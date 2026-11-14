@@ -25,8 +25,12 @@ One turn in a Conversation. A Message is never an Entry; something said becomes 
 _Avoid_: Chat message, turn
 
 **Author**:
-Who made an Entry or Task: the person, the Agent, or an MCP caller. A record the person edits becomes theirs.
+Who made an Entry or Task: the person, the Agent, or a Connection, shown by its name. A record the person edits becomes theirs.
 _Avoid_: Creator, owner, source
+
+**Connection**:
+The standing permission the person gives an outside agent to work in one Context, which may be limited to reading. The person names it, its Context never changes, and only the person makes or ends one. Its name stays on what it made after it ends.
+_Avoid_: Grant, integration, API key, token
 
 **Origin Entry**:
 The Entry a Task came from. Every Task has one, whoever created it.
