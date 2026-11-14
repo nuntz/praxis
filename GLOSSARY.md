@@ -4,6 +4,10 @@ A journal-centric personal task manager for one person, where an Agent and the p
 
 ## Language
 
+**Context**:
+A part of the person's life kept apart from the others, such as work. The person defines Contexts and there is always at least one. Every Entry, Task, Project and Person belongs to exactly one, and nothing links across two. A retired Context is hidden, not deleted.
+_Avoid_: Workspace, area, space
+
 **Journal**:
 The person's record, made of Entries. It is the only truth: anything worth keeping is in the Journal.
 _Avoid_: Log, notes, history
@@ -13,7 +17,7 @@ One piece of the Journal, in the person's own words unless they asked the Agent 
 _Avoid_: Note, post, record
 
 **Conversation**:
-The single continuing exchange between the person and the Agent. It is a way of working on the Journal, not part of it.
+The continuing exchange between the person and the Agent within one Context. Each Context has exactly one. It is a way of working on the Journal, not part of it.
 _Avoid_: Chat, session, thread
 
 **Message**:
@@ -45,7 +49,7 @@ Work made of several Tasks. It is the only thing that contains Tasks.
 _Avoid_: Parent task, list, epic
 
 **Waiting**:
-The state of a Task that waits on a Task or Project that is not yet finished. It says the Task cannot be acted on yet; it does not stop the person finishing it.
+The state of a Task that waits on a Task or Project in its own Context that is not yet finished. It says the Task cannot be acted on yet; it does not stop the person finishing it.
 _Avoid_: Blocked, dependent, depends on
 
 **Delegated**:
