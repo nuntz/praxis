@@ -117,5 +117,5 @@ One thing a change brought about: a record made, changed or deleted, whether dir
 _Avoid_: Side effect, consequence, cascade
 
 **Trash**:
-Where a deleted Entry, Task, Project or Person stays until it is removed for good. Anything in it can be restored as it was.
+Where a deleted Entry, Task, Project or Person stays until it is removed for good. A deleted record takes with it only what cannot exist without it, such as the Tasks an Entry is the Origin Entry of, and what went together is restored together. Anything in it can be restored as it was, and nothing of it is left once it is removed for good.
 _Avoid_: Archive, bin, soft delete
