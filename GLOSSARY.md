@@ -36,6 +36,14 @@ _Avoid_: Source entry, parent entry
 An Entry that continues or corrects one earlier Entry. It is the only direct link between two Entries.
 _Avoid_: Thread, reply, chain
 
+**Reference**:
+A link from an Entry to a Task or Project in its Context. It is kept beside the Entry's words, not in them, so adding or removing one leaves the words as they were.
+_Avoid_: Link, tag, backlink
+
+**Mention**:
+A link from an Entry to a Person in its Context, kept beside the Entry's words like a Reference. It says the Person came up; it never delegates anything to them.
+_Avoid_: Tag, at-mention
+
 **Inline Task**:
 A marker typed in an Entry that creates a Task when the Entry is saved. It is a way of typing; the Task it creates is the same as any other.
 _Avoid_: Checkbox, todo syntax
@@ -67,6 +75,10 @@ _Avoid_: Audit, retrospective, check-in
 **Held Change**:
 A change to the words of an Entry whose Author is the person, asked for by the Agent and not yet made. It shows the Entry before and after, and only the person's tap makes it.
 _Avoid_: Confirmation, pending confirmation, approval, draft
+
+**Effect**:
+One thing a change brought about: a record made, changed or deleted, whether directly or by a rule that followed from the change. Every change reports all of its Effects, and says so when there are none.
+_Avoid_: Side effect, consequence, cascade
 
 **Trash**:
 Where a deleted Entry, Task, Project or Person stays until it is removed for good. Anything in it can be restored as it was.
