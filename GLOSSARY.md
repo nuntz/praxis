@@ -68,6 +68,10 @@ _Avoid_: Blocked, dependent, depends on
 The state of a Task that a Person other than the deployment's person is doing. The Task is still the person's to track, and only they can finish it or take it back.
 _Avoid_: Assigned, waiting for, shared
 
+**Run**:
+One piece of work by the Agent, from what started it to the Agent stopping. A Message from the person starts one, and so does the clock.
+_Avoid_: Turn, session, job, invocation
+
 **Brief**:
 A Message the Agent leaves in a Context's Conversation without being asked, saying what in that Context needs attention today. It is a view of the Journal, not part of it, and a new Brief replaces one the person has not read.
 _Avoid_: Digest, summary, daily note
