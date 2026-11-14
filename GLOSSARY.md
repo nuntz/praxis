@@ -63,3 +63,11 @@ _Avoid_: Digest, summary, daily note
 **Review**:
 A Message the Agent leaves in a Context's Conversation without being asked, less often than a Brief, listing what has gone stale or been missed in that Context. Like a Brief it is a view of the Journal, and a new Review replaces one the person has not read.
 _Avoid_: Audit, retrospective, check-in
+
+**Held Change**:
+A change to the words of an Entry whose Author is the person, asked for by the Agent and not yet made. It shows the Entry before and after, and only the person's tap makes it.
+_Avoid_: Confirmation, pending confirmation, approval, draft
+
+**Trash**:
+Where a deleted Entry, Task, Project or Person stays until it is removed for good. Anything in it can be restored as it was.
+_Avoid_: Archive, bin, soft delete
