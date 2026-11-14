@@ -61,12 +61,36 @@ Work made of several Tasks. It is the only thing that contains Tasks.
 _Avoid_: Parent task, list, epic
 
 **Waiting**:
-The state of a Task that waits on a Task or Project in its own Context that is not yet finished. It says the Task cannot be acted on yet; it does not stop the person finishing it.
+The state of a Task that waits on a Task or Project in its own Context that is still open. The wait ends when that one is Finished or Dropped. It says the Task cannot be acted on yet; it does not stop the person finishing it.
 _Avoid_: Blocked, dependent, depends on
 
 **Delegated**:
 The state of a Task that a Person other than the deployment's person is doing. The Task is still the person's to track, and only they can finish it or take it back.
 _Avoid_: Assigned, waiting for, shared
+
+**Finished**:
+The state of a Task that was done, or of a Project the person has declared done. A Project is never Finished by its Tasks alone: one with no open Task is waiting for its next Task or for the person to finish it.
+_Avoid_: Done, completed, closed
+
+**Dropped**:
+The state of a Task or Project the person decided not to do. It is an end like Finished, and the record stays where it was; dropping is not deleting. Finishing or dropping a Project drops the Tasks still open in it. Either end can be reopened.
+_Avoid_: Cancelled, abandoned, won't do
+
+**Due Date**:
+The day a Task or Project should be Finished by. It is a day, never a time of day. A Project's Due Date says nothing about its Tasks'.
+_Avoid_: Deadline, due
+
+**Overdue**:
+The state of an open Task or Project whose Due Date has passed. A Task can be Overdue while also Waiting, Delegated or Deferred.
+_Avoid_: Late, missed
+
+**Deferred**:
+The state of a Task the person has put off until a day that has not come yet. Until then it is not offered as something to act on.
+_Avoid_: Snoozed, scheduled, start date
+
+**Recurrence**:
+A rule on a Task that makes the next occurrence when this one is Finished or Dropped. It either follows a schedule or counts from the day the Task was closed, and what it sets is the next occurrence's Due Date, so a Task with a Recurrence always has one. Each occurrence is a Task of its own, only one is ever open, and all share one Origin Entry. It runs until the person removes it.
+_Avoid_: Repeat, series, recurring task template
 
 **Run**:
 One piece of work by the Agent, from what started it to the Agent stopping. A Message from the person starts one, and so does the clock.
