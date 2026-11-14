@@ -35,3 +35,19 @@ _Avoid_: Thread, reply, chain
 **Inline Task**:
 A marker typed in an Entry that creates a Task when the Entry is saved. It is a way of typing; the Task it creates is the same as any other.
 _Avoid_: Checkbox, todo syntax
+
+**Task**:
+One thing to do. It has no parts: work made of several Tasks is a Project. Its state is derived from what has happened to it, never set directly.
+_Avoid_: Todo, item, sub-task
+
+**Project**:
+Work made of several Tasks. It is the only thing that contains Tasks.
+_Avoid_: Parent task, list, epic
+
+**Waiting**:
+The state of a Task that waits on a Task or Project that is not yet finished. It says the Task cannot be acted on yet; it does not stop the person finishing it.
+_Avoid_: Blocked, dependent, depends on
+
+**Delegated**:
+The state of a Task that a Person other than the deployment's person is doing. The Task is still the person's to track, and only they can finish it or take it back.
+_Avoid_: Assigned, waiting for, shared
