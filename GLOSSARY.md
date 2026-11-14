@@ -97,12 +97,16 @@ One piece of work by the Agent, from what started it to the Agent stopping. A Me
 _Avoid_: Turn, session, job, invocation
 
 **Brief**:
-A Message the Agent leaves in a Context's Conversation without being asked, saying what in that Context needs attention today. It is a view of the Journal, not part of it, and a new Brief replaces one the person has not read.
+A Message the Agent leaves in a Context's Conversation without being asked, saying what in that Context needs attention today. It is a view of the Journal, not part of it, and a new Brief replaces one the person has not read. It is read once Praxis has shown it to the person, on any device.
 _Avoid_: Digest, summary, daily note
 
 **Review**:
-A Message the Agent leaves in a Context's Conversation without being asked, less often than a Brief, listing what has gone stale or been missed in that Context. Like a Brief it is a view of the Journal, and a new Review replaces one the person has not read.
+A Message the Agent leaves in a Context's Conversation without being asked, less often than a Brief, listing what has gone stale or been missed in that Context. Like a Brief it is a view of the Journal, and a new Review replaces one the person has not read. It is read in the same way as a Brief.
 _Avoid_: Audit, retrospective, check-in
+
+**Notification**:
+What Praxis sends to the person's devices when the Agent leaves a Brief or a Review, so they learn of it while not looking at Praxis. It names the kind and the Context and carries nothing from the Message or the Journal. Nothing else in Praxis sends one: there are no reminders for a Due Date.
+_Avoid_: Alert, reminder, push
 
 **Held Change**:
 A change to the words of an Entry whose Author is the person, asked for by the Agent and not yet made. It shows the Entry before and after, and only the person's tap makes it.
