@@ -1,0 +1,37 @@
+# Praxis
+
+A journal-centric personal task manager for one person, where an Agent and the person work on the same Journal.
+
+## Language
+
+**Journal**:
+The person's record, made of Entries. It is the only truth: anything worth keeping is in the Journal.
+_Avoid_: Log, notes, history
+
+**Entry**:
+One piece of the Journal, in the person's own words unless they asked the Agent to compose it.
+_Avoid_: Note, post, record
+
+**Conversation**:
+The single continuing exchange between the person and the Agent. It is a way of working on the Journal, not part of it.
+_Avoid_: Chat, session, thread
+
+**Message**:
+One turn in a Conversation. A Message is never an Entry; something said becomes an Entry only when it is recorded.
+_Avoid_: Chat message, turn
+
+**Author**:
+Who made an Entry or Task: the person, the Agent, or an MCP caller. A record the person edits becomes theirs.
+_Avoid_: Creator, owner, source
+
+**Origin Entry**:
+The Entry a Task came from. Every Task has one, whoever created it.
+_Avoid_: Source entry, parent entry
+
+**Follow-up**:
+An Entry that continues or corrects one earlier Entry. It is the only direct link between two Entries.
+_Avoid_: Thread, reply, chain
+
+**Inline Task**:
+A marker typed in an Entry that creates a Task when the Entry is saved. It is a way of typing; the Task it creates is the same as any other.
+_Avoid_: Checkbox, todo syntax
