@@ -615,8 +615,8 @@ The column is composed by the screen from four sources, in this order:
   - The content security policy allows images from any `https` host, and nothing else new.
 - **How it looks** is fixed in the design system's Rendered Markdown section and drawn in its Markdown preview, from [Styles for rendered Markdown in the design system](https://github.com/nuntz/praxis/issues/36).
   - Markdown changes weight, indentation and face, never size, and never takes the Context's accent. A heading is the size of the words around it, and three levels are kept apart: bold, semibold, and semibold in the muted colour.
-  - A quote is indented behind a hairline, in the muted colour. Code is in the Device's own monospace on the inset colour. A table sits in an inset box, which is what scrolls.
-  - The three kinds of link are told apart by shape. A Mention is a tinted pill, a Reference is an inset pill, and a link or a bare address is underlined and followed by a small arrow, since it leaves Praxis.
+  - A quote is indented behind a hairline, in the muted colour. Code is in the Device's own monospace on the inset colour. A table is hairlines only, with no box and a muted header.
+  - The three kinds of link are told apart by shape. A Mention is a tinted pill, a Reference is an inset pill, and a link or a bare address is underlined ink.
   - An image that has loaded has no frame. One waiting for a tap is one line: an icon, its description and "Show image". One that failed is the same line saying it did not load, with its address.
 - **Never rendered**: both composers and the Entry editor, which show the words as typed with no toolbar and no preview; a Held Change's before and after; a Version compared against the current words; a search result's excerpt; a Task's title; a Project's or a Person's name.
 
