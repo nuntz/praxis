@@ -9,7 +9,6 @@ This document says what Praxis does. It is meant to be sliced into implementatio
 - **Terms** are defined in [`GLOSSARY.md`](GLOSSARY.md) and capitalised here. The glossary wins on what a word means.
 - **Reasons** are in [`docs/adr/`](docs/adr/). Each section names the ADRs behind it. An ADR wins on why, and on any option it rejects.
 - **This spec** wins on what is built. Where it only restates an ADR it says so by naming it.
-- A dagger (†) marks something no decision states, filled in here from the nearest rule so the spec is whole. Section 15 lists every one. Treat a dagger as a proposal.
 - Tool names are working names. They may change until the first release, after which a name is a contract with outside agents.
 
 **The person** means the one human a deployment belongs to. A **Person** (capitalised) is someone the person deals with, kept as a record in one Context.
@@ -35,7 +34,8 @@ ADR 0003, 0006.
 
 - The person defines Contexts. There is always at least one.
 - Every Entry, Task, Project and Person belongs to exactly one Context. Someone dealt with in two Contexts is two Persons.
-- A Context has a name, a time zone†, a Brief time, a Review day and time, a Notification switch, and one Conversation.
+- A Context has a name, an accent colour (section 8.11), a time zone, a Brief time, a Review day and time, a Notification switch, and one Conversation.
+- **The time zone** is set when the Context is made, defaulting to the zone of the device it is made on, and is changed only by the person's hand. Travel changes nothing by itself: when a device's zone differs from the Context's, that Context's settings show both, with one tap to switch. There is no notice and no prompt. A change moves no date, because a Due Date and a defer date are days. Only "today" and the hour of the Brief and the Review shift.
 - The person always has one current Context in the PWA. It decides what they see, which Conversation they are in and where new records go. There is no combined view.
 - **Retiring** a Context hides it and ends its Connections. Nothing is deleted. The person can bring it back, which does not restore the Connections.
 - **Deleting** a Context is offered only for a retired one (section 10.4).
@@ -48,7 +48,7 @@ ADR 0001, 0008. Glossary: Entry, Author, Version, Follow-up, Standing Entry, Ref
 An Entry has:
 
 - **Words**: plain text. No ids, no markup that means anything to the server. The server never reads words to find Tasks or links.
-- **A time**: when it was made. Set by the server on arrival, or by the made-at time on a write from the person's hand (section 4.6).
+- **A time**: when it was made. Set by the server on arrival, or by the made-at time on a write from the person's hand (section 4.6). It is an instant, shown in the Context's time zone, so the Journal's days agree with "today".
 - **An Author**: the person, the Agent, or a Connection shown by its name. Stamped by the tool layer, never stated by the caller. An Entry the person edits becomes theirs.
 - **Whether it came through the Conversation.** It does not link back to a Message, and an Entry recorded in a Call carries no mark that it was spoken.
 - **Links**, kept beside the words: References to Tasks and Projects, and Mentions of Persons, each optionally anchored to a span of the words. An anchor whose span is gone stays on the Entry without one.
@@ -61,7 +61,13 @@ Rules:
 - The person writes an Entry directly in the Journal's composer with no model turn.
 - An Entry recorded by the Agent from the Conversation holds the person's words verbatim, trimmed of filler and never paraphrased. The Agent composes prose only when asked, and such an Entry has the Agent as Author. What was said together becomes one Entry; the Agent splits only on a plain change of subject.
 - Adding or removing a link never changes the words, makes no Version and is never a Held Change.
-- **Inline Task**: a marker the person types in an editor. The editor, using a parser in the domain package, turns it into the list of Tasks passed to `record_entry`. The Task it makes is the same as any other, and editing the words later cannot delete it. The same holds for what the person types to link something. The syntax of both markers is not chosen†.
+- **Inline Task**: a marker the person types in an editor. The editor, using a parser in the domain package, turns it into the list of Tasks passed to `record_entry`. The Task it makes is the same as any other, and editing the words later cannot delete it. The same holds for what the person types to link something.
+
+**What the person types.**
+
+- **An Inline Task** is a line that starts with `[]`. `[ ]` and a leading `- ` are accepted too. The rest of the line is the Task's title. The marker stays in the words. The syntax carries no date and no Project: those are set on the Task.
+- **A Mention**: `@` opens a picker of the Context's Persons. **A Reference**: `#` opens a picker of its Tasks and Projects. Picking puts the name into the words, with the `@` or `#` kept, and anchors the link to it. Either picker offers to make a new Person or Project from what was typed.
+- Only a pick makes a link. `@ali` typed and left is text. The parser never matches a name to a record, since two records can share one.
 
 **Versions.** Every saved change to an Entry's words keeps the words before it as a Version, with who changed them and when, for as long as the Entry exists. No pruning and no coalescing. A Version covers the words only. An Entry whose words have changed shows an edited mark, naming the last Author to change them when that was not the person. Opening it lists the Versions newest first, each compared against the current words. Restoring one is a new change with Effects, and the words it replaced become a Version. Restored words that contain an Inline Task marker make no Task.
 
@@ -71,7 +77,7 @@ ADR 0002, 0011. Glossary: Task, Origin Entry, Waiting, Delegated, Finished, Drop
 
 A Task has:
 
-- **A title.** It has no body of its own†: what there is to say about a Task is said in Entries that Reference it.
+- **A title**, and nothing else of its own. It has no body: what there is to say about a Task is said in Entries that Reference it.
 - **An Origin Entry**, always, whoever created it. A Task is made only with an Entry named (section 4.8).
 - **An Author**, as for an Entry.
 - **A Project**, or none.
@@ -103,7 +109,7 @@ An open Task can be any of the following at once:
 
 - A Task is **actionable** when it is open and none of Waiting, Delegated or Deferred.
 - Every Task in every tool result carries its derived state and the reason for it: which end it reached and when, what it waits on, who it is Delegated to, the day it is Deferred until, the day it became Overdue. No caller works out state.
-- "Today", and so Overdue and Deferred, is the current day in the Context's time zone†.
+- "Today", and so Overdue and Deferred, is the current day in the Context's time zone.
 
 - There is no leading state. On the screen each state that holds is its own mark, Overdue is marked on the date, and nothing is ranked. The only order is in attention, where a Task sits in the first section it fits (section 8.3).
 
@@ -144,7 +150,8 @@ ADR 0011.
 
 ADR 0002, 0012.
 
-- A Project has a name, an optional Due Date that says nothing about its Tasks', and the Tasks in it. It is the only thing that contains Tasks.
+- A Project has a name, an optional Due Date that says nothing about its Tasks', and the Tasks in it. It has no description: what there is to say about it is said in Entries that Reference it. It is the only thing that contains Tasks.
+- Two Projects may share a name.
 - A Project is open, Finished or Dropped. It can be Overdue. It is Finished only when declared, by the person, or by the Agent or a Connection through the tool, and never because its Tasks ran out.
 - A Project with no open Task is flagged in attention as needing a next Task or finishing.
 - Finishing or dropping a Project drops the Tasks still open in it and ends their Recurrences, each as an Effect. Closing a Project is never refused.
@@ -152,9 +159,9 @@ ADR 0002, 0012.
 
 ### 3.7 Person
 
-- A Person has a name and belongs to one Context. Nothing else is kept about them†.
+- A Person has a name and belongs to one Context. Nothing else is kept about them: what there is to say is said in Entries that Mention them.
 - A Person can be Mentioned in Entries and have Tasks Delegated to them.
-- The server never guesses that two Persons of one name are the same.
+- Two Persons may share a name, and the server never guesses that they are the same. A picker tells them apart by the latest Entry that Mentions each.
 
 ### 3.8 Deleting and the Trash
 
@@ -181,8 +188,21 @@ A delete sends to the Trash the record and only what cannot exist without it. It
 ADR 0003, 0006.
 
 - Only the person's hand moves a record. It is a deployment tool.
-- A move takes the whole unit: an Entry with its Follow-ups and the Tasks that came from it, or a Project with all its Tasks.
-- Any link back into the old Context is dropped with its text kept: a Mention, a Reference to something left behind, a wait, a delegation†.
+- A move takes a whole unit, and the person is shown all of it before confirming:
+  - **An Entry's unit**: the Entry, its Follow-ups and the Tasks that came from it, with every occurrence of a recurring one.
+  - **A Project's unit**: the Project, its Tasks, their Origin Entries, those Entries' Follow-ups, and any other Tasks those Entries made. It goes no further. A Task is never left without its Origin Entry.
+- **Dropped at the boundary**, with the text kept, each an Effect:
+  - every Mention in a moved Entry;
+  - a Reference between something moved and something that stays, in either direction;
+  - a wait between something moved and something that stays, in either direction, so a Task left behind stops Waiting;
+  - a delegation, which is taken back;
+  - a moved Task's place in a Project that stays;
+  - the Follow-up link of a moved Entry to an Entry that stays;
+  - a Standing mark.
+- **What goes with the unit**: every Version, each Recurrence, and each record's Author.
+- Nothing is made in the destination. No Person or Project there is matched by name.
+- A record in the Trash cannot be moved. A dormant link to a moved record is dropped.
+- Both Contexts' change logs record the move.
 - Ids are unique across the deployment, and a record keeps its id when it moves.
 - The unit is never lost and never visible in both Contexts. The source hides it and marks it as moving; the destination takes it under a move id so a retry cannot add it twice; the source removes it only once the destination has confirmed. An interrupted move is finished from the source's alarm. For a moment the unit is in neither Context's view.
 - A move into a Context whose object is stuck on an upgrade is refused.
@@ -191,12 +211,13 @@ ADR 0003, 0006.
 
 ADR 0005, 0007, 0008, 0015.
 
-### 4.1 Two registries
+### 4.1 Three groups of tools
 
 - **Context tools** run inside one Context's object and take no Context as input. The Context is fixed before the call arrives: by the screen's current Context, by the Conversation, or by the Connection's address.
 - **Deployment tools** run on the deployment object and are offered to the person's hand only.
+- **Conversation tools** run inside one Context's object and are offered to the person's hand only (section 4.12). They are how the screen reaches the Conversation.
 
-The screen reads and writes only through tools. How the Conversation itself is reached is an open point† (section 15, point 6).
+The screen reads and writes only through tools. What the server pushes to it, the Effects of each change and the Agent's answer as it is written, comes over one live channel that carries nothing upward (section 9.5).
 
 ### 4.2 Callers
 
@@ -270,7 +291,7 @@ ADR 0005. Glossary: Held Change.
 
 ### 4.9 Reads
 
-- A few named views, one filtered list per kind, get by id, one search, `list_changes`, `list_trash`, `list_held_changes`.
+- Two named views (`view_attention` and `view_ahead`), one filtered list per kind, get by id, one search, `list_changes`, `list_trash`, `list_held_changes`.
 - Lists are paged by cursor, 50 by default.
 - An Entry comes with its words in full, its links and its Tasks. A Task comes with its derived state and the reason.
 
@@ -286,13 +307,17 @@ Every **read** is offered to all five callers, except where noted:
 | Tasks | `get_task`, `list_tasks` |
 | Projects | `get_project`, `list_projects` |
 | Persons | `get_person`, `list_persons` |
-| Views | `view_attention`, `search`, `list_changes` |
+| Views | `view_attention`, `view_ahead`, `search`, `list_changes` |
 | Trash | `list_trash` |
-| Held Changes | `list_held_changes`† (hand, Agent and Clock; not a Connection) |
-| Notices | `list_notices`† (hand only: the standing notices of section 8.3) |
-| Settings | `get_settings`† (Brief and Review times, the Notification switch, the time zone) |
-| Runs | `list_runs`†, `get_run`† (hand only: a Run record, never its words) |
-| Connection calls | `list_connection_calls`† (hand only) |
+| Held Changes | `list_held_changes` (hand, Agent and Clock; never a Connection) |
+| Notices | `list_notices` (hand only: the standing notices of section 8.3) |
+| Settings | `get_settings` (the Context's name, its time zone, today's date there, the Brief and Review times, the Notification switch) |
+| Runs | `list_runs`, `get_run` (hand only: a Run record, never its words) |
+| Connection calls | `list_connection_calls` (hand only) |
+
+`get_settings` is offered to every caller because a Connection needs the time zone and today's date to resolve "next Friday".
+
+`view_ahead` returns the open Tasks and Projects with a Due Date or a defer date in the coming days: 28 by default, 90 at most. A Recurrence's future occurrences are worked out from its rule and marked as not yet existing.
 
 `list_entries` can be narrowed to Standing Entries, which is how the person sees the full list in one place and how a Connection reads them.
 
@@ -322,31 +347,51 @@ Every **read** is offered to all five callers, except where noted:
 | `delete_project` | A Project goes to the Trash | yes | yes | yes |
 | `create_person`, `rename_person`, `delete_person` | A Person is made, renamed or sent to the Trash | yes | yes | yes |
 | `restore` | An item comes back from the Trash | yes | yes | no |
-| `empty_trash` | The Trash, or one item in it, is removed for good | yes | no | no |
+| `remove_for_good` | One item in the Trash is removed for good | yes | no | no |
+| `empty_trash` | Everything in the Trash is removed for good | yes | no | no |
 | `make_held_change` | A Held Change is made by the person's tap | yes | no | no |
 | `cancel_held_change` | A Held Change is cancelled | yes | yes | no |
 | `set_brief_time`, `set_review_time` | A Context's Brief or Review time is set or switched off | yes | yes | no |
-| `set_notifications`† | A Context's Notification switch is turned | yes | no† | no |
+| `set_notifications` | A Context's Notification switch is turned | yes | no | no |
+| `set_time_zone` | A Context's time zone is changed | yes | no | no |
 | `clear_conversation` | A Context's Conversation text is dropped | yes | no | no |
-| `rebuild_search_index`† | The Context's meaning index is rebuilt from the Journal | yes | no | no |
+| `rebuild_search_index` | The Context's meaning index is rebuilt from the Journal | yes | no | no |
 
 The set may grow and inputs may gain optional fields freely. There are no version numbers on tools or on the endpoint. The schemas live in the domain package.
 
 ### 4.11 Deployment tools
 
-Offered to the hand only, never to the Agent or a Connection. Working names†.
+Offered to the hand only, never to the Agent or a Connection.
 
 | Area | Tools |
 |---|---|
-| Contexts | `list_contexts`, `create_context`, `rename_context`, `set_context_time_zone`†, `retire_context`, `bring_back_context`, `delete_context` |
+| Contexts | `list_contexts`, `create_context`, `rename_context`, `set_context_accent`, `retire_context`, `bring_back_context`, `delete_context` |
 | Moving | `move_record` |
 | Connections | `list_connections`, `create_connection`, `rename_connection`, `set_connection_reading_only`, `end_connection` |
-| Devices | `list_devices`, `set_device_notifications`, `set_device_offline_copy`, `remove_device` |
+| Devices | `list_devices`, `rename_device`, `set_device_notifications`, `set_device_offline_copy`, `remove_device` |
 | Spend | `get_spend`, `set_spend_cap` |
 | Export | `make_export`, `restore_export` (setup only) |
 | Runs | `save_run_transcript` |
 
 Never offered to the Agent or a Connection in any form: removing anything for good, defining, renaming or retiring a Context, moving a record between Contexts, anything that mints or shows a credential, and a device's own settings.
+
+`create_context` takes the name, the time zone and the accent colour. The time zone is then kept in the Context's own object, which is why changing it is a Context tool.
+
+### 4.12 Conversation tools
+
+ADR 0001, 0010. Offered to the hand only, never to the Agent, the Clock or a Connection.
+
+| Tool | What happens |
+|---|---|
+| `send_message` | A Message from the person is added to the Context's Conversation and starts a Run. It says whether it was typed or spoken. |
+| `list_messages` | The Conversation's Messages, paged back to the start, with the notices under them and each Run's folded calls. |
+| `retry_run` | A Run that failed is tried again from the person's Message. |
+| `start_call`, `end_call` | A Call is set up in this Context, or ended (section 6). |
+
+- They return no Effects and write nothing to the change log, because the Conversation is not data. What a Run changes is reported by the Context tools it calls, as always.
+- They are in the offering table and its tests like any other tool. The oracle of section 13 holds them to changing no domain table.
+- `clear_conversation` stays a Context tool, since it is listed with a Context's settings.
+- The answer is not the result of `send_message`. It arrives on the live channel (section 9.5) and is read back with `list_messages`.
 
 ## 5. The Agent
 
@@ -381,8 +426,8 @@ Glossary: Run.
 
 ADR 0004. Glossary: Brief, Review.
 
-- **Brief**: once a day, at a time the person sets for the Context. It says what is due, what became actionable, and what is Delegated or Waiting and has gone quiet.
-- **Review**: once a week by default, on a day and time the person sets for the Context. It lists stale Tasks, Projects with no next Task, and Entries that look like they hold a Task nobody made.
+- **Brief**: once a day, at a time the person sets for the Context. A new Context starts with it on, at 07:00. It says what is due, what became actionable, and what is Delegated or Waiting and has gone quiet.
+- **Review**: once a week, on a day and time the person sets for the Context. A new Context starts with it on, on Sunday at 17:00. It lists stale Tasks, Projects with no next Task, and Entries that look like they hold a Task nobody made.
 - What has gone quiet is the Agent's judgment from the Journal. There is no threshold setting. It is said only in a Brief or a Review: attention lists Delegated Tasks by age and judges nothing (section 8.3).
 - Either can be switched off for a Context. There is no Brief across Contexts.
 - A Clock Run is offered reads only. It cannot change anything or leave a Held Change. If it thinks something should change, it says so.
@@ -407,7 +452,7 @@ ADR 0016. Glossary: Standing Entry.
 - A **Standing Entry** is an ordinary Entry with a mark. Versions, the Trash and the Export apply unchanged.
   - The person marks or unmarks any Entry by hand. The Agent records and marks one when asked, in the person's words, and never unasked.
   - A Connection can read Standing Entries but cannot mark or unmark one, and its outside agent is not handed them.
-  - A Context's Standing Entries have a ceiling on their total size, not their number†. A mark that would pass it is refused with the reason.
+  - A Context's Standing Entries have a ceiling on their total size, not their number: 10,000 characters, in code. A mark that would pass it is refused with the reason.
   - When two disagree the newer wins. A Follow-up to one is not standing unless marked.
   - It stays in its Context. One that should apply in two is written twice.
 
@@ -417,7 +462,7 @@ ADR 0017.
 
 - One model from one provider, reached directly from the Worker with the person's own API key. No gateway, no fallback.
 - The key and the model's name are in the deployment's configuration outside the repo (section 12). No tool or screen reads or sets the key, and it is never in an object.
-- The model must be one the code ships a price for. One with no shipped price fails the deploy with the reason. The first release ships a price for Claude Sonnet 5.5†.
+- The model must be one the code ships a price for. One with no shipped price fails the deploy with the reason. The first release ships a price for one model, Claude Sonnet 5.5, which also writes the compaction summary. Another model is a release.
 - **The key is optional.** Without one there is no Agent: the Conversation says so in place of its composer. The Journal, the screen, Connections and search work as normal, and nothing is shown as broken.
 - **When the model cannot be reached**, a Run the person started retries for seconds, then ends as failed. The person's Message stays, with a notice under it that is not a Message and a way to try again. Nothing is answered later by itself.
 - **Two failures are told apart.** The provider being unavailable shows only on the Run that failed. The provider refusing the key (wrong, out of credit, or at the provider's own limit) is a standing notice in attention and in settings until a call succeeds.
@@ -427,7 +472,7 @@ ADR 0017.
 
 ADR 0010, 0017.
 
-- One cap, in money, per calendar month, for the whole deployment. Set by the person's hand.
+- One cap, in money, per calendar month, for the whole deployment. Set by the person's hand. There is always one: setup asks for it and offers 20 US dollars.
 - Counted from Run records, Call records and embedding, against a price table shipped with the code. Each Context's object reports what it spent to the deployment object, which keeps the month's running total and answers whether a Run or a Call may start. The provider's own spend limit is the hard backstop, and setup says to set one.
 - A warning shows at 80%.
 - At the cap: no new Run starts, whether the person or the clock would start it; a Run already going finishes; no Call starts; embedding of newly saved Entries stops. The Conversation's composer is replaced by a notice that links to the cap in settings. The Journal's composer, the screen and Connections keep working.
@@ -460,9 +505,9 @@ ADR 0021. Glossary: Call.
 - **Talking over the Agent** stops the speech and nothing else. A Run that has started finishes and its writes stand.
 - **Ending.** The person's tap; leaving Praxis (tab hidden, screen locked, network gone); about two minutes of silence; the cap, saying so first; the provider's two-hour session limit. An ended Call is never resumed by itself.
 - **One Call at a time for the deployment.** Starting another ends the first. On the device in the Call, the Conversation's composer gives way to the Call's controls: end and mute. A Message typed elsewhere meanwhile is answered in writing only.
-- **Counting.** A Call's time is counted by the object's own clock, from setting it up until the device reports its end, against the cap at a price shipped with the code, on top of the Runs it starts. The device sends a sign of life. When none comes for a short while, or the cap is reached, the object ends the Call at the provider itself. A Call leaves a record with no words: when, how long, what it cost and why it ended.
+- **Counting.** A Call's time is counted by the object's own clock, from setting it up until the device reports its end, against the cap at a price shipped with the code, on top of the Runs it starts. The device sends a sign of life every 15 seconds. When none comes for 45 seconds, or the cap is reached, the object ends the Call at the provider itself. A Call leaves a record with no words: when, how long, what it cost and why it ended.
 - **Failures.** When a Run fails in a Call the voice says so and the usual notice sits under the person's Message. When the voice provider fails or the connection drops, the Call ends with a notice that is not a Message. A refused voice key is a standing notice.
-- **The voice key** is a second optional key for a second provider, kept like the first. Without it there is no way to start a Call and nothing looks broken. Without the Agent's key there is no Call either. The first release ships a price for GPT-Live†.
+- **The voice key** is a second optional key for a second provider, kept like the first. Without it there is no way to start a Call and nothing looks broken. Without the Agent's key there is no Call either. The first release ships a price for one voice model, GPT-Live.
 - What is said in a Call reaches the voice provider and whatever it keeps for its own monitoring. Praxis never asks it to store a session. Setup says this where the key is given.
 - Nothing unprompted speaks. A Call is not a tool, so a Connection can neither start nor see one.
 
@@ -517,7 +562,7 @@ Three peers, none hosting the others: **attention**, the **Journal** and the **C
 
 - The Journal's composer records an Entry with no model turn. The Conversation's composer sends a Message to the Agent. Where the person types decides what happens. No composer offers both sends.
 - Attention has no composer.
-- The Journal's composer names its Context.
+- The Journal's composer names its Context. Both composers carry the Context's accent colour (section 8.11).
 
 ### 8.3 Attention
 
@@ -526,7 +571,7 @@ Attention is what in the current Context is open for the person to act on. It is
 The column is composed by the screen from four sources, in this order:
 
 1. **Unsent writes the server did not accept** (section 8.8). Only the device knows them.
-2. **Standing notices**, from `list_notices`†: a refused key, the cap reached or 80% passed, no good Backup for three days, a Context stuck on an upgrade, a Brief or Review that could not run.
+2. **Standing notices**, from `list_notices`: a refused key, the cap reached or 80% passed, no good Backup for three days, a Context stuck on an upgrade, a Brief or Review that could not run.
 3. **Held Changes**, from `list_held_changes`.
 4. **The sections of `view_attention`**, below.
 
@@ -543,7 +588,7 @@ The column is composed by the screen from four sources, in this order:
 - A Task appears once, in the first section it fits. The rule covers Tasks only: a Project in Due appears as itself and is still in Projects, and its Tasks are placed by their own dates.
 - A Waiting or Deferred Task that is not due is not shown. It is reached through its Project, its Entry or search, and arrives in Newly actionable when it comes up.
 - Seven days is in code and is not a setting. It decides only how long a released Task is listed apart.
-- There is no "due soon" in attention. A view of the weeks ahead is another view (section 15, point 8).
+- There is no "due soon" in attention. The weeks ahead are another view, `view_ahead`, opened from the Due section. It is not a fourth peer.
 - Nothing in attention says what has gone quiet. That is the Agent's judgment, said in a Brief or a Review (section 5.4).
 - **The count** on the Today tab, and on the top-bar button at middle widths, is the refused Unsent writes, the Held Changes and the Due section. Nothing else is counted.
 - A Task is finished from wherever it is shown: attention or the Entry it hangs off.
@@ -569,8 +614,8 @@ The column is composed by the screen from four sources, in this order:
 - **Changes**: a Context's list of changes, filtered by caller, with a Connection's reads listed alongside. There is no activity screen beyond this.
 - **Trash**: each item, what went with it and when it will be removed. Restore, remove one for good, empty.
 - **Standing Entries**: the full list for the Context.
-- **Settings**, per Context: time zone†, Brief time, Review day and time, the Notification switch, clear the Conversation, rebuild the search index.
-- **Settings**, deployment: Contexts, Connections with the registrations seen, devices, the spend cap and the month's spend against it, when the last Backup was made, make an Export.
+- **Settings**, per Context: time zone, Brief time, Review day and time, the Notification switch, clear the Conversation, rebuild the search index.
+- **Settings**, deployment: Contexts with their accent colours, Connections with the registrations seen, devices, the spend cap and the month's spend against it, when the last Backup was made, make an Export.
 
 ### 8.7 Notifications
 
@@ -625,6 +670,29 @@ From [Other ways in](https://github.com/nuntz/praxis/issues/28). Something reach
 - **Home-screen shortcut.** An app shortcut opens straight onto the Journal's composer.
 - For both: nothing is recorded until the person sends it. The composer opens in the Context that device last showed, which can be changed before sending. A shared link is text; Praxis fetches nothing. Shared text is added to a draft already in the composer and never replaces it.
 
+### 8.10 Devices
+
+Glossary: Device.
+
+- A Device is one browser's installation of Praxis, known by an id Praxis keeps in that browser's storage.
+- Praxis holds a record of a Device only while Notifications or an Offline Copy is switched on there. A browser with neither is not listed, and one whose last switch goes off leaves the list.
+- It is named by itself from the browser and the system, such as "Safari on iPhone". The person can rename it. The list shows when each was last seen.
+- Removing a Device, from any Device, switches both off. Its Offline Copy is cleared on its next contact (section 8.8).
+- Removing a Device does not sign it out. The sign-in is Access's session, and settings says so.
+- Unsent writes and the Context a browser last showed are kept in the browser and need no record.
+
+### 8.11 Look, language and accessibility
+
+- **A design system of Praxis's own**, new and not derived from mise's. Its tokens are in code as the source, and the SolidJS components are built from them. No third-party kit.
+- **The direction is chosen by exploring.** Two or three directions are drawn as Claude Design artifacts, one is picked, and its tokens are captured as a Design System artifact that this section then names. This is [Explore design directions for the main screen](https://github.com/nuntz/praxis/issues/34).
+- Each direction draws the main screen at desktop and phone width, in light and dark, in two Contexts, with these states: an Entry with an Inline Task and a Mention, a Held Change waiting, an unread Brief, an Unsent Entry and a standing notice. Settings, the Trash and the Changes screen are not drawn. They are built from the chosen system.
+- **Fixed for every direction**:
+  - the layout of section 8.1;
+  - light and dark, following the device, with no switch;
+  - one accent colour per Context, from a fixed set the exploration chooses, shown in the top bar, the Context switcher and both composers, so the person sees where they are about to write. There is no theme beyond it;
+  - the interface in English, with no translation layer. An Entry can be in any language. Dates and numbers follow the device's locale;
+  - WCAG 2.2 AA, in light and in dark. Everything is reachable by keyboard.
+
 ## 9. Architecture
 
 ADR 0006, 0010, 0017.
@@ -639,7 +707,7 @@ ADR 0006, 0010, 0017.
 
 - All of a deployment's data is in Durable Object SQLite. There is no D1.
 - **Each Context is its own object**, holding its Journal, Tasks, Projects, Persons, Trash, change log, Run records, words index and Conversation. The domain is in Praxis's own tables. The runtime's tables hold only the Conversation and can be dropped without losing anything true.
-- **One deployment object** holds the list of Contexts, the Connections, the devices with their push subscriptions and switches, the spend cap, the month's running spend total, the monthly spend totals of deleted Contexts, and which Context has a Call. It holds nothing from any Journal.
+- **One deployment object** holds the list of Contexts with their names and accent colours, the Connections, the devices with their push subscriptions and switches, the spend cap, the month's running spend total, the monthly spend totals of deleted Contexts, and which Context has a Call. It holds nothing from any Journal.
 - The Worker asks the deployment object which Context a request is for, then talks to that Context's object. A Context's object reaches the deployment object only through a closed set of calls:
   - the other Contexts' names;
   - whether a Run or a Call may start, which is the cap;
@@ -669,14 +737,19 @@ From [Recall](https://github.com/nuntz/praxis/issues/21), which has an ADR for m
 - One `search` tool returns one ranked list. No caller picks a mode. It is the same tool for the hand, the Agent and a Connection.
 - It covers Entries, Tasks, Projects and Persons in the current Context by words. Meaning applies to Entries only. The Trash and Versions are never searched.
 - It can be narrowed by date range, Project, Person and Author.
-- The words index is inside the Context's object. The meaning index is outside it. Nothing goes to a third party, and embedding spend counts toward the cap.
+- The words index is inside the Context's object. The meaning index is outside it. Its embeddings come from `@cf/baai/bge-m3` on Workers AI, chosen because it handles Entries in more than one language. The model is fixed in code and is not configuration: a release that changes it marks every meaning index stale. Nothing goes to a third party, and embedding spend counts toward the cap.
 - If the meaning index is missing or stale, search still answers from words, and tells every caller that it did.
 - A saved Entry is findable by words at once and by meaning shortly after. A deleted Entry leaves both indexes at once and returns on restore.
 - The person can start a full rebuild from settings.
 
 ### 9.5 Live updates
 
-A connected PWA receives the Effects of each change in its current Context and patches what it shows. A PWA that was away catches up from `list_changes`. The Conversation streams the Agent's answer as it is written. The transport for both is not decided†.
+- The PWA holds one WebSocket to its current Context's object, which hibernates when idle.
+- It carries two things, both downward: the Effects of each change in that Context, from which the PWA patches what it shows, and the Agent's answer as it is written.
+- Nothing travels up it. Every send is a tool call.
+- A PWA that was away catches up from `list_changes` and `list_messages`. An answer missed part-way is not replayed: the Message is read once it is whole.
+- Switching Context closes the socket and opens one to the other object.
+- A Connection has no live channel. It polls `list_changes`.
 
 ## 10. Export, Backup and retention
 
@@ -686,7 +759,7 @@ ADR 0018.
 
 - An **Export** is an archive in a documented JSON format of Praxis's own, stamped with a format version: one file for the deployment and one per Context. It is always the whole deployment. Only the person's hand makes one.
 - A **Backup** is the same file, made by the system once a day into R2 and deleted after 30 days. Always on, with no switch.
-- **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; Run records. From the deployment: the Contexts with their names, whether each is retired, their Brief and Review times and Notification switch; the spend cap; the monthly spend totals of deleted Contexts; Connections.
+- **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; Run records. From the deployment: the Contexts with their names, accent colours and time zones, whether each is retired, their Brief and Review times and Notification switch; the spend cap; the monthly spend totals of deleted Contexts; Connections.
 - **Out**: every Conversation and transcript, the change log, the record of a Connection's calls, devices and push subscriptions, both provider keys.
 - An Entry in the file is its plain words plus its links as data.
 - There is no Markdown rendering, no per-Context Export and no encryption of Praxis's own.
@@ -757,8 +830,9 @@ The setup wizard:
 - Offers the jurisdiction, once.
 - Takes the Agent's provider key and the model's name, both optional, and says to set a spend limit with the provider.
 - Takes the voice provider key, optional, and says what reaches that provider.
+- Asks for the monthly spend cap, offering 20 US dollars.
 - Makes the Web Push signing key pair.
-- Either makes the first Context or restores an Export.
+- Either makes the first Context, with its name, time zone and accent colour, or restores an Export.
 
 Changing a key or the model is a change to the configuration and a deploy, never something done in Praxis.
 
@@ -785,7 +859,7 @@ ADR 0015, 0019, 0020, 0021.
 
 **MCP.** A real MCP SDK client over Streamable HTTP against the Worker in workerd, with tokens signed by a test key. It asserts the tool list equals the Connection column, held calls are refused with the error saying what to do instead, a read-only Connection gets no writes, an ended Connection is refused on its next call, and a Connection reaches only its own Context.
 
-**The browser.** A Playwright suite gates CI from the start, against the built PWA served by the real Worker, at desktop and phone width. Journeys: record an Entry with an Inline Task; finish a Task from attention; ask the Agent for a change and see the screen patch; tap a Held Change; restore from the Trash; make a Connection; and the five offline journeys of ADR 0015.
+**The browser.** A Playwright suite gates CI from the start, against the built PWA served by the real Worker, at desktop and phone width. Journeys: record an Entry with an Inline Task; finish a Task from attention; ask the Agent for a change and see the screen patch; tap a Held Change; restore from the Trash; make a Connection; and the five offline journeys of ADR 0015. Each journey also runs an automated accessibility check, in light and in dark.
 
 **Fakes.** Four things are faked: the model, the voice provider (on the device, with scripted transcripts and no sound), the Web Push sender and the Access key set. Each adapter has one contract suite, run in CI against the fake and by hand against the real service.
 
@@ -807,24 +881,26 @@ ADR 0015, 0019, 0020, 0021.
 
 ## 15. Open points
 
-Found while assembling this spec. Each needs a decision before the slice that touches it. Everything marked † above belongs to one of these.
+Found while assembling this spec. The numbers are kept so that references to them still hold.
 
 **Decisions that disagreed**
 
-Points 1 to 5 were settled in [Settle where decisions disagree](https://github.com/nuntz/praxis/issues/31) and are no longer open: what attention holds (section 8.3), when the Agent records an Entry (sections 5.3 and 6), how a Context's object reaches the deployment object (section 9.2), a Task having no leading state (section 3.4), and who is offered restoring a Version (section 4.10, ADR 0005). The numbers below are kept so that references to them still hold.
+Points 1 to 5 were settled in [Settle where decisions disagree](https://github.com/nuntz/praxis/issues/31) and are no longer open: what attention holds (section 8.3), when the Agent records an Entry (sections 5.3 and 6), how a Context's object reaches the deployment object (section 9.2), a Task having no leading state (section 3.4), and who is offered restoring a Version (section 4.10, ADR 0005).
 
 **Not decided**
 
-6. **The Conversation's channel.** Sending a Message, reading Messages, trying a failed Run again and starting a Call are not in any tool list, though "the screen reads and writes only through tools". Whether they are hand-only tools or a channel of their own, and the transport for live Effects and the streamed answer.
-7. **A Context's time zone.** Used by dates, Overdue, Deferred and tests. Who sets it, when, and what happens when the person travels.
-8. **Tools implied but never named or offered**: `set_notifications`, `get_settings`, `list_notices`, a view of the weeks ahead, `list_held_changes` for a Connection, `list_runs` and `get_run`, `list_connection_calls`, `rebuild_search_index`, removing one Trash item for good, and every deployment tool's name.
-9. **Devices.** What makes a device, how it is named and how one is removed are only implied.
-10. **Typing syntax.** The Inline Task marker and what the person types to make a Reference or a Mention.
-11. **Small numbers and defaults**: the ceiling on Standing Entries, the default Brief time and Review day, whether they start on or off, the default cap, how long without a sign of life ends a Call.
-12. **The models shipped.** The map leans to Claude Sonnet 5.5 and GPT-Live. The embedding model is not named.
-13. **What a record holds beyond its name.** A Task has a title only and a Person a name only, by omission.
-14. **What a move drops.** That a delegation is taken back on a move is inferred from "any link back is dropped".
-15. **Look.** A design system, dark mode, and whether a Context has a theme were raised in [What carries over from mise](https://github.com/nuntz/praxis/issues/5) and never settled. Language and accessibility were never raised.
+Points 6 to 15 were settled in [Settle what the spec leaves undecided](https://github.com/nuntz/praxis/issues/32) and are no longer open:
+
+6. The Conversation's channel: Conversation tools (section 4.12) and one WebSocket downward (section 9.5).
+7. A Context's time zone (section 3.1).
+8. Tools implied but never named (sections 4.10 and 4.11), with `view_ahead` for the weeks ahead.
+9. Devices (section 8.10).
+10. Typing syntax (section 3.2).
+11. Small numbers and defaults (sections 5.4, 5.5, 5.7 and 6).
+12. The models shipped (sections 5.6, 6 and 9.4).
+13. What a record holds beyond its name: nothing (sections 3.3, 3.6 and 3.7).
+14. What a move takes and drops (section 3.9). A Project's unit now takes its Tasks' Origin Entries.
+15. Look, language and accessibility (section 8.11). One thing is still open: the design direction, which is chosen in [Explore design directions for the main screen](https://github.com/nuntz/praxis/issues/34).
 
 **Glossary**
 

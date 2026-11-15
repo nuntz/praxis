@@ -144,6 +144,10 @@ _Avoid_: Dump, download, archive
 An Export the system makes by itself each day and keeps for a limited time, so a deployment that is lost can be started again.
 _Avoid_: Snapshot, copy
 
+**Device**:
+One browser's installation of Praxis. Praxis keeps track of a Device only while the person has Notifications or an Offline Copy switched on there, and removing it switches both off. Removing it does not sign it out.
+_Avoid_: Client, session, install
+
 **Unsent**:
 The state of an Entry recorded or a Task finished on a device that Praxis has not yet received. It is on that device only, and until it is sent it is the person's to change or discard. Nothing else can be made Unsent: every other change needs the network.
 _Avoid_: Pending, queued, draft, outbox
