@@ -28,3 +28,32 @@ test("the person records Entries in the Journal's composer and sees them in time
   await expect(ours.nth(0).getByTestId("words")).toHaveText(first);
   await expect(ours.nth(1).getByTestId("words")).toHaveText(second, { useInnerText: true });
 });
+
+test("the person records an Entry with an Inline Task and finishes the Task where it is shown", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${Date.now()}`;
+  const title = `Send the signed lease ${tag}`;
+  const words = `Called the landlord ${tag}\n[] ${title}\n- Not a Task ${tag}`;
+
+  await page.goto("/");
+  const journal = page.getByRole("region", { name: "Journal" });
+  await journal.getByRole("textbox", { name: "New Entry" }).fill(words);
+  await journal.getByRole("button", { name: "Record" }).click();
+
+  // The marked line makes one Task, shown with its Entry; the list item makes none.
+  const entry = journal.getByTestId("entry").filter({ hasText: `Called the landlord ${tag}` });
+  await expect(entry.getByRole("checkbox")).toHaveCount(1);
+  const task = entry.getByRole("checkbox", { name: title });
+  await expect(task).not.toBeChecked();
+  // The marker stays in the words, as typed.
+  await expect(entry.getByTestId("words")).toHaveText(words, { useInnerText: true });
+
+  await task.check();
+  await expect(task).toBeChecked();
+
+  // What the server kept, read back afresh: the Task is Finished, and still hangs off its Entry.
+  await page.reload();
+  await expect(entry.getByRole("checkbox", { name: title })).toBeChecked();
+  await expect(entry.getByTestId("words")).toHaveText(words, { useInnerText: true });
+});

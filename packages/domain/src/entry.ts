@@ -1,6 +1,7 @@
 import type { Author } from "./callers.ts";
+import type { Task } from "./task.ts";
 
-/** An Entry as every read and write returns it (section 3.2). */
+/** An Entry as every read and write returns it (section 3.2), with its Tasks. */
 export type Entry = {
   id: string;
   /** Plain text, exactly as typed. */
@@ -10,6 +11,8 @@ export type Entry = {
   author: Author;
   /** Whether it came through the Conversation. */
   through_conversation: boolean;
+  /** The Tasks it is the Origin Entry of, in the order they were made. */
+  tasks: Task[];
 };
 
 /** A page of a list, read by cursor (section 4.9). `next_cursor` is null on the last page. */

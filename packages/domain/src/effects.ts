@@ -1,7 +1,7 @@
 import type { Caller } from "./callers.ts";
 
 /** The kinds of record an Effect can name. */
-export type RecordKind = "entry";
+export type RecordKind = "entry" | "task";
 
 /**
  * One thing a change brought about (section 4.4): a record made, changed or deleted, and whether

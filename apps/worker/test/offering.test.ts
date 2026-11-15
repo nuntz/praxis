@@ -8,6 +8,12 @@ const runsWith: Record<string, () => unknown> = {
   record_entry: () => ({ words: marked("Offered") }),
   get_entry: () => ({ id: "no-such-entry" }),
   list_entries: () => ({}),
+  add_task: () => ({ entry_id: "no-such-entry", title: marked("Offered") }),
+  finish_task: () => ({ id: "no-such-task" }),
+  drop_task: () => ({ id: "no-such-task" }),
+  reopen_task: () => ({ id: "no-such-task" }),
+  rename_task: () => ({ id: "no-such-task", title: marked("Offered") }),
+  get_task: () => ({ id: "no-such-task" }),
   list_changes: () => ({}),
 };
 

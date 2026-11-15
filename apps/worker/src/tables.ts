@@ -15,6 +15,27 @@ export function createTables(sql: SqlStorage): void {
     );
     CREATE INDEX IF NOT EXISTS entries_by_time ON entries (at, seq);
 
+    -- A Task hangs off its Origin Entry. Its state is not a column: it is derived from its events.
+    CREATE TABLE IF NOT EXISTS tasks (
+      seq INTEGER PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      origin_entry TEXT NOT NULL REFERENCES entries (id),
+      at INTEGER NOT NULL,
+      author_kind TEXT NOT NULL,
+      author_name TEXT
+    );
+    CREATE INDEX IF NOT EXISTS tasks_by_entry ON tasks (origin_entry, seq);
+
+    -- What has happened to each Task, in order: it reached an end or was reopened.
+    CREATE TABLE IF NOT EXISTS task_events (
+      seq INTEGER PRIMARY KEY,
+      task TEXT NOT NULL REFERENCES tasks (id),
+      what TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS task_events_by_task ON task_events (task, seq);
+
     -- The change log (section 4.4): one row per write that changed something, and its Effects.
     -- AUTOINCREMENT so a number is never given twice, even once the oldest are pruned.
     CREATE TABLE IF NOT EXISTS change_calls (

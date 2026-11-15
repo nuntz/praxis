@@ -20,9 +20,14 @@ type Stub = ReturnType<typeof env.CONTEXT.get>;
 
 export type Request = { caller: Caller; tool: string; input: unknown; arrivedAt: number };
 
-/** Each domain table, with the kind of record its rows are and the column holding its id. */
+/**
+ * Each domain table, with the kind of record its rows belong to and the column holding that
+ * record's id. A record can span tables: a Task is its row and its events.
+ */
 const domainTables: Record<string, { kind: Effect["kind"]; id: string }> = {
   entries: { kind: "entry", id: "id" },
+  tasks: { kind: "task", id: "id" },
+  task_events: { kind: "task", id: "task" },
 };
 
 /** The Context object's other tables, which hold no record. */
@@ -138,12 +143,18 @@ function snapshot(stub: Stub): Promise<{ records: Records; lastChange: number }>
       "Every table is known to the oracle: add it to domainTables in apps/worker/test/oracle.ts if its rows are records, else to otherTables",
     ).toEqual([]);
 
-    const records: Records = new Map();
+    const rows = new Map<string, Record<string, unknown[]>>();
     for (const [table, { kind, id }] of Object.entries(domainTables)) {
-      for (const row of sql.exec(`SELECT * FROM ${table}`)) {
-        records.set(`${kind}:${row[id]}`, canonical(row));
+      for (const row of sql.exec(`SELECT * FROM ${table} ORDER BY rowid`)) {
+        const record = `${kind}:${row[id]}`;
+        const held = rows.get(record) ?? {};
+        held[table] = [...(held[table] ?? []), row];
+        rows.set(record, held);
       }
     }
+    const records: Records = new Map(
+      [...rows].map(([record, tables]) => [record, canonical(tables)]),
+    );
     const { seq } = sql
       .exec<{ seq: number | null }>(`SELECT max(seq) AS seq FROM change_calls`)
       .one();

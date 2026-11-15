@@ -24,6 +24,7 @@ describe("record_entry", () => {
       at: "2026-11-15T09:30:00.000Z",
       author: { kind: "person" },
       through_conversation: false,
+      tasks: [],
     });
     expect(value(await context.call(hand, "get_entry", { id: record.id }))).toEqual(record);
   });
@@ -111,7 +112,7 @@ describe("get_entry", () => {
 
 describe("a tool the registry does not have", () => {
   test("is not offered", async () => {
-    const result = await newContext().callAny(hand, "create_task", { title: "No bare Tasks" });
+    const result = await newContext().callAny(hand, "no_such_tool", { title: "Nothing" });
 
     expect(result).toMatchObject({ ok: false, error: { code: "not_offered" } });
   });

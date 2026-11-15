@@ -12,5 +12,11 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   record_entry: [  "yes", "yes", "no",  "yes",      "no"  ],
   get_entry: [     "yes", "yes", "yes", "yes",      "yes" ],
   list_entries: [  "yes", "yes", "yes", "yes",      "yes" ],
+  add_task: [      "yes", "yes", "no",  "yes",      "no"  ],
+  finish_task: [   "yes", "yes", "no",  "yes",      "no"  ],
+  drop_task: [     "yes", "yes", "no",  "yes",      "no"  ],
+  reopen_task: [   "yes", "yes", "no",  "yes",      "no"  ],
+  rename_task: [   "yes", "yes", "no",  "yes",      "no"  ],
+  get_task: [      "yes", "yes", "yes", "yes",      "yes" ],
   list_changes: [  "yes", "yes", "yes", "yes",      "yes" ],
 };

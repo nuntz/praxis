@@ -1,5 +1,4 @@
 import {
-  type Author,
   authorOf,
   type Entry,
   failure,
@@ -9,15 +8,15 @@ import {
   summarizeWords,
   written,
 } from "@praxis/domain";
+import { type AuthorColumns, authorColumns, toAuthor } from "../author.ts";
 import type { Handlers } from "../registry.ts";
+import { insertTask, taskEffect, tasksOf } from "../task-rows.ts";
 
-type EntryRow = {
+type EntryRow = AuthorColumns & {
   seq: number;
   id: string;
   words: string;
   at: number;
-  author_kind: Author["kind"];
-  author_name: string | null;
   through_conversation: number;
 };
 
@@ -33,14 +32,18 @@ export const entryTools: Pick<Handlers, "record_entry" | "get_entry" | "list_ent
       id,
       input.words,
       arrivedAt,
-      author.kind,
-      author.kind === "connection" ? author.name : null,
+      ...authorColumns(author),
       throughConversation ? 1 : 0,
     );
+    // The Tasks come as a list beside the words. The words are never read to find them.
+    for (const { title } of input.tasks ?? []) {
+      insertTask(sql, { title, originEntry: id, at: arrivedAt, author });
+    }
     const entry = readEntry(sql, id) as Entry;
     return success(
       written(entry, [
         { kind: "entry", id, what: "made", summary: summarizeWords(entry.words), by: "call" },
+        ...entry.tasks.map((task) => taskEffect(task, "made")),
       ]),
     );
   },
@@ -73,30 +76,31 @@ export const entryTools: Pick<Handlers, "record_entry" | "get_entry" | "list_ent
     const page = rows.slice(0, PAGE_SIZE);
     const last = page.at(-1);
     return success({
-      items: page.map(toEntry),
+      items: withTasks(sql, page),
       next_cursor: rows.length > PAGE_SIZE && last ? encodeCursor(last) : null,
     });
   },
 };
 
+/** An Entry that exists in this Context, with its Tasks. */
 function readEntry(sql: SqlStorage, id: string): Entry | null {
-  const row = sql.exec<EntryRow>(`SELECT * FROM entries WHERE id = ?`, id).toArray()[0];
-  return row ? toEntry(row) : null;
+  const rows = sql.exec<EntryRow>(`SELECT * FROM entries WHERE id = ?`, id).toArray();
+  return withTasks(sql, rows)[0] ?? null;
 }
 
-function toEntry(row: EntryRow): Entry {
-  return {
+function withTasks(sql: SqlStorage, rows: EntryRow[]): Entry[] {
+  const tasks = tasksOf(
+    sql,
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) => ({
     id: row.id,
     words: row.words,
     at: instantToIso(row.at),
     author: toAuthor(row),
     through_conversation: row.through_conversation === 1,
-  };
-}
-
-function toAuthor(row: EntryRow): Author {
-  if (row.author_kind === "connection") return { kind: "connection", name: row.author_name ?? "" };
-  return { kind: row.author_kind };
+    tasks: tasks.get(row.id) ?? [],
+  }));
 }
 
 /** Where a page ended: the last Entry's time and its order of arrival. */

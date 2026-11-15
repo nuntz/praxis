@@ -1,4 +1,4 @@
-import type { Entry } from "@praxis/domain";
+import { type Entry, inlineTasks, type Task } from "@praxis/domain";
 import { createSignal, For, onMount, Show } from "solid-js";
 import { callTool, Unreachable } from "./tools.ts";
 
@@ -24,6 +24,18 @@ export function Journal() {
 
   onMount(() => loadPage());
 
+  /** Show a Task as a write returned it, on the Entry it hangs off. */
+  function showTask(task: Task) {
+    setProblem(null);
+    setEntries((shown) =>
+      shown.map((entry) =>
+        entry.id === task.origin_entry
+          ? { ...entry, tasks: entry.tasks.map((each) => (each.id === task.id ? task : each)) }
+          : entry,
+      ),
+    );
+  }
+
   return (
     <section class="journal" aria-labelledby="journal-heading">
       <h1 id="journal-heading" class="column-heading">
@@ -38,7 +50,9 @@ export function Journal() {
           )}
         </Show>
         <ol class="entry-list" aria-label="Entries">
-          <For each={entries()}>{(entry) => <EntryItem entry={entry} />}</For>
+          <For each={entries()}>
+            {(entry) => <EntryItem entry={entry} onTask={showTask} onProblem={setProblem} />}
+          </For>
         </ol>
       </div>
       <Composer
@@ -59,15 +73,70 @@ export function Journal() {
   );
 }
 
-function EntryItem(props: { entry: Entry }) {
+function EntryItem(props: {
+  entry: Entry;
+  onTask: (task: Task) => void;
+  onProblem: (message: string) => void;
+}) {
   return (
-    <li class="entry">
+    <li class="entry" data-testid="entry">
       <time class="entry-time" datetime={props.entry.at}>
         {timeFormat.format(new Date(props.entry.at))}
       </time>
       <p class="entry-words" data-testid="words">
         {props.entry.words}
       </p>
+      <Show when={props.entry.tasks.length > 0}>
+        <ul class="task-list" aria-label="Tasks">
+          <For each={props.entry.tasks}>
+            {(task) => <TaskItem task={task} onTask={props.onTask} onProblem={props.onProblem} />}
+          </For>
+        </ul>
+      </Show>
+    </li>
+  );
+}
+
+/** A Task where it is shown, finished or reopened from there by its checkbox. */
+function TaskItem(props: {
+  task: Task;
+  onTask: (task: Task) => void;
+  onProblem: (message: string) => void;
+}) {
+  const [sending, setSending] = createSignal(false);
+  const finished = () => props.task.state.is === "finished";
+  const dropped = () => props.task.state.is === "dropped";
+
+  async function toggle(box: HTMLInputElement) {
+    setSending(true);
+    try {
+      const tool = box.checked ? "finish_task" : "reopen_task";
+      const result = await callTool(tool, { id: props.task.id });
+      if (!result.ok) return props.onProblem(result.error.message);
+      props.onTask(result.value.record);
+    } catch (error) {
+      props.onProblem(unreachableMessage(error));
+    } finally {
+      // Whatever the answer, the box shows the Task as the server last said it is.
+      box.checked = finished();
+      setSending(false);
+    }
+  }
+
+  return (
+    <li class="task" classList={{ closed: props.task.state.is !== "open" }}>
+      <label>
+        <input
+          type="checkbox"
+          checked={finished()}
+          disabled={sending() || dropped()}
+          onChange={(event) => void toggle(event.currentTarget)}
+        />
+        <span class="task-title">{props.task.title}</span>
+      </label>
+      <Show when={dropped()}>
+        <span class="task-mark">Dropped</span>
+      </Show>
     </li>
   );
 }
@@ -84,7 +153,11 @@ function Composer(props: {
     if (!canRecord()) return;
     setSending(true);
     try {
-      const result = await callTool("record_entry", { words: words() });
+      // The editor finds the Inline Tasks; the server never reads words for them.
+      const result = await callTool("record_entry", {
+        words: words(),
+        tasks: inlineTasks(words()),
+      });
       if (!result.ok) return props.onProblem(result.error.message);
       props.onRecorded(result.value.record);
       setWords("");

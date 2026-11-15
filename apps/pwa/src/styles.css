@@ -91,6 +91,43 @@ body {
   overflow-wrap: anywhere;
 }
 
+.task-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+}
+
+.task label {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  cursor: pointer;
+}
+
+.task input {
+  accent-color: var(--accent);
+}
+
+.task-title {
+  overflow-wrap: anywhere;
+}
+
+.task.closed .task-title,
+.task-mark {
+  color: var(--muted);
+}
+
+.task-mark {
+  font-size: 0.8125rem;
+}
+
 .composer {
   display: flex;
   gap: 8px;
