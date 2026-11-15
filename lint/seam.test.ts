@@ -9,14 +9,25 @@ import { toolNames } from "../packages/domain/src/index.ts";
 
 const seamTests = join(import.meta.dir, "../apps/worker/test");
 
+const table = "apps/worker/test/offering.ts";
+
 /** What is unguarded: a tool with no row or no seam test, or a row for no tool. */
 function unguarded(tools: string[], rows: string[], testSources: string[]): string[] {
   const named = (tool: string) =>
     testSources.some((source) => new RegExp(`describe\\(\\s*["'\`]${tool}\\b`).test(source));
   return [
-    ...tools.filter((tool) => !rows.includes(tool)).map((tool) => `${tool} has no row`),
-    ...tools.filter((tool) => !named(tool)).map((tool) => `${tool} has no seam test`),
-    ...rows.filter((row) => !tools.includes(row)).map((row) => `${row} is a row for no tool`),
+    ...tools
+      .filter((tool) => !rows.includes(tool))
+      .map((tool) => `${tool} has no row: add one to the offering table in ${table}`),
+    ...tools
+      .filter((tool) => !named(tool))
+      .map(
+        (tool) =>
+          `${tool} has no seam test: name a describe block after it, describe("${tool}", …), in a *.test.ts under apps/worker/test`,
+      ),
+    ...rows
+      .filter((row) => !tools.includes(row))
+      .map((row) => `${row} is a row for no tool: remove it from ${table}`),
   ];
 }
 
@@ -37,10 +48,10 @@ describe("the registry guard", () => {
     expect(
       unguarded(["get_entry", "list_entries", "edit_entry"], ["get_entry", "gone"], sources),
     ).toEqual([
-      "list_entries has no row",
-      "edit_entry has no row",
-      "edit_entry has no seam test",
-      "gone is a row for no tool",
+      expect.stringMatching(/^list_entries has no row: .*offering\.ts$/),
+      expect.stringMatching(/^edit_entry has no row: /),
+      expect.stringMatching(/^edit_entry has no seam test: .*describe\("edit_entry", …\)/),
+      expect.stringMatching(/^gone is a row for no tool: remove it/),
     ]);
   });
 
@@ -48,7 +59,7 @@ describe("the registry guard", () => {
     const sources = ['test("calls get_entry", () => {});', 'describe("get_entry_versions")'];
 
     expect(unguarded(["get_entry"], ["get_entry"], sources)).toEqual([
-      "get_entry has no seam test",
+      expect.stringMatching(/^get_entry has no seam test: /),
     ]);
   });
 });

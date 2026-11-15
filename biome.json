@@ -40,6 +40,26 @@
           }
         }
       }
+    },
+    {
+      "includes": ["apps/worker/test/**/*.test.ts", "!apps/worker/test/endpoint.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["cloudflare:test", "cloudflare:workers"],
+                    "message": "A seam test reaches a Context only through newContext() in seam.ts, so every call goes through the oracle and no test reads tables or writes rows (ADR 0015). endpoint.test.ts alone tests the Worker's HTTP path."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

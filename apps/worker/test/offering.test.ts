@@ -21,7 +21,10 @@ describe("the offering table", () => {
 
       test(`${tool} is ${offered ? "" : "not "}offered to the ${caller.kind}`, async () => {
         const input = runsWith[tool];
-        expect(input, `${tool} needs an input it runs with`).toBeDefined();
+        expect(
+          input,
+          `${tool} needs an input it runs with: add one to runsWith in apps/worker/test/offering.test.ts`,
+        ).toBeDefined();
 
         const result = await newContext().callAny(caller, tool, input?.());
 

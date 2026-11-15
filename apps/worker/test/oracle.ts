@@ -133,7 +133,10 @@ function snapshot(stub: Stub): Promise<{ records: Records; lastChange: number }>
       .toArray()
       .map((row) => row.name);
     const unknown = tables.filter((name) => !(name in domainTables || otherTables.includes(name)));
-    expect(unknown, "Every table is known to the oracle, as a domain table or not").toEqual([]);
+    expect(
+      unknown,
+      "Every table is known to the oracle: add it to domainTables in apps/worker/test/oracle.ts if its rows are records, else to otherTables",
+    ).toEqual([]);
 
     const records: Records = new Map();
     for (const [table, { kind, id }] of Object.entries(domainTables)) {

@@ -29,6 +29,16 @@ const fixtures: Record<string, string> = {
   // The Worker reads the clock in this one file, and an instant held as a number is no read.
   "apps/worker/src/arrival.ts": "export const now = Date.now();",
   "apps/worker/src/instant.ts": "export const iso = new Date(0).toISOString();",
+  // A seam test reaches a Context only through the harness, so the oracle sees every call.
+  "apps/worker/test/around-the-oracle.test.ts": [
+    'import { runInDurableObject } from "cloudflare:test";',
+    'import { env } from "cloudflare:workers";',
+    "export const used = [runInDurableObject, env];",
+  ].join("\n"),
+  "apps/worker/test/nested/around-the-oracle.test.ts": 'export { env } from "cloudflare:workers";',
+  // The harness itself, and the one test of the Worker's HTTP path, may.
+  "apps/worker/test/oracle.ts": 'export { runInDurableObject } from "cloudflare:test";',
+  "apps/worker/test/endpoint.test.ts": 'export { exports } from "cloudflare:workers";',
   // The recommended rules are on.
   "apps/pwa/src/recommended.ts": "export function f(a: number) {\n  debugger;\n  return a;\n}",
 };
@@ -82,6 +92,21 @@ describe("the lint guards", () => {
   test("the Worker reads it only in arrival.ts, and an instant from a number is no read", () => {
     expect(rulesAt("apps/worker/src/arrival.ts")).toEqual([]);
     expect(rulesAt("apps/worker/src/instant.ts")).toEqual([]);
+  });
+
+  test("a seam test cannot reach a Context object or its tables except through the harness", () => {
+    expect(rulesAt("apps/worker/test/around-the-oracle.test.ts")).toEqual([
+      restrictedImport,
+      restrictedImport,
+    ]);
+    expect(rulesAt("apps/worker/test/nested/around-the-oracle.test.ts")).toEqual([
+      restrictedImport,
+    ]);
+  });
+
+  test("the harness and the Worker's HTTP test can", () => {
+    expect(rulesAt("apps/worker/test/oracle.ts")).toEqual([]);
+    expect(rulesAt("apps/worker/test/endpoint.test.ts")).toEqual([]);
   });
 
   test("the recommended rules are on", () => {

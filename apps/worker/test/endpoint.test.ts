@@ -1,4 +1,8 @@
 import { exports } from "cloudflare:workers";
+
+// The one test that reaches a Context the way the screen does, over HTTP, so it is the one test
+// whose calls the oracle does not see. It covers only the endpoint's own work: which caller,
+// which tool, and the body. What the tools do is tested at the seam.
 import { describe, expect, test } from "vitest";
 
 function callTool(tool: string, body: string) {
