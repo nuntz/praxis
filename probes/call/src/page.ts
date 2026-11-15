@@ -31,6 +31,12 @@ export const PAGE = /* html */ `<!doctype html>
 
 <fieldset>
   <legend>Setup</legend>
+  <label>Who carries the Call
+    <select id="carrier">
+      <option value="browser">this device, on its data channel (the object attaches to nothing)</option>
+      <option value="side">the object, on the side channel (it is sent the sound)</option>
+    </select>
+  </label>
   <label>Stand-in for a Run
     <select id="mode">
       <option value="stream">streamed subrequest, fixed answer (tests the workerd drop)</option>
@@ -47,7 +53,9 @@ export const PAGE = /* html */ `<!doctype html>
   <button id="start">Start Call</button>
   <button id="mute" disabled>Mute</button>
   <button id="end" disabled>End (leave)</button>
-  <button id="close" disabled>End (object sends session.close)</button>
+  <button id="dcclose" disabled>End (device sends session.close)</button>
+  <button id="close" disabled>End (object attaches if need be, sends session.close)</button>
+  <button id="guess" disabled>Object guesses at a hangup endpoint</button>
   <button id="wipe">Wipe log</button>
 </fieldset>
 
@@ -69,7 +77,24 @@ export const PAGE = /* html */ `<!doctype html>
 const k = new URLSearchParams(location.search).get("k");
 const api = (p) => p + (p.includes("?") ? "&" : "?") + "k=" + encodeURIComponent(k);
 const $ = (id) => document.getElementById(id);
-let pc, mic, since = 0, rows = [], t0 = 0, facts = {}, dcLog = [];
+let pc, mic, dc, since = 0, rows = [], t0 = 0, facts = {}, dcLog = [], outbox = [], heard = "", carrier = "browser";
+const post = (p, body) => fetch(api(p), { method: "POST", body: JSON.stringify(body) });
+const note = (kind, body) => outbox.push({ at: Date.now(), kind, body });
+setInterval(() => { if (outbox.length) post("/api/log", { events: outbox.splice(0) }); }, 700);
+function dcSend(ev) { dc.send(JSON.stringify(ev)); note("sent", ev); }
+
+// The device carries the Call: rebuild the request from what was heard, ask the object, hand the answer back.
+async function handover(ev) {
+  const settle = Number($("settle").value);
+  if (settle) await new Promise((r) => setTimeout(r, settle));
+  const request = heard.trim();
+  heard = "";
+  const started = Date.now();
+  const r = await post("/api/run", { request, mode: $("mode").value });
+  const { answer } = await r.json();
+  note("device.run.roundtrip", { ms: Date.now() - started });
+  dcSend({ type: "session.commentary.append", event_id: "result_" + started, delegation_id: ev.delegation.id, content: answer });
+}
 
 function fact(name, value) { facts[name] = value; renderFacts(); }
 function renderFacts() {
@@ -79,16 +104,24 @@ const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">":
 
 $("start").onclick = async () => {
   await fetch(api("/api/wipe"), { method: "POST" });
-  since = 0; rows = []; dcLog = []; facts = {}; t0 = Date.now();
+  since = 0; rows = []; dcLog = []; facts = {}; t0 = Date.now(); heard = ""; carrier = $("carrier").value;
   pc = new RTCPeerConnection();
   pc.ontrack = (e) => { $("audio").srcObject = e.streams[0]; };
   pc.onconnectionstatechange = () => { fact("WebRTC", pc.connectionState); if (pc.connectionState === "connected") route(); };
   mic = await navigator.mediaDevices.getUserMedia({ audio: true });
   mic.getTracks().forEach((t) => pc.addTrack(t, mic));
-  const dc = pc.createDataChannel("oai-events");
+  dc = pc.createDataChannel("oai-events");
+  dc.onclose = () => note("device.datachannel.close", {});
   dc.onmessage = (e) => {
     const ev = JSON.parse(e.data);
     dcLog.push(ev);
+    if (carrier === "browser") {
+      // Any sound on the data channel would be a finding: note its type, never its bytes.
+      if (/_audio\./.test(ev.type)) note("device.audio.on.datachannel", { type: ev.type });
+      else note("in:" + ev.type, ev);
+      if (ev.type === "session.input_transcript.delta") heard += ev.delta;
+      if (ev.type === "session.delegation.created") handover(ev);
+    }
     if (!/transcript\\.delta$/.test(ev.type)) $("dc").textContent += JSON.stringify(ev) + "\\n";
     if (ev.session && ev.session.expires_at) {
       const left = ev.session.expires_at * 1000 - Date.now();
@@ -99,13 +132,13 @@ $("start").onclick = async () => {
   await pc.setLocalDescription(offer);
   const r = await fetch(api("/api/session"), {
     method: "POST",
-    body: JSON.stringify({ sdp: offer.sdp, mode: $("mode").value, settleMs: Number($("settle").value), instructions: $("instructions").value }),
+    body: JSON.stringify({ carrier, sdp: offer.sdp, mode: $("mode").value, settleMs: Number($("settle").value), instructions: $("instructions").value }),
   });
   if (!r.ok) { fact("Session", "failed: " + (await r.text()).slice(0, 400)); return; }
   const created = await r.json();
   fact("Session", created.session.id);
   await pc.setRemoteDescription({ type: "answer", sdp: created.transport.sdp });
-  $("mute").disabled = $("end").disabled = $("close").disabled = false;
+  $("mute").disabled = $("end").disabled = $("close").disabled = $("dcclose").disabled = $("guess").disabled = false;
 };
 
 // Where the sound goes: the far end of the selected candidate pair.
@@ -126,15 +159,17 @@ $("mute").onclick = () => {
 };
 $("end").onclick = () => { pc.close(); mic.getTracks().forEach((t) => t.stop()); fact("WebRTC", "closed by this page"); };
 $("close").onclick = () => fetch(api("/api/close"), { method: "POST" });
+$("dcclose").onclick = () => dcSend({ type: "session.close", event_id: "close_" + Date.now() });
+$("guess").onclick = () => fetch(api("/api/guess"), { method: "POST" });
 $("wipe").onclick = async () => { await fetch(api("/api/wipe"), { method: "POST" }); since = 0; rows = []; render(); };
 
 async function poll() {
   try {
     const s = await (await fetch(api("/api/state?since=" + since))).json();
-    if (s.rows.length) { rows.push(...s.rows); since = rows[rows.length - 1].id; render(); }
+    if (s.rows.length) { rows.push(...s.rows); rows.sort((a, b) => a.at - b.at || a.id - b.id); since = Math.max(...rows.map((r) => r.id)); render(); }
     fact("Object boot id", s.boot);
     fact("Side channel", s.sidebandOpen ? "open" : "not open");
-    fact("Call", s.sessionOver ? "over or not started" : "on");
+    fact("Call, as the object knows it", s.sessionOver ? "over or not started" : "on");
     const usage = [...rows].reverse().find((r) => r.kind === "in:session.usage.updated");
     if (usage) fact("Provider usage", JSON.stringify(JSON.parse(usage.body).usage));
     const boots = new Set(rows.map((r) => r.boot));

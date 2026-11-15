@@ -61,6 +61,7 @@ export class CallProbe extends DurableObject<Env> {
   settleMs = 0;
   heard = "";
   lastRunEnd = 0;
+  audioDropped = 0;
   seen = new Set<string>();
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -108,13 +109,67 @@ export class CallProbe extends DurableObject<Env> {
     }
 
     if (path === "/api/close") {
-      // Ending from the object, over the side channel.
+      // Ending from the object. With no side channel open, attach just long enough to say so:
+      // this is how the object would end a Call at the cap when the device carries it.
+      if (this.ws?.readyState !== 1) await this.attach(5);
       this.send({ type: "session.close", event_id: `close_${Date.now()}` });
       return Response.json({ ok: true });
     }
 
+    if (path === "/api/guess") {
+      // Is there any way for the object to see or end a session without attaching? Undocumented guesses.
+      const tries: [string, string][] = [
+        ["GET", ""],
+        ["POST", "/hangup"],
+        ["POST", "/close"],
+        ["DELETE", ""],
+      ];
+      for (const [method, suffix] of tries) {
+        const r = await fetch(`https://${LIVE}/${this.sessionId}${suffix}`, {
+          method,
+          headers: { Authorization: `Bearer ${this.env.OPENAI_API_KEY}` },
+        });
+        this.log("guess", { method, suffix, status: r.status, body: (await r.text()).slice(0, 400) });
+        if (r.ok && method !== "GET") break;
+      }
+      return Response.json({ ok: true });
+    }
+
+    if (path === "/api/run") {
+      // The device carries the Call: a handover reaches the object as an ordinary request.
+      const { request, mode } = (await req.json()) as { request: string; mode: string };
+      this.mode = mode;
+      const started = Date.now();
+      this.log("run.start", { mode, request });
+      let answer: string;
+      try {
+        answer = await this.run(request);
+      } catch (e) {
+        this.log("run.failed", { error: String(e) });
+        answer = "That did not work. Something failed on my side and nothing was changed.";
+      }
+      this.log("run.end", { ms: Date.now() - started, answer });
+      return Response.json({ answer });
+    }
+
+    if (path === "/api/log") {
+      // What the device saw on its data channel, so the whole Call reads as one log.
+      const { events } = (await req.json()) as { events: { at: number; kind: string; body: unknown }[] };
+      for (const e of events) {
+        this.ctx.storage.sql.exec(
+          "INSERT INTO prototype_wipe_me_log (at, boot, kind, body) VALUES (?, ?, ?, ?)",
+          e.at,
+          "device",
+          e.kind,
+          JSON.stringify(e.body),
+        );
+      }
+      return Response.json({ ok: true });
+    }
+
     if (path === "/api/session") {
-      const { sdp, mode, settleMs, instructions } = (await req.json()) as {
+      const { sdp, mode, settleMs, instructions, carrier } = (await req.json()) as {
+        carrier: string;
         sdp: string;
         mode: string;
         settleMs: number;
@@ -147,8 +202,10 @@ export class CallProbe extends DurableObject<Env> {
       this.sessionId = created.session.id;
       this.sessionOver = false;
       const { transport, ...rest } = created;
-      this.log("session.created", { ms: Date.now() - started, mode, settleMs: this.settleMs, response: rest });
-      this.ctx.waitUntil(this.attach());
+      this.log("session.created", { ms: Date.now() - started, carrier, mode, settleMs: this.settleMs, response: rest });
+      // carrier "side": the object follows the side channel (and is sent the sound).
+      // carrier "browser": the object attaches to nothing; the device carries the Call.
+      if (carrier === "side") this.ctx.waitUntil(this.attach());
       return Response.json(created);
     }
 
@@ -206,6 +263,11 @@ export class CallProbe extends DurableObject<Env> {
   }
 
   async onEvent(raw: string) {
+    // The side channel carries every frame of sound, both ways. Dropped unread, only counted.
+    if (raw.slice(0, 60).includes("_audio.")) {
+      if (++this.audioDropped % 200 === 1) this.log("audio.dropped", { frames: this.audioDropped });
+      return;
+    }
     const ev = JSON.parse(raw);
     // Attaching replays the last three seconds, so the same event can arrive twice.
     if (ev.event_id) {
