@@ -43,7 +43,9 @@ function createServer() {
 	const seen = getMcpAuthContext()?.props as Seen | undefined;
 	server.registerTool(
 		"whoami",
-		{ description: "Report who the probe Worker thinks is calling, and how the call arrived." },
+		{
+			description: `Report who the probe Worker thinks is calling, and how the call arrived. This is connection "${seen?.connection ?? "none"}".`,
+		},
 		async () => ({ content: [{ type: "text", text: JSON.stringify(seen, null, 2) }] }),
 	);
 	return server;
@@ -103,12 +105,18 @@ export default {
 		if (identity.signatureVerified !== true) {
 			return new Response("Probe: the Access token did not verify.", { status: 403 });
 		}
-		if (url.pathname !== "/mcp") {
+		// A Connection's address: /mcp/<opaque id>. The bare /mcp is kept too.
+		const match = /^\/mcp(?:\/([A-Za-z0-9_-]+))?$/.exec(url.pathname);
+		if (!match) {
 			return new Response(JSON.stringify(seen, null, 2), {
 				headers: { "content-type": "application/json" },
 			});
 		}
-		const response = await createMcpHandler(createServer, { authContext: { props: seen } })(
+		const connection = match[1] ?? null;
+		const response = await createMcpHandler(createServer, {
+			route: url.pathname,
+			authContext: { props: { connection, ...seen } },
+		})(
 			request,
 			env,
 			ctx,
