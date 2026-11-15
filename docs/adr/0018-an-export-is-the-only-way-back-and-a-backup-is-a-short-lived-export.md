@@ -27,5 +27,6 @@ A deployment has one file format for leaving and coming back: the Export, an arc
 - Each Context's object writes its own file, so the files of one Export are not one instant. Only a record caught moving between Contexts can straddle two files. Restore settles it by id: found in both, it is kept in the destination; marked as moving with no copy elsewhere, it stays in the source.
 - Backups are always on, with no switch, and setup provisions the bucket. Settings shows when the last one was made. When none has succeeded for three days a standing notice appears in attention and in settings; it is not a Notification.
 - Deleting a Context is offered only for a retired one, by the person's hand, after typing its name and being offered an Export. It removes the object's whole storage, its part of the meaning index and its Connections, with no Trash. Its Run records go, and its spend stays as monthly totals in the deployment object with no name attached, so the month's count against the cap never goes down. Its files in Backups go as those Backups age out.
-- A restore must read a file whose format version is older than the code's.
+- A restore must read a file whose format version is older than the code's, however old, and refuses one that is newer. The format version is not the tables' (ADR 0019).
+- One Backup outlives its 30 days: the last that holds a Context whose object failed to upgrade, kept until that Context upgrades (ADR 0019).
 - The file a person saves of one Run is a Run transcript, not an Export.

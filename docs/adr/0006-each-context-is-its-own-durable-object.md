@@ -19,5 +19,5 @@ All of a deployment's data lives in Durable Object SQLite, and each Context is i
 - A Context's object is the only place its truth lives. Anything kept elsewhere, such as a search index or a backup, is derived from it, kept per Context, and can be thrown away and rebuilt.
 - Each Context has its own alarm, so its Brief and Review are scheduled inside it.
 - A jurisdiction is chosen once at setup, optionally, and applies to every object in the deployment. It cannot be changed afterwards except by export and restore into a new deployment.
-- Each object upgrades its own tables, so a retired Context's object may sit on an old schema until it is next woken.
+- Each object upgrades its own tables when it wakes (ADR 0019). The daily Backup wakes every object, a retired Context's included, so the distance an upgrade must cover is set by how long the deployment went without a deploy, not by how long an object slept.
 - An Entry is text only. Nothing but backups needs R2.
