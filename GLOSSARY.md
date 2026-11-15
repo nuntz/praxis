@@ -77,7 +77,7 @@ A link from an Entry to a Person in its Context, kept beside the Entry's words l
 _Avoid_: Tag, at-mention
 
 **Inline Task**:
-A marker typed in an Entry that creates a Task when the Entry is saved. It is a way of typing; the Task it creates is the same as any other.
+A marker typed at the start of a line in an Entry that creates a Task when the Entry is saved. It is a way of typing; the Task it creates is the same as any other. A list item is not one.
 _Avoid_: Checkbox, todo syntax
 
 **Task**:

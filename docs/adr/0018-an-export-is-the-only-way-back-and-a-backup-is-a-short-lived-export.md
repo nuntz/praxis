@@ -11,7 +11,7 @@ A Deployment has one file format for leaving and coming back: the Export, an arc
 - **Merging a file into live data.** Rejected: every record needs a rule for which side wins.
 - **Backups kept for good.** Rejected: a record removed for good would stay in them for ever.
 - **Scrubbing removed records out of old Backups.** Rejected: it rewrites the files that are meant to be left alone, and a fault in the scrub damages every Backup at once.
-- **A Markdown rendering of the Journal beside the JSON.** Rejected for now: a second format that cannot be restored from. It can be added without touching the format.
+- **An Export of the Journal as Markdown files beside the JSON.** Rejected for now: a second format that cannot be restored from. It can be added without touching the format.
 - **Encrypting Backups with a key Praxis holds.** Rejected: the bucket is on the person's account beside the objects that hold the same text, and a managed key is one more way to have a Backup nobody can open.
 - **A per-Context Export.** Rejected: one more shape of file for restore to accept, and an Export of everything already holds it.
 

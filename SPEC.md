@@ -43,11 +43,11 @@ ADR 0003, 0006.
 
 ### 3.2 Entry
 
-ADR 0001, 0008. Glossary: Entry, Author, Version, Follow-up, Standing Entry, Reference, Mention, Inline Task.
+ADR 0001, 0008, 0025. Glossary: Entry, Author, Version, Follow-up, Standing Entry, Reference, Mention, Inline Task.
 
 An Entry has:
 
-- **Words**: plain text. No ids, no markup that means anything to the server. The server never reads words to find Tasks or links.
+- **Words**: plain text, kept exactly as typed. No ids, no markup that means anything to the server. The server never reads words to find Tasks or links. The screen shows them as Markdown (section 8.4).
 - **A time**: when it was made. Set by the server on arrival, or by the made-at time on a write from the person's hand (section 4.6). It is an instant, shown in the Context's time zone, so the Journal's days agree with "today".
 - **An Author**: the person, the Agent, or a Connection shown by its name. Stamped by the tool layer, never stated by the caller. An Entry the person edits becomes theirs.
 - **Whether it came through the Conversation.** It does not link back to a Message, and an Entry recorded in a Call carries no mark that it was spoken.
@@ -59,14 +59,14 @@ An Entry has:
 Rules:
 
 - The person writes an Entry directly in the Journal's composer with no model turn.
-- An Entry recorded by the Agent from the Conversation holds the person's words verbatim, trimmed of filler and never paraphrased. The Agent composes prose only when asked, and such an Entry has the Agent as Author. What was said together becomes one Entry; the Agent splits only on a plain change of subject.
+- An Entry recorded by the Agent from the Conversation holds the person's words verbatim, trimmed of filler and never paraphrased, with no Markdown added. The Agent composes prose only when asked, and such an Entry has the Agent as Author. What was said together becomes one Entry; the Agent splits only on a plain change of subject.
 - Adding or removing a link never changes the words, makes no Version and is never a Held Change.
 - **Inline Task**: a marker the person types in an editor. The editor, using a parser in the domain package, turns it into the list of Tasks passed to `record_entry`. The Task it makes is the same as any other, and editing the words later cannot delete it. The same holds for what the person types to link something.
 
 **What the person types.**
 
-- **An Inline Task** is a line that starts with `[]`. `[ ]` and a leading `- ` are accepted too. The rest of the line is the Task's title. The marker stays in the words. The syntax carries no date and no Project: those are set on the Task.
-- **A Mention**: `@` opens a picker of the Context's Persons. **A Reference**: `#` opens a picker of its Tasks and Projects. Picking puts the name into the words, with the `@` or `#` kept, and anchors the link to it. Either picker offers to make a new Person or Project from what was typed.
+- **An Inline Task** is a line that starts with `[]`. `[ ]` and `- [ ]` are accepted too. A leading `- ` alone is a list item and makes no Task. The rest of the line is the Task's title. The marker stays in the words. The syntax carries no date and no Project: those are set on the Task.
+- **A Mention**: `@` opens a picker of the Context's Persons. **A Reference**: `#` opens a picker of its Tasks and Projects. Picking puts the name into the words, with the `@` or `#` kept, and anchors the link to it. Either picker offers to make a new Person or Project from what was typed. The `#` picker opens only when a character follows the `#`. A `#` and a space at the start of a line is a heading, and a picked Reference never has that space.
 - Only a pick makes a link. `@ali` typed and left is text. The parser never matches a name to a record, since two records can share one.
 
 **Versions.** Every saved change to an Entry's words keeps the words before it as a Version, with who changed them and when, for as long as the Entry exists. No pruning and no coalescing. A Version covers the words only. An Entry whose words have changed shows an edited mark, naming the last Author to change them when that was not the person. Opening it lists the Versions newest first, each compared against the current words. Restoring one is a new change with Effects, and the words it replaced become a Version. Restored words that contain an Inline Task marker make no Task.
@@ -419,6 +419,7 @@ Glossary: Run.
 - The Agent makes a change at once, with no tap and no draft: recording Entries; creating, finishing, rescheduling, delegating and deleting Tasks; making Projects and Persons.
 - The one exception is the Held Change (section 4.7).
 - The Agent judges what is worth recording as an Entry, without needing a cue, and always says what it recorded. This is the same for a typed Message and a spoken one.
+- When it composes, in an Entry or a Message, the Agent may use the Markdown of section 8.4, and is told the set. An image it puts in an Entry waits for a tap.
 - There is no "save this Message". What the Agent says enters the Journal only as an Entry with the Agent as Author, when asked.
 - A correction the Agent must keep honouring is recorded as a Standing Entry, when asked.
 
@@ -537,6 +538,7 @@ ADR 0003, 0005, 0007, 0009, 0010. Glossary: Connection.
 ### 7.3 What a Connection gets
 
 - The Context tools of section 4.10 under the same names and schemas, per its column. A held call is refused. Nothing is made or renamed for MCP.
+- It reads and writes an Entry's words as typed. The tools' descriptions say the words are shown as Markdown and name the set. Words are never checked or refused for their Markdown.
 - Tools only: no resources, no prompts. Read-only and destructive hints come from the tool's metadata.
 - It is never offered the Conversation, Run records, a Call, Standing marks, or the cap. No tool it calls starts a Run, so it sees nothing of an outage.
 - Every call from a Connection is kept for 90 days, reads included: the tool, the time, the result code and how many records came back, never the text of its arguments or results.
@@ -600,9 +602,23 @@ The column is composed by the screen from four sources, in this order:
 - A link to a trashed record shows as deleted. A Follow-up of a trashed Entry shows that it continues a deleted Entry.
 - A Held Change shows as a marker on its Entry that leads to Attention.
 
+**How an Entry's words are shown.** ADR 0025.
+
+- An Entry's words are rendered as Markdown, on the screen only. An Unsent Entry is rendered like any other.
+- **The set** is fixed, with CommonMark's syntax: emphasis and strong, inline code and code blocks, links and bare addresses, bulleted and numbered lists, quotes, headings, tables and images. A table wider than its column scrolls sideways inside the Entry.
+- **Shown as typed**: raw HTML, footnotes, strikethrough, rules and task-list checkboxes. An Inline Task's line shows as typed, with no checkbox. Its Task is shown with the Entry.
+- **Addresses**: a link or an image takes only an `https` address. Anything else is shown as typed. A link opens in a new tab and sends no referrer.
+- **An image** is given by its address, and Praxis keeps none of its bytes.
+  - It loads by itself only in an Entry whose Author is the person and which did not come through the Conversation.
+  - In any other Entry it shows its description and waits for a tap. A tap loads that image for that showing and is not remembered. Editing the Entry makes it the person's, and its images then load by themselves.
+  - One that fails to load shows its description and its address as a link.
+  - The content security policy allows images from any `https` host, and nothing else new.
+- **Never rendered**: both composers and the Entry editor, which show the words as typed with no toolbar and no preview; a Held Change's before and after; a Version compared against the current words; a search result's excerpt; a Task's title; a Project's or a Person's name.
+
 ### 8.5 The Conversation
 
 - Every Message, scrollable to the start.
+- A Message from the Agent, a Brief and a Review included, is rendered as an Entry's words are (section 8.4), except that an image never loads and shows as its description. The person's own Messages show as typed.
 - A Run's calls fold under the Message it left, each change linking to its record, with the Run's cost on opening it.
 - A Held Change waits where the Agent left it, as well as at the top of Attention and on its Entry. It is counted in the Attention badge.
 - A Brief says when it was taken, and says so once Tasks it names have been finished since. The live Attention list stays beside it.
@@ -644,6 +660,7 @@ Capture never fails, and Praxis is not local-first. The server stays the only pl
 - Holds, for every Context that is not retired: the result of `view_attention`, every open Task and Project, every Person, the Standing Entries, the last 30 days of Entries, and any older Entry that Device has opened.
 - Shown as last fetched, with the time. The person can switch Context.
 - Search, older Entries, the Trash, Versions and the change log need the network.
+- It holds no image, and the service worker caches none. Without the network an image shows its description.
 - Its text sits in the browser's storage unencrypted. Turning it off or removing the Device clears it, on that Device's next contact if it is away, and the person is asked first about any Unsent writes.
 
 **Writing: two Unsent writes.**
@@ -763,7 +780,7 @@ ADR 0018.
 - **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; Run records. From the Deployment: the Contexts with their names, accent colours and time zones, whether each is retired, their Brief and Review times and Notification switch; the spend cap; the monthly spend totals of deleted Contexts; Connections.
 - **Out**: every Conversation and the runtime's record of it, the change log, the record of a Connection's calls, Devices and push subscriptions, both provider keys.
 - An Entry in the file is its plain words plus its links as data.
-- There is no Markdown rendering, no per-Context Export and no encryption of Praxis's own.
+- The words go out as typed, with an image as its address only. There is no Export of the Journal as Markdown files, no per-Context Export and no encryption of Praxis's own.
 
 ### 10.2 Restore
 
@@ -843,7 +860,7 @@ ADR 0015, 0019, 0020, 0021.
 
 **Layers.**
 
-- `bun test` for the pure domain package. Direct tests there only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, parsing an Inline Task.
+- `bun test` for the pure domain package. Direct tests there only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, parsing an Inline Task, and what the Markdown renderer lets through: the set, the addresses and when an image loads.
 - Vitest in real workerd for anything touching a Durable Object or SQL. A test can stand up several Context objects and the Deployment object.
 - No domain or tool code reads the real clock. A test sets the time and the Context's time zone and fires alarms itself.
 - CI never calls a model.
@@ -878,5 +895,5 @@ ADR 0015, 0019, 0020, 0021.
 - The Agent reaching outside tools ([Praxis as an MCP client](https://github.com/nuntz/praxis/issues/27)). Nothing is reserved for it.
 - Email-in, an ambient display, and ways in with no browser.
 - Times of day on a Due Date, and reminders.
-- A Markdown rendering of the Journal.
+- An Export of the Journal as Markdown files.
 
