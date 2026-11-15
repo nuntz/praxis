@@ -19,5 +19,6 @@ The Agent runs on one model from one provider, paid for by the person's own API 
 - Praxis tells two failures apart. The provider being unavailable shows only on the Run that failed. The provider refusing the key, whether the key is wrong, out of credit or at the provider's own limit, is a standing notice in attention and in settings until a call succeeds.
 - At the cap the Conversation's composer is replaced by the notice, which links to the cap in settings. The Journal's composer is untouched.
 - A Brief or Review that was due retries with a growing gap during an outage, and at the cap waits for the cap to be raised or the month to turn. Either way it is dropped once the next one is due, attention shows one line with the reason, and no Notification is sent.
+- A Call needs a second provider and a second optional key, kept and set in the same way, for the model that listens and speaks. It is not a fallback: that model never does the Agent's work (ADR 0021). Without the voice key there is no Call and nothing is shown as broken.
 - A Connection sees nothing of the cap or an outage, since no tool it calls starts a Run. Search tells every caller when it answered from words only.
 - At the cap, embedding of newly saved Entries stops too. Those Entries are found by words, and the meaning index catches up once the cap lifts.

@@ -28,6 +28,10 @@ _Avoid_: Chat, session, thread
 One turn in a Conversation. A Message is never an Entry; something said becomes an Entry only when it is recorded.
 _Avoid_: Chat message, turn
 
+**Call**:
+A stretch of a Context's Conversation carried out by speaking. The person starts and ends it, and it stays in the Context it was started from. What the person asks in it and what the Agent answers are Messages like any other, kept as text; no sound is kept.
+_Avoid_: Voice session, voice mode, voice chat
+
 **Author**:
 Who made an Entry or Task: the person, the Agent, or a Connection, shown by its name. A record the person edits becomes theirs.
 _Avoid_: Creator, owner, source
