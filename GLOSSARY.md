@@ -40,6 +40,10 @@ _Avoid_: Source entry, parent entry
 An Entry that continues or corrects one earlier Entry. It is the only direct link between two Entries.
 _Avoid_: Thread, reply, chain
 
+**Standing Entry**:
+An Entry the person has marked for the Agent to keep honouring. The Agent is given every Standing Entry of a Context at the start of each Run there. It is an Entry like any other, and unmarking it stops it applying. The Agent marks one only when asked.
+_Avoid_: Instruction, pinned entry, memory, preference
+
 **Reference**:
 A link from an Entry to a Task or Project in its Context. It is kept beside the Entry's words, not in them, so adding or removing one leaves the words as they were.
 _Avoid_: Link, tag, backlink
