@@ -1,6 +1,6 @@
 # The Journal is the only truth
 
-Praxis is agentic-first, so much of what the person tells it arrives as Conversation with the Agent. We decided that the Conversation is not data: a Message is never an Entry, and something said becomes part of the Journal only when a tool records it as an Entry, in the person's own words. The Journal and what derives from it are the whole of a deployment's truth, so the Conversation can be compacted, left out of backup and export, or lost in a restore without losing anything true.
+Praxis is agentic-first, so much of what the person tells it arrives as Conversation with the Agent. We decided that the Conversation is not data: a Message is never an Entry, and something said becomes part of the Journal only when a tool records it as an Entry, in the person's own words. The Journal and what derives from it are the whole of a Deployment's truth, so the Conversation can be compacted, left out of backup and export, or lost in a restore without losing anything true.
 
 ## Considered Options
 

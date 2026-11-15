@@ -15,5 +15,5 @@ Every Entry, Task, Project and Person belongs to exactly one Context, and nothin
 - Someone the person deals with in two Contexts is two Persons.
 - A client that needs two Contexts is connected twice, once for each.
 - Moving a record to another Context is the one act that crosses the boundary. Only the person can do it, it takes the whole unit (an Entry with its Follow-ups and the Tasks that came from it, a Project with all its Tasks), and any link back into the old Context is dropped with its text kept.
-- Retiring a Context hides it and cuts off the MCP connections granted to it. It does not delete or merge anything, and the person can bring it back.
+- Retiring a Context hides it and ends its Connections. It does not delete or merge anything, and the person can bring it back.
 - Anything the Agent does unprompted happens inside one Context.

@@ -19,7 +19,7 @@ An MCP caller is held to the Agent's rule, not the screen's, because it is almos
 ## Consequences
 
 - An unprompted run is offered read tools only. A Brief or Review cannot create or change anything and cannot leave a Held Change; if it thinks something should change, it says so.
-- Some calls are never offered to the Agent or to an MCP caller, with no held version: removing anything for good (emptying the Trash, deleting a retired Context's data), defining, renaming or retiring a Context, moving a record between Contexts, anything that mints or shows a credential, and a device's own settings.
+- Some calls are never offered to the Agent or to an MCP caller, with no held version: removing anything for good (emptying the Trash, deleting a retired Context's data), defining, renaming or retiring a Context, moving a record between Contexts, anything that mints or shows a credential, and a Device's own settings.
 - The Agent is offered restoring from the Trash and a Context's Brief and Review times.
 - Restoring an earlier Version of an Entry is offered exactly as editing its words is, because it is a change to words like any other. The Agent makes it at once on an Entry that is not the person's and leaves a Held Change on one that is. An MCP caller makes it at once on an Entry that is not the person's and is refused on one that is. This replaces an earlier form of this decision, which offered it to the Agent only for an Entry that is not the person's and kept it from an MCP caller.
 - Adding a Reference or Mention that leaves an Entry's words as they were is not a Held Change.
