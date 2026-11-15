@@ -1,0 +1,31 @@
+# Offline is two Unsent writes and a copy to read, not a replica
+
+With no network the PWA does two things. It shows an Offline Copy, a fixed set of the Journal as last fetched, and it takes two writes, recording an Entry and finishing a Task, which stay Unsent on the device until Praxis receives them. Everything else needs the network and says so, the Conversation included. The server stays the only place a rule runs or a Task's state is derived. We decided this because the promise worth making is that capture never fails, in a lift, on a train or in a shop, for gaps of minutes to a day; because a device that worked out state would be a second place for every rule, against the one tool seam (ADR 0007); and because every write that can wait is a write that can come back refused hours later, so the set is kept to the two worth that cost.
+
+## Considered Options
+
+- **A local-first replica**, with state derived on the device and merged later. Rejected: every rule would exist twice and need a merge story, for a week away from the network that this product does not promise.
+- **Queueing every write.** Rejected: dropping, deferring, delegating, deleting and editing an Entry's words each bring a refusal or a stale case to explain long after the fact, and none is what a person needs in a gap.
+- **Queueing a Message to the Agent.** Rejected: the Agent acts at once, so a Message answered hours later acts on a Journal that has moved on. What the person wanted to say can be recorded as an Entry.
+- **Keeping Conversation text on the device** so past Messages and an unread Brief can be read. Rejected: the Conversation's text stays in its object (ADR 0010), and a Brief is a view of the Journal that the Offline Copy already serves.
+- **Showing only what the device has already displayed.** Rejected: what is readable would depend on what happened to be opened, which nobody can predict when the network goes.
+- **Showing what will follow an Unsent write**, such as the next occurrence of a Recurrence. Rejected: the device would be working out Effects.
+- **Letting Unsent writes point at each other**, such as a Follow-up to an Unsent Entry. Rejected: one refusal would then block or orphan the writes behind it. An Unsent Entry can be edited instead.
+- **Dating a write by its arrival.** Rejected: an Entry typed at 09:10 belongs at 09:10 in the Journal, and a Recurrence that counts from closing counts from the day the Task was finished.
+- **Expiring an Unsent write after a time.** Rejected: throwing away the person's words defeats the point.
+
+## Consequences
+
+- The Offline Copy holds, for every Context that is not retired: the attention views, every open Task and Project, every Person, the Standing Entries, the last 30 days of Entries, and any older Entry that device has opened. It is shown as last fetched, with the time it was fetched. Search, older Entries, the Trash, Versions and the change log need the network. The person can switch Context with no network.
+- The Offline Copy is switched on per device and is off until the person turns it on. Its text sits in the browser's storage unencrypted, and the device's own lock is the protection. Turning it off or removing the device clears what it held, on that device's next contact if it is away, and the person is asked first about any Unsent writes.
+- Every device takes Unsent writes, with or without an Offline Copy. An Unsent Entry may be a Follow-up to an Entry the device holds, carries its Inline Tasks, and links only to records the device holds. It makes no new Person or Project, since the device cannot tell whether one of that name exists. On a device with no Offline Copy it is words and Inline Tasks only.
+- An Unsent Entry sits in the Journal where it will go, marked Unsent, with its Inline Tasks shown as part of its words and not yet as Tasks. A Task finished Unsent is marked so and leaves the attention views. Nothing that would follow is shown. A count of Unsent writes is visible whenever there is one.
+- An Unsent write is the person's to change: an Entry can be edited or discarded and a finish undone, on the device and with no trace. Nothing can point at an Unsent record, so no Unsent write depends on another and one failing never blocks the rest.
+- An Unsent write carries the time it was made, which sets the Entry's time and the Task's closing day (ADR 0007). It is otherwise judged against the Journal as it is on arrival, under the ordinary rules. There is no merge logic: finishing a Task already Finished succeeds with no Effects and runs no Recurrence again; finishing one that is Dropped, deleted or moved is refused; an Entry linking to a record since deleted is recorded with that link dormant.
+- A write the server refuses stays on the device, marked as not accepted with the server's reason, at the top of attention until the person deals with it. A refused Entry keeps its words and can be edited and sent again, copied or discarded; a refused finish can only be dismissed. Nothing is dropped silently, and nothing is sent again by itself after a refusal. A network failure is not a refusal and is retried.
+- An Unsent write never expires on the device. A key is remembered for 30 days (ADR 0007), and a write older than that is not sent by itself but put to the person like a refused one, since it can no longer be told from one already made.
+- Unsent writes are sent only while Praxis is open, in the order made, with no promise of sending in the background. After sending, the device catches up from the change log. If the sign-in with Access has lapsed, they wait untouched until the person signs in again.
+- An Unsent write lives on one device only. Praxis asks the browser to keep its storage for good, and where the browser will not promise that, says so beside the Unsent count. It promises nothing stronger.
+- The Conversation's text is never stored on a device. With no network the Conversation shows only that it needs the network, an unread Brief or Review included, and its composer is off. The Journal's composer stays live.
+- Deployment tools, tapping a Held Change and every other Context write are unavailable with no network and say so.
+- The browser suite gains offline journeys (ADR 0015).

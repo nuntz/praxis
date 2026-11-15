@@ -135,3 +135,11 @@ _Avoid_: Dump, download, archive
 **Backup**:
 An Export the system makes by itself each day and keeps for a limited time, so a deployment that is lost can be started again.
 _Avoid_: Snapshot, copy
+
+**Unsent**:
+The state of an Entry recorded or a Task finished on a device that Praxis has not yet received. It is on that device only, and until it is sent it is the person's to change or discard. Nothing else can be made Unsent: every other change needs the network.
+_Avoid_: Pending, queued, draft, outbox
+
+**Offline Copy**:
+What a device keeps of the Journal so it can be read with no network, shown as it was when last fetched. The person turns it on for each device. It never holds any of a Conversation.
+_Avoid_: Cache, replica, sync
