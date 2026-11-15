@@ -79,7 +79,7 @@ A Task has:
 
 - **A title**, and nothing else of its own. It has no body: what there is to say about a Task is said in Entries that Reference it.
 - **An Origin Entry**, always, whoever created it. A Task is made only with an Entry named (section 4.8).
-- **An Author**, as for an Entry.
+- **An Author**, as for an Entry: a Task the person renames becomes theirs.
 - **A Project**, or none.
 - **A Due Date** and **a Defer Date**, both optional, both days with no time of day.
 - **A Recurrence**, or none.
@@ -96,7 +96,7 @@ A Task is **open** or at one of two ends:
 - **Finished**: it was done.
 - **Dropped**: the person decided not to do it. The record stays where it was. Dropping is not deleting.
 
-Either end can be reopened. Reopening does not bring back waits that had ended or a Recurrence that has moved on to a newer Occurrence.
+Either end can be reopened, and a Task at one end reaches the other only by being reopened first: finishing a Dropped Task or dropping a Finished one is refused. Reopening does not bring back waits that had ended or a Recurrence that has moved on to a newer Occurrence.
 
 An open Task can be any of the following at once:
 

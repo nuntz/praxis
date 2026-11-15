@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "test": "vitest run",
-    "typecheck": "wrangler types && tsc -p . && tsc -p test"
+    "typecheck": "wrangler types --check >/dev/null 2>&1 || wrangler types && tsc -p . && tsc -p test"
   },
   "dependencies": {
     "@praxis/domain": "workspace:*"
