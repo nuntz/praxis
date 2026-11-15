@@ -1,0 +1,11 @@
+{
+  "name": "praxis-call-probe",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.162.0"
+  }
+}

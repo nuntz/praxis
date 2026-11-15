@@ -1,0 +1,15 @@
+{
+  // PROTOTYPE. Throwaway probe for the Call (ADR 0021). Delete the Worker when done.
+  "name": "praxis-call-probe",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": true,
+  "preview_urls": false,
+  // Off on purpose: the probe handles speech transcripts and must not log them to the platform.
+  "observability": { "enabled": false },
+  "durable_objects": {
+    "bindings": [{ "name": "CALL", "class_name": "CallProbe" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CallProbe"] }]
+}
