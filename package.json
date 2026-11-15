@@ -1,0 +1,24 @@
+{
+  "name": "praxis",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.4",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "check": "biome check .",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test:domain": "bun test --cwd packages/domain",
+    "test:worker": "bun run --cwd apps/worker test",
+    "test:e2e": "playwright test",
+    "build": "bun run --cwd apps/pwa build",
+    "dev": "bun run build && bun run --cwd apps/worker dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8",
+    "@playwright/test": "1.65.1",
+    "typescript": "7.0.2"
+  }
+}

@@ -1,0 +1,12 @@
+language js
+
+or {
+  `Date.now()`,
+  `new Date()`,
+  `new Date`,
+  `Date()`,
+  `performance.now()`,
+  `Temporal.Now.$_($...)`
+} as $read where {
+  register_diagnostic(span=$read, message="Domain and tool code never reads the real clock: the time a call arrived is passed in.")
+}

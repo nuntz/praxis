@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/.wrangler",
+      "!probes",
+      "!test-results",
+      "!playwright-report",
+      "!**/*.md"
+    ]
+  },
+  "formatter": { "indentStyle": "space", "lineWidth": 100 },
+  "linter": {
+    "rules": { "preset": "recommended" }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/domain/src/**", "apps/worker/src/**", "!apps/worker/src/arrival.ts"],
+      "plugins": ["./lint/no-real-clock.grit"]
+    },
+    {
+      "includes": ["packages/domain/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["bun", "bun:*", "cloudflare:*", "@cloudflare/*", "wrangler"],
+                    "message": "The domain package imports nothing from Cloudflare or Bun."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

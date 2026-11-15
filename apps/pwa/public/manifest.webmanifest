@@ -1,0 +1,8 @@
+{
+  "name": "Praxis",
+  "short_name": "Praxis",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f3f0",
+  "theme_color": "#f4f3f0"
+}

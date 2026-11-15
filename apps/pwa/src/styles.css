@@ -1,0 +1,152 @@
+/* Placeholder tokens until the design system lands (issue #39). */
+:root {
+  color-scheme: light dark;
+  --ground: #f4f3f0;
+  --panel: #ffffff;
+  --ink: #1f1e1c;
+  --muted: #6b6862;
+  --hairline: #dedbd4;
+  --accent: #2f5fd0;
+  --on-accent: #ffffff;
+  --problem: #a32d2d;
+  --radius: 14px;
+  font-family: Figtree, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #171716;
+    --panel: #22211f;
+    --ink: #ecebe8;
+    --muted: #a19e97;
+    --hairline: #3a3936;
+    --accent: #7ea2f2;
+    --on-accent: #10131a;
+    --problem: #f08a8a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+}
+
+.main-screen {
+  display: flex;
+  justify-content: center;
+  height: 100dvh;
+  padding: 16px;
+}
+
+.journal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 44rem;
+  min-height: 0;
+  padding: 16px;
+  background: var(--panel);
+  border-radius: var(--radius);
+}
+
+.column-heading {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.entries {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.entry-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.entry-time {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.entry-words {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.composer textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--ground);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+
+.composer textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.quiet {
+  background: none;
+  color: var(--accent);
+  padding: 4px 0;
+}
+
+.problem {
+  margin: 0;
+  color: var(--problem);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

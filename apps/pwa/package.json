@@ -1,0 +1,17 @@
+{
+  "name": "@praxis/pwa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@praxis/domain": "workspace:*",
+    "solid-js": "1.9.19"
+  },
+  "devDependencies": {
+    "vite": "8.3.8",
+    "vite-plugin-solid": "2.11.16"
+  }
+}
