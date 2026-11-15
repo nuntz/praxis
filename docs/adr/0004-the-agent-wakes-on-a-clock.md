@@ -9,7 +9,7 @@ Without being spoken to, the Agent does two things: a Brief once a day and a Rev
 - **Storing each Brief and Review as an Entry.** Rejected: Entries are in the person's words, and a view of the Journal stored in the Journal goes stale and crowds out what the person wrote.
 - **Unprompted work the person defines**, such as "every Friday, list what I Delegated to Sam". Rejected for now: it is a scheduler of its own, and the person can ask for the same thing in the Conversation at any time.
 - **A separate trigger for chasing** Delegated or Waiting Tasks that have gone quiet. Rejected: it is content of the Brief and the Review, not a third thing.
-- **A threshold setting for "gone quiet"**, such as seven days. Rejected: Tasks go quiet on different timescales and the Journal usually says which; the Agent judges.
+- **A threshold setting for "gone quiet"**, such as seven days. Rejected: Tasks go quiet on different timescales and the Journal usually says which; the Agent judges. So what has gone quiet is said only in a Brief or a Review. Attention, which is derived by rule with no model, lists Delegated Tasks oldest first and leaves the judging to the person.
 
 ## Consequences
 

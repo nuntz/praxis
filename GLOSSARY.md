@@ -104,6 +104,10 @@ _Avoid_: Snoozed, scheduled, start date
 A rule on a Task that makes the next occurrence when this one is Finished or Dropped. It either follows a schedule or counts from the day the Task was closed, and what it sets is the next occurrence's Due Date, so a Task with a Recurrence always has one. Each occurrence is a Task of its own, only one is ever open, and all share one Origin Entry. It runs until the person removes it.
 _Avoid_: Repeat, series, recurring task template
 
+**Attention**:
+What in a Context is open for the person to act on now, set out in a fixed order. It is derived from the Journal by rule and involves no judgment by the Agent, so it never says what has gone quiet. Called Today on a phone.
+_Avoid_: Dashboard, inbox, agenda
+
 **Run**:
 One piece of work by the Agent, from what started it to the Agent stopping. A Message from the person starts one, and so does the clock.
 _Avoid_: Turn, session, job, invocation

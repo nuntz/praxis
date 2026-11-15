@@ -105,7 +105,9 @@ An open Task can be any of the following at once:
 - Every Task in every tool result carries its derived state and the reason for it: which end it reached and when, what it waits on, who it is Delegated to, the day it is Deferred until, the day it became Overdue. No caller works out state.
 - "Today", and so Overdue and Deferred, is the current day in the Context's time zone†.
 
-This replaces the single ordered state decided earlier in [Sub-tasks and dependencies](https://github.com/nuntz/praxis/issues/6); see section 15.
+- There is no leading state. On the screen each state that holds is its own mark, Overdue is marked on the date, and nothing is ranked. The only order is in attention, where a Task sits in the first section it fits (section 8.3).
+
+This replaces the single ordered state decided earlier in [Sub-tasks and dependencies](https://github.com/nuntz/praxis/issues/6).
 
 **Waiting.**
 
@@ -287,6 +289,7 @@ Every **read** is offered to all five callers, except where noted:
 | Views | `view_attention`, `search`, `list_changes` |
 | Trash | `list_trash` |
 | Held Changes | `list_held_changes`† (hand, Agent and Clock; not a Connection) |
+| Notices | `list_notices`† (hand only: the standing notices of section 8.3) |
 | Settings | `get_settings`† (Brief and Review times, the Notification switch, the time zone) |
 | Runs | `list_runs`†, `get_run`† (hand only: a Run record, never its words) |
 | Connection calls | `list_connection_calls`† (hand only) |
@@ -362,6 +365,7 @@ Glossary: Run.
 
 - A Message from the person starts a Run. So does the clock, for a Brief or a Review. Nothing else does: not a saved Entry, not a Connection's write, not a date passing.
 - Runs in a Context happen one after another.
+- At the start of every Run the Context's object asks the deployment object for the other Contexts' names and whether a Run may start (section 9.2). This is the same for a Run the person started and one the clock started, and the Worker hands the Agent nothing.
 - At the start of every Run the Agent is given: the Context's Standing Entries with their dates, today's date, the Context's name, and the other Contexts' names. Each turn it is also given the Held Changes still waiting and a bounded digest of what changed since its last turn. Nothing else from the Journal: everything else it fetches through tools, so what it knew shows in the Run's tool calls.
 - A Run is limited to 25 model rounds when the person started it and 10 when the clock did. The numbers are in code. A Run that reaches the limit stops, says so in its last Message, and its record marks it as cut short.
 
@@ -369,7 +373,7 @@ Glossary: Run.
 
 - The Agent makes a change at once, with no tap and no draft: recording Entries; creating, finishing, rescheduling, delegating and deleting Tasks; making Projects and Persons.
 - The one exception is the Held Change (section 4.7).
-- The Agent judges what is worth recording as an Entry, without needing a cue, and always says what it recorded (but see section 15, point 2).
+- The Agent judges what is worth recording as an Entry, without needing a cue, and always says what it recorded. This is the same for a typed Message and a spoken one.
 - There is no "save this Message". What the Agent says enters the Journal only as an Entry with the Agent as Author, when asked.
 - A correction the Agent must keep honouring is recorded as a Standing Entry, when asked.
 
@@ -379,7 +383,7 @@ ADR 0004. Glossary: Brief, Review.
 
 - **Brief**: once a day, at a time the person sets for the Context. It says what is due, what became actionable, and what is Delegated or Waiting and has gone quiet.
 - **Review**: once a week by default, on a day and time the person sets for the Context. It lists stale Tasks, Projects with no next Task, and Entries that look like they hold a Task nobody made.
-- What has gone quiet is the Agent's judgment from the Journal. There is no threshold setting.
+- What has gone quiet is the Agent's judgment from the Journal. There is no threshold setting. It is said only in a Brief or a Review: attention lists Delegated Tasks by age and judges nothing (section 8.3).
 - Either can be switched off for a Context. There is no Brief across Contexts.
 - A Clock Run is offered reads only. It cannot change anything or leave a Held Change. If it thinks something should change, it says so.
 - It leaves one Message in the Context's Conversation and never an Entry.
@@ -424,7 +428,7 @@ ADR 0017.
 ADR 0010, 0017.
 
 - One cap, in money, per calendar month, for the whole deployment. Set by the person's hand.
-- Counted from Run records, Call records and embedding, against a price table shipped with the code. The provider's own spend limit is the hard backstop, and setup says to set one.
+- Counted from Run records, Call records and embedding, against a price table shipped with the code. Each Context's object reports what it spent to the deployment object, which keeps the month's running total and answers whether a Run or a Call may start. The provider's own spend limit is the hard backstop, and setup says to set one.
 - A warning shows at 80%.
 - At the cap: no new Run starts, whether the person or the clock would start it; a Run already going finishes; no Call starts; embedding of newly saved Entries stops. The Conversation's composer is replaced by a notice that links to the cap in settings. The Journal's composer, the screen and Connections keep working.
 - A Brief or Review due at the cap waits for the cap to be raised or the month to turn, and is dropped once the next one is due.
@@ -452,7 +456,7 @@ ADR 0021. Glossary: Call.
 - In a Call the Agent is told it is being heard: it writes short answers, offers the rest, and always says what it changed.
 - **No sound is kept**, anywhere.
 - **Who carries it.** The Context's object sets the Call up with the voice key, which never reaches a device. Sound travels between the device and the voice provider. The device follows the transcript and the handovers on its own channel to the provider, sends each request to the object as it would a typed Message, marked as spoken, and passes the Agent's answer back to be spoken. The object holds no connection to the provider during a Call. It attaches to the provider's side channel only to end one, and drops unread the sound it is then sent.
-- **Entries.** An Entry recorded in a Call uses the transcript, with the person as Author. A mishearing is fixed by the person's edit or by a Held Change, which is tapped as always.
+- **Entries.** The Agent records an Entry in a Call as it does when the person types: without needing a cue, saying what it recorded. The Entry uses the transcript, with the person as Author. A mishearing is fixed by the person's edit or by a Held Change, which is tapped as always.
 - **Talking over the Agent** stops the speech and nothing else. A Run that has started finishes and its writes stand.
 - **Ending.** The person's tap; leaving Praxis (tab hidden, screen locked, network gone); about two minutes of silence; the cap, saying so first; the provider's two-hour session limit. An ended Call is never resumed by itself.
 - **One Call at a time for the deployment.** Starting another ends the first. On the device in the Call, the Conversation's composer gives way to the Call's controls: end and mute. A Message typed elsewhere meanwhile is answered in writing only.
@@ -517,18 +521,32 @@ Three peers, none hosting the others: **attention**, the **Journal** and the **C
 
 ### 8.3 Attention
 
-Starts from `view_attention`. In order:
+Attention is what in the current Context is open for the person to act on. It is derived by rule, with no judgment by the Agent, and works with no key.
 
-1. Unsent writes the server did not accept (section 8.8)†.
-2. Standing notices: a refused key, the cap reached or 80% passed, no good Backup for three days, a Context stuck on an upgrade, a Brief or Review that could not run.
-3. Held Changes.
-4. What is Overdue or due today.
-5. What became actionable.
-6. What has gone quiet†.
-7. Projects, with those that have no open Task flagged.
+The column is composed by the screen from four sources, in this order:
 
+1. **Unsent writes the server did not accept** (section 8.8). Only the device knows them.
+2. **Standing notices**, from `list_notices`†: a refused key, the cap reached or 80% passed, no good Backup for three days, a Context stuck on an upgrade, a Brief or Review that could not run.
+3. **Held Changes**, from `list_held_changes`.
+4. **The sections of `view_attention`**, below.
+
+`view_attention` is one view. It holds Tasks and Projects only, derived from the Journal, and returns the same to every caller. A Connection therefore sees nothing of the cap, the key or a Held Change through it. Its sections, in order:
+
+| Section | Holds | Order |
+|---|---|---|
+| **Due** | Every open Task that is Overdue or due today, whatever else holds for it, and every open Project that is. | Oldest Due Date first |
+| **Newly actionable** | Actionable Tasks whose wait ended, whose defer date came or that were taken back in the last seven days. | Newest first |
+| **Delegated** | Every other Delegated Task, with the Person and the day it was Delegated. | Oldest delegation first |
+| **Projects** | Every open Project, with its count of actionable Tasks, flagged when it has no open Task. Opening one shows its Tasks. | By name |
+| **Loose** | Every other actionable Task with no Project. | Oldest first |
+
+- A Task appears once, in the first section it fits. The rule covers Tasks only: a Project in Due appears as itself and is still in Projects, and its Tasks are placed by their own dates.
+- A Waiting or Deferred Task that is not due is not shown. It is reached through its Project, its Entry or search, and arrives in Newly actionable when it comes up.
+- Seven days is in code and is not a setting. It decides only how long a released Task is listed apart.
+- There is no "due soon" in attention. A view of the weeks ahead is another view (section 15, point 8).
+- Nothing in attention says what has gone quiet. That is the Agent's judgment, said in a Brief or a Review (section 5.4).
+- **The count** on the Today tab, and on the top-bar button at middle widths, is the refused Unsent writes, the Held Changes and the Due section. Nothing else is counted.
 - A Task is finished from wherever it is shown: attention or the Entry it hangs off.
-- The exact contents and rules of each section are the largest open point in this spec (section 15, point 1).
 
 ### 8.4 The Journal
 
@@ -578,7 +596,7 @@ Capture never fails, and Praxis is not local-first. The server stays the only pl
 **Reading: the Offline Copy.**
 
 - Switched on per device, off until then.
-- Holds, for every Context that is not retired: the attention views, every open Task and Project, every Person, the Standing Entries, the last 30 days of Entries, and any older Entry that device has opened.
+- Holds, for every Context that is not retired: the result of `view_attention`, every open Task and Project, every Person, the Standing Entries, the last 30 days of Entries, and any older Entry that device has opened.
 - Shown as last fetched, with the time. The person can switch Context.
 - Search, older Entries, the Trash, Versions and the change log need the network.
 - Its text sits in the browser's storage unencrypted. Turning it off or removing the device clears it, on that device's next contact if it is away, and the person is asked first about any Unsent writes.
@@ -587,7 +605,7 @@ Capture never fails, and Praxis is not local-first. The server stays the only pl
 
 - On every device, with or without an Offline Copy: recording an Entry and finishing a Task.
 - An Unsent Entry may be a Follow-up to an Entry the device holds, carries its Inline Tasks, and links only to records the device holds. It makes no new Person or Project. With no Offline Copy it is words and Inline Tasks only.
-- It sits in the Journal where it will go, marked Unsent, its Inline Tasks shown as part of its words. A Task finished Unsent is marked so and leaves the attention views. Nothing that would follow is shown. A count of Unsent writes is visible whenever there is one.
+- It sits in the Journal where it will go, marked Unsent, its Inline Tasks shown as part of its words. A Task finished Unsent is marked so and leaves attention. Nothing that would follow is shown. A count of Unsent writes is visible whenever there is one.
 - It is the person's to change: an Entry can be edited or discarded and a finish undone, with no trace. Nothing can point at an Unsent record.
 - It carries its made-at time and a key.
 - Sent only while Praxis is open, in the order made. The device then catches up from the change log. If the Access sign-in has lapsed, it waits until the person signs in again.
@@ -621,8 +639,14 @@ ADR 0006, 0010, 0017.
 
 - All of a deployment's data is in Durable Object SQLite. There is no D1.
 - **Each Context is its own object**, holding its Journal, Tasks, Projects, Persons, Trash, change log, Run records, words index and Conversation. The domain is in Praxis's own tables. The runtime's tables hold only the Conversation and can be dropped without losing anything true.
-- **One deployment object** holds the list of Contexts, the Connections, the devices with their push subscriptions and switches, the spend cap, and the monthly spend totals of deleted Contexts. It holds nothing from any Journal.
-- The Worker asks the deployment object which Context a request is for, then talks to that Context's object. A Context's object never reads the deployment object (but see section 15, point 3).
+- **One deployment object** holds the list of Contexts, the Connections, the devices with their push subscriptions and switches, the spend cap, the month's running spend total, the monthly spend totals of deleted Contexts, and which Context has a Call. It holds nothing from any Journal.
+- The Worker asks the deployment object which Context a request is for, then talks to that Context's object. A Context's object reaches the deployment object only through a closed set of calls:
+  - the other Contexts' names;
+  - whether a Run or a Call may start, which is the cap;
+  - what a Run, a Call or embedding cost;
+  - notify the devices that this Context has a Brief or a Review;
+  - a Call is starting here, or has ended.
+- The deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only for a Backup, a move, and ending a Call there when another starts elsewhere.
 - Revoking a Connection or retiring a Context takes effect on the next request.
 - Each Context has its own alarm, which schedules its Brief and Review, expires its Trash, prunes its change log and finishes an interrupted move.
 - A jurisdiction is chosen once at setup, optionally, for every object. It cannot be changed except by Export and restore into a new deployment.
@@ -785,19 +809,15 @@ ADR 0015, 0019, 0020, 0021.
 
 Found while assembling this spec. Each needs a decision before the slice that touches it. Everything marked † above belongs to one of these.
 
-**Decisions that disagree or were replaced without a record**
+**Decisions that disagreed**
 
-1. **What attention holds.** [The main screen](https://github.com/nuntz/praxis/issues/12) lists "what has gone quiet" in the attention list, which is a tool with no model. ADR 0004 says what has gone quiet is the Agent's judgment, with no threshold. The sections of `view_attention`, their rules and their order are only sketched. ADR 0020 also speaks of "the attention views" in the plural.
-2. **When the Agent records an Entry.** [Journal and conversation](https://github.com/nuntz/praxis/issues/2) says the Agent judges what is worth recording without a cue. [Voice](https://github.com/nuntz/praxis/issues/26) says "as with typing: recorded only when asked". This spec follows the first.
-3. **A Context's object never reads the deployment object** (ADR 0006), yet a Run the clock starts has no Worker request behind it and needs the other Contexts' names, whether the cap is reached, and the devices to notify. The cap is counted across Contexts and "one Call at a time" holds across them. How these cross is not stated.
-4. **One state or several.** [Sub-tasks and dependencies](https://github.com/nuntz/praxis/issues/6) gave a Task exactly one state in a fixed order. [Recurrence and finishing a Project](https://github.com/nuntz/praxis/issues/16) and the glossary let Waiting, Delegated, Deferred and Overdue hold together. This spec follows the second. Whether a Task still shows one leading state on the screen is not said.
-5. **Restoring a Version.** ADR 0005 offers the Agent "restoring an earlier version of an Entry that is not the person's", and [The tool seam](https://github.com/nuntz/praxis/issues/11) kept it from a Connection. [Backup, export and Entry versions](https://github.com/nuntz/praxis/issues/23) offers it to every caller under the held rule. This spec follows the last. ADR 0005 was not amended.
+Points 1 to 5 were settled in [Settle where decisions disagree](https://github.com/nuntz/praxis/issues/31) and are no longer open: what attention holds (section 8.3), when the Agent records an Entry (sections 5.3 and 6), how a Context's object reaches the deployment object (section 9.2), a Task having no leading state (section 3.4), and who is offered restoring a Version (section 4.10, ADR 0005). The numbers below are kept so that references to them still hold.
 
 **Not decided**
 
 6. **The Conversation's channel.** Sending a Message, reading Messages, trying a failed Run again and starting a Call are not in any tool list, though "the screen reads and writes only through tools". Whether they are hand-only tools or a channel of their own, and the transport for live Effects and the streamed answer.
 7. **A Context's time zone.** Used by dates, Overdue, Deferred and tests. Who sets it, when, and what happens when the person travels.
-8. **Tools implied but never named or offered**: `set_notifications`, `get_settings`, `list_held_changes` for a Connection, `list_runs` and `get_run`, `list_connection_calls`, `rebuild_search_index`, removing one Trash item for good, and every deployment tool's name.
+8. **Tools implied but never named or offered**: `set_notifications`, `get_settings`, `list_notices`, a view of the weeks ahead, `list_held_changes` for a Connection, `list_runs` and `get_run`, `list_connection_calls`, `rebuild_search_index`, removing one Trash item for good, and every deployment tool's name.
 9. **Devices.** What makes a device, how it is named and how one is removed are only implied.
 10. **Typing syntax.** The Inline Task marker and what the person types to make a Reference or a Mention.
 11. **Small numbers and defaults**: the ceiling on Standing Entries, the default Brief time and Review day, whether they start on or off, the default cap, how long without a sign of life ends a Call.
@@ -808,7 +828,7 @@ Found while assembling this spec. Each needs a decision before the slice that to
 
 **Glossary**
 
-16. Terms used throughout with no entry: **Agent**, **Person**, **the person**, **attention** ("Today" on a phone), **open** and **actionable** for a Task, **occurrence**, **defer date**, **Run transcript**, **notice** (what is shown that is not a Message), **device**, **deployment**.
+16. Terms used throughout with no entry: **Agent**, **Person**, **the person**, **open** and **actionable** for a Task, **occurrence**, **defer date**, **Run transcript**, **notice** (what is shown that is not a Message), **device**, **deployment**.
 
 **ADRs**
 
