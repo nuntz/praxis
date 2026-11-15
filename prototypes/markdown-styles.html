@@ -1,0 +1,343 @@
+<title>Praxis Markdown styles</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&display=swap">
+<style>
+/* PROTOTYPE, throwaway. Three variants of rendered Markdown in an Entry and in a Message from the Agent,
+   switchable by #a / #b / #c, drawn on the Atelier tokens at desktop and phone width.
+   Layout: a control strip, the variant's rules, then a desktop mock (Journal + Conversation) and two phone frames. */
+:root{
+  --ground:#ECEEF2;--surface:#FFFFFF;--inset:#F4F5F8;--rule:#D5D9E0;--ink:#1A1D23;--muted:#596070;
+  --acc:#2B55C4;--acc-on:#FFFFFF;--acc-tint:#E6ECFA;
+  --sans:"Figtree",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --ground:#0F1114;--surface:#1B1E24;--inset:#252931;--rule:#3A3F4A;--ink:#EEF0F4;--muted:#A3AAB8;
+  --acc:#9DB6FF;--acc-on:#14161B;--acc-tint:#1E2740;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --ground:#0F1114;--surface:#1B1E24;--inset:#252931;--rule:#3A3F4A;--ink:#EEF0F4;--muted:#A3AAB8;
+  --acc:#9DB6FF;--acc-on:#14161B;--acc-tint:#1E2740;color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:22px;
+  padding-block:20px 110px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.page{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1.t{margin:0;font-size:26px;line-height:32px;font-weight:700;letter-spacing:-0.02em;text-wrap:balance}
+.sub{margin:4px 0 0;color:var(--muted);max-width:70ch}
+.controls{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+.seg{display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--surface)}
+.seg button{height:36px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.lab{font-size:13px;font-weight:700;color:var(--muted);margin-right:-8px}
+button:focus-visible,a:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.notes{background:var(--surface);border-radius:14px;padding:16px 20px}
+.notes h2{margin:0 0 6px;font-size:17px;line-height:26px}
+.notes ul{margin:0;padding-left:20px;columns:2 320px;column-gap:32px}
+.notes li{break-inside:avoid;margin-bottom:4px}
+.cap{margin:0;font-size:13px;font-weight:700;color:var(--muted)}
+
+/* ---------- the stage: Atelier ---------- */
+.stage{display:flex;flex-direction:column;gap:20px;color:var(--ink)}
+.deskwrap{overflow-x:auto;border-radius:20px}
+.desk{min-width:1040px;display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:14px;padding:14px;background:var(--ground);align-items:start}
+.stage .desk,.stage .phone{background:var(--ground)}
+.panel{background:var(--surface);border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel>h2,.phone>h2{margin:0;font-size:20px;line-height:26px;font-weight:700;letter-spacing:-0.01em}
+.day{align-self:center;padding:4px 12px;border-radius:12px;background:var(--inset);font-size:13px;font-weight:600;color:var(--muted)}
+.entry{display:flex;flex-direction:column;gap:8px;min-width:0}
+.meta{font-size:13px;line-height:18px;color:var(--muted)}
+.tasks{display:flex;flex-direction:column;gap:4px}
+.task{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--inset);font-weight:500}
+.task i{width:20px;height:20px;flex-shrink:0;border:2px solid var(--muted);border-radius:50%}
+.msg{display:flex;flex-direction:column;gap:8px;min-width:0}
+.mine{align-items:flex-end}
+.mine p{margin:0;max-width:310px;padding:10px 16px;border-radius:18px 18px 4px 18px;background:var(--inset)}
+.msg .md{font-size:15px;line-height:22px}
+.phones{display:flex;flex-wrap:wrap;gap:20px}
+.phone{width:390px;max-width:100%;border-radius:28px;padding:16px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--rule)}
+.card{background:var(--surface);border-radius:14px;padding:16px}
+.phone .mine p{background:var(--surface)}
+
+/* ---------- rendered Markdown: shared base ---------- */
+.md{font-size:17px;line-height:26px;max-width:620px;min-width:0;overflow-wrap:anywhere}
+.md>*{margin:0}
+.md>*+*{margin-top:12px}
+.md ul,.md ol{margin:0;padding-left:24px}
+.md li>ul,.md li>ol{margin-top:4px}
+.md li+li{margin-top:4px}
+.md strong{font-weight:700}
+.md code,.md pre{font-family:var(--mono)}
+.md code{font-size:.88em}
+.md pre{margin:0;overflow-x:auto;font-size:14px;line-height:22px;white-space:pre}
+.md pre code{font-size:inherit;padding:0;background:none;border:0}
+.md .scroll{overflow-x:auto}
+.md table{border-collapse:collapse;white-space:nowrap;font-size:15px;line-height:22px;font-variant-numeric:tabular-nums}
+.md th{text-align:left}
+.md td.n,.md th.n{text-align:right}
+.md a{color:var(--ink);text-underline-offset:3px}
+.md a.mention,.md a.ref{padding:2px 8px;border-radius:10px;font-weight:600;text-decoration:none;white-space:nowrap}
+.md a.mention{background:var(--acc-tint);color:var(--acc)}
+.md .typed{white-space:pre-wrap}
+.ic{width:18px;height:18px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.md .img{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:15px;line-height:22px}
+.md .img.loaded{display:block}
+.md .img.loaded svg{display:block;width:100%;max-width:440px;height:auto}
+.md .img .desc{min-width:0}
+.md .img .why{color:var(--muted)}
+.md .img button{height:32px;padding:0 14px;border:0;border-radius:999px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;background:var(--inset);color:var(--ink)}
+
+/* ---------- A · Plain: type only, one size ---------- */
+[data-v="a"] .md h1,[data-v="a"] .md h2,[data-v="a"] .md h3,[data-v="a"] .md h4{font-size:inherit;line-height:inherit}
+[data-v="a"] .md h1{font-weight:700;margin-top:20px}
+[data-v="a"] .md h2{font-weight:600;margin-top:16px}
+[data-v="a"] .md h3,[data-v="a"] .md h4{font-weight:600;color:var(--muted)}
+[data-v="a"] .md>h1:first-child{margin-top:0}
+[data-v="a"] .md li::marker{color:var(--muted)}
+[data-v="a"] .md blockquote{padding-left:16px;border-left:2px solid var(--rule);color:var(--muted)}
+[data-v="a"] .md :not(pre)>code{padding:1px 5px;border-radius:6px;background:var(--inset)}
+[data-v="a"] .md pre{padding:12px 16px;border-radius:10px;background:var(--inset)}
+[data-v="a"] .md th{font-size:13px;font-weight:700;color:var(--muted)}
+[data-v="a"] .md th,[data-v="a"] .md td{padding:8px 24px 8px 0;border-bottom:1px solid var(--rule)}
+[data-v="a"] .md tr:last-child td{border-bottom:0}
+[data-v="a"] .md a.ref{background:var(--inset);color:var(--ink)}
+[data-v="a"] .md .img.loaded svg{border-radius:10px}
+[data-v="a"] .md .img{color:var(--muted)}
+[data-v="a"] .md .img .desc{color:var(--ink)}
+[data-v="a"] .md .img button{background:none;padding:0;height:auto;text-decoration:underline;text-underline-offset:3px;font-size:15px;font-weight:600}
+
+/* ---------- B · Inset: Atelier's flat steps, every block is a box ---------- */
+[data-v="b"] .md h1{font-size:22px;line-height:28px;font-weight:700;letter-spacing:-0.01em;margin-top:20px}
+[data-v="b"] .md h2{font-size:19px;line-height:26px;font-weight:700;margin-top:16px}
+[data-v="b"] .md h3{font-size:17px;line-height:26px;font-weight:700}
+[data-v="b"] .md h4{font-size:15px;line-height:22px;font-weight:700}
+[data-v="b"] .md>h1:first-child{margin-top:0}
+[data-v="b"] .msg .md h1{font-size:19px;line-height:26px}
+[data-v="b"] .msg .md h2{font-size:17px;line-height:24px}
+[data-v="b"] .msg .md h3{font-size:15px;line-height:22px}
+[data-v="b"] .md ul{list-style:none}
+[data-v="b"] .md ul>li{position:relative}
+[data-v="b"] .md ul>li::before{content:"";position:absolute;left:-17px;top:.62em;width:6px;height:6px;border-radius:50%;background:var(--ink)}
+[data-v="b"] .md ul ul>li::before{background:none;border:1.5px solid var(--ink)}
+[data-v="b"] .md ol>li::marker{font-weight:600}
+[data-v="b"] .md blockquote{padding:12px 16px;border-radius:10px;background:var(--inset)}
+[data-v="b"] .md :not(pre)>code{padding:1px 6px;border-radius:6px;background:var(--inset)}
+[data-v="b"] .md pre{padding:12px 16px;border-radius:10px;background:var(--inset)}
+[data-v="b"] .md .scroll{padding:4px 16px;border-radius:10px;background:var(--inset)}
+[data-v="b"] .md th{font-size:13px;font-weight:700}
+[data-v="b"] .md th,[data-v="b"] .md td{padding:9px 24px 9px 0;border-bottom:2px solid var(--surface)}
+[data-v="b"] .md tr:last-child td{border-bottom:0}
+[data-v="b"] .md a:not(.mention):not(.ref){color:var(--acc);font-weight:500}
+[data-v="b"] .md a.ref{background:var(--acc-tint);color:var(--acc)}
+[data-v="b"] .md .typed .mk{font-family:var(--mono);font-size:.88em;color:var(--muted)}
+[data-v="b"] .md .img{padding:12px 16px;border-radius:10px;background:var(--inset)}
+[data-v="b"] .md .img.loaded{padding:8px;display:inline-block}
+[data-v="b"] .md .img.loaded svg{border-radius:6px}
+[data-v="b"] .md .img.loaded figcaption{padding:6px 8px 0;font-size:13px;line-height:18px;color:var(--muted)}
+[data-v="b"] .md .img button{background:var(--surface);margin-left:auto}
+[data-v="b"] .phone .md .img button{background:var(--ground)}
+
+/* ---------- C · Ruled: hairlines, no fills, label headings ---------- */
+[data-v="c"] .md h1{font-size:20px;line-height:26px;font-weight:700;letter-spacing:-0.01em;margin-top:20px}
+[data-v="c"] .md h2{font-size:inherit;line-height:inherit;font-weight:700;margin-top:16px}
+[data-v="c"] .md h3,[data-v="c"] .md h4{font-size:13px;line-height:18px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:16px}
+[data-v="c"] .md>h1:first-child{margin-top:0}
+[data-v="c"] .md ul{list-style:none}
+[data-v="c"] .md ul>li{position:relative}
+[data-v="c"] .md ul>li::before{content:"\2013";position:absolute;left:-18px;color:var(--muted)}
+[data-v="c"] .md ol>li::marker{color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums}
+[data-v="c"] .md blockquote{position:relative;padding-left:32px;font-style:italic}
+[data-v="c"] .md blockquote::before{content:"\201C";position:absolute;left:0;top:6px;font-size:44px;line-height:1;font-style:normal;font-weight:700;color:var(--muted)}
+[data-v="c"] .md :not(pre)>code{padding:0 5px;border-radius:6px;border:1px solid var(--rule)}
+[data-v="c"] .md pre{padding:12px 16px;border-radius:10px;border:1px solid var(--rule)}
+[data-v="c"] .md .scroll{border-radius:10px;border:1px solid var(--rule)}
+[data-v="c"] .md table{min-width:100%}
+[data-v="c"] .md th{font-size:13px;font-weight:700;background:var(--inset)}
+[data-v="c"] .md th,[data-v="c"] .md td{padding:8px 14px;border-bottom:1px solid var(--rule);border-right:1px solid var(--rule)}
+[data-v="c"] .md tr>:last-child{border-right:0}
+[data-v="c"] .md tr:last-child td{border-bottom:0}
+[data-v="c"] .md a.ext::after{content:"\2197";display:inline-block;margin-left:2px;font-size:.8em;color:var(--muted);text-decoration:none}
+[data-v="c"] .md a.ref{border:1px solid var(--rule);color:var(--ink);padding:1px 8px}
+[data-v="c"] .md .img{padding:10px 14px;border-radius:10px;border:1px solid var(--rule)}
+[data-v="c"] .md .img.loaded{padding:0;border:0}
+[data-v="c"] .md .img.loaded svg{border-radius:10px;border:1px solid var(--rule)}
+[data-v="c"] .md .img button{margin-left:auto;background:none;border:1.5px solid var(--ink)}
+
+/* ---------- the switcher: not part of the design ---------- */
+.switch{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:20;
+  display:flex;align-items:center;gap:4px;padding:6px;border-radius:999px;background:var(--ink);color:var(--surface);
+  box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:calc(100% - 32px)}
+.switch button{width:40px;height:40px;border:0;border-radius:50%;background:transparent;color:inherit;font:inherit;font-size:18px;cursor:pointer}
+.switch button:hover{background:rgba(128,128,128,.3)}
+.switch button:focus-visible{outline-color:var(--surface)}
+.switch span{padding:0 10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:520px){.lab{width:100%;margin:0 0 -8px}}
+</style>
+
+<div class="page">
+  <header>
+    <h1 class="t">Rendered Markdown in Atelier</h1>
+    <p class="sub">A throwaway prototype for the ticket “Styles for rendered Markdown in the design system”. Three variants of the same Entries and the same Message. Flip with the bar at the bottom or the arrow keys.</p>
+  </header>
+
+  <div class="controls">
+    <span class="lab">Theme</span>
+    <div class="seg" id="theme"><button id="th-light" data-val="light">Light</button><button id="th-dark" data-val="dark">Dark</button></div>
+    <span class="lab">Context</span>
+    <div class="seg" id="ctx"><button id="cx-work" data-val="work">Work · Blue</button><button id="cx-home" data-val="home">Home · Rust</button></div>
+  </div>
+
+  <section class="notes" aria-live="polite"><h2 id="vname"></h2><ul id="vrules"></ul></section>
+
+  <main class="stage" id="stage" data-v="a">
+    <p class="cap">Desktop: the Journal and the Conversation columns</p>
+    <div class="deskwrap"><div class="desk">
+      <section class="panel" aria-label="Journal"><h2>Journal</h2><span class="day">Today</span><div data-fill="journal"></div></section>
+      <section class="panel" aria-label="Conversation"><h2>Conversation</h2><div data-fill="conversation"></div></section>
+    </div></div>
+    <p class="cap">Phone: the Journal tab and the Agent tab</p>
+    <div class="phones">
+      <section class="phone" aria-label="Journal on a phone"><h2>Journal</h2><div data-fill="journal-phone"></div></section>
+      <section class="phone" aria-label="Agent on a phone"><h2>Agent</h2><div data-fill="conversation-phone"></div></section>
+    </div>
+  </main>
+</div>
+
+<div class="switch" role="group" aria-label="Prototype variant">
+  <button id="prev" aria-label="Previous variant">←</button>
+  <span id="vlabel"></span>
+  <button id="next" aria-label="Next variant">→</button>
+</div>
+
+<script>
+(function(){
+var IMG='<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>';
+var IMGOFF='<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.4 5H19a2 2 0 0 1 2 2v8.6"/><path d="M21 19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><path d="m3 16 4.6-4.6a2 2 0 0 1 2.8 0L15 16"/></svg>';
+function photo(kind){
+  var hut = kind==='plan'
+    ? '<rect x="70" y="50" width="300" height="150" fill="#F4F1E6" stroke="#3B4252" stroke-width="4"/><path d="M190 50v90M190 140h180M70 120h70" stroke="#3B4252" stroke-width="4" fill="none"/>'
+    : '<rect width="440" height="150" fill="#BFD7EA"/><path d="M0 150 90 96l70 34 90-60 190 80z" fill="#6E8F72"/><rect y="150" width="440" height="100" fill="#4F7CA8"/><rect x="250" y="112" width="96" height="48" fill="#8A4B2A"/><path d="M240 114l58-34 58 34z" fill="#3B2A22"/><rect x="150" y="158" width="110" height="8" fill="#C9A66B"/><rect x="160" y="166" width="6" height="30" fill="#7A5A32"/><rect x="240" y="166" width="6" height="30" fill="#7A5A32"/>';
+  return '<svg viewBox="0 0 440 250" role="img" aria-label="'+(kind==='plan'?'Floor plan of the print works':'The boathouse from the jetty')+'"><rect width="440" height="250" fill="#E9E4D4"/>'+hut+'</svg>';
+}
+function loaded(kind,desc){return '<figure class="img loaded">'+photo(kind)+'<figcaption hidden>'+desc+'</figcaption></figure>';}
+function waiting(kind,desc){return '<div class="img wait" data-kind="'+kind+'">'+IMG+'<span class="desc">'+desc+'</span><button type="button" class="show">Show image</button></div>';}
+function failed(desc,addr){return '<div class="img failed">'+IMGOFF+'<span class="desc">'+desc+'</span><span class="why">did not load</span><a class="ext" href="https://'+addr+'" target="_blank" rel="noreferrer">'+addr+'</a></div>';}
+function off(desc){return '<div class="img off">'+IMG+'<span class="desc">'+desc+'</span></div>';}
+
+var D={
+ work:{person:'@Priya Raman',ref:'#Offsite 2027',t1:'Ask the boathouse for a quote',t2:'Confirm the date with Priya'},
+ home:{person:'@Marek Novak',ref:'#Summer trip',t1:'Ask the boathouse for a quote',t2:'Confirm the date with Marek'}
+};
+function e1(d){return '<article class="entry"><span class="meta">09:12</span><div class="md">'
+ +'<h1>Offsite planning</h1>'
+ +'<p>Call with <a class="mention" href="#">'+d.person+'</a> about <a class="ref" href="#">'+d.ref+'</a>. Finance closes on <strong>Friday</strong>, so the numbers are needed by <em>Wednesday</em>. The budget is in <a class="ext" href="https://wiki.example.com/finance" target="_blank" rel="noreferrer">the finance wiki</a> and the form is at <a class="ext" href="https://forms.example.com/offsite" target="_blank" rel="noreferrer">https://forms.example.com/offsite</a>.</p>'
+ +'<h2>Venues</h2>'
+ +'<ul><li>The boathouse on the lake<ul><li>holds forty</li><li>no projector</li></ul></li><li>The old print works</li></ul>'
+ +'<h3>Next</h3>'
+ +'<ol><li>Ask both for a quote</li><li>Compare them<ol><li>price per head</li><li>travel from the office</li></ol></li><li>Book by the end of the month</li></ol>'
+ +'<h4>What was said about money</h4>'
+ +'<blockquote>Keep it under 12,000. Anything above that needs a second signature, and that takes a week.</blockquote>'
+ +'<p>The forecast comes from <code>bun run forecast --quarter q4</code>, which reads:</p>'
+ +'<pre><code>{\n  "quarter": "q4",\n  "headcount": 38,\n  "ceiling": 12000,\n  "source": "finance/2026-q4-forecast.csv"\n}</code></pre>'
+ +'</div></article>';}
+function e2(d){return '<article class="entry"><span class="meta">10:05 · edited</span><div class="md">'
+ +'<p>Both quotes side by side:</p>'
+ +'<div class="scroll"><table><thead><tr><th>Venue</th><th class="n">Holds</th><th class="n">Per head</th><th>Travel from the office</th><th class="n">Deposit</th><th>Notes</th></tr></thead><tbody>'
+ +'<tr><td>The boathouse</td><td class="n">40</td><td class="n">210</td><td>50 minutes by coach</td><td class="n">1,500</td><td>No projector, bring our own</td></tr>'
+ +'<tr><td>The old print works</td><td class="n">65</td><td class="n">285</td><td>15 minutes on foot</td><td class="n">3,000</td><td>Catering must be theirs</td></tr>'
+ +'<tr><td>The library hall</td><td class="n">30</td><td class="n">160</td><td>25 minutes by tram</td><td class="n">800</td><td>Ends at 17:00 sharp</td></tr>'
+ +'</tbody></table></div>'
+ +loaded('boat','The boathouse from the jetty')
+ +failed('Floor plan of the print works','printworks.example.com/plan.png')
+ +'<ul><li>Bring the deposit cheque</li></ul>'
+ +'<p class="typed"><span class="mk">[]</span> '+d.t1+'\n<span class="mk">- [ ]</span> '+d.t2+'</p>'
+ +'</div><div class="tasks"><div class="task"><i></i>'+d.t1+'</div><div class="task"><i></i>'+d.t2+'</div></div></article>';}
+function e3(){return '<article class="entry"><span class="meta">11:02 · recorded through the Conversation</span><div class="md">'
+ +'<p>The print works sent their floor plan. The long room is the one to ask for.</p>'
+ +waiting('plan','Floor plan of the print works')
+ +'</div></article>';}
+function convo(){return '<div class="msg mine"><span class="meta">You · 11:20</span><p>Compare the **two** quotes in a table, and add the floor plan.</p></div>'
+ +'<div class="msg"><span class="meta">Agent · 11:20</span><div class="md">'
+ +'<h2>The two quotes</h2>'
+ +'<p><strong>The boathouse</strong> is cheaper per head and under the ceiling. The print works is over it at 38 people.</p>'
+ +'<div class="scroll"><table><thead><tr><th>Venue</th><th class="n">Per head</th><th class="n">Total at 38</th><th class="n">Against 12,000</th></tr></thead><tbody>'
+ +'<tr><td>The boathouse</td><td class="n">210</td><td class="n">7,980</td><td class="n">4,020 under</td></tr>'
+ +'<tr><td>The old print works</td><td class="n">285</td><td class="n">10,830</td><td class="n">1,170 under</td></tr></tbody></table></div>'
+ +'<h3>Still open</h3>'
+ +'<ul><li>Neither quote includes travel.</li><li>The deposit form is at <a class="ext" href="https://forms.example.com/offsite" target="_blank" rel="noreferrer">forms.example.com/offsite</a>.</li></ul>'
+ +off('Floor plan of the print works')
+ +'<blockquote>Anything above that needs a second signature.</blockquote>'
+ +'<p>That line is from your Entry of 09:12. I used <code>ceiling: 12000</code> from the same Entry.</p>'
+ +'</div></div>';}
+
+var V=[
+ {k:'a',name:'Plain',rules:[
+  'Headings keep the words’ size. Three levels are told apart by weight and colour only; level four and deeper look like level three.',
+  'No boxes except code. A quote is indented behind a hairline, in muted.',
+  'A table is hairlines only, with a muted header.',
+  'A link is ink, underlined. A Mention is the tinted pill. A Reference is an inset pill in ink.',
+  'An image has no frame. One waiting or failed is a single line of text with an icon.',
+  'An Inline Task’s line is plain words.']},
+ {k:'b',name:'Inset',rules:[
+  'Headings step in size: 22, 19, 17 and 15, all bold. Four levels are kept apart. In a Message each is one step smaller.',
+  'Every block is an inset box with the small radius: quote, code, table and image.',
+  'A table scrolls inside its box. Rows are parted by a line of the panel’s colour.',
+  'A link takes the Context accent, which the system so far gives to nothing but the switcher, buttons, composers, a Held Change and a Mention.',
+  'A Reference is a tinted pill like a Mention; only the # and @ tell them apart.',
+  'An Inline Task’s marker is set in the code face, muted.']},
+ {k:'c',name:'Ruled',rules:[
+  'Headings: level one is larger, level two is bold at the words’ size, level three and deeper are a small capital label in muted.',
+  'Hairline borders, no fills. Code and tables sit in a ruled box; a table has a grid and an inset header row.',
+  'A quote is italic behind a large opening mark, with no line or box.',
+  'A link is ink, underlined, followed by an arrow that says it leaves Praxis. A Reference is an outlined pill.',
+  'List items are marked with a dash, numbers are bold and muted.',
+  'An image waiting or failed is a ruled box with an outlined button.']}
+];
+var PAL={
+ light:{ground:'#ECEEF2',surface:'#FFFFFF',inset:'#F4F5F8',rule:'#D5D9E0',ink:'#1A1D23',muted:'#596070',
+   work:['#2B55C4','#FFFFFF','#E6ECFA'],home:['#A8480C','#FFFFFF','#FAEBDD']},
+ dark:{ground:'#0F1114',surface:'#1B1E24',inset:'#252931',rule:'#3A3F4A',ink:'#EEF0F4',muted:'#A3AAB8',
+   work:['#9DB6FF','#14161B','#1E2740'],home:['#F2A766','#14161B','#3A2616']}
+};
+var stage=document.getElementById('stage');
+var rootTheme=document.documentElement.getAttribute('data-theme');
+var S={v:0,theme:rootTheme==='dark'||rootTheme==='light'?rootTheme:(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'),ctx:'work'};
+
+function fill(){
+  var d=D[S.ctx];
+  var j=e1(d)+e2(d)+e3();
+  document.querySelector('[data-fill="journal"]').innerHTML='<div style="display:flex;flex-direction:column;gap:24px">'+j+'</div>';
+  document.querySelector('[data-fill="journal-phone"]').innerHTML='<div style="display:flex;flex-direction:column;gap:12px">'+[e1(d),e2(d),e3()].map(function(x){return '<div class="card">'+x+'</div>';}).join('')+'</div>';
+  document.querySelector('[data-fill="conversation"]').innerHTML='<div style="display:flex;flex-direction:column;gap:16px">'+convo()+'</div>';
+  document.querySelector('[data-fill="conversation-phone"]').innerHTML='<div style="display:flex;flex-direction:column;gap:16px">'+convo().replace('<div class="msg"><span','<div class="msg card"><span')+'</div>';
+}
+function paint(){
+  var p=PAL[S.theme],a=p[S.ctx],s=stage.style;
+  ['ground','surface','inset','rule','ink','muted'].forEach(function(k){s.setProperty('--'+k,p[k]);});
+  s.setProperty('--acc',a[0]);s.setProperty('--acc-on',a[1]);s.setProperty('--acc-tint',a[2]);
+  var v=V[S.v];stage.setAttribute('data-v',v.k);
+  document.getElementById('vlabel').textContent=v.k.toUpperCase()+' · '+v.name;
+  document.getElementById('vname').textContent='Variant '+v.k.toUpperCase()+': '+v.name;
+  document.getElementById('vrules').innerHTML=v.rules.map(function(r){return '<li>'+r+'</li>';}).join('');
+  [['theme',S.theme],['ctx',S.ctx]].forEach(function(g){
+    Array.prototype.forEach.call(document.getElementById(g[0]).children,function(b){b.setAttribute('aria-pressed',String(b.dataset.val===g[1]));});
+  });
+  Array.prototype.forEach.call(stage.querySelectorAll('figure.img figcaption'),function(f){f.hidden=v.k!=='b';});
+}
+function go(i){S.v=(i+V.length)%V.length;try{history.replaceState(null,'','#'+V[S.v].k);}catch(e){location.hash=V[S.v].k;}paint();}
+function fromHash(){var h=(location.hash||'').replace('#','');for(var i=0;i<V.length;i++)if(V[i].k===h)S.v=i;}
+document.getElementById('prev').onclick=function(){go(S.v-1);};
+document.getElementById('next').onclick=function(){go(S.v+1);};
+document.getElementById('theme').onclick=function(e){if(e.target.dataset.val){S.theme=e.target.dataset.val;paint();}};
+document.getElementById('ctx').onclick=function(e){if(e.target.dataset.val){S.ctx=e.target.dataset.val;fill();paint();}};
+document.addEventListener('keydown',function(e){
+  var t=e.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;
+  if(e.key==='ArrowLeft')go(S.v-1);if(e.key==='ArrowRight')go(S.v+1);
+});
+stage.addEventListener('click',function(e){
+  var b=e.target.closest&&e.target.closest('button.show');
+  if(b){var w=b.parentNode;w.outerHTML=loaded(w.dataset.kind,w.querySelector('.desc').textContent);paint();}
+  var a=e.target.closest&&e.target.closest('a[href="#"]');if(a)e.preventDefault();
+});
+window.addEventListener('hashchange',function(){fromHash();paint();});
+fromHash();fill();paint();
+})();
+</script>
