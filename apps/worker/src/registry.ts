@@ -2,13 +2,18 @@ import {
   type Caller,
   failure,
   isToolName,
+  isWrite,
   parseToolInput,
   type ToolInput,
   type ToolName,
   type ToolOutput,
   type ToolResult,
   tools,
+  type WriteName,
+  type Written,
 } from "@praxis/domain";
+import { appendChange } from "./change-log.ts";
+import { firstWithKey, rememberKey } from "./keys.ts";
 
 /** What a Context tool is given to run. It never reads the real clock: `arrivedAt` is the time. */
 export type ToolCall<N extends ToolName> = {
@@ -32,7 +37,8 @@ export type ToolRequest = {
 
 /**
  * The one way into a Context's tools. It refuses a tool the caller is not offered, checks the
- * input against the tool's schema, and runs the tool as one transaction.
+ * input against the tool's schema, and runs the tool as one transaction. For a write it also
+ * answers a repeated key with the first result, and puts the Effects in the change log.
  */
 export function dispatch(
   handlers: Handlers,
@@ -55,12 +61,42 @@ function runTool<N extends ToolName>(
   const parsed = parseToolInput(tool, request.input);
   if (!parsed.ok) return parsed;
   const handler = handlers[tool] as (call: ToolCall<N>) => ToolResult<ToolOutput[N]>;
+  const call: ToolCall<N> = {
+    caller: request.caller,
+    input: parsed.input,
+    arrivedAt: request.arrivedAt,
+    sql: storage.sql,
+  };
   return storage.transactionSync(() =>
-    handler({
-      caller: request.caller,
-      input: parsed.input,
-      arrivedAt: request.arrivedAt,
-      sql: storage.sql,
-    }),
+    isWrite(tool)
+      ? runWrite(
+          tool,
+          handler as unknown as (call: ToolCall<WriteName>) => ToolResult<Written<unknown>>,
+          call as unknown as ToolCall<WriteName>,
+        )
+      : handler(call),
   );
+}
+
+function runWrite(
+  tool: WriteName,
+  handler: (call: ToolCall<WriteName>) => ToolResult<Written<unknown>>,
+  call: ToolCall<WriteName>,
+): ToolResult<unknown> {
+  const { sql, caller, arrivedAt } = call;
+  const key = call.input.key;
+  if (key !== undefined) {
+    const first = firstWithKey(sql, caller, key, arrivedAt);
+    if (first && first.tool !== tool) {
+      return failure("invalid_input", "This key was already given with another tool.");
+    }
+    if (first) return first.result;
+  }
+
+  const result = handler(call);
+  if (result.ok && result.value.effects.length > 0) {
+    appendChange(sql, { at: arrivedAt, caller, tool, effects: result.value.effects });
+  }
+  if (key !== undefined) rememberKey(sql, { caller, key, tool, at: arrivedAt, result });
+  return result;
 }

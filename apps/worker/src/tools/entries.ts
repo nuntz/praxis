@@ -6,6 +6,8 @@ import {
   instantToIso,
   PAGE_SIZE,
   success,
+  summarizeWords,
+  written,
 } from "@praxis/domain";
 import type { Handlers } from "../registry.ts";
 
@@ -35,7 +37,12 @@ export const entryTools: Pick<Handlers, "record_entry" | "get_entry" | "list_ent
       author.kind === "connection" ? author.name : null,
       throughConversation ? 1 : 0,
     );
-    return success({ record: readEntry(sql, id) as Entry });
+    const entry = readEntry(sql, id) as Entry;
+    return success(
+      written(entry, [
+        { kind: "entry", id, what: "made", summary: summarizeWords(entry.words), by: "call" },
+      ]),
+    );
   },
 
   get_entry({ input, sql }) {

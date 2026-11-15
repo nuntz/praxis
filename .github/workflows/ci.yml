@@ -18,7 +18,7 @@ jobs:
         run: bunx biome ci .
       - name: Typecheck
         run: bun run typecheck
-      - name: Lint guards still fire
+      - name: Guards still fire (lint rules, the registry guard)
         run: bun run test:lint
       - name: Domain package (bun test)
         run: bun run test:domain

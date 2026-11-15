@@ -22,3 +22,22 @@ export const PAGE_SIZE = 50;
 export function instantToIso(ms: number): string {
   return new Date(ms).toISOString();
 }
+
+const SUMMARY_LENGTH = 80;
+
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** An Entry's one-line summary: its first line with words, cut at 80 characters as seen. */
+export function summarizeWords(words: string): string {
+  const line =
+    words
+      .split(/\r\n|\r|\n/)
+      .map((each) => each.replace(/\s+/g, " ").trim())
+      .find((each) => each.length > 0) ?? "";
+  const characters = Array.from(graphemes.segment(line), (each) => each.segment);
+  if (characters.length <= SUMMARY_LENGTH) return line;
+  return `${characters
+    .slice(0, SUMMARY_LENGTH - 1)
+    .join("")
+    .trimEnd()}…`;
+}

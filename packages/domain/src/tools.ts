@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { CallerKind } from "./callers.ts";
+import type { ChangesPage, Written } from "./effects.ts";
 import type { Entry, Page } from "./entry.ts";
 import { failure, type ToolResult } from "./results.ts";
 
@@ -30,6 +31,25 @@ const toEveryWriter: Record<CallerKind, Offer> = {
   read_only_connection: "no",
 };
 
+/**
+ * The optional key every write accepts (section 4.5). A repeat from the same caller within 30
+ * days returns the first result and does nothing again.
+ */
+const key = z.string().min(1).max(200).optional();
+
+/** A write's input: its own fields and the key. */
+function writeInput<S extends z.ZodRawShape>(shape: S) {
+  return z.strictObject({ ...shape, key });
+}
+
+/** Days a caller's key for a write is remembered. */
+export const KEY_DAYS = 30;
+
+/** A key given at or before the instant this returns is forgotten by `at`. */
+export function keysForgottenBy(at: number): number {
+  return at - KEY_DAYS * 24 * 60 * 60 * 1000;
+}
+
 const words = z
   .string()
   .refine((value) => value.trim().length > 0, { message: "An Entry needs words." });
@@ -39,7 +59,7 @@ export const tools = {
   record_entry: {
     kind: "write",
     description: "Record an Entry in the Journal. The words are kept exactly as given.",
-    input: z.strictObject({ words }),
+    input: writeInput({ words }),
     offered: toEveryWriter,
   },
   get_entry: {
@@ -54,6 +74,13 @@ export const tools = {
     input: z.strictObject({ cursor: z.string().min(1).optional() }),
     offered: toEveryCaller,
   },
+  list_changes: {
+    kind: "read",
+    description:
+      "List what changed in this Context since a cursor, oldest first: each write's Effects, its caller and when it arrived. Without a cursor it starts from the oldest change kept. Keep the cursor it gives to ask again later.",
+    input: z.strictObject({ cursor: z.string().min(1).optional() }),
+    offered: toEveryCaller,
+  },
 } as const satisfies Record<string, ToolDefinition>;
 
 export type ToolName = keyof typeof tools;
@@ -64,13 +91,22 @@ export function isToolName(name: string): name is ToolName {
   return Object.hasOwn(tools, name);
 }
 
+export type WriteName = {
+  [N in ToolName]: (typeof tools)[N]["kind"] extends "write" ? N : never;
+}[ToolName];
+
+export function isWrite(name: string): name is WriteName {
+  return isToolName(name) && tools[name].kind === "write";
+}
+
 export type ToolInput<N extends ToolName> = z.infer<(typeof tools)[N]["input"]>;
 
 /** What each tool returns on success. */
 export type ToolOutput = {
-  record_entry: { record: Entry };
+  record_entry: Written<Entry>;
   get_entry: Entry;
   list_entries: Page<Entry>;
+  list_changes: ChangesPage;
 };
 
 export function parseToolInput<N extends ToolName>(
