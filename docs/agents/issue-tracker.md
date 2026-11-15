@@ -34,6 +34,8 @@ Create a GitHub issue.
 
 Read it as in **Read an issue** above.
 
+A ticket is one **slice** of `SPEC.md`, and its open siblings own the rest. When reviewing a ticket against the spec or the ADRs, list the open tickets (`gh issue list --state open --json number,title`) and report what a sibling owns as deferred to that ticket, by number, rather than as missing.
+
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.

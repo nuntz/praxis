@@ -18,6 +18,8 @@ jobs:
         run: bunx biome ci .
       - name: Typecheck
         run: bun run typecheck
+      - name: Lint guards still fire
+        run: bun run test:lint
       - name: Domain package (bun test)
         run: bun run test:domain
       - name: Context object (Vitest in workerd)

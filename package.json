@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "check": "biome check .",
-    "typecheck": "bun run --filter '*' typecheck",
+    "typecheck": "bun run --filter '*' typecheck && tsc -p lint",
+    "test:lint": "bun test ./lint",
     "test:domain": "bun test --cwd packages/domain",
     "test:worker": "bun run --cwd apps/worker test",
     "test:e2e": "playwright test",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
     "@playwright/test": "1.65.1",
+    "@types/bun": "1.4.4",
     "typescript": "7.0.2"
   }
 }
