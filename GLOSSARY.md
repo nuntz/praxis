@@ -5,7 +5,7 @@ A journal-centric personal task manager for one person, where an Agent and the p
 ## Language
 
 **Context**:
-A part of the person's life kept apart from the others, such as work. The person defines Contexts and there is always at least one. Every Entry, Task, Project and Person belongs to exactly one, and nothing links across two. A retired Context is hidden, not deleted.
+A part of the person's life kept apart from the others, such as work. The person defines Contexts and there is always at least one. Every Entry, Task, Project and Person belongs to exactly one, and nothing links across two. A retired Context is hidden and keeps everything; only the person can then delete it, which removes everything in it and cannot be put back.
 _Avoid_: Workspace, area, space
 
 **Journal**:
@@ -15,6 +15,10 @@ _Avoid_: Log, notes, history
 **Entry**:
 One piece of the Journal, in the person's own words unless they asked the Agent to compose it.
 _Avoid_: Note, post, record
+
+**Version**:
+The words an Entry had before a change to them, with who changed them and when. An Entry keeps every Version for as long as it exists, and restoring one is a new change that leaves the others in place. It covers the words only, not the Entry's References or Mentions.
+_Avoid_: Revision, history, draft
 
 **Conversation**:
 The continuing exchange between the person and the Agent within one Context. Each Context has exactly one. It is a way of working on the Journal, not part of it.
@@ -123,3 +127,11 @@ _Avoid_: Side effect, consequence, cascade
 **Trash**:
 Where a deleted Entry, Task, Project or Person stays until it is removed for good. A deleted record takes with it only what cannot exist without it, such as the Tasks an Entry is the Origin Entry of, and what went together is restored together. Anything in it can be restored as it was, and nothing of it is left once it is removed for good.
 _Avoid_: Archive, bin, soft delete
+
+**Export**:
+A file holding everything a deployment keeps that is worth keeping: every Context's Journal with its Trash and its Entries' Versions, and the deployment's own settings. It does not hold any Conversation. Only the person makes one, it is always the whole deployment, and a new deployment can be started from it.
+_Avoid_: Dump, download, archive
+
+**Backup**:
+An Export the system makes by itself each day and keeps for a limited time, so a deployment that is lost can be started again.
+_Avoid_: Snapshot, copy
