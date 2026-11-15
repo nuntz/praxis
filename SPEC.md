@@ -553,7 +553,7 @@ Three peers, none hosting the others: **Attention**, the **Journal** and the **C
 |---|---|
 | Desktop | Three columns: Attention left, Journal middle, Conversation right. |
 | In between | Journal and Conversation side by side. Attention is a column opened from a button in the top bar that carries its count. |
-| Phone | Three bottom tabs: Today, Journal, Agent. It opens on Today. |
+| Phone | Three bottom tabs: Attention, Journal, Agent. It opens on Attention. |
 
 - The Context switcher is in the top bar at every width.
 - A change the Agent makes shows in the other two columns as it happens, patched from its Effects.
@@ -590,7 +590,7 @@ The column is composed by the screen from four sources, in this order:
 - Seven days is in code and is not a setting. It decides only how long a released Task is listed apart.
 - There is no "due soon" in Attention. The weeks ahead are another view, `view_ahead`, opened from the Due section. It is not a fourth peer.
 - Nothing in Attention says what has gone quiet. That is the Agent's judgment, said in a Brief or a Review (section 5.4).
-- **The count** on the Today tab, and on the top-bar button at middle widths, is the refused Unsent writes, the Held Changes and the Due section. Nothing else is counted.
+- **The count** on the Attention tab, and on the top-bar button at middle widths, is the refused Unsent writes, the Held Changes and the Due section. Nothing else is counted.
 - A Task is finished from wherever it is shown: Attention or the Entry it hangs off.
 
 ### 8.4 The Journal
@@ -604,7 +604,7 @@ The column is composed by the screen from four sources, in this order:
 
 - Every Message, scrollable to the start.
 - A Run's calls fold under the Message it left, each change linking to its record, with the Run's cost on opening it.
-- A Held Change waits where the Agent left it, as well as at the top of Attention and on its Entry. It is counted in the Today badge.
+- A Held Change waits where the Agent left it, as well as at the top of Attention and on its Entry. It is counted in the Attention badge.
 - A Brief says when it was taken, and says so once Tasks it names have been finished since. The live Attention list stays beside it.
 - On a phone the Agent tab carries a badge while a Brief or Review is unread.
 - Notices that are not Messages: a failed Run with a way to try again, the cap, no key, no network.
@@ -684,12 +684,13 @@ Glossary: Device.
 ### 8.11 Look, language and accessibility
 
 - **A design system of Praxis's own**, new and not derived from mise's. Its tokens are in code as the source, and the SolidJS components are built from them. No third-party kit.
-- **The direction is chosen by exploring.** Two or three directions are drawn as Claude Design artifacts, one is picked, and its tokens are captured as a Design System artifact that this section then names. This is [Explore design directions for the main screen](https://github.com/nuntz/praxis/issues/34).
-- Each direction draws the main screen at desktop and phone width, in light and dark, in two Contexts, with these states: an Entry with an Inline Task and a Mention, a Held Change waiting, an unread Brief, an Unsent Entry and a standing Notice. Settings, the Trash and the Changes screen are not drawn. They are built from the chosen system.
-- **Fixed for every direction**:
+- **The direction is Atelier**: soft panels on a tinted ground, round controls and one type family, Figtree. It was picked from three directions drawn on the canvas [Praxis design directions](https://claude.ai/artifact/2XWrtwoKZCBjJ6kcT3q5zS), in [Explore design directions for the main screen](https://github.com/nuntz/praxis/issues/34). Its tokens, voice and rules are captured in the [Praxis design system](https://claude.ai/artifact/1drME2ytFn9ta9seAetLuw), which the tokens in code are written from. Both are private to the person who made them.
+- The canvas draws the main screen at desktop and phone width, in light and dark, in two Contexts, with these states: an Entry with an Inline Task and a Mention, a Held Change waiting, an unread Brief, an Unsent Entry and a standing Notice. Settings, the Trash and the Changes screen are not drawn. They are built from the system.
+- **The app icon** is the Lucide hammer, kept from the predecessor, in white on a dark neutral tile. It never takes a Context's accent colour, since it stands for the whole Deployment. The same mark sits in the top bar beside the name. Interface icons are Lucide too, the one outside asset, under the ISC licence.
+- **Fixed**:
   - the layout of section 8.1;
   - light and dark, following the Device, with no switch;
-  - one accent colour per Context, from a fixed set the exploration chooses, shown in the top bar, the Context switcher and both composers, so the person sees where they are about to write. There is no theme beyond it;
+  - one accent colour per Context, from a fixed set of six, Blue, Rust, Teal, Plum, Moss and Slate, shown in the top bar, the Context switcher and both composers, so the person sees where they are about to write. There is no theme beyond it;
   - the interface in English, with no translation layer. An Entry can be in any language. Dates and numbers follow the Device's locale;
   - WCAG 2.2 AA, in light and in dark. Everything is reachable by keyboard.
 

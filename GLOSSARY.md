@@ -141,7 +141,7 @@ One of the Tasks a Recurrence makes, each a Task of its own.
 _Avoid_: Instance, repeat, copy
 
 **Attention**:
-What in a Context is open for the person to act on now, set out in a fixed order. It is derived from the Journal by rule and involves no judgment by the Agent, so it never says what has gone quiet. Called Today on a phone.
+What in a Context is open for the person to act on now, set out in a fixed order. It is derived from the Journal by rule and involves no judgment by the Agent, so it never says what has gone quiet.
 _Avoid_: Dashboard, inbox, agenda
 
 **Run**:
