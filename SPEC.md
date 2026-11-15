@@ -613,6 +613,11 @@ The column is composed by the screen from four sources, in this order:
   - In any other Entry it shows its description and waits for a tap. A tap loads that image for that showing and is not remembered. Editing the Entry makes it the person's, and its images then load by themselves.
   - One that fails to load shows its description and its address as a link.
   - The content security policy allows images from any `https` host, and nothing else new.
+- **How it looks** is fixed in the design system's Rendered Markdown section and drawn in its Markdown preview, from [Styles for rendered Markdown in the design system](https://github.com/nuntz/praxis/issues/36).
+  - Markdown changes weight, indentation and face, never size, and never takes the Context's accent. A heading is the size of the words around it, and three levels are kept apart: bold, semibold, and semibold in the muted colour.
+  - A quote is indented behind a hairline, in the muted colour. Code is in the Device's own monospace on the inset colour. A table sits in an inset box, which is what scrolls.
+  - The three kinds of link are told apart by shape. A Mention is a tinted pill, a Reference is an inset pill, and a link or a bare address is underlined and followed by a small arrow, since it leaves Praxis.
+  - An image that has loaded has no frame. One waiting for a tap is one line: an icon, its description and "Show image". One that failed is the same line saying it did not load, with its address.
 - **Never rendered**: both composers and the Entry editor, which show the words as typed with no toolbar and no preview; a Held Change's before and after; a Version compared against the current words; a search result's excerpt; a Task's title; a Project's or a Person's name.
 
 ### 8.5 The Conversation
@@ -701,7 +706,7 @@ Glossary: Device.
 ### 8.11 Look, language and accessibility
 
 - **A design system of Praxis's own**, new and not derived from mise's. Its tokens are in code as the source, and the SolidJS components are built from them. No third-party kit.
-- **The direction is Atelier**: soft panels on a tinted ground, round controls and one type family, Figtree. It was picked from three directions drawn on the canvas [Praxis design directions](https://claude.ai/artifact/2XWrtwoKZCBjJ6kcT3q5zS), in [Explore design directions for the main screen](https://github.com/nuntz/praxis/issues/34). Its tokens, voice and rules are captured in the [Praxis design system](https://claude.ai/artifact/1drME2ytFn9ta9seAetLuw), which the tokens in code are written from. Both are private to the person who made them.
+- **The direction is Atelier**: soft panels on a tinted ground, round controls and one type family, Figtree, with the Device's own monospace for code only. It was picked from three directions drawn on the canvas [Praxis design directions](https://claude.ai/artifact/2XWrtwoKZCBjJ6kcT3q5zS), in [Explore design directions for the main screen](https://github.com/nuntz/praxis/issues/34). Its tokens, voice and rules are captured in the [Praxis design system](https://claude.ai/artifact/1drME2ytFn9ta9seAetLuw), which the tokens in code are written from. Both are private to the person who made them.
 - The canvas draws the main screen at desktop and phone width, in light and dark, in two Contexts, with these states: an Entry with an Inline Task and a Mention, a Held Change waiting, an unread Brief, an Unsent Entry and a standing Notice. Settings, the Trash and the Changes screen are not drawn. They are built from the system.
 - **The app icon** is the Lucide hammer, kept from the predecessor, in white on a dark neutral tile. It never takes a Context's accent colour, since it stands for the whole Deployment. The same mark sits in the top bar beside the name. Interface icons are Lucide too, the one outside asset, under the ISC licence.
 - **Fixed**:
