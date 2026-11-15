@@ -252,7 +252,7 @@ A result is a success or an error from a closed set of codes:
 
 ### 4.4 Effects and the change log
 
-- Every write returns the record it changed and its Effects: each other record made, changed or deleted, what happened to it, and whether the call did it or a rule did. A call that changes nothing says so.
+- Every write returns the record it changed and its Effects: every record made, changed or deleted, the record itself among them, what happened to each, and whether the call did it or a rule did. A call that changes nothing says so and has no Effects.
 - An Effect carries the record's id and a one-line summary, the same summary reads use.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
 - `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since its last turn.
@@ -262,7 +262,7 @@ A result is a success or an error from a closed set of codes:
 ### 4.5 One call, one transaction
 
 - Each call is one transaction in one object. There is no batch tool. A compound change exists only as a named tool: `record_entry` and `make_project_from_task`.
-- Every write accepts an optional key from the caller, remembered for 30 days per caller. A repeat returns the first result and does nothing again. The Agent's calls get a key from the runtime.
+- Every write accepts an optional key from the caller, remembered for 30 days per caller. A repeat returns the first result and does nothing again. A key given again with another tool is `invalid_input`. The Agent's calls get a key from the runtime.
 
 ### 4.6 Made-at
 

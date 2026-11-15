@@ -21,7 +21,7 @@ A part of the person's life kept apart from the others, such as work. The person
 _Avoid_: Workspace, area, space
 
 **Journal**:
-The person's record, made of Entries. It is the only truth: anything worth keeping is in the Journal.
+Everything the person keeps in writing, made of Entries. It is the only truth: anything worth keeping is in the Journal.
 _Avoid_: Log, notes, history
 
 **Entry**:
@@ -171,6 +171,10 @@ _Avoid_: Alert, warning, banner, error message, toast
 **Held Change**:
 A change to the words of an Entry whose Author is the person, asked for by the Agent and not yet made. It shows the Entry before and after, and only the person's tap makes it.
 _Avoid_: Confirmation, pending confirmation, approval, draft
+
+**Record**:
+An Entry, Task, Project or Person: one of the things a Context keeps, each with an id of its own. "Record" never means an Entry alone.
+_Avoid_: Object, row
 
 **Effect**:
 One thing a change brought about: a record made, changed or deleted, whether directly or by a rule that followed from the change. Every change reports all of its Effects, and says so when there are none.
