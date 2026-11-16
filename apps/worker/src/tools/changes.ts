@@ -13,6 +13,7 @@ type CallRow = {
   seq: number;
   at: number;
   caller_kind: Caller["kind"];
+  caller_id: string | null;
   caller_name: string | null;
   tool: string;
 };
@@ -82,7 +83,7 @@ function toCaller(row: CallRow): Caller {
   switch (row.caller_kind) {
     case "connection":
     case "read_only_connection":
-      return { kind: row.caller_kind, name: row.caller_name ?? "" };
+      return { kind: row.caller_kind, id: row.caller_id ?? "", name: row.caller_name ?? "" };
     default:
       return { kind: row.caller_kind };
   }

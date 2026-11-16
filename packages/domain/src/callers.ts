@@ -3,12 +3,16 @@ export const CALLERS = ["hand", "agent", "clock", "connection", "read_only_conne
 
 export type CallerKind = (typeof CALLERS)[number];
 
+/**
+ * A caller. A Connection is told apart by its id, the opaque one in its address (section 7.2),
+ * and carries the name it had when it called, which is the Author of what it makes.
+ */
 export type Caller =
   | { kind: "hand" }
   | { kind: "agent" }
   | { kind: "clock" }
-  | { kind: "connection"; name: string }
-  | { kind: "read_only_connection"; name: string };
+  | { kind: "connection"; id: string; name: string }
+  | { kind: "read_only_connection"; id: string; name: string };
 
 /** Who made a record. Stamped by the tool layer from the caller, never stated by it. */
 export type Author = { kind: "person" } | { kind: "agent" } | { kind: "connection"; name: string };

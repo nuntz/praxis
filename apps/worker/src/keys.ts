@@ -46,9 +46,9 @@ export function holdsKeys(sql: SqlStorage): boolean {
 }
 
 /**
- * Keys are remembered per caller. A Connection is told apart by its name until Connections
- * have ids of their own (section 7.2).
+ * Keys are remembered per caller. A Connection is told apart by its id, so two that share a name
+ * keep their own keys, and one renamed keeps its keys (section 7.2).
  */
-function callerKey(caller: Caller): string {
-  return "name" in caller ? `${caller.kind}:${caller.name}` : caller.kind;
+export function callerKey(caller: Caller): string {
+  return "id" in caller ? `connection:${caller.id}` : caller.kind;
 }

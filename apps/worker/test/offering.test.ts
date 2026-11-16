@@ -76,6 +76,11 @@ const deploymentRunsWith: Record<string, (id: string) => unknown> = {
   set_context_accent: (id) => ({ id, accent: "teal" }),
   retire_context: (id) => ({ id }),
   bring_back_context: (id) => ({ id }),
+  list_connections: () => ({}),
+  create_connection: (id) => ({ name: "Claude Code", context_id: id, reading_only: false }),
+  rename_connection: () => ({ id: "no-such-connection", name: "Laptop" }),
+  set_connection_reading_only: () => ({ id: "no-such-connection", reading_only: true }),
+  end_connection: () => ({ id: "no-such-connection" }),
 };
 
 // The same, for the Deployment tools against their own table. The oracle sees only a Context's

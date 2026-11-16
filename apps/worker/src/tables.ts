@@ -108,6 +108,8 @@ export function createTables(sql: SqlStorage): void {
       seq INTEGER PRIMARY KEY AUTOINCREMENT,
       at INTEGER NOT NULL,
       caller_kind TEXT NOT NULL,
+      -- A Connection's id, and the name it had when it called, which is kept after it ends.
+      caller_id TEXT,
       caller_name TEXT,
       tool TEXT NOT NULL
     );

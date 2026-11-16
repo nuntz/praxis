@@ -20,6 +20,32 @@ export type ContextListing = {
   retired: boolean;
 };
 
+/**
+ * A Connection, as the Deployment object keeps it (section 7.2): the person's standing permission
+ * for an outside agent to work in one Context. Not a record. Its Context never changes.
+ */
+export type Connection = {
+  /** Opaque, and in its address. It never names the Context. */
+  id: string;
+  /** The Author of what it makes, kept on that after it ends. */
+  name: string;
+  context_id: string;
+  /** Limited to reading, it is offered only the reading tools. The one thing switched later. */
+  reading_only: boolean;
+  /**
+   * Where an outside agent reaches it: a path under `/mcp` on the Deployment's own hostname,
+   * which the person pastes into the client. It is not a secret: Access stands in front of it.
+   */
+  address: string;
+  /** An ended Connection is refused on its next call, and is never brought back. */
+  ended: boolean;
+};
+
+/** The path a Connection is reached at over MCP, holding its id and nothing else. */
+export function connectionAddress(id: string): string {
+  return `/mcp/${id}`;
+}
+
 /** A Context's name: one line, kept exactly as given. */
 const contextName = z
   .string()
@@ -30,8 +56,14 @@ const accent = z.enum(ACCENTS, {
   message: `An accent is one of ${ACCENTS.join(", ")}.`,
 });
 
-/** A Context's id, as `list_contexts` gives it. */
+/** A Context's id, as `list_contexts` gives it, or a Connection's, as `list_connections` does. */
 const id = z.string().min(1);
+
+/** A Connection's name: one line, kept exactly as given. */
+const connectionName = z
+  .string()
+  .refine((value) => value.trim().length > 0, { message: "A Connection needs a name." })
+  .refine((value) => !/[\r\n]/.test(value), { message: "A Connection's name is one line." });
 
 /**
  * The Deployment tools (section 4.11). They run on the Deployment object and are offered to the
@@ -72,6 +104,36 @@ export const deploymentTools = {
       "Bring a retired Context back, as it was. Bringing back one that is not retired changes nothing.",
     input: writeInput({ id }),
   },
+  list_connections: {
+    kind: "read",
+    description:
+      "List the Connections not ended, in the order they were made, each with its name, its Context, whether it reads only and its address.",
+    input: z.strictObject({}),
+  },
+  create_connection: {
+    kind: "write",
+    description:
+      "Make a Connection for an outside agent to work in one Context, which never changes, limited to reading or not. It is given an address under /mcp to paste into the client.",
+    input: writeInput({ name: connectionName, context_id: id, reading_only: z.boolean() }),
+  },
+  rename_connection: {
+    kind: "write",
+    description:
+      "Change a Connection's name, which is the Author of what it makes from then on. Renaming it to the name it has changes nothing.",
+    input: writeInput({ id, name: connectionName }),
+  },
+  set_connection_reading_only: {
+    kind: "write",
+    description:
+      "Limit a Connection to reading, or lift the limit, from its next call on. Setting what it is already changes nothing.",
+    input: writeInput({ id, reading_only: z.boolean() }),
+  },
+  end_connection: {
+    kind: "write",
+    description:
+      "End a Connection: its next call is refused, and it is never brought back. Its name stays on what it made. Ending one already ended changes nothing.",
+    input: writeInput({ id }),
+  },
 } as const;
 
 export type DeploymentToolName = keyof typeof deploymentTools;
@@ -99,6 +161,11 @@ export type DeploymentToolOutput = {
   set_context_accent: Written<ContextListing>;
   retire_context: Written<ContextListing>;
   bring_back_context: Written<ContextListing>;
+  list_connections: { items: Connection[] };
+  create_connection: Written<Connection>;
+  rename_connection: Written<Connection>;
+  set_connection_reading_only: Written<Connection>;
+  end_connection: Written<Connection>;
 };
 
 export function parseDeploymentToolInput<N extends DeploymentToolName>(

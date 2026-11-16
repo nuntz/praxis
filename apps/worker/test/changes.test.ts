@@ -72,7 +72,7 @@ describe("list_changes", () => {
       },
       {
         at: "2026-11-15T09:01:30.000Z",
-        caller: { kind: "connection", name: "Claude Code" },
+        caller: { kind: "connection", id: "claude-code", name: "Claude Code" },
         tool: "record_entry",
         effects: byConnection.effects,
       },

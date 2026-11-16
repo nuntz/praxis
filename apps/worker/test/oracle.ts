@@ -122,7 +122,9 @@ export function judge(seen: Seen): string[] {
 // The same promise for a Deployment write, which can reach into a Context's object (to make it or
 // rename it): every Context listed is snapshotted before and after, and what changed in each must
 // be Effects the call returned, logged in that Context with the caller. A Context the call made
-// holds its settings and nothing else, and its change log starts empty.
+// holds its settings and nothing else, and its change log starts empty. The Connections the
+// Deployment object keeps are held the same way: the ones changed are exactly the ones its
+// Effects name, and the Deployment object keeps no change log for them.
 
 type DeploymentStub = ReturnType<typeof env.DEPLOYMENT.get>;
 
@@ -133,6 +135,8 @@ export type SeenDeployment = {
   request: Request;
   result: ToolResult<unknown>;
   contexts: Map<string, SeenContext>;
+  /** The Deployment object's Connections, each as a record is, before and after the call. */
+  connections: { before: Records; after: Records };
 };
 
 /** Call a Deployment tool through the oracle, failing the test on anything it finds. */
@@ -144,8 +148,10 @@ export async function throughDeploymentOracle(
   const listedBefore = await listedContexts(deployment);
   const before = new Map<string, { records: Records; lastChange: number }>();
   for (const id of listedBefore) before.set(id, await snapshot(contextOf(id)));
+  const connectionsBefore = await connectionRecords(deployment);
   const result = await deployment.call(request);
   const listedAfter = await listedContexts(deployment);
+  const connections = { before: connectionsBefore, after: await connectionRecords(deployment) };
 
   const contexts = new Map<string, SeenContext>();
   for (const id of listedAfter) {
@@ -159,7 +165,7 @@ export async function throughDeploymentOracle(
 
   const problems = [
     ...gone.map((id) => `The Context ${id} left the list.`),
-    ...judgeDeployment({ request, result, contexts }),
+    ...judgeDeployment({ request, result, contexts, connections }),
   ];
   expect(problems, `The oracle, on ${request.tool} as ${request.caller.kind}`).toEqual([]);
   return result;
@@ -170,6 +176,16 @@ export function judgeDeployment(seen: SeenDeployment): string[] {
   const { request, result } = seen;
   const effects = result.ok ? ((result.value as { effects?: Effect[] }).effects ?? []) : [];
   const problems: string[] = [];
+
+  const connectionsChanged = differences(seen.connections.before, seen.connections.after);
+  const onConnections = effects
+    .filter((e) => e.kind === "connection")
+    .map(({ kind, id, what }) => ({ kind, id, what }));
+  if (!same(sorted(connectionsChanged), sorted(onConnections))) {
+    problems.push(
+      `The Connections changed are not the Effects on Connections returned. Changed: ${canonical(sorted(connectionsChanged))}. Effects: ${canonical(sorted(onConnections))}.`,
+    );
+  }
 
   for (const [id, { before, after, logged }] of seen.contexts) {
     if (before === null) {
@@ -229,6 +245,14 @@ function listedContexts(deployment: DeploymentStub): Promise<string[]> {
   );
 }
 
+/** The Deployment object's Connections, each as a record is, by `connection:id`. */
+function connectionRecords(deployment: DeploymentStub): Promise<Records> {
+  return runInDurableObject(deployment, (_, state) => {
+    const rows = state.storage.sql.exec<{ id: string }>(`SELECT * FROM connections ORDER BY seq`);
+    return new Map([...rows].map((row) => [`connection:${row.id}`, canonical(row)]));
+  });
+}
+
 /** Each record made, changed or deleted between two snapshots. */
 function differences(before: Records, after: Records): Pick<Effect, "kind" | "id" | "what">[] {
   const found: Pick<Effect, "kind" | "id" | "what">[] = [];
@@ -284,6 +308,7 @@ function changesSince(stub: Stub, seq: number): Promise<Change[]> {
     seq: number;
     at: number;
     caller_kind: Caller["kind"];
+    caller_id: string | null;
     caller_name: string | null;
     tool: string;
   };
@@ -301,9 +326,9 @@ function changesSince(stub: Stub, seq: number): Promise<Change[]> {
       .toArray()
       .map((call) => ({
         at: instantToIso(call.at),
-        caller: (call.caller_name === null
+        caller: (call.caller_id === null
           ? { kind: call.caller_kind }
-          : { kind: call.caller_kind, name: call.caller_name }) as Caller,
+          : { kind: call.caller_kind, id: call.caller_id, name: call.caller_name }) as Caller,
         tool: call.tool,
         effects: sql
           .exec<EffectRow>(`SELECT * FROM changes WHERE call = ? ORDER BY ord`, call.seq)
@@ -324,7 +349,8 @@ function rememberedResult(stub: Stub, request: Request): Promise<ToolResult<unkn
   const key = (request.input as { key?: unknown } | null)?.key;
   if (typeof key !== "string") return Promise.resolve(null);
   const { caller } = request;
-  const by = "name" in caller ? `${caller.kind}:${caller.name}` : caller.kind;
+  // A Connection's keys are its own by its id, whatever its name and whether it reads only.
+  const by = "id" in caller ? `connection:${caller.id}` : caller.kind;
   return runInDurableObject(stub, (_, state) => {
     const row = state.storage.sql
       .exec<{ tool: string; result: string }>(

@@ -4,10 +4,11 @@ import type { Caller } from "./callers.ts";
 export type RecordKind = "entry" | "task" | "project" | "person";
 
 /**
- * What an Effect can name: a record, or the Context itself, whose settings a write can change.
- * A Context is not a record, but a change to its settings is a change like any other.
+ * What an Effect can name: a record, the Context itself, whose settings a write can change, or a
+ * Connection, which the Deployment object keeps. Neither a Context nor a Connection is a record,
+ * but a change to one is a change like any other.
  */
-export type EffectKind = RecordKind | "context";
+export type EffectKind = RecordKind | "context" | "connection";
 
 /**
  * One thing a change brought about (section 4.4): a record made, changed or deleted, or the
@@ -50,6 +51,18 @@ export type Change = {
  * caller that has read to the end can ask again later for what changed since.
  */
 export type ChangesPage = { items: Change[]; cursor: string; more: boolean };
+
+/**
+ * An Effect on a Connection: made, renamed, switched to or from reading only, or ended, by the
+ * call or, when its Context is retired, by rule. Summarised by its name.
+ */
+export function effectOnConnection(
+  connection: { id: string; name: string },
+  what: Effect["what"],
+  by: Effect["by"] = "call",
+): Effect {
+  return { kind: "connection", id: connection.id, what, summary: connection.name, by };
+}
 
 /**
  * An Effect on a Context: a change to its settings, or, from the Deployment object, the Context

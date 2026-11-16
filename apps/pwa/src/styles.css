@@ -291,6 +291,51 @@ button.quiet {
   font: var(--type-label);
 }
 
+.settings-note {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* A Connection's row, as a Context's is, with the address to paste across the full width. */
+.connection-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connection-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.connection-context {
+  color: var(--muted);
+}
+
+.connection-address {
+  flex-basis: 100%;
+  display: flex;
+}
+
+.connection-address input {
+  flex-grow: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.connection-reading-only {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+}
+
 /* The fields side by side where they fit, the button after them. */
 .new-context {
   display: flex;

@@ -36,9 +36,10 @@ const fixtures: Record<string, string> = {
     "export const used = [runInDurableObject, env];",
   ].join("\n"),
   "apps/worker/test/nested/around-the-oracle.test.ts": 'export { env } from "cloudflare:workers";',
-  // The harness itself, and the one test of the Worker's HTTP path, may.
+  // The harness itself, and the two tests of the Worker's HTTP path, the screen's and MCP's, may.
   "apps/worker/test/oracle.ts": 'export { runInDurableObject } from "cloudflare:test";',
   "apps/worker/test/endpoint.test.ts": 'export { exports } from "cloudflare:workers";',
+  "apps/worker/test/mcp.test.ts": 'export { env } from "cloudflare:workers";',
   // The recommended rules are on.
   "apps/pwa/src/recommended.ts": "export function f(a: number) {\n  debugger;\n  return a;\n}",
 };
@@ -104,9 +105,10 @@ describe("the lint guards", () => {
     ]);
   });
 
-  test("the harness and the Worker's HTTP test can", () => {
+  test("the harness and the Worker's HTTP tests can", () => {
     expect(rulesAt("apps/worker/test/oracle.ts")).toEqual([]);
     expect(rulesAt("apps/worker/test/endpoint.test.ts")).toEqual([]);
+    expect(rulesAt("apps/worker/test/mcp.test.ts")).toEqual([]);
   });
 
   test("the recommended rules are on", () => {

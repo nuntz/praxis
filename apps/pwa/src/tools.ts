@@ -55,6 +55,36 @@ export function callDeploymentTool<N extends DeploymentToolName>(
   return post(`/api/deployment/tools/${tool}`, input);
 }
 
+/** What a Deployment write returns as its record: a Context or a Connection, as it now is. */
+export type DeploymentWritten<N extends DeploymentToolName> = DeploymentToolOutput[N] extends {
+  record: infer R;
+}
+  ? R
+  : never;
+
+/**
+ * Call a Deployment write, for what it changed as it now is. A refusal or an outage is reported as
+ * a problem, and gives nothing; a call that goes through clears the problem.
+ */
+export async function writeToDeployment<N extends DeploymentToolName>(
+  tool: N,
+  input: DeploymentToolInput<N>,
+  onProblem: (message: string | null) => void,
+): Promise<DeploymentWritten<N> | null> {
+  try {
+    const result = await callDeploymentTool(tool, input);
+    if (!result.ok) {
+      onProblem(result.error.message);
+      return null;
+    }
+    onProblem(null);
+    return (result.value as unknown as { record: DeploymentWritten<N> }).record;
+  } catch (error) {
+    onProblem(unreachableMessage(error));
+    return null;
+  }
+}
+
 /** Calls the tools of one Context. No tool names a Context: the address the call goes to does. */
 export type CallTool = <N extends ToolName>(
   tool: N,

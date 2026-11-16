@@ -262,6 +262,7 @@ A result is a success or an error from a closed set of codes:
 - An Effect carries the record's id and a one-line summary, the same summary reads use.
 - A Context is not a record, but a change to its settings, such as its time zone, is an Effect on the Context, carrying its id and its name as the summary. A time zone change changes no Task: its dates are days, and what today makes of them is derived when read.
 - A Deployment tool that changes a Context returns its Effect on the Context to its caller. Only a rename goes in that Context's change log, since it is the one such change a reader of the Context sees: the accent shows only on the person's screen, a retired Context cannot be read, and a new Context's log starts empty. The Deployment object keeps no change log.
+- A Connection is not a record either. A Deployment tool that makes or changes one returns an Effect on it, carrying its id and its name as the summary. Retiring a Context ends its Connections, each an Effect by rule. None of these goes in a change log.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
 - `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since its last turn.
 - The change log is kept 90 days. A caller whose cursor is older is told to read afresh.

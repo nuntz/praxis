@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+  type Connection,
   type DeploymentToolName,
   failure,
   isDeploymentToolName,
@@ -10,7 +11,12 @@ import {
 } from "@praxis/domain";
 import { startTimer } from "./arrival.ts";
 import { createDeploymentTables } from "./deployment-tables.ts";
-import { type DeploymentCall, deploymentHandlers, isReachable } from "./deployment-tools.ts";
+import {
+  callableConnection,
+  type DeploymentCall,
+  deploymentHandlers,
+  isReachable,
+} from "./deployment-tools.ts";
 import { firstWithKey, rememberKey } from "./keys.ts";
 import { logCall } from "./log.ts";
 import type { ToolRequest } from "./registry.ts";
@@ -45,6 +51,15 @@ export class DeploymentObject extends DurableObject<Env> {
   /** Whether a request may reach the Context with this id: it was made and is not retired. */
   async isReachable(id: string): Promise<boolean> {
     return isReachable(this.ctx.storage.sql, id);
+  }
+
+  /**
+   * The Connection an MCP address names, asked on every call, so ending one or switching it to
+   * reading only takes effect on the next (section 7.2). Null when it has ended, its Context is
+   * retired, or there never was one: the caller cannot tell these apart.
+   */
+  async callableConnection(id: string): Promise<Connection | null> {
+    return callableConnection(this.ctx.storage.sql, id);
   }
 
   private async run<N extends DeploymentToolName>(

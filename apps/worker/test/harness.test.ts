@@ -161,6 +161,7 @@ describe("the oracle, on a Deployment write", () => {
           },
         ],
       ]),
+      connections: { before: new Map(), after: new Map() },
     };
   }
 
@@ -199,11 +200,45 @@ describe("the oracle, on a Deployment write", () => {
           },
         ],
       ]),
+      connections: { before: new Map(), after: new Map() },
     };
 
     expect(judgeDeployment(seen)).toEqual([
       expect.stringMatching(/holds more than its settings/),
       expect.stringMatching(/does not start empty/),
+    ]);
+  });
+
+  /** Ending a Connection: its row changed, and the call's Effects say so. */
+  function anEnding(effects: Effect[]): SeenDeployment {
+    return {
+      request: { caller: hand, tool: "end_connection", input: {}, arrivedAt: Date.parse(at) },
+      result: { ok: true, value: { record: {}, effects, changed: effects.length > 0 } },
+      contexts: new Map(),
+      connections: {
+        before: new Map([["connection:k1", "not ended"]]),
+        after: new Map([["connection:k1", "ended"]]),
+      },
+    };
+  }
+  const ended: Effect = {
+    kind: "connection",
+    id: "k1",
+    what: "changed",
+    summary: "Laptop",
+    by: "call",
+  };
+
+  test("passes a change to a Connection its Effects report", () => {
+    expect(judgeDeployment(anEnding([ended]))).toEqual([]);
+  });
+
+  test("fails a change to a Connection that no Effect reports, or an Effect on one unchanged", () => {
+    expect(judgeDeployment(anEnding([]))).toEqual([
+      expect.stringMatching(/Connections changed are not the Effects/),
+    ]);
+    expect(judgeDeployment(anEnding([ended, { ...ended, id: "k2" }]))).toEqual([
+      expect.stringMatching(/Connections changed are not the Effects/),
     ]);
   });
 });

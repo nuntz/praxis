@@ -8,11 +8,13 @@ export function appendChange(
   const { caller } = change;
   const { seq } = sql
     .exec<{ seq: number }>(
-      `INSERT INTO change_calls (at, caller_kind, caller_name, tool) VALUES (?, ?, ?, ?)
+      `INSERT INTO change_calls (at, caller_kind, caller_id, caller_name, tool)
+       VALUES (?, ?, ?, ?, ?)
        RETURNING seq`,
       change.at,
       caller.kind,
-      "name" in caller ? caller.name : null,
+      "id" in caller ? caller.id : null,
+      "id" in caller ? caller.name : null,
       change.tool,
     )
     .one();

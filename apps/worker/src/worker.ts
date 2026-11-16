@@ -1,6 +1,7 @@
 import { type Caller, failure, type ToolResult } from "@praxis/domain";
 import { ACCESS_TOKEN_HEADER, type Access, type AccessApplication, AccessGate } from "./access.ts";
 import { arrivalTime } from "./arrival.ts";
+import { connectionCaller, connectionIdIn, noConnection, serveConnection } from "./mcp.ts";
 import type { ToolRequest } from "./registry.ts";
 import { deploymentOf, reachContext } from "./routing.ts";
 
@@ -13,7 +14,7 @@ const DEPLOYMENT_TOOL_PATH = /^\/api\/deployment\/tools\/([a-z_]+)$/;
  */
 const CONTEXT_TOOL_PATH = /^\/api\/contexts\/([0-9A-Za-z_-]+)\/tools\/([a-z_]+)$/;
 
-/** MCP is served under this path (section 7.2); it is not served yet, but signed in like the rest. */
+/** MCP is served under this path, a Connection at an address holding its id (section 7.2). */
 const MCP_PATH = /^\/mcp(\/|$)/;
 
 /** The screen is the person's hand. */
@@ -43,9 +44,8 @@ export function praxis(accessOf: (env: Env) => Access) {
       if (signIn === "unavailable") return unavailable();
 
       const { pathname } = new URL(request.url);
-      if (!pathname.startsWith("/api/") && !MCP_PATH.test(pathname)) {
-        return env.ASSETS.fetch(request);
-      }
+      if (MCP_PATH.test(pathname)) return serveMcp(request, env, pathname, arrivedAt);
+      if (!pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
       const deploymentTool = DEPLOYMENT_TOOL_PATH.exec(pathname);
       const contextTool = CONTEXT_TOOL_PATH.exec(pathname);
       if (!deploymentTool && !contextTool) return new Response("Not found", { status: 404 });
@@ -92,6 +92,28 @@ function unavailable(): Response {
     status: 503,
     headers: { "cache-control": "no-store", "retry-after": "5" },
   });
+}
+
+/**
+ * Serve an MCP request. The path alone says which Connection is calling, and the Deployment object
+ * is asked on every request whether it may be called and in which Context, so ending one or
+ * switching it to reading only takes effect on its next call (section 7.2).
+ */
+async function serveMcp(
+  request: Request,
+  env: Env,
+  pathname: string,
+  arrivedAt: number,
+): Promise<Response> {
+  const id = connectionIdIn(pathname);
+  // One ask answers both: a Connection may be called only while its Context is not retired.
+  const connection = id === null ? null : await deploymentOf(env).callableConnection(id);
+  if (connection === null) return noConnection(request);
+  const context = env.CONTEXT.get(env.CONTEXT.idFromString(connection.context_id));
+  const caller = connectionCaller(connection);
+  return serveConnection(request, caller, (tool, input) =>
+    context.call({ caller, tool, input, arrivedAt }),
+  );
 }
 
 /** Ask the Deployment object which Context the request is for, then call that Context's object. */

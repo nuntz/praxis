@@ -177,7 +177,7 @@ An Entry, Task, Project or Person: one of the things a Context keeps, each with 
 _Avoid_: Object, row
 
 **Effect**:
-One thing a change brought about: a record made, changed or deleted, or a Context's settings changed, whether directly or by a rule that followed from the change. Every change reports all of its Effects, and says so when there are none.
+One thing a change brought about: a record made, changed or deleted, a Context's settings changed, or a Connection made, changed or ended, whether directly or by a rule that followed from the change. Every change reports all of its Effects, and says so when there are none.
 _Avoid_: Side effect, consequence, cascade
 
 **Trash**:

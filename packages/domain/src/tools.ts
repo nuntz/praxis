@@ -14,11 +14,21 @@ import type { Task } from "./task.ts";
 export type Offer = "yes" | "no";
 
 type ToolDefinition = {
-  kind: "read" | "write";
   description: string;
   input: z.ZodType;
   offered: Record<CallerKind, Offer>;
-};
+} & (
+  | { kind: "read" }
+  | {
+      kind: "write";
+      /**
+       * Whether it can take away or overwrite what is there, rather than only add: MCP's
+       * destructive hint (section 7.3). Nothing is lost for good either way: what a write takes
+       * away is put back by ordinary means.
+       */
+      destructive: boolean;
+    }
+);
 
 const toEveryCaller: Record<CallerKind, Offer> = {
   hand: "yes",
@@ -131,6 +141,7 @@ const newLink = z.strictObject({ to: newLinkTarget, anchor: anchor.optional() })
 export const tools = {
   record_entry: {
     kind: "write",
+    destructive: false,
     description:
       "Record an Entry in the Journal. The words are kept exactly as given and never read for Tasks or links: each Task to make with the Entry is given in `tasks`, and has the Entry as its Origin Entry, and each link in `links`. A link to a Task or Project is a Reference and one to a Person a Mention; it may name a new Person or Project to make, and may be anchored to a span of the words. The words are never refused for a link: one naming a record not in this Context is not kept, and an anchor past the words' end is left off. Read the Entry returned for the links kept.",
     input: writeInput({
@@ -154,6 +165,7 @@ export const tools = {
   },
   add_link: {
     kind: "write",
+    destructive: false,
     description:
       "Link an Entry to a Task or Project (a Reference) or to a Person (a Mention), optionally anchored to a span of its words. The words never change, so this is never held. `to` may name a new Person or Project to make. Linking what the Entry already links, at that span or with none, changes nothing.",
     input: writeInput({ entry_id: id, to: newLinkTarget, anchor: anchor.optional() }),
@@ -161,6 +173,7 @@ export const tools = {
   },
   remove_link: {
     kind: "write",
+    destructive: true,
     description:
       "Remove the links from an Entry to a Task, Project or Person: every one, or given an anchor only the one at that span. The words never change, so this is never held, and the record itself stays.",
     input: writeInput({ entry_id: id, to: linkTarget, anchor: anchor.optional() }),
@@ -168,6 +181,7 @@ export const tools = {
   },
   add_task: {
     kind: "write",
+    destructive: false,
     description:
       "Make a Task on an Entry that exists, which becomes its Origin Entry. Every Task is made with an Entry named: there is no Task without one.",
     input: writeInput({ entry_id: z.string().min(1), title }),
@@ -175,6 +189,7 @@ export const tools = {
   },
   finish_task: {
     kind: "write",
+    destructive: true,
     description:
       "Finish a Task: it was done. Finishing a Finished Task changes nothing, and a Dropped one is refused until it is reopened.",
     input: writeInput({ id: z.string().min(1) }),
@@ -182,6 +197,7 @@ export const tools = {
   },
   drop_task: {
     kind: "write",
+    destructive: true,
     description:
       "Drop a Task: the person decided not to do it. It stays where it was; dropping is not deleting. Dropping a Dropped Task changes nothing, and a Finished one is refused until it is reopened.",
     input: writeInput({ id: z.string().min(1) }),
@@ -189,6 +205,7 @@ export const tools = {
   },
   reopen_task: {
     kind: "write",
+    destructive: true,
     description:
       "Reopen a Finished or Dropped Task, so it is open again. Reopening an open Task changes nothing.",
     input: writeInput({ id: z.string().min(1) }),
@@ -196,12 +213,14 @@ export const tools = {
   },
   rename_task: {
     kind: "write",
+    destructive: true,
     description: "Change a Task's title. A Task has a title and no body: say more in an Entry.",
     input: writeInput({ id: z.string().min(1), title }),
     offered: toEveryWriter,
   },
   set_task_dates: {
     kind: "write",
+    destructive: true,
     description:
       'Set or clear a Task\'s Due Date, its Defer Date, or both. Each is a day written YYYY-MM-DD with no time of day, or null to clear it; one left out stays as it was. Dates are never prose: resolve "next Friday" with today and the time zone from get_settings. A Task is Overdue once its Due Date has passed and Deferred until its Defer Date comes.',
     input: writeInput({
@@ -215,6 +234,7 @@ export const tools = {
   },
   set_recurrence: {
     kind: "write",
+    destructive: true,
     description:
       'Put a Recurrence on a Task, or change the one it has: when the Task is finished or dropped, the next Occurrence is made by rule, a new Task with the same title, Project, Recurrence, delegation and Origin Entry, and its Defer Date as many days before its Due Date as this one\'s. The rule sets the next Due Date. A schedule is every N days, every N weeks on chosen weekdays, every N months on a day of the month or the last day ("last"), or every N years, and the next Due Date is the first day on it after both the current Due Date and the day the Task was closed; it counts from the Task\'s Due Date now, so every 2 weeks runs from this week. A day the month lacks falls on its last day. An interval ("interval") is counted from the day the Task was closed. The Task must have a Due Date and be open. A change applies from the next Occurrence: this one\'s Due Date stays. Setting the rule it has changes nothing.',
     input: writeInput({ id, recurrence: newRecurrence }),
@@ -222,6 +242,7 @@ export const tools = {
   },
   remove_recurrence: {
     kind: "write",
+    destructive: true,
     description:
       "End a Task's Recurrence: closing it makes no next Occurrence. Give the open Occurrence, which is the one holding the rule. Its Due Date stays. Removing it from a Task with none changes nothing.",
     input: writeInput({ id }),
@@ -229,6 +250,7 @@ export const tools = {
   },
   delegate_task: {
     kind: "write",
+    destructive: true,
     description:
       "Delegate a Task to a Person in this Context: they are doing it, and it is no longer actionable for the person, who still tracks it. Only this call delegates: a Mention never does. The Person has no access to Praxis and nothing is sent to them. Delegating to the Person it is Delegated to changes nothing; to another hands it on. A closed Task is refused until it is reopened. The delegation ends when the Task is finished, dropped or taken back.",
     input: writeInput({ id: z.string().min(1), person_id: z.string().min(1) }),
@@ -236,6 +258,7 @@ export const tools = {
   },
   take_back_task: {
     kind: "write",
+    destructive: true,
     description:
       "Take back a Delegated Task: no Person is doing it any more, and it is the person's to act on again. Taking back a Task no one is doing changes nothing.",
     input: writeInput({ id: z.string().min(1) }),
@@ -243,6 +266,7 @@ export const tools = {
   },
   wait_on: {
     kind: "write",
+    destructive: false,
     description:
       "Set a Task waiting on another Task or a Project in this Context, which can be in another Project. It is not actionable while what it waits on is open, and the wait ends by itself when that one is finished or dropped. A Task can wait on several. It never waits on a Person: delegate the Task, or wait on a Task Delegated to them. Waiting locks nothing: the Task can still be finished. Waiting on what it already waits on changes nothing. A wait that would make a cycle is refused, and so is one on something closed, or from a closed Task until it is reopened.",
     input: writeInput({ id, on: waitTarget }),
@@ -250,6 +274,7 @@ export const tools = {
   },
   stop_waiting: {
     kind: "write",
+    destructive: true,
     description:
       "Stop a Task waiting on a Task or Project. Stopping a wait the Task does not have changes nothing.",
     input: writeInput({ id, on: waitTarget }),
@@ -271,6 +296,7 @@ export const tools = {
   },
   move_task: {
     kind: "write",
+    destructive: true,
     description:
       "Put a Task in a Project, move it to another, or take it out of any with a project_id of null. A Task is in one Project at most, and a Project is the only thing that contains Tasks.",
     input: writeInput({ id, project_id: id.nullable() }),
@@ -278,6 +304,7 @@ export const tools = {
   },
   make_project_from_task: {
     kind: "write",
+    destructive: true,
     description:
       "Turn a Task that turns out to have parts into a Project, in one call: a Project is made, named after the Task unless a name is given, and the Task becomes its first Task, keeping its Origin Entry. A Task has no parts: add the others to the Project.",
     input: writeInput({ id, name: name.optional() }),
@@ -285,6 +312,7 @@ export const tools = {
   },
   create_project: {
     kind: "write",
+    destructive: false,
     description:
       "Make a Project: work made of several Tasks. It has a name and, optionally, a Due Date written YYYY-MM-DD, which says nothing about its Tasks'. It has no description: say more in an Entry. Two Projects may share a name.",
     input: writeInput({ name, due_date: day.optional() }),
@@ -292,12 +320,14 @@ export const tools = {
   },
   rename_project: {
     kind: "write",
+    destructive: true,
     description: "Change a Project's name.",
     input: writeInput({ id, name }),
     offered: toEveryWriter,
   },
   set_project_due_date: {
     kind: "write",
+    destructive: true,
     description:
       "Set a Project's Due Date, a day written YYYY-MM-DD, or clear it with null. It says nothing about its Tasks' Due Dates. Resolve \"next Friday\" with get_settings first. An open Project is Overdue once its Due Date has passed.",
     input: writeInput({ id, due_date: day.nullable() }),
@@ -305,6 +335,7 @@ export const tools = {
   },
   finish_project: {
     kind: "write",
+    destructive: true,
     description:
       "Declare a Project Finished. It is never Finished by its Tasks running out, only by this. The Tasks still open in it are Dropped. It is never refused.",
     input: writeInput({ id }),
@@ -312,6 +343,7 @@ export const tools = {
   },
   drop_project: {
     kind: "write",
+    destructive: true,
     description:
       "Drop a Project: the person decided not to do it. It stays where it was; dropping is not deleting. The Tasks still open in it are Dropped. It is never refused.",
     input: writeInput({ id }),
@@ -319,6 +351,7 @@ export const tools = {
   },
   reopen_project: {
     kind: "write",
+    destructive: true,
     description:
       "Reopen a Finished or Dropped Project, so it is open again. The Tasks dropped with it stay Dropped: reopen each one wanted.",
     input: writeInput({ id }),
@@ -344,6 +377,7 @@ export const tools = {
   },
   create_person: {
     kind: "write",
+    destructive: false,
     description:
       "Make a Person: someone the person deals with, so Entries can Mention them. A Person has a name and nothing else: say more in an Entry that Mentions them. Two Persons may share a name, and are never taken to be the same.",
     input: writeInput({ name: personName }),
@@ -351,6 +385,7 @@ export const tools = {
   },
   rename_person: {
     kind: "write",
+    destructive: true,
     description: "Change a Person's name.",
     input: writeInput({ id, name: personName }),
     offered: toEveryWriter,
@@ -378,6 +413,7 @@ export const tools = {
   },
   set_time_zone: {
     kind: "write",
+    destructive: true,
     description:
       "Change this Context's time zone, a zone of the IANA database such as Europe/Paris. It moves no date, since a Due Date and a Defer Date are days: only today shifts.",
     input: writeInput({ time_zone: timeZone }),
@@ -398,6 +434,16 @@ export const toolNames = Object.keys(tools) as ToolName[];
 
 export function isToolName(name: string): name is ToolName {
   return Object.hasOwn(tools, name);
+}
+
+/** Whether a caller is offered a Context tool: metadata of the tool, never a prompt (4.2). */
+export function isOffered(name: ToolName, caller: CallerKind): boolean {
+  return tools[name].offered[caller] === "yes";
+}
+
+/** The Context tools a caller is offered, in the registry's order. */
+export function offeredTo(caller: CallerKind): ToolName[] {
+  return toolNames.filter((name) => isOffered(name, caller));
 }
 
 export type WriteName = {
@@ -458,6 +504,11 @@ export function parseInput<I>(schema: z.ZodType, input: unknown): Parsed<I> {
   if (parsed.success) return { ok: true, input: parsed.data as I };
   const result = failure("invalid_input", z.prettifyError(parsed.error));
   return result as Extract<ToolResult<never>, { ok: false }>;
+}
+
+/** A tool's input schema as JSON Schema, as MCP lists it (section 7.3): what a caller may send. */
+export function inputJsonSchema(name: ToolName): Record<string, unknown> {
+  return z.toJSONSchema(tools[name].input, { io: "input" });
 }
 
 export function parseToolInput<N extends ToolName>(name: N, input: unknown): Parsed<ToolInput<N>> {

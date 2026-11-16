@@ -30,12 +30,34 @@ describe("a write's key", () => {
       hand,
       agent,
       connection,
-      { kind: "connection", name: "Other" } as const,
+      { kind: "connection", id: "another-connection", name: "Other" } as const,
     ]) {
       value(await context.call(caller, "record_entry", { words: marked("Same key"), key: "k" }));
     }
 
     expect(await entryCount(context)).toBe(4);
+  });
+
+  test("a Connection is told apart by its id: two sharing a name have keys of their own", async () => {
+    const context = newContext();
+    const twin = { ...connection, id: "its-twin" };
+
+    const first = value(await context.call(connection, "record_entry", { words: "A", key: "k" }));
+    const other = value(await context.call(twin, "record_entry", { words: "B", key: "k" }));
+
+    expect(other.record.id).not.toBe(first.record.id);
+    expect(await entryCount(context)).toBe(2);
+  });
+
+  test("a Connection renamed keeps its keys", async () => {
+    const context = newContext();
+    const input = { words: marked("Sent before the rename"), key: "k" };
+
+    const first = await context.call(connection, "record_entry", input);
+    const repeat = await context.call({ ...connection, name: "Renamed" }, "record_entry", input);
+
+    expect(repeat).toEqual(first);
+    expect(await entryCount(context)).toBe(1);
   });
 
   test("input that is not valid is not remembered, so a corrected call with the key runs", async () => {

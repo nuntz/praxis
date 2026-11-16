@@ -1,6 +1,7 @@
 import type { ContextListing, Settings } from "@praxis/domain";
 import SettingsIcon from "lucide-solid/icons/settings";
 import { createEffect, createMemo, createSignal, type JSX, on, onMount, Show } from "solid-js";
+import { Connections } from "./Connections.tsx";
 import { ContextSettings, deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
 import { Contexts, NewContext } from "./Contexts.tsx";
@@ -203,6 +204,7 @@ export function App() {
                   onChanged={showChangedContext}
                   onMade={addContext}
                 />
+                <Connections contexts={contexts() ?? []} />
               </div>
             </Show>
             <main class="peers">

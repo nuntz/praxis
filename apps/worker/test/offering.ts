@@ -63,4 +63,10 @@ export const deploymentOffering: Record<string, [Offer, Offer, Offer, Offer, Off
   set_context_accent: [ "yes", "no",  "no",  "no",       "no"  ],
   retire_context: [     "yes", "no",  "no",  "no",       "no"  ],
   bring_back_context: [ "yes", "no",  "no",  "no",       "no"  ],
+  list_connections: [   "yes", "no",  "no",  "no",       "no"  ],
+  create_connection: [  "yes", "no",  "no",  "no",       "no"  ],
+  rename_connection: [  "yes", "no",  "no",  "no",       "no"  ],
+  set_connection_reading_only: [
+                        "yes", "no",  "no",  "no",       "no"  ],
+  end_connection: [     "yes", "no",  "no",  "no",       "no"  ],
 };

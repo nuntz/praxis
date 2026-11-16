@@ -16,8 +16,12 @@ import { throughDeploymentOracle, throughOracle } from "./oracle.ts";
 export const hand: Caller = { kind: "hand" };
 export const agent: Caller = { kind: "agent" };
 export const clock: Caller = { kind: "clock" };
-export const connection: Caller = { kind: "connection", name: "Claude Code" };
-export const readOnlyConnection: Caller = { kind: "read_only_connection", name: "Reader" };
+export const connection = { kind: "connection", id: "claude-code", name: "Claude Code" } as const;
+export const readOnlyConnection = {
+  kind: "read_only_connection",
+  id: "reader",
+  name: "Reader",
+} as const;
 export const everyCaller = [hand, agent, clock, connection, readOnlyConnection];
 
 export const DAY = 24 * 60 * 60 * 1000;

@@ -1,6 +1,7 @@
 /**
  * The Deployment object's own tables. It holds nothing from any Journal (ADR 0006): for now the
- * list of Contexts with their names and accents, and the keys of the writes made to it. The
+ * list of Contexts with their names and accents, the Connections, and the keys of the writes made
+ * to it. The
  * upgrade ladder of section 11 replaces this with numbered steps before the first release.
  */
 export function createDeploymentTables(sql: SqlStorage): void {
@@ -13,6 +14,17 @@ export function createDeploymentTables(sql: SqlStorage): void {
       accent TEXT NOT NULL,
       -- A retired Context is hidden and keeps everything.
       retired INTEGER NOT NULL
+    );
+
+    -- One row per Connection, in the order they were made (section 7.2). Its id is opaque and is
+    -- the one in its address. An ended one is kept, so its id is never reached again.
+    CREATE TABLE IF NOT EXISTS connections (
+      seq INTEGER PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      context_id TEXT NOT NULL REFERENCES contexts (id),
+      reading_only INTEGER NOT NULL,
+      ended INTEGER NOT NULL
     );
 
     -- Each caller's keys for its writes and the first result, remembered 30 days (section 4.5),

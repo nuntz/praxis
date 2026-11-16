@@ -7,7 +7,7 @@ import {
 } from "@praxis/domain";
 import { createSignal, For, Show } from "solid-js";
 import { deviceTimeZone } from "./ContextSettings.tsx";
-import { callDeploymentTool, unreachableMessage } from "./tools.ts";
+import { writeToDeployment } from "./tools.ts";
 
 /** An accent as the person reads it. */
 function accentName(accent: Accent): string {
@@ -15,30 +15,14 @@ function accentName(accent: Accent): string {
 }
 
 /** A Deployment tool that changes one Context, and returns it as it now is. */
-type ContextChange = Exclude<DeploymentToolName, "list_contexts">;
-
-/**
- * Call a Deployment tool that changes one Context, for the Context as it now is. A refusal or an
- * outage is reported as a problem, and gives nothing.
- */
-async function changeContext<N extends ContextChange>(
-  tool: N,
-  input: DeploymentToolInput<N>,
-  onProblem: (message: string | null) => void,
-): Promise<ContextListing | null> {
-  try {
-    const result = await callDeploymentTool(tool, input);
-    if (!result.ok) {
-      onProblem(result.error.message);
-      return null;
-    }
-    onProblem(null);
-    return (result.value as { record: ContextListing }).record;
-  } catch (error) {
-    onProblem(unreachableMessage(error));
-    return null;
-  }
-}
+type ContextChange = Extract<
+  DeploymentToolName,
+  | "create_context"
+  | "rename_context"
+  | "set_context_accent"
+  | "retire_context"
+  | "bring_back_context"
+>;
 
 /**
  * The Deployment's Contexts, in its settings (section 8.6): each with its accent, renamed, given
@@ -86,7 +70,11 @@ function ContextRow(props: {
 
   async function send<N extends ContextChange>(tool: N, input: DeploymentToolInput<N>) {
     setSending(true);
-    const changed = await changeContext(tool, input, props.onProblem);
+    const changed = (await writeToDeployment(
+      tool,
+      input,
+      props.onProblem,
+    )) as ContextListing | null;
     setSending(false);
     if (changed) props.onChanged(changed);
     return changed;
@@ -173,7 +161,7 @@ export function NewContext(props: { heading: string; onMade: (context: ContextLi
     const form = event.currentTarget as HTMLFormElement;
     const fields = new FormData(form);
     setSending(true);
-    const made = await changeContext(
+    const made = await writeToDeployment(
       "create_context",
       {
         name: String(fields.get("name") ?? ""),

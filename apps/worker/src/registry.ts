@@ -3,6 +3,7 @@ import {
   type Day,
   dayIn,
   failure,
+  isOffered,
   isToolName,
   isWrite,
   parseToolInput,
@@ -10,7 +11,6 @@ import {
   type ToolName,
   type ToolOutput,
   type ToolResult,
-  tools,
   type WriteName,
   type Written,
 } from "@praxis/domain";
@@ -51,7 +51,7 @@ export function dispatch(
   request: ToolRequest,
 ): ToolResult<unknown> {
   const { caller, tool } = request;
-  if (!isToolName(tool) || tools[tool].offered[caller.kind] !== "yes") {
+  if (!isToolName(tool) || !isOffered(tool, caller.kind)) {
     return failure("not_offered", `The tool ${tool} is not offered to this caller.`);
   }
   return runTool(tool, handlers, storage, request);
