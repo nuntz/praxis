@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { offering } from "../apps/worker/test/offering.ts";
+import { deploymentOffering, offering } from "../apps/worker/test/offering.ts";
 import { deploymentToolNames, toolNames } from "../packages/domain/src/index.ts";
 
 // The guard of ADR 0015, in place of a line-coverage threshold: CI fails when a tool in the
-// registry has no row in the offering table or no seam test naming it. A Deployment tool is
-// offered to the hand alone, by rule rather than by a row, and needs only its seam test.
+// registry has no row in the offering table or no seam test naming it. The Deployment tools have
+// a table of their own, held to the same guard.
 
 const seamTests = join(import.meta.dir, "../apps/worker/test");
 
@@ -46,9 +46,10 @@ describe("the registry guard", () => {
     expect(unguarded(toolNames, Object.keys(offering), readSeamTests())).toEqual([]);
   });
 
-  test("every Deployment tool has a seam test naming it", () => {
-    const sources = readSeamTests();
-    expect(deploymentToolNames.filter((tool) => !named(tool, sources))).toEqual([]);
+  test("every Deployment tool has a row in its offering table and a seam test naming it", () => {
+    expect(
+      unguarded(deploymentToolNames, Object.keys(deploymentOffering), readSeamTests()),
+    ).toEqual([]);
   });
 
   test("fails a tool with no row, a tool with no seam test, and a row for no tool", () => {

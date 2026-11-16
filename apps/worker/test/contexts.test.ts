@@ -274,37 +274,6 @@ describe("bring_back_context", () => {
   });
 });
 
-describe("the Deployment tools", () => {
-  test("are offered to the person's hand only, and refuse any other caller before reading its input", async () => {
-    const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    const inputs: Record<string, unknown> = {
-      list_contexts: {},
-      create_context: { name: "Side", time_zone: "Europe/Paris", accent: "teal" },
-      rename_context: { id: work, name: "Side" },
-      set_context_accent: { id: work, accent: "teal" },
-      retire_context: { id: work },
-      bring_back_context: { id: work },
-    };
-
-    for (const caller of everyCaller.filter((each) => each.kind !== "hand")) {
-      for (const [tool, input] of Object.entries(inputs)) {
-        expect(
-          await deployment.callAny(caller, tool, input),
-          `${tool} as ${caller.kind}`,
-        ).toMatchObject({ ok: false, error: { code: "not_offered" } });
-      }
-    }
-    expect(await listed(deployment)).toEqual([
-      { id: work, name: "Work", accent: "blue", retired: false },
-    ]);
-    expect(await deployment.callAny(hand, "no_such_tool", {})).toMatchObject({
-      ok: false,
-      error: { code: "not_offered" },
-    });
-  });
-});
-
 describe("nothing crosses a Context", () => {
   test("a record in one Context is not found in another", async () => {
     const deployment = newDeployment();

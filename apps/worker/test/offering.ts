@@ -49,3 +49,18 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   set_time_zone: [ "yes", "no",  "no",  "no",       "no"  ],
   list_changes: [  "yes", "yes", "yes", "yes",      "yes" ],
 };
+
+/**
+ * The Deployment tools of section 4.11, kept by hand the same way, in the same columns. Every one
+ * is offered to the person's hand only, never to the Agent or a Connection in any form.
+ */
+// biome-ignore format: read as a table
+export const deploymentOffering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
+  //                   hand   agent  clock  connection  read-only connection
+  list_contexts: [      "yes", "no",  "no",  "no",       "no"  ],
+  create_context: [     "yes", "no",  "no",  "no",       "no"  ],
+  rename_context: [     "yes", "no",  "no",  "no",       "no"  ],
+  set_context_accent: [ "yes", "no",  "no",  "no",       "no"  ],
+  retire_context: [     "yes", "no",  "no",  "no",       "no"  ],
+  bring_back_context: [ "yes", "no",  "no",  "no",       "no"  ],
+};

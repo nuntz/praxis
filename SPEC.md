@@ -245,7 +245,7 @@ A result is a success or an error from a closed set of codes:
 
 | Code | Meaning |
 |---|---|
-| `not_found` | No such record in this Context, or it is in the Trash. |
+| `not_found` | No such record in this Context, or it is in the Trash. For a call to a Context, no such Context to reach: one never made, or one retired. |
 | `invalid_input` | The input is malformed. |
 | `not_offered` | This caller is never offered this tool. |
 | `held` | The call would change the person's words. For a Connection this is the refusal, and it says to add a Follow-up or ask the person to make the edit. For the Agent it is not an error: the result is the Held Change it left. |
@@ -261,6 +261,7 @@ A result is a success or an error from a closed set of codes:
 - Every write returns the record it changed and its Effects: every record made, changed or deleted, the record itself among them, what happened to each, and whether the call did it or a rule did. A call that changes nothing says so and has no Effects.
 - An Effect carries the record's id and a one-line summary, the same summary reads use.
 - A Context is not a record, but a change to its settings, such as its time zone, is an Effect on the Context, carrying its id and its name as the summary. A time zone change changes no Task: its dates are days, and what today makes of them is derived when read.
+- A Deployment tool that changes a Context returns its Effect on the Context to its caller. Only a rename goes in that Context's change log, since it is the one such change a reader of the Context sees: the accent shows only on the person's screen, a retired Context cannot be read, and a new Context's log starts empty. The Deployment object keeps no change log.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
 - `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since its last turn.
 - The change log is kept 90 days. A caller whose cursor is older is told to read afresh.
@@ -382,7 +383,9 @@ Offered to the hand only, never to the Agent or a Connection.
 
 Never offered to the Agent or a Connection in any form: removing anything for good, defining, renaming or retiring a Context, moving a record between Contexts, anything that mints or shows a credential, and a Device's own settings.
 
-`create_context` takes the name, the time zone and the accent colour. The time zone is then kept in the Context's own object, which is why changing it is a Context tool.
+`create_context` takes the name, the time zone and the accent colour. The time zone is then kept in the Context's own object, which is why changing it is a Context tool. `retire_context` refuses the last Context not retired, since there is always one.
+
+The repo keeps a copy of who is offered each Deployment tool, by hand, beside the table of section 4.10, and the generic test of section 13 calls each as every caller.
 
 ### 4.12 Conversation tools
 
@@ -643,6 +646,7 @@ The column is composed by the screen from four sources, in this order:
 - **Trash**: each item, what went with it and when it will be removed. Restore, remove one for good, empty.
 - **Standing Entries**: the full list for the Context.
 - **Settings**, per Context: time zone, Brief time, Review day and time, the Notification switch, clear the Conversation, rebuild the search index.
+- **The first Context**: a Deployment with no Context shows only the form that makes one, with `create_context`, the tool the setup wizard uses too.
 - **Settings**, Deployment: Contexts with their accent colours, Connections with the registrations seen, Devices, the spend cap and the month's spend against it, when the last Backup was made, make an Export.
 
 ### 8.7 Notifications
@@ -744,7 +748,8 @@ ADR 0006, 0010, 0017, 0023, 0024.
   - what a Run, a Call or embedding cost;
   - notify the Devices that this Context has a Brief or a Review;
   - a Call is starting here, or has ended.
-- The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only for a Backup, a move, and ending a Call there when another starts elsewhere.
+- The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to rename it, for a Backup, a move, and ending a Call there when another starts elsewhere.
+- A Context's object keeps its own name, for its settings and the summary of an Effect on it. The Deployment object is its only writer, writes it before its own list, and runs its writes one at a time, so the two never disagree (ADR 0006).
 - Revoking a Connection or retiring a Context takes effect on the next request.
 - Each Context has its own alarm, which schedules its Brief and Review, expires its Trash, prunes its change log and finishes an interrupted move.
 - A jurisdiction is chosen once at setup, optionally, for every object. It cannot be changed except by Export and restore into a new Deployment.
@@ -862,7 +867,7 @@ The setup wizard:
 - Takes the voice provider key, optional, and says what reaches that provider.
 - Asks for the monthly spend cap, offering 20 US dollars.
 - Makes the Web Push signing key pair.
-- Either makes the first Context, with its name, time zone and accent colour, or restores an Export.
+- Either makes the first Context, with its name, time zone and accent colour, through `create_context`, or restores an Export.
 
 Changing a key or the model is a change to the configuration and a deploy, never something done in Praxis.
 
@@ -882,7 +887,7 @@ ADR 0015, 0019, 0020, 0021.
 
 - A test calls a tool through the registry as one of the five callers against a real Context object, and asserts only the result, the Effects and later reads. Tests never read tables and never seed by writing rows.
 - **The oracle**: the harness wraps every write, snapshots the domain tables before and after, and fails unless the difference is exactly the Effects returned and the change log holds the same Effects with the right caller. A refused, stale or repeated-key call changes nothing. A held call changes nothing but its Held Change.
-- **Offering**: checked against the table of section 4.10, kept by hand in the repo. A generic test calls every tool as every caller.
+- **Offering**: checked against the tables of sections 4.10 and 4.11, kept by hand in the repo. A generic test calls every tool as every caller.
 - **Guard**: CI fails when a tool has no row in the offering table or no seam test naming it. No line-coverage threshold.
 - **No words leave**: tests seed Entries and Messages with marker strings, and the harness fails any test where a marker appears in anything logged, in a Notification or in a Run record.
 

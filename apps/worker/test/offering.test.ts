@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
-import { offering } from "./offering.ts";
-import { everyCaller, newContext } from "./seam.ts";
+import { deploymentOffering, offering } from "./offering.ts";
+import { everyCaller, hand, newContext, newDeployment, value } from "./seam.ts";
 
 /** An input each tool runs with, so an offered call is seen to run. Every row needs one. */
 const runsWith: Record<string, () => unknown> = {
@@ -66,4 +66,56 @@ describe("the offering table", () => {
       });
     });
   }
+});
+
+/** An input each Deployment tool runs with, given a Context made first. Every row needs one. */
+const deploymentRunsWith: Record<string, (id: string) => unknown> = {
+  list_contexts: () => ({}),
+  create_context: () => ({ name: "Side", time_zone: "Europe/Paris", accent: "teal" }),
+  rename_context: (id) => ({ id, name: "Side" }),
+  set_context_accent: (id) => ({ id, accent: "teal" }),
+  retire_context: (id) => ({ id }),
+  bring_back_context: (id) => ({ id }),
+};
+
+// The same, for the Deployment tools against their own table. The oracle sees only a Context's
+// tables, so a call not offered is seen to change nothing by the list of Contexts after it.
+
+describe("the Deployment tools' offering table", () => {
+  for (const [tool, row] of Object.entries(deploymentOffering)) {
+    everyCaller.forEach((caller, column) => {
+      const offered = row[column] === "yes";
+
+      test(`${tool} is ${offered ? "" : "not "}offered to the ${caller.kind}`, async () => {
+        const input = deploymentRunsWith[tool];
+        expect(
+          input,
+          `${tool} needs an input it runs with: add one to deploymentRunsWith in apps/worker/test/offering.test.ts`,
+        ).toBeDefined();
+        const deployment = newDeployment();
+        const made = value(
+          await deployment.call(hand, "create_context", {
+            name: "Work",
+            time_zone: "Europe/Paris",
+            accent: "blue",
+          }),
+        ).record;
+
+        const result = await deployment.callAny(caller, tool, input?.(made.id));
+
+        if (offered) {
+          if (!result.ok) expect(["not_offered", "invalid_input"]).not.toContain(result.error.code);
+          return;
+        }
+        expect(result).toMatchObject({ ok: false, error: { code: "not_offered" } });
+        expect(value(await deployment.call(hand, "list_contexts", {})).items).toEqual([made]);
+      });
+    });
+  }
+
+  test("a name no registry has is not offered", async () => {
+    const result = await newDeployment().callAny(hand, "no_such_tool", {});
+
+    expect(result).toMatchObject({ ok: false, error: { code: "not_offered" } });
+  });
 });
