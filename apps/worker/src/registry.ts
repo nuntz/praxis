@@ -1,5 +1,7 @@
 import {
   type Caller,
+  type Day,
+  dayIn,
   failure,
   isToolName,
   isWrite,
@@ -14,6 +16,7 @@ import {
 } from "@praxis/domain";
 import { appendChange } from "./change-log.ts";
 import { firstWithKey, rememberKey } from "./keys.ts";
+import { timeZoneOf } from "./settings.ts";
 
 /** What a Context tool is given to run. It never reads the real clock: `arrivedAt` is the time. */
 export type ToolCall<N extends ToolName> = {
@@ -21,6 +24,8 @@ export type ToolCall<N extends ToolName> = {
   input: ToolInput<N>;
   /** When the call arrived, in milliseconds since the epoch. */
   arrivedAt: number;
+  /** The day the call arrived on in the Context's time zone, by which a Task's state is read. */
+  today: Day;
   sql: SqlStorage;
 };
 
@@ -65,6 +70,7 @@ function runTool<N extends ToolName>(
     caller: request.caller,
     input: parsed.input,
     arrivedAt: request.arrivedAt,
+    today: dayIn(request.arrivedAt, timeZoneOf(storage.sql)),
     sql: storage.sql,
   };
   return storage.transactionSync(() =>

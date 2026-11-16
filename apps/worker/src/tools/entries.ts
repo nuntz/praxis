@@ -1,5 +1,6 @@
 import {
   authorOf,
+  type Day,
   type Entry,
   failure,
   instantToIso,
@@ -21,7 +22,7 @@ type EntryRow = AuthorColumns & {
 };
 
 export const entryTools: Pick<Handlers, "record_entry" | "get_entry" | "list_entries"> = {
-  record_entry({ caller, input, arrivedAt, sql }) {
+  record_entry({ caller, input, arrivedAt, today, sql }) {
     const author = authorOf(caller);
     const id = crypto.randomUUID();
     // Only the Agent works from the Conversation: whatever it records came through it.
@@ -39,7 +40,7 @@ export const entryTools: Pick<Handlers, "record_entry" | "get_entry" | "list_ent
     for (const { title } of input.tasks ?? []) {
       insertTask(sql, { title, originEntry: id, at: arrivedAt, author });
     }
-    const entry = readEntry(sql, id) as Entry;
+    const entry = readEntry(sql, id, today) as Entry;
     return success(
       written(entry, [
         { kind: "entry", id, what: "made", summary: summarizeWords(entry.words), by: "call" },
@@ -48,12 +49,12 @@ export const entryTools: Pick<Handlers, "record_entry" | "get_entry" | "list_ent
     );
   },
 
-  get_entry({ input, sql }) {
-    const entry = readEntry(sql, input.id);
+  get_entry({ input, today, sql }) {
+    const entry = readEntry(sql, input.id, today);
     return entry ? success(entry) : failure("not_found", "No such Entry in this Context.");
   },
 
-  list_entries({ input, sql }) {
+  list_entries({ input, today, sql }) {
     let after: Position | null = null;
     if (input.cursor !== undefined) {
       after = decodeCursor(input.cursor);
@@ -76,22 +77,24 @@ export const entryTools: Pick<Handlers, "record_entry" | "get_entry" | "list_ent
     const page = rows.slice(0, PAGE_SIZE);
     const last = page.at(-1);
     return success({
-      items: withTasks(sql, page),
+      items: withTasks(sql, page, today),
       next_cursor: rows.length > PAGE_SIZE && last ? encodeCursor(last) : null,
     });
   },
 };
 
 /** An Entry that exists in this Context, with its Tasks. */
-function readEntry(sql: SqlStorage, id: string): Entry | null {
+function readEntry(sql: SqlStorage, id: string, today: Day): Entry | null {
   const rows = sql.exec<EntryRow>(`SELECT * FROM entries WHERE id = ?`, id).toArray();
-  return withTasks(sql, rows)[0] ?? null;
+  return withTasks(sql, rows, today)[0] ?? null;
 }
 
-function withTasks(sql: SqlStorage, rows: EntryRow[]): Entry[] {
+/** The Entries with their Tasks, each Task's state read as on `today`. */
+function withTasks(sql: SqlStorage, rows: EntryRow[], today: Day): Entry[] {
   const tasks = tasksOf(
     sql,
     rows.map((row) => row.id),
+    today,
   );
   return rows.map((row) => ({
     id: row.id,

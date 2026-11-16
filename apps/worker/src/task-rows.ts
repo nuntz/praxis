@@ -1,5 +1,6 @@
 import {
   type Author,
+  type Day,
   type Effect,
   instantToIso,
   summarizeWords,
@@ -15,6 +16,8 @@ type TaskRow = AuthorColumns & {
   title: string;
   origin_entry: string;
   at: number;
+  due_date: string | null;
+  defer_date: string | null;
 };
 
 type EventRow = { task: string; what: TaskEvent["what"]; at: number };
@@ -42,17 +45,18 @@ export function insertTaskEvent(sql: SqlStorage, task: string, event: TaskEvent)
   sql.exec(`INSERT INTO task_events (task, what, at) VALUES (?, ?, ?)`, task, event.what, event.at);
 }
 
-export function readTask(sql: SqlStorage, id: string): Task | null {
+/** A Task that exists in this Context, its state read as on `today`. */
+export function readTask(sql: SqlStorage, id: string, today: Day): Task | null {
   const row = sql.exec<TaskRow>(`SELECT * FROM tasks WHERE id = ?`, id).toArray()[0];
   if (!row) return null;
   const events = sql
     .exec<EventRow>(`SELECT task, what, at FROM task_events WHERE task = ? ORDER BY seq`, id)
     .toArray();
-  return toTask(row, events);
+  return toTask(row, events, today);
 }
 
 /** The Tasks of each of these Entries, in the order they were made, by Entry id. */
-export function tasksOf(sql: SqlStorage, entries: string[]): Map<string, Task[]> {
+export function tasksOf(sql: SqlStorage, entries: string[], today: Day): Map<string, Task[]> {
   const ids = JSON.stringify(entries);
   const rows = sql
     .exec<TaskRow>(
@@ -71,7 +75,7 @@ export function tasksOf(sql: SqlStorage, entries: string[]): Map<string, Task[]>
     (event) => event.task,
   );
   return Map.groupBy(
-    rows.map((row) => toTask(row, events.get(row.id) ?? [])),
+    rows.map((row) => toTask(row, events.get(row.id) ?? [], today)),
     (task) => task.origin_entry,
   );
 }
@@ -81,13 +85,15 @@ export function taskEffect(task: Task, what: Effect["what"]): Effect {
   return { kind: "task", id: task.id, what, summary: summarizeWords(task.title), by: "call" };
 }
 
-function toTask(row: TaskRow, events: EventRow[]): Task {
+function toTask(row: TaskRow, events: EventRow[], today: Day): Task {
+  const dates = { due_date: row.due_date, defer_date: row.defer_date };
   return {
     id: row.id,
     title: row.title,
     origin_entry: row.origin_entry,
     at: instantToIso(row.at),
     author: toAuthor(row),
-    state: taskState(events),
+    ...dates,
+    state: taskState(events, dates, today),
   };
 }

@@ -1,12 +1,5 @@
 import { render } from "solid-js/web";
-import { Journal } from "./Journal.tsx";
+import { App } from "./App.tsx";
 import "./styles.css";
 
-render(
-  () => (
-    <main class="main-screen">
-      <Journal />
-    </main>
-  ),
-  document.body,
-);
+render(() => <App />, document.body);

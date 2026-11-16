@@ -1,14 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
-import { isToolName, isWrite, type ToolResult } from "@praxis/domain";
+import { type ContextMade, isToolName, isWrite, type ToolResult } from "@praxis/domain";
 import { arrivalTime, startTimer } from "./arrival.ts";
 import { forgetOldKeys, holdsKeys } from "./keys.ts";
 import { dispatch, type Handlers, type ToolRequest } from "./registry.ts";
+import { makeContext, seedSettings } from "./settings.ts";
 import { createTables } from "./tables.ts";
 import { changeTools } from "./tools/changes.ts";
 import { entryTools } from "./tools/entries.ts";
+import { settingsTools } from "./tools/settings.ts";
 import { taskTools } from "./tools/tasks.ts";
 
-const handlers: Handlers = { ...entryTools, ...taskTools, ...changeTools };
+const handlers: Handlers = { ...entryTools, ...taskTools, ...settingsTools, ...changeTools };
 
 /** How long the alarm sleeps between wakes while it has something to do. */
 const ALARM_GAP = 24 * 60 * 60 * 1000;
@@ -17,7 +19,19 @@ const ALARM_GAP = 24 * 60 * 60 * 1000;
 export class ContextObject extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    ctx.blockConcurrencyWhile(async () => createTables(ctx.storage.sql));
+    ctx.blockConcurrencyWhile(async () => {
+      createTables(ctx.storage.sql);
+      seedSettings(ctx.storage.sql, ctx.id.toString());
+    });
+  }
+
+  /**
+   * Make this Context with its name and time zone. The Deployment object calls it on
+   * `create_context`; until it exists, the one Context is unmade, in UTC, and the person sets its
+   * time zone in its settings.
+   */
+  async make(made: ContextMade): Promise<void> {
+    makeContext(this.ctx.storage.sql, made);
   }
 
   /** Call a Context tool through the registry. `arrivedAt` is when the call reached the Worker. */

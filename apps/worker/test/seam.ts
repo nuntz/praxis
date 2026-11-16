@@ -1,6 +1,6 @@
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { Caller, ToolName, ToolOutput, ToolResult } from "@praxis/domain";
+import type { Caller, ContextMade, ToolName, ToolOutput, ToolResult } from "@praxis/domain";
 import { throughOracle } from "./oracle.ts";
 
 export const hand: Caller = { kind: "hand" };
@@ -14,14 +14,20 @@ export const DAY = 24 * 60 * 60 * 1000;
 
 /**
  * A fresh Context object, reached the way the Worker reaches one: through the registry, as a
- * named caller, at a time the test sets. Every call goes through the oracle.
+ * named caller, at a time the test sets. Every call goes through the oracle. Given `made`, it is
+ * made with that name and time zone first, as the Deployment object makes a Context. This stands
+ * in for `create_context` (#56), a Deployment tool, until the Deployment object exists: no
+ * Context tool can name a Context.
  */
-export function newContext(startAt = "2026-11-15T09:00:00.000Z") {
+export function newContext(startAt = "2026-11-15T09:00:00.000Z", made?: ContextMade) {
   const stub = env.CONTEXT.get(env.CONTEXT.newUniqueId());
   let now = Date.parse(startAt);
+  const ready = made ? stub.make(made) : Promise.resolve();
 
-  const callAny = (caller: Caller, tool: string, input: unknown) =>
-    throughOracle(stub, { caller, tool, input, arrivedAt: now });
+  const callAny = async (caller: Caller, tool: string, input: unknown) => {
+    await ready;
+    return throughOracle(stub, { caller, tool, input, arrivedAt: now });
+  };
 
   return {
     /** Move the Context's clock on. */

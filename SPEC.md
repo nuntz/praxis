@@ -254,6 +254,7 @@ A result is a success or an error from a closed set of codes:
 
 - Every write returns the record it changed and its Effects: every record made, changed or deleted, the record itself among them, what happened to each, and whether the call did it or a rule did. A call that changes nothing says so and has no Effects.
 - An Effect carries the record's id and a one-line summary, the same summary reads use.
+- A Context is not a record, but a change to its settings, such as its time zone, is an Effect on the Context, carrying its id and its name as the summary. A time zone change changes no Task: its dates are days, and what today makes of them is derived when read.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
 - `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since its last turn.
 - The change log is kept 90 days. A caller whose cursor is older is told to read afresh.

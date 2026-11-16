@@ -1,18 +1,25 @@
 import type { Caller } from "./callers.ts";
 
-/** The kinds of record an Effect can name. */
+/** The kinds of record. */
 export type RecordKind = "entry" | "task";
 
 /**
- * One thing a change brought about (section 4.4): a record made, changed or deleted, and whether
- * the call did it directly or a rule did. The record a write is about is an Effect of the call
- * like any other, so the Effects are everything the write changed.
+ * What an Effect can name: a record, or the Context itself, whose settings a write can change.
+ * A Context is not a record, but a change to its settings is a change like any other.
+ */
+export type EffectKind = RecordKind | "context";
+
+/**
+ * One thing a change brought about (section 4.4): a record made, changed or deleted, or the
+ * Context's settings changed, and whether the call did it directly or a rule did. The record a
+ * write is about is an Effect of the call like any other, so the Effects are everything the
+ * write changed.
  */
 export type Effect = {
-  kind: RecordKind;
+  kind: EffectKind;
   id: string;
   what: "made" | "changed" | "deleted";
-  /** The record's one-line summary, the same one reads use. */
+  /** The one-line summary reads use: a record's, or the Context's name. */
   summary: string;
   by: "call" | "rule";
 };

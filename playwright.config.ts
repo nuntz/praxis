@@ -7,12 +7,18 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? "github" : "list",
   use: { baseURL: `http://localhost:${port}`, trace: "retain-on-failure" },
+  // Each Device is in a time zone of its own, and neither is UTC, so the journey that sets the
+  // Context to UTC and switches it to its Device's zone finds the two different.
   projects: [
     {
       name: "desktop",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 800 },
+        timezoneId: "Pacific/Chatham",
+      },
     },
-    { name: "phone", use: { ...devices["Pixel 7"] } },
+    { name: "phone", use: { ...devices["Pixel 7"], timezoneId: "America/Lima" } },
   ],
   // The built PWA served by the real Worker, on a Journal that starts empty each run.
   webServer: {

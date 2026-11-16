@@ -21,13 +21,15 @@ type Stub = ReturnType<typeof env.CONTEXT.get>;
 export type Request = { caller: Caller; tool: string; input: unknown; arrivedAt: number };
 
 /**
- * Each domain table, with the kind of record its rows belong to and the column holding that
- * record's id. A record can span tables: a Task is its row and its events.
+ * Each domain table, with the kind of thing an Effect names that its rows belong to (a record, or
+ * the Context's own settings) and the column holding its id. A record can span tables: a Task is
+ * its row and its events.
  */
 const domainTables: Record<string, { kind: Effect["kind"]; id: string }> = {
   entries: { kind: "entry", id: "id" },
   tasks: { kind: "task", id: "id" },
   task_events: { kind: "task", id: "task" },
+  context_settings: { kind: "context", id: "id" },
 };
 
 /** The Context object's other tables, which hold no record. */

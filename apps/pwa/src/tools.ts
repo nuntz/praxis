@@ -21,3 +21,9 @@ export async function callTool<N extends ToolName>(
   if (!response.ok) throw new Unreachable(`Praxis answered ${response.status}.`);
   return (await response.json()) as ToolResult<ToolOutput[N]>;
 }
+
+/** The message of a call that never reached a tool. Anything else is a fault, thrown on. */
+export function unreachableMessage(error: unknown): string {
+  if (error instanceof Unreachable) return error.message;
+  throw error;
+}

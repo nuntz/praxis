@@ -13,7 +13,10 @@ const runsWith: Record<string, () => unknown> = {
   drop_task: () => ({ id: "no-such-task" }),
   reopen_task: () => ({ id: "no-such-task" }),
   rename_task: () => ({ id: "no-such-task", title: marked("Offered") }),
+  set_task_dates: () => ({ id: "no-such-task", due_date: "2026-12-01" }),
   get_task: () => ({ id: "no-such-task" }),
+  get_settings: () => ({}),
+  set_time_zone: () => ({ time_zone: "Europe/Paris" }),
   list_changes: () => ({}),
 };
 

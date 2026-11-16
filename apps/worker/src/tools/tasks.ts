@@ -1,5 +1,6 @@
 import {
   authorOf,
+  type Day,
   type End,
   failure,
   refusal,
@@ -19,9 +20,15 @@ const NO_SUCH_TASK = "No such Task in this Context.";
 
 export const taskTools: Pick<
   Handlers,
-  "add_task" | "finish_task" | "drop_task" | "reopen_task" | "rename_task" | "get_task"
+  | "add_task"
+  | "finish_task"
+  | "drop_task"
+  | "reopen_task"
+  | "rename_task"
+  | "set_task_dates"
+  | "get_task"
 > = {
-  add_task({ caller, input, arrivedAt, sql }) {
+  add_task({ caller, input, arrivedAt, today, sql }) {
     const entry = sql.exec(`SELECT 1 FROM entries WHERE id = ?`, input.entry_id).toArray();
     if (entry.length === 0) return failure("not_found", "No such Entry in this Context.");
     const id = insertTask(sql, {
@@ -30,7 +37,7 @@ export const taskTools: Pick<
       at: arrivedAt,
       author: authorOf(caller),
     });
-    const task = readTask(sql, id) as Task;
+    const task = readTask(sql, id, today) as Task;
     return success(written(task, [taskEffect(task, "made")]));
   },
 
@@ -38,15 +45,15 @@ export const taskTools: Pick<
 
   drop_task: (call) => reach("dropped", call),
 
-  reopen_task({ input, arrivedAt, sql }) {
-    const task = readTask(sql, input.id);
+  reopen_task({ input, arrivedAt, today, sql }) {
+    const task = readTask(sql, input.id, today);
     if (!task) return failure("not_found", NO_SUCH_TASK);
     if (task.state.is === "open") return success(written(task, []));
-    return happened(sql, task, { what: "reopened", at: arrivedAt });
+    return happened(sql, task, { what: "reopened", at: arrivedAt }, today);
   },
 
-  rename_task({ caller, input, sql }) {
-    const task = readTask(sql, input.id);
+  rename_task({ caller, input, today, sql }) {
+    const task = readTask(sql, input.id, today);
     if (!task) return failure("not_found", NO_SUCH_TASK);
     if (task.title === input.title) return success(written(task, []));
     // A record the person edits becomes theirs; anyone else's edit leaves its Author as it was.
@@ -57,12 +64,25 @@ export const taskTools: Pick<
       ...authorColumns(author),
       task.id,
     );
-    const renamed = readTask(sql, task.id) as Task;
+    const renamed = readTask(sql, task.id, today) as Task;
     return success(written(renamed, [taskEffect(renamed, "changed")]));
   },
 
-  get_task({ input, sql }) {
-    const task = readTask(sql, input.id);
+  set_task_dates({ input, today, sql }) {
+    const task = readTask(sql, input.id, today);
+    if (!task) return failure("not_found", NO_SUCH_TASK);
+    // A date left out stays as it was; null clears it. Setting dates is no edit of the Task's
+    // words, so its Author stays as it was.
+    const due = input.due_date === undefined ? task.due_date : input.due_date;
+    const defer = input.defer_date === undefined ? task.defer_date : input.defer_date;
+    if (due === task.due_date && defer === task.defer_date) return success(written(task, []));
+    sql.exec(`UPDATE tasks SET due_date = ?, defer_date = ? WHERE id = ?`, due, defer, task.id);
+    const dated = readTask(sql, task.id, today) as Task;
+    return success(written(dated, [taskEffect(dated, "changed")]));
+  },
+
+  get_task({ input, today, sql }) {
+    const task = readTask(sql, input.id, today);
     return task ? success(task) : failure("not_found", NO_SUCH_TASK);
   },
 };
@@ -73,9 +93,9 @@ export const taskTools: Pick<
  */
 function reach(
   end: End,
-  { input, arrivedAt, sql }: ToolCall<"finish_task" | "drop_task">,
+  { input, arrivedAt, today, sql }: ToolCall<"finish_task" | "drop_task">,
 ): ToolResult<Written<Task>> {
-  const task = readTask(sql, input.id);
+  const task = readTask(sql, input.id, today);
   if (!task) return failure("not_found", NO_SUCH_TASK);
   if (task.state.is === end) return success(written(task, []));
   if (task.state.is !== "open") {
@@ -84,12 +104,17 @@ function reach(
       { kind: "task", id: task.id, summary: summarizeWords(task.title) },
     ]);
   }
-  return happened(sql, task, { what: end, at: arrivedAt });
+  return happened(sql, task, { what: end, at: arrivedAt }, today);
 }
 
 /** Something happened to a Task: its state follows, and the Task is the call's one Effect. */
-function happened(sql: SqlStorage, task: Task, event: TaskEvent): ToolResult<Written<Task>> {
+function happened(
+  sql: SqlStorage,
+  task: Task,
+  event: TaskEvent,
+  today: Day,
+): ToolResult<Written<Task>> {
   insertTaskEvent(sql, task.id, event);
-  const updated = readTask(sql, task.id) as Task;
+  const updated = readTask(sql, task.id, today) as Task;
   return success(written(updated, [taskEffect(updated, "changed")]));
 }

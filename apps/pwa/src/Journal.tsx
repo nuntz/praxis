@@ -1,13 +1,35 @@
-import { type Entry, inlineTasks, type Task } from "@praxis/domain";
+import {
+  type Day,
+  type Entry,
+  inlineTasks,
+  type Task,
+  type TaskDates,
+  utcMidnight,
+} from "@praxis/domain";
 import { createSignal, For, onMount, Show } from "solid-js";
-import { callTool, Unreachable } from "./tools.ts";
+import { createStore } from "solid-js/store";
+import { callTool, unreachableMessage } from "./tools.ts";
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+/** A day as the Device's locale writes it. A day has no time zone of its own. */
+const dayFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" });
 
-/** The Journal: Entries in time order, and the composer that records one with no model turn. */
-export function Journal() {
-  // Oldest first, as shown. `list_entries` gives newest first, a page at a time.
-  const [entries, setEntries] = createSignal<Entry[]>([]);
+function formatDay(day: Day): string {
+  return dayFormat.format(utcMidnight(day));
+}
+
+/**
+ * The Journal: Entries in time order, and the composer that records one with no model turn. Each
+ * Entry's time is shown in the Context's time zone, so the Journal's days agree with today.
+ */
+export function Journal(props: { timeZone: string }) {
+  const timeFormat = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: props.timeZone,
+  });
+  // Oldest first, as shown. `list_entries` gives newest first, a page at a time. A store, so a
+  // record that changes is patched in place and what is open on it stays open.
+  const [entries, setEntries] = createStore<Entry[]>([]);
   const [earlierCursor, setEarlierCursor] = createSignal<string | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
 
@@ -27,12 +49,11 @@ export function Journal() {
   /** Show a Task as a write returned it, on the Entry it hangs off. */
   function showTask(task: Task) {
     setProblem(null);
-    setEntries((shown) =>
-      shown.map((entry) =>
-        entry.id === task.origin_entry
-          ? { ...entry, tasks: entry.tasks.map((each) => (each.id === task.id ? task : each)) }
-          : entry,
-      ),
+    setEntries(
+      (entry) => entry.id === task.origin_entry,
+      "tasks",
+      (each) => each.id === task.id,
+      task,
     );
   }
 
@@ -50,8 +71,15 @@ export function Journal() {
           )}
         </Show>
         <ol class="entry-list" aria-label="Entries">
-          <For each={entries()}>
-            {(entry) => <EntryItem entry={entry} onTask={showTask} onProblem={setProblem} />}
+          <For each={entries}>
+            {(entry) => (
+              <EntryItem
+                entry={entry}
+                time={timeFormat.format(new Date(entry.at))}
+                onTask={showTask}
+                onProblem={setProblem}
+              />
+            )}
           </For>
         </ol>
       </div>
@@ -75,13 +103,15 @@ export function Journal() {
 
 function EntryItem(props: {
   entry: Entry;
+  /** When it was made, as shown in the Context's time zone. */
+  time: string;
   onTask: (task: Task) => void;
   onProblem: (message: string) => void;
 }) {
   return (
     <li class="entry" data-testid="entry">
       <time class="entry-time" datetime={props.entry.at}>
-        {timeFormat.format(new Date(props.entry.at))}
+        {props.time}
       </time>
       <p class="entry-words" data-testid="words">
         {props.entry.words}
@@ -97,15 +127,20 @@ function EntryItem(props: {
   );
 }
 
-/** A Task where it is shown, finished or reopened from there by its checkbox. */
+/**
+ * A Task where it is shown, finished or reopened from there by its checkbox. Each state that
+ * holds is its own mark, and Overdue is marked on the date.
+ */
 function TaskItem(props: {
   task: Task;
   onTask: (task: Task) => void;
   onProblem: (message: string) => void;
 }) {
   const [sending, setSending] = createSignal(false);
+  const [editingDates, setEditingDates] = createSignal(false);
   const finished = () => props.task.state.is === "finished";
   const dropped = () => props.task.state.is === "dropped";
+  const open = () => (props.task.state.is === "open" ? props.task.state : null);
 
   async function toggle(box: HTMLInputElement) {
     setSending(true);
@@ -137,7 +172,70 @@ function TaskItem(props: {
       <Show when={dropped()}>
         <span class="task-mark">Dropped</span>
       </Show>
+      <Show when={props.task.due_date}>
+        {(due) => (
+          <span class="task-mark" classList={{ overdue: open()?.overdue != null }}>
+            Due {formatDay(due())}
+            <Show when={open()?.overdue}>, Overdue</Show>
+          </span>
+        )}
+      </Show>
+      <Show when={open()?.deferred}>
+        {(deferred) => <span class="task-mark">Deferred until {formatDay(deferred().until)}</span>}
+      </Show>
+      <button
+        type="button"
+        class="quiet"
+        aria-expanded={editingDates()}
+        onClick={() => setEditingDates((shown) => !shown)}
+      >
+        Dates
+      </button>
+      <Show when={editingDates()}>
+        <TaskDatesEditor task={props.task} onTask={props.onTask} onProblem={props.onProblem} />
+      </Show>
     </li>
+  );
+}
+
+/** A Task's Due Date and Defer Date, each set as it is picked and cleared by emptying it. */
+function TaskDatesEditor(props: {
+  task: Task;
+  onTask: (task: Task) => void;
+  onProblem: (message: string) => void;
+}) {
+  async function setDate(field: keyof TaskDates, input: HTMLInputElement) {
+    try {
+      const result = await callTool("set_task_dates", {
+        id: props.task.id,
+        [field]: input.value === "" ? null : input.value,
+      });
+      if (!result.ok) return props.onProblem(result.error.message);
+      props.onTask(result.value.record);
+    } catch (error) {
+      props.onProblem(unreachableMessage(error));
+    } finally {
+      // Whatever the answer, the field shows the day the server last said the Task has.
+      input.value = props.task[field] ?? "";
+    }
+  }
+
+  const field = (name: keyof TaskDates, label: string) => (
+    <label class="task-date">
+      {label}
+      <input
+        type="date"
+        value={props.task[name] ?? ""}
+        onChange={(event) => void setDate(name, event.currentTarget)}
+      />
+    </label>
+  );
+
+  return (
+    <div class="task-dates">
+      {field("due_date", "Due Date")}
+      {field("defer_date", "Defer Date")}
+    </div>
   );
 }
 
@@ -197,10 +295,4 @@ function Composer(props: {
       </button>
     </form>
   );
-}
-
-/** The message of a call that never reached a tool. Anything else is a fault, thrown on. */
-function unreachableMessage(error: unknown): string {
-  if (error instanceof Unreachable) return error.message;
-  throw error;
 }

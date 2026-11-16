@@ -5,6 +5,9 @@ import { agent, connection, DAY, everyCaller, hand, newContext, value } from "./
 
 type Context = ReturnType<typeof newContext>;
 
+/** An open Task with no dates: nothing holds for it but that the person could act on it. */
+const actionable = { is: "open", actionable: true, deferred: null, overdue: null };
+
 describe("record_entry's Tasks", () => {
   test("each Task given is made with the Entry as its Origin Entry, open, and read with it", async () => {
     const context = newContext("2026-11-15T09:30:00.000Z");
@@ -25,7 +28,9 @@ describe("record_entry's Tasks", () => {
       origin_entry: entry.id,
       at: "2026-11-15T09:30:00.000Z",
       author: { kind: "person" },
-      state: { is: "open" },
+      due_date: null,
+      defer_date: null,
+      state: actionable,
     });
     expect(entry.words).toBe(words);
     expect(entry.tasks).toEqual([open(expect.any(String), send), open(expect.any(String), boiler)]);
@@ -121,7 +126,9 @@ describe("add_task", () => {
       origin_entry: entry.id,
       at: "2026-11-15T09:01:00.000Z",
       author: { kind: "agent" },
-      state: { is: "open" },
+      due_date: null,
+      defer_date: null,
+      state: actionable,
     });
     expect(result.effects).toEqual([
       { kind: "task", id: result.record.id, what: "made", summary: title, by: "call" },
@@ -380,6 +387,151 @@ describe("rename_task", () => {
     const result = await newContext().call(hand, "rename_task", {
       id: "no-such-task",
       title: marked("Renamed"),
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "not_found" } });
+  });
+});
+
+describe("set_task_dates", () => {
+  test("sets a Due Date and a Defer Date, read with the Task and the day each state holds from", async () => {
+    const context = newContext("2026-11-15T09:00:00.000Z");
+    const { entry, task } = await aTask(context);
+
+    const result = value(
+      await context.call(connection, "set_task_dates", {
+        id: task.id,
+        due_date: "2026-11-10",
+        defer_date: "2026-11-18",
+      }),
+    );
+
+    const dated = {
+      ...task,
+      due_date: "2026-11-10",
+      defer_date: "2026-11-18",
+      state: {
+        is: "open",
+        actionable: false,
+        deferred: { until: "2026-11-18" },
+        overdue: { since: "2026-11-11" },
+      },
+    };
+    expect(result.record).toEqual(dated);
+    expect(result.effects).toEqual([
+      { kind: "task", id: task.id, what: "changed", summary: task.title, by: "call" },
+    ]);
+    expect(value(await context.call(agent, "get_task", { id: task.id }))).toEqual(dated);
+    expect(value(await context.call(hand, "get_entry", { id: entry.id })).tasks).toEqual([dated]);
+  });
+
+  test("leaves a date it is not given as it was, and clears one given as null", async () => {
+    const context = newContext();
+    const { task } = await aTask(context);
+    const set = (dates: object) =>
+      context.call(agent, "set_task_dates", { id: task.id, ...dates }).then(value);
+
+    const due = await set({ due_date: "2026-12-01" });
+    const both = await set({ defer_date: "2026-11-20" });
+    const cleared = await set({ due_date: null });
+
+    expect([due, both, cleared].map(({ record }) => [record.due_date, record.defer_date])).toEqual([
+      ["2026-12-01", null],
+      ["2026-12-01", "2026-11-20"],
+      [null, "2026-11-20"],
+    ]);
+  });
+
+  test("dates the Task already has change nothing", async () => {
+    const context = newContext();
+    const { task } = await aTask(context);
+    const first = value(
+      await context.call(hand, "set_task_dates", { id: task.id, due_date: "2026-12-01" }),
+    );
+
+    for (const dates of [{ due_date: "2026-12-01" }, { defer_date: null }]) {
+      const again = value(await context.call(hand, "set_task_dates", { id: task.id, ...dates }));
+      expect(again).toEqual({ record: first.record, effects: [], changed: false });
+    }
+  });
+
+  test("Overdue and Deferred are judged by today in the Context's time zone", async () => {
+    // Noon on the 15th in London is already the 16th in Auckland.
+    const at = "2026-11-15T12:00:00.000Z";
+    const dates = { due_date: "2026-11-15", defer_date: "2026-11-16" };
+    const states = [];
+    for (const time_zone of ["Europe/London", "Pacific/Auckland"]) {
+      const context = newContext(at, { name: "Work", time_zone });
+      const { task } = await aTask(context);
+      states.push(
+        value(await context.call(hand, "set_task_dates", { id: task.id, ...dates })).record.state,
+      );
+    }
+
+    expect(states).toEqual([
+      { is: "open", actionable: false, deferred: { until: "2026-11-16" }, overdue: null },
+      { is: "open", actionable: true, deferred: null, overdue: { since: "2026-11-16" } },
+    ]);
+  });
+
+  test("a closed Task keeps its dates and is neither Overdue nor Deferred", async () => {
+    const context = newContext("2026-11-15T09:00:00.000Z");
+    const { task } = await aTask(context);
+    value(await context.call(hand, "finish_task", { id: task.id }));
+
+    const { record } = value(
+      await context.call(hand, "set_task_dates", {
+        id: task.id,
+        due_date: "2026-11-01",
+        defer_date: "2026-12-01",
+      }),
+    );
+
+    expect(record).toMatchObject({
+      due_date: "2026-11-01",
+      defer_date: "2026-12-01",
+      state: { is: "finished", at: "2026-11-15T09:00:00.000Z" },
+    });
+  });
+
+  test("dates are days, never prose or a time of day, and at least one is given", async () => {
+    const context = newContext();
+    const { task } = await aTask(context);
+
+    for (const dates of [
+      { due_date: "next Friday" },
+      { due_date: "2026-02-29" },
+      { defer_date: "2026-11-20T09:00:00Z" },
+      { defer_date: "20/11/2026" },
+      { due_date: 20261120 },
+      {},
+    ]) {
+      const result = await context.call(hand, "set_task_dates", { id: task.id, ...dates });
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+    }
+  });
+
+  test("setting dates leaves the Task's Author as it was", async () => {
+    const context = newContext();
+    const { record: entry } = value(
+      await context.call(connection, "record_entry", {
+        words: marked("From outside"),
+        tasks: [{ title: marked("Theirs") }],
+      }),
+    );
+    const task = entry.tasks[0] as Task;
+
+    const { record } = value(
+      await context.call(hand, "set_task_dates", { id: task.id, due_date: "2026-12-01" }),
+    );
+
+    expect(record.author).toEqual(task.author);
+  });
+
+  test("a Task not in this Context is not found", async () => {
+    const result = await newContext().call(hand, "set_task_dates", {
+      id: "no-such-task",
+      due_date: "2026-12-01",
     });
 
     expect(result).toMatchObject({ ok: false, error: { code: "not_found" } });

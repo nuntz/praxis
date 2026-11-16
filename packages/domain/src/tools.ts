@@ -1,8 +1,10 @@
 import { z } from "zod";
 import type { CallerKind } from "./callers.ts";
+import { day, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
 import type { Entry, Page } from "./entry.ts";
 import { failure, type ToolResult } from "./results.ts";
+import type { Settings } from "./settings.ts";
 import type { Task } from "./task.ts";
 
 /** Whether a caller is offered a tool (section 4.10). */
@@ -29,6 +31,15 @@ const toEveryWriter: Record<CallerKind, Offer> = {
   agent: "yes",
   clock: "no",
   connection: "yes",
+  read_only_connection: "no",
+};
+
+/** A write offered to the person's hand alone. */
+const toHandOnly: Record<CallerKind, Offer> = {
+  hand: "yes",
+  agent: "no",
+  clock: "no",
+  connection: "no",
   read_only_connection: "no",
 };
 
@@ -118,11 +129,39 @@ export const tools = {
     input: writeInput({ id: z.string().min(1), title }),
     offered: toEveryWriter,
   },
+  set_task_dates: {
+    kind: "write",
+    description:
+      'Set or clear a Task\'s Due Date, its Defer Date, or both. Each is a day written YYYY-MM-DD with no time of day, or null to clear it; one left out stays as it was. Dates are never prose: resolve "next Friday" with today and the time zone from get_settings. A Task is Overdue once its Due Date has passed and Deferred until its Defer Date comes.',
+    input: writeInput({
+      id: z.string().min(1),
+      due_date: day.nullable().optional(),
+      defer_date: day.nullable().optional(),
+    }).refine((input) => input.due_date !== undefined || input.defer_date !== undefined, {
+      message: "Give a due_date, a defer_date or both: a day to set it, or null to clear it.",
+    }),
+    offered: toEveryWriter,
+  },
   get_task: {
     kind: "read",
-    description: "Get one Task by its id, with its derived state and the reason for it.",
+    description:
+      "Get one Task by its id, with its dates, its derived state and the reason for it: the end it reached and when, or, while open, whether it is actionable, the day it is Deferred until and the day it became Overdue.",
     input: z.strictObject({ id: z.string().min(1) }),
     offered: toEveryCaller,
+  },
+  get_settings: {
+    kind: "read",
+    description:
+      "Get this Context's settings: its name, its time zone, and today's date there. Today, and so whether a Task is Overdue or Deferred, is the current day in that time zone. Use them to resolve a day such as \"next Friday\" before giving it to a tool.",
+    input: z.strictObject({}),
+    offered: toEveryCaller,
+  },
+  set_time_zone: {
+    kind: "write",
+    description:
+      "Change this Context's time zone, a zone of the IANA database such as Europe/Paris. It moves no date, since a Due Date and a Defer Date are days: only today shifts.",
+    input: writeInput({ time_zone: timeZone }),
+    offered: toHandOnly,
   },
   list_changes: {
     kind: "read",
@@ -161,7 +200,10 @@ export type ToolOutput = {
   drop_task: Written<Task>;
   reopen_task: Written<Task>;
   rename_task: Written<Task>;
+  set_task_dates: Written<Task>;
   get_task: Task;
+  get_settings: Settings;
+  set_time_zone: Written<Settings>;
   list_changes: ChangesPage;
 };
 

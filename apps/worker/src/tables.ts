@@ -23,7 +23,10 @@ export function createTables(sql: SqlStorage): void {
       origin_entry TEXT NOT NULL REFERENCES entries (id),
       at INTEGER NOT NULL,
       author_kind TEXT NOT NULL,
-      author_name TEXT
+      author_name TEXT,
+      -- Days as YYYY-MM-DD, with no time of day, so no time zone moves them.
+      due_date TEXT,
+      defer_date TEXT
     );
     CREATE INDEX IF NOT EXISTS tasks_by_entry ON tasks (origin_entry, seq);
 
@@ -35,6 +38,14 @@ export function createTables(sql: SqlStorage): void {
       at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS task_events_by_task ON task_events (task, seq);
+
+    -- The Context's own settings, in one row with the Context's id. Not a record, but a change to
+    -- them is an Effect on the Context.
+    CREATE TABLE IF NOT EXISTS context_settings (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      time_zone TEXT NOT NULL
+    );
 
     -- The change log (section 4.4): one row per write that changed something, and its Effects.
     -- AUTOINCREMENT so a number is never given twice, even once the oldest are pruned.
