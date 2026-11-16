@@ -715,7 +715,7 @@ Glossary: Device.
 - **A design system of Praxis's own**, new and not derived from mise's. Its tokens are in code as the source, and the SolidJS components are built from them. No third-party kit.
 - **The direction is Atelier**: soft panels on a tinted ground, round controls and one type family, Figtree, with the Device's own monospace for code only. It was picked from three directions drawn on the canvas [Praxis design directions](https://claude.ai/artifact/2XWrtwoKZCBjJ6kcT3q5zS), in [Explore design directions for the main screen](https://github.com/nuntz/praxis/issues/34). Its tokens, voice and rules are captured in the [Praxis design system](https://claude.ai/artifact/1drME2ytFn9ta9seAetLuw), which the tokens in code are written from. Both are private to the person who made them.
 - The canvas draws the main screen at desktop and phone width, in light and dark, in two Contexts, with these states: an Entry with an Inline Task and a Mention, a Held Change waiting, an unread Brief, an Unsent Entry and a standing Notice. Settings, the Trash and the Changes screen are not drawn. They are built from the system.
-- **The app icon** is the Lucide hammer, kept from the predecessor, in white on a dark neutral tile. It never takes a Context's accent colour, since it stands for the whole Deployment. The same mark sits in the top bar beside the name. Interface icons are Lucide too, the one outside asset, under the ISC licence.
+- **The app icon** is the Lucide hammer, kept from the predecessor, in white on a dark neutral tile. It never takes a Context's accent colour, since it stands for the whole Deployment. The same mark sits in the top bar beside the name, inverting with the theme. Interface icons are Lucide too, under the ISC licence. Lucide and the Figtree typeface, under the SIL Open Font Licence, are the only outside assets. Both ship with the app, which fetches nothing from elsewhere, and their licences ship beside it.
 - **Fixed**:
   - the layout of section 8.1;
   - light and dark, following the Device, with no switch;
@@ -873,6 +873,7 @@ ADR 0015, 0019, 0020, 0021.
 **Layers.**
 
 - `bun test` for the pure domain package. Direct tests there only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, parsing an Inline Task and what the person types to link something, and what the Markdown renderer lets through: the set, the addresses and when an image loads.
+- `bun test` for the design tokens in the PWA, for one thing only: every text pairing the design system names is at least 4.5:1 in light and in dark, for all six accents. The browser's accessibility check sees only the accent the screen shows.
 - Vitest in real workerd for anything touching a Durable Object or SQL. A test can stand up several Context objects and the Deployment object.
 - No domain or tool code reads the real clock. A test sets the time and the Context's time zone and fires alarms itself.
 - CI never calls a model.

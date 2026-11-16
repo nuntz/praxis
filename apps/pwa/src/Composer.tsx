@@ -33,6 +33,8 @@ const dayFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
  * record.
  */
 export function Composer(props: {
+  /** The Context the Entry is recorded in, named on the composer once known. */
+  contextName: string | undefined;
   onRecorded: (entry: Entry) => void;
   onProblem: (message: string) => void;
 }) {
@@ -216,37 +218,40 @@ export function Composer(props: {
       </Show>
       <form
         class="composer"
+        data-testid="composer"
         onSubmit={(event) => {
           event.preventDefault();
           void record();
         }}
       >
-        <label for="new-entry" class="visually-hidden">
-          New Entry
+        {/* Colour never carries the Context alone: the composer names it. */}
+        <label for="new-entry" class="composer-label">
+          {props.contextName ? `Record an Entry in ${props.contextName}` : "Record an Entry"}
         </label>
-        <textarea
-          ref={field}
-          id="new-entry"
-          rows={3}
-          placeholder="Write in the Journal"
-          value={words()}
-          aria-autocomplete="list"
-          aria-controls={open() ? "link-picker" : undefined}
-          aria-activedescendant={open() && highlight() >= 0 ? optionId(highlight()) : undefined}
-          onInput={(event) => {
-            changeWords(event.currentTarget.value);
-            look();
-          }}
-          onKeyDown={onKeyDown}
-          onKeyUp={(event) => {
-            if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) look();
-          }}
-          onClick={look}
-          onBlur={shutPicker}
-        />
-        <button type="submit" disabled={!canRecord()}>
-          Record
-        </button>
+        <div class="composer-row">
+          <textarea
+            ref={field}
+            id="new-entry"
+            rows={2}
+            value={words()}
+            aria-autocomplete="list"
+            aria-controls={open() ? "link-picker" : undefined}
+            aria-activedescendant={open() && highlight() >= 0 ? optionId(highlight()) : undefined}
+            onInput={(event) => {
+              changeWords(event.currentTarget.value);
+              look();
+            }}
+            onKeyDown={onKeyDown}
+            onKeyUp={(event) => {
+              if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) look();
+            }}
+            onClick={look}
+            onBlur={shutPicker}
+          />
+          <button type="submit" disabled={!canRecord()}>
+            Record
+          </button>
+        </div>
       </form>
     </div>
   );

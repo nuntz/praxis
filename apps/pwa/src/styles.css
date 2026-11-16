@@ -1,87 +1,183 @@
-/* Placeholder tokens until the design system lands (issue #39). */
-:root {
-  color-scheme: light dark;
-  --ground: #f4f3f0;
-  --panel: #ffffff;
-  --ink: #1f1e1c;
-  --muted: #6b6862;
-  --hairline: #dedbd4;
-  --accent: #2f5fd0;
-  --on-accent: #ffffff;
-  --problem: #a32d2d;
-  --radius: 14px;
-  font-family: Figtree, system-ui, sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ground: #171716;
-    --panel: #22211f;
-    --ink: #ecebe8;
-    --muted: #a19e97;
-    --hairline: #3a3936;
-    --accent: #7ea2f2;
-    --on-accent: #10131a;
-    --problem: #f08a8a;
-  }
-}
+/*
+ * The main screen in the Atelier look (section 8.11): soft panels on a tinted ground, round
+ * controls, one family. Colours, type, spacing and radii are tokens from src/design/tokens.ts.
+ * What is written here is the layout: the columns' widths, and the widths the screen changes at,
+ * those of section 8.1: three columns from 1200px, the Journal and the Conversation from 720px,
+ * and a phone's tabs below.
+ */
 
 * {
   box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
 }
 
 body {
   margin: 0;
   background: var(--ground);
   color: var(--ink);
+  font: var(--type-body);
 }
 
-.main-screen {
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Controls are round. A primary button is the solid accent. */
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-5);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: var(--type-button);
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* A quiet button is words in ink: nothing but the primary takes the accent. */
+button.quiet {
+  min-height: 24px;
+  padding: 0;
+  background: none;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.icon-button {
+  width: 40px;
+  padding: 0;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: var(--type-label);
+}
+
+.problem {
+  color: var(--warn);
+}
+
+/* The screen: a top bar over the peers, on the ground. */
+
+.screen {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
+  gap: var(--panel-gap);
   height: 100dvh;
-  padding: 16px;
-}
-
-.main-screen > * {
-  width: 100%;
-  max-width: 44rem;
+  padding: var(--panel-gap);
 }
 
 .top-bar {
   display: flex;
-  justify-content: space-between;
+  flex-shrink: 0;
   align-items: center;
-  padding: 0 16px;
+  gap: var(--space-4);
+  min-height: 52px;
+  padding: 0 var(--space-2) 0 var(--space-3);
 }
 
-.context-name {
-  font-weight: 700;
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: var(--type-wordmark);
+  letter-spacing: -0.02em;
 }
 
-.journal,
+/* The app icon's tile, inverting with the theme. It never takes the accent. */
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  /* The app icon's corner, in proportion to the tile. */
+  border-radius: 9px;
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.context {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.top-bar-fill {
+  flex-grow: 1;
+}
+
+.attention-toggle {
+  background: var(--surface);
+  color: var(--ink);
+}
+
 .settings {
   display: flex;
+  flex-shrink: 0;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--panel);
-  border-radius: var(--radius);
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
-.journal {
-  flex: 1;
-  min-height: 0;
+.settings .column-heading {
+  font: var(--type-column-title);
 }
 
 .setting {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
+  gap: var(--space-1) var(--space-4);
   margin: 0;
 }
 
@@ -94,46 +190,270 @@ body {
   overflow-wrap: anywhere;
 }
 
-.settings {
-  align-items: flex-start;
-}
+/* The peers: panels side by side, none hosting another. */
 
-.column-heading {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
-}
-
-.entries {
+.peers {
+  position: relative;
+  display: flex;
   flex: 1;
+  gap: var(--panel-gap);
   min-height: 0;
+}
+
+.peer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.peer.attention {
+  flex: 0 0 350px;
+}
+
+.peer.journal {
+  flex: 1;
+}
+
+.peer.conversation {
+  flex: 0 0 420px;
+}
+
+.peer-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 40px;
+  padding: var(--space-5) var(--space-5) var(--space-3);
+  box-sizing: content-box;
+}
+
+.peer-title {
+  font: var(--type-column-title);
+  letter-spacing: -0.01em;
+}
+
+.peer-note {
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.peer-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-1) var(--space-5) var(--space-5);
   overflow-y: auto;
 }
 
+.peer-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5) var(--space-5);
+}
+
+.tabs,
+.attention-toggle {
+  display: none;
+}
+
+/* In between: the Journal and the Conversation, with Attention opened from the top bar over them. */
+@media (720px <= width < 1200px) {
+  .attention-toggle {
+    display: inline-flex;
+  }
+
+  .peer.attention {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 1;
+    width: 350px;
+    border: 1px solid var(--rule);
+  }
+
+  .screen[data-attention="shut"] .peer.attention {
+    display: none;
+  }
+
+  .peer.conversation {
+    flex-basis: 360px;
+  }
+}
+
+/* A phone: one column at a time, behind three tabs, on the ground itself. */
+@media (width < 720px) {
+  .screen {
+    gap: 0;
+    padding: 0;
+    font: var(--type-body-phone);
+  }
+
+  .top-bar {
+    gap: 10px;
+    min-height: 60px;
+    padding: 0 var(--space-4);
+  }
+
+  .wordmark {
+    gap: var(--space-2);
+  }
+
+  /* A touch target is at least 44px on a phone. A Task's control is reached through its label. */
+  .context,
+  .icon-button,
+  button,
+  button.quiet,
+  .task label {
+    min-height: 44px;
+  }
+
+  .icon-button {
+    width: 44px;
+  }
+
+  .problem,
+  .settings {
+    margin: 0 var(--space-4) var(--space-3);
+  }
+
+  .peer {
+    display: none;
+    flex: 1;
+    border-radius: 0;
+    background: none;
+  }
+
+  .screen[data-tab="attention"] .peer.attention,
+  .screen[data-tab="journal"] .peer.journal,
+  .screen[data-tab="conversation"] .peer.conversation {
+    display: flex;
+  }
+
+  .peer-header {
+    padding: var(--space-1) var(--space-4) var(--space-3);
+  }
+
+  .peer-title {
+    font: var(--type-screen-title);
+    letter-spacing: -0.02em;
+  }
+
+  .peer-body {
+    align-items: stretch;
+    gap: var(--space-3);
+    padding: 0 var(--space-4) var(--space-3);
+  }
+
+  .peer-foot {
+    padding: 10px var(--space-4);
+  }
+
+  .entry {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .task {
+    background: var(--inset);
+  }
+
+  .tabs {
+    display: grid;
+    flex-shrink: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1);
+    margin: 0 var(--space-4) var(--space-3);
+    padding: 6px;
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+  }
+
+  .tabs button {
+    min-height: 48px;
+    padding: 0 var(--space-2);
+    background: none;
+    color: var(--muted);
+  }
+
+  .tabs button[aria-current="true"] {
+    background: var(--inset);
+    color: var(--ink);
+  }
+}
+
+/* The Journal: Entries in time order, each with its links and Tasks. */
+
 .entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .entry {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .entry-time {
   color: var(--muted);
-  font-size: 0.8125rem;
+  font: var(--type-meta);
 }
 
+/* An Entry's words are the person's, one step larger, never restyled. */
 .entry-words {
-  margin: 4px 0 0;
+  max-width: 620px;
+  font: var(--type-words);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
+/* The three kinds of link are told apart by shape: a Mention is a tinted pill, a Reference an inset one. */
+.link-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.link.mention {
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.link.reference {
+  background: var(--inset);
+  color: var(--ink);
+}
+
 .task-list {
-  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -141,38 +461,65 @@ body {
 .task {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: baseline;
-  padding: 2px 0;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  padding: 10px var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--inset);
 }
 
 .task label {
   display: flex;
-  gap: 8px;
-  align-items: baseline;
+  align-items: center;
+  gap: var(--space-3);
   cursor: pointer;
 }
 
+/* A Task's control is an empty circle with a muted border, filled when it is Finished. */
 .task input {
-  accent-color: var(--accent);
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.task input:checked {
+  border-color: var(--ink);
+  background: radial-gradient(var(--ink) 0 4px, transparent 5px);
+}
+
+.task input:disabled {
+  cursor: default;
 }
 
 .task-title {
+  font: var(--type-row-title);
   overflow-wrap: anywhere;
 }
 
 .task.closed .task-title,
-.task-mark {
+.task-mark,
+.task-date {
   color: var(--muted);
 }
 
 .task-mark,
+.task .quiet,
+.task-date {
+  font: var(--type-meta);
+}
+
 .task .quiet {
-  font-size: 0.8125rem;
+  font-weight: 600;
 }
 
 .task-mark.overdue {
-  color: var(--problem);
+  color: var(--warn);
   font-weight: 600;
 }
 
@@ -180,115 +527,21 @@ body {
   display: flex;
   flex-basis: 100%;
   flex-wrap: wrap;
-  gap: 8px 16px;
-  padding-left: 24px;
-}
-
-.task-date {
-  font-size: 0.8125rem;
-  color: var(--muted);
+  gap: var(--space-2) var(--space-4);
+  padding-left: 32px;
 }
 
 .task-date input {
   margin-left: 6px;
-  padding: 4px 8px;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: var(--ground);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--ink);
   font: inherit;
 }
 
-.task-date input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.composer {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-.composer textarea {
-  flex: 1;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  background: var(--ground);
-  color: inherit;
-  font: inherit;
-  resize: vertical;
-}
-
-.composer textarea:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-button {
-  padding: 10px 18px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--on-accent);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-button.quiet {
-  background: none;
-  color: var(--accent);
-  padding: 4px 0;
-}
-
-.problem {
-  margin: 0;
-  color: var(--problem);
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.link-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* A Mention is a tinted pill and a Reference an inset pill, told apart by shape (section 8.4). */
-.link {
-  padding: 1px 10px;
-  border-radius: 999px;
-  font-size: 0.875rem;
-  overflow-wrap: anywhere;
-}
-
-.link.mention {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-}
-
-.link.reference {
-  background: var(--ground);
-  box-shadow: inset 0 0 0 1px var(--hairline);
-}
+/* A composer marks where the person is about to write: the Context's tint, edged in its accent. */
 
 .composer-area {
   display: flex;
@@ -296,27 +549,69 @@ button.quiet {
   gap: 6px;
 }
 
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--accent-tint);
+}
+
+.composer:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.composer-label {
+  color: var(--accent);
+  font: var(--type-label);
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.composer textarea {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: var(--type-body-phone);
+  line-height: 26px;
+  resize: none;
+}
+
+.composer textarea:focus-visible {
+  outline: none;
+}
+
 .link-picker {
   margin: 0;
-  padding: 4px;
-  list-style: none;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  background: var(--panel);
+  padding: var(--space-1);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--surface);
 }
 
 .link-picker [role="option"] {
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   overflow-wrap: anywhere;
 }
 
 .link-picker .highlighted {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  background: var(--accent-tint);
 }
 
 .choice-detail {
   color: var(--muted);
-  font-size: 0.8125rem;
+  font: var(--type-meta);
 }

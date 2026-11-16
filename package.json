@@ -9,10 +9,11 @@
   ],
   "scripts": {
     "check": "biome check .",
-    "ci": "biome ci . && bun run typecheck && bun run test:lint && bun run test:domain && bun run test:worker && bun run test:e2e:twice",
+    "ci": "biome ci . && bun run typecheck && bun run test:lint && bun run test:domain && bun run test:pwa && bun run test:worker && bun run test:e2e:twice",
     "typecheck": "bun run --filter '*' typecheck && tsc -p lint",
     "test:lint": "bun test ./lint",
     "test:domain": "bun test --cwd packages/domain",
+    "test:pwa": "bun test --cwd apps/pwa",
     "test:worker": "bun run --cwd apps/worker test",
     "test:e2e": "playwright test",
     "test:e2e:twice": "playwright test --repeat-each=2",
@@ -20,6 +21,7 @@
     "dev": "bun run build && bun run --cwd apps/worker dev"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@biomejs/biome": "2.6.8",
     "@playwright/test": "1.65.1",
     "@types/bun": "1.4.4",

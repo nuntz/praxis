@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, openJournal, test } from "./fixtures.ts";
 
 test("the person records Entries in the Journal's composer and sees them in time order", async ({
   page,
@@ -9,8 +9,7 @@ test("the person records Entries in the Journal's composer and sees them in time
   const second = `Lease renewal needs a signature ${tag}\n  indented, as typed`;
 
   await page.goto("/");
-  const journal = page.getByRole("region", { name: "Journal" });
-  const composer = journal.getByRole("textbox", { name: "New Entry" });
+  const { journal, composer } = await openJournal(page, testInfo);
 
   await composer.fill(first);
   await journal.getByRole("button", { name: "Record" }).click();
@@ -23,6 +22,7 @@ test("the person records Entries in the Journal's composer and sees them in time
 
   // What the server kept, read back afresh: the words as typed, oldest first.
   await page.reload();
+  await openJournal(page, testInfo);
   const ours = journal.getByRole("listitem").filter({ hasText: tag });
   await expect(ours).toHaveCount(2);
   await expect(ours.nth(0).getByTestId("words")).toHaveText(first);
@@ -37,8 +37,8 @@ test("the person records an Entry with an Inline Task and finishes the Task wher
   const words = `Called the landlord ${tag}\n[] ${title}\n- Not a Task ${tag}`;
 
   await page.goto("/");
-  const journal = page.getByRole("region", { name: "Journal" });
-  await journal.getByRole("textbox", { name: "New Entry" }).fill(words);
+  const { journal, composer } = await openJournal(page, testInfo);
+  await composer.fill(words);
   await journal.getByRole("button", { name: "Record" }).click();
 
   // The marked line makes one Task, shown with its Entry; the list item makes none.
@@ -54,6 +54,7 @@ test("the person records an Entry with an Inline Task and finishes the Task wher
 
   // What the server kept, read back afresh: the Task is Finished, and still hangs off its Entry.
   await page.reload();
+  await openJournal(page, testInfo);
   await expect(entry.getByRole("checkbox", { name: title })).toBeChecked();
   await expect(entry.getByTestId("words")).toHaveText(words, { useInnerText: true });
 });

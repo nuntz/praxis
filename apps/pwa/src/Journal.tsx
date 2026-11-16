@@ -10,6 +10,7 @@ import {
 import { createSignal, For, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Composer } from "./Composer.tsx";
+import { Peer } from "./design/Peer.tsx";
 import { callTool, unreachableMessage } from "./tools.ts";
 
 /** A day as the Device's locale writes it. A day has no time zone of its own. */
@@ -23,7 +24,7 @@ function formatDay(day: Day): string {
  * The Journal: Entries in time order, and the composer that records one with no model turn. Each
  * Entry's time is shown in the Context's time zone, so the Journal's days agree with today.
  */
-export function Journal(props: { timeZone: string }) {
+export function Journal(props: { timeZone: string; contextName: string | undefined }) {
   const timeFormat = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -62,11 +63,8 @@ export function Journal(props: { timeZone: string }) {
   }
 
   return (
-    <section class="journal" aria-labelledby="journal-heading">
-      <h1 id="journal-heading" class="column-heading">
-        Journal
-      </h1>
-      <div class="entries">
+    <Peer id="journal" title="Journal">
+      <div class="peer-body">
         <Show when={earlierCursor()}>
           {(cursor) => (
             <button type="button" class="quiet" onClick={() => loadPage(cursor())}>
@@ -87,21 +85,24 @@ export function Journal(props: { timeZone: string }) {
           </For>
         </ol>
       </div>
-      <Composer
-        onRecorded={(entry) => {
-          setProblem(null);
-          setEntries((shown) => [...shown, entry]);
-        }}
-        onProblem={setProblem}
-      />
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
-    </section>
+      <div class="peer-foot">
+        <Show when={problem()}>
+          {(message) => (
+            <p class="problem" role="alert">
+              {message()}
+            </p>
+          )}
+        </Show>
+        <Composer
+          contextName={props.contextName}
+          onRecorded={(entry) => {
+            setProblem(null);
+            setEntries((shown) => [...shown, entry]);
+          }}
+          onProblem={setProblem}
+        />
+      </div>
+    </Peer>
   );
 }
 

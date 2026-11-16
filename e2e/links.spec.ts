@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, openJournal, test } from "./fixtures.ts";
 
 test("the person Mentions a Person and References a Project by picking them as they type", async ({
   page,
@@ -10,8 +10,7 @@ test("the person Mentions a Person and References a Project by picking them as t
   const fence = `Fence-${tag}`;
 
   await page.goto("/");
-  const journal = page.getByRole("region", { name: "Journal" });
-  const composer = journal.getByRole("textbox", { name: "New Entry" });
+  const { journal, composer } = await openJournal(page, testInfo);
   const persons = journal.getByRole("listbox", { name: "Persons" });
   const tasksAndProjects = journal.getByRole("listbox", { name: "Tasks and Projects" });
 
@@ -61,6 +60,7 @@ test("the person Mentions a Person and References a Project by picking them as t
 
   // What the server kept, read back afresh.
   await page.reload();
+  await openJournal(page, testInfo);
   await expect(lunch.getByRole("listitem")).toHaveText([`@${bea}`, `#${fence}`]);
   await expect(called.getByRole("listitem")).toHaveText([`@${bea}`]);
 });
