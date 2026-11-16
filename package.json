@@ -12,6 +12,7 @@
     "ci": "biome ci . && bun run typecheck && bun run test:lint && bun run test:domain && bun run test:pwa && bun run test:worker && bun run test:e2e:twice",
     "typecheck": "bun run --filter '*' typecheck && tsc -p lint",
     "test:lint": "bun test ./lint",
+    "check:tickets": "bun lint/tickets.ts",
     "test:domain": "bun test --cwd packages/domain",
     "test:pwa": "bun test --cwd apps/pwa",
     "test:worker": "bun run --cwd apps/worker test",

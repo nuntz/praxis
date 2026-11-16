@@ -1,7 +1,7 @@
 import type { Change, Effect, ToolResult } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { forget, leakedMarkers, logs, marked } from "./markers.ts";
-import { judge, type Records, type Seen } from "./oracle.ts";
+import { judge, judgeDeployment, type Records, type Seen, type SeenDeployment } from "./oracle.ts";
 import { connection, hand, newContext, value } from "./seam.ts";
 
 // The harness is what every seam test leans on, so it is tested for what it must catch.
@@ -133,6 +133,78 @@ describe("the marker check", () => {
     value(await context.call(hand, "record_entry", { words: marked("Seen by nobody") }));
 
     expect(logs()).toContainEqual(expect.stringContaining('"tool":"record_entry"'));
+  });
+});
+
+describe("the oracle, on a Deployment write", () => {
+  const renamed: Effect = {
+    kind: "context",
+    id: "c1",
+    what: "changed",
+    summary: "Studio",
+    by: "call",
+  };
+  const settings = (name: string): Records => new Map([["context:c1", name]]);
+
+  /** A rename_context that renamed the Context in its own object and logged it there, as it should. */
+  function aGoodRename(): SeenDeployment {
+    return {
+      request: { caller: hand, tool: "rename_context", input: {}, arrivedAt: Date.parse(at) },
+      result: { ok: true, value: { record: {}, effects: [renamed], changed: true } },
+      contexts: new Map([
+        [
+          "c1",
+          {
+            before: settings("Work"),
+            after: settings("Studio"),
+            logged: [{ at, caller: hand, tool: "rename_context", effects: [renamed] }],
+          },
+        ],
+      ]),
+    };
+  }
+
+  test("passes a change to a Context reported and logged in it with its caller", () => {
+    expect(judgeDeployment(aGoodRename())).toEqual([]);
+  });
+
+  test("fails a change to a Context that its change log leaves out", () => {
+    const seen = aGoodRename();
+    seen.contexts.set("c1", { before: settings("Work"), after: settings("Studio"), logged: [] });
+
+    expect(judgeDeployment(seen)).toEqual([expect.stringMatching(/change log of the Context c1/)]);
+  });
+
+  test("fails a change to a Context that no Effect reports", () => {
+    const seen = { ...aGoodRename(), result: { ok: true, value: { effects: [] } } as const };
+
+    expect(judgeDeployment(seen)).toEqual([
+      expect.stringMatching(/c1 changed with no Effect/),
+      expect.stringMatching(/change log of the Context c1/),
+    ]);
+  });
+
+  test("fails a Context made with more than its settings, or a change log already begun", () => {
+    const made: Effect = { ...renamed, what: "made", summary: "Work" };
+    const seen: SeenDeployment = {
+      request: { caller: hand, tool: "create_context", input: {}, arrivedAt: Date.parse(at) },
+      result: { ok: true, value: { record: {}, effects: [made], changed: true } },
+      contexts: new Map([
+        [
+          "c1",
+          {
+            before: null,
+            after: new Map([...settings("Work"), ["entry:e1", "row"]]),
+            logged: logged([made]),
+          },
+        ],
+      ]),
+    };
+
+    expect(judgeDeployment(seen)).toEqual([
+      expect.stringMatching(/holds more than its settings/),
+      expect.stringMatching(/does not start empty/),
+    ]);
   });
 });
 

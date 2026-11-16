@@ -20,6 +20,10 @@ jobs:
         run: bun run typecheck
       - name: Guards still fire (lint rules, the registry guard)
         run: bun run test:lint
+      - name: No placeholder names a closed ticket
+        run: bun run check:tickets
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Domain package (bun test)
         run: bun run test:domain
       - name: Context object (Vitest in workerd)

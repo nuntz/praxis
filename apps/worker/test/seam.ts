@@ -11,7 +11,7 @@ import type {
   ToolResult,
 } from "@praxis/domain";
 import { reachContext } from "../src/routing.ts";
-import { throughOracle } from "./oracle.ts";
+import { throughDeploymentOracle, throughOracle } from "./oracle.ts";
 
 export const hand: Caller = { kind: "hand" };
 export const agent: Caller = { kind: "agent" };
@@ -31,6 +31,10 @@ export const DAY = 24 * 60 * 60 * 1000;
 export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
   const stub = env.DEPLOYMENT.get(env.DEPLOYMENT.newUniqueId());
   const time = { now: Date.parse(startAt) };
+  const contextOf = (id: string) => env.CONTEXT.get(env.CONTEXT.idFromString(id));
+  // Every call goes through the oracle, which holds a write's reach into a Context to its Effects.
+  const callAny = (caller: Caller, tool: string, input: unknown) =>
+    throughDeploymentOracle(stub, contextOf, { caller, tool, input, arrivedAt: time.now });
 
   return {
     /** Move the Deployment's clock on, and every Context's in it. */
@@ -38,14 +42,10 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
       time.now += ms;
     },
     call<N extends DeploymentToolName>(caller: Caller, tool: N, input: unknown) {
-      return stub.call({ caller, tool, input, arrivedAt: time.now }) as Promise<
-        ToolResult<DeploymentToolOutput[N]>
-      >;
+      return callAny(caller, tool, input) as Promise<ToolResult<DeploymentToolOutput[N]>>;
     },
     /** For calling a Deployment tool the registry may not have, by any name. */
-    callAny(caller: Caller, tool: string, input: unknown) {
-      return stub.call({ caller, tool, input, arrivedAt: time.now });
-    },
+    callAny,
     /** The Context with this id, reached through the Deployment object as the Worker does. */
     context(id: string) {
       return contextHandle(time, () => reachContext(env, stub, id));

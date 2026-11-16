@@ -119,6 +119,116 @@ export function judge(seen: Seen): string[] {
   return problems;
 }
 
+// The same promise for a Deployment write, which can reach into a Context's object (to make it or
+// rename it): every Context listed is snapshotted before and after, and what changed in each must
+// be Effects the call returned, logged in that Context with the caller. A Context the call made
+// holds its settings and nothing else, and its change log starts empty.
+
+type DeploymentStub = ReturnType<typeof env.DEPLOYMENT.get>;
+
+/** One Context as a Deployment write found it: before (null when the call made it) and after. */
+export type SeenContext = { before: Records | null; after: Records; logged: Change[] };
+
+export type SeenDeployment = {
+  request: Request;
+  result: ToolResult<unknown>;
+  contexts: Map<string, SeenContext>;
+};
+
+/** Call a Deployment tool through the oracle, failing the test on anything it finds. */
+export async function throughDeploymentOracle(
+  deployment: DeploymentStub,
+  contextOf: (id: string) => Stub,
+  request: Request,
+): Promise<ToolResult<unknown>> {
+  const listedBefore = await listedContexts(deployment);
+  const before = new Map<string, { records: Records; lastChange: number }>();
+  for (const id of listedBefore) before.set(id, await snapshot(contextOf(id)));
+  const result = await deployment.call(request);
+  const listedAfter = await listedContexts(deployment);
+
+  const contexts = new Map<string, SeenContext>();
+  for (const id of listedAfter) {
+    const stub = contextOf(id);
+    const was = before.get(id);
+    const after = await snapshot(stub);
+    const logged = await changesSince(stub, was?.lastChange ?? 0);
+    contexts.set(id, { before: was?.records ?? null, after: after.records, logged });
+  }
+  const gone = listedBefore.filter((id) => !listedAfter.includes(id));
+
+  const problems = [
+    ...gone.map((id) => `The Context ${id} left the list.`),
+    ...judgeDeployment({ request, result, contexts }),
+  ];
+  expect(problems, `The oracle, on ${request.tool} as ${request.caller.kind}`).toEqual([]);
+  return result;
+}
+
+/** What is wrong with one Deployment call as the oracle saw each Context. */
+export function judgeDeployment(seen: SeenDeployment): string[] {
+  const { request, result } = seen;
+  const effects = result.ok ? ((result.value as { effects?: Effect[] }).effects ?? []) : [];
+  const problems: string[] = [];
+
+  for (const [id, { before, after, logged }] of seen.contexts) {
+    if (before === null) {
+      const made = differences(new Map(), after);
+      if (!same(made, [{ kind: "context", id, what: "made" }])) {
+        problems.push(`The Context made holds more than its settings: ${canonical(made)}`);
+      }
+      if (!effects.some((e) => e.kind === "context" && e.id === id && e.what === "made")) {
+        problems.push(`The Context ${id} was made with no Effect saying so.`);
+      }
+      if (logged.length > 0)
+        problems.push(`The change log of the Context made does not start empty.`);
+      continue;
+    }
+
+    const changed = differences(before, after);
+    if (!result.ok && changed.length > 0) {
+      problems.push(`A call that failed changed the Context ${id}: ${canonical(changed)}`);
+      continue;
+    }
+    const unreported = changed.filter(
+      (c) => !effects.some((e) => e.kind === c.kind && e.id === c.id && e.what === c.what),
+    );
+    if (unreported.length > 0) {
+      problems.push(`The Context ${id} changed with no Effect saying so: ${canonical(unreported)}`);
+    }
+    const inThisContext = effects.filter((e) =>
+      changed.some((c) => c.kind === e.kind && c.id === e.id),
+    );
+    const expected: Change[] =
+      inThisContext.length === 0
+        ? []
+        : [
+            {
+              at: instantToIso(request.arrivedAt),
+              caller: request.caller,
+              tool: request.tool,
+              effects: inThisContext,
+            },
+          ];
+    if (!same(logged, expected)) {
+      problems.push(
+        `The change log of the Context ${id} does not hold what changed in it, with the caller. Logged: ${canonical(logged)}.`,
+      );
+    }
+  }
+  return problems;
+}
+
+/** The ids of the Contexts the Deployment object lists, read from its table. */
+function listedContexts(deployment: DeploymentStub): Promise<string[]> {
+  return runInDurableObject(deployment, (_, state) =>
+    state.storage.sql
+      .exec<{ id: string }>(`SELECT id FROM contexts ORDER BY seq`)
+      .toArray()
+      .map((row) => row.id),
+  );
+}
+
 /** Each record made, changed or deleted between two snapshots. */
 function differences(before: Records, after: Records): Pick<Effect, "kind" | "id" | "what">[] {
   const found: Pick<Effect, "kind" | "id" | "what">[] = [];
