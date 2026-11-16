@@ -209,6 +209,20 @@ export const tools = {
     }),
     offered: toEveryWriter,
   },
+  delegate_task: {
+    kind: "write",
+    description:
+      "Delegate a Task to a Person in this Context: they are doing it, and it is no longer actionable for the person, who still tracks it. Only this call delegates: a Mention never does. The Person has no access to Praxis and nothing is sent to them. Delegating to the Person it is Delegated to changes nothing; to another hands it on. A closed Task is refused until it is reopened. The delegation ends when the Task is finished, dropped or taken back.",
+    input: writeInput({ id: z.string().min(1), person_id: z.string().min(1) }),
+    offered: toEveryWriter,
+  },
+  take_back_task: {
+    kind: "write",
+    description:
+      "Take back a Delegated Task: no Person is doing it any more, and it is the person's to act on again. Taking back a Task no one is doing changes nothing.",
+    input: writeInput({ id: z.string().min(1) }),
+    offered: toEveryWriter,
+  },
   get_task: {
     kind: "read",
     description:
@@ -377,6 +391,8 @@ export type ToolOutput = {
   reopen_task: Written<Task>;
   rename_task: Written<Task>;
   set_task_dates: Written<Task>;
+  delegate_task: Written<Task>;
+  take_back_task: Written<Task>;
   get_task: Task;
   list_tasks: Page<Task>;
   move_task: Written<Task>;

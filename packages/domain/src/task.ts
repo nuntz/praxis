@@ -1,6 +1,10 @@
 import type { Author } from "./callers.ts";
 import { addDays, type Day } from "./day.ts";
 import { instantToIso } from "./entry.ts";
+import type { Person } from "./person.ts";
+
+/** A Person as a Task names them: their id, and their name as it is now. */
+type PersonNamed = Pick<Person, "id" | "name">;
 
 /** A Task as every read and write returns it (section 3.3). It has a title and no body. */
 export type Task = {
@@ -38,6 +42,8 @@ export type OpenState = {
   is: "open";
   /** None of Waiting, Delegated or Deferred: the person could act on it now. */
   actionable: boolean;
+  /** A Person is doing it: who, and since when as an ISO 8601 instant. */
+  delegated: { to: PersonNamed; since: string } | null;
   /** Its Defer Date has not come: the day it is Deferred until. */
   deferred: { until: Day } | null;
   /** Its Due Date has passed: the day it became Overdue, the one after its Due Date. */
@@ -47,22 +53,40 @@ export type OpenState = {
 /** A Task is open, or at one of its ends since a time. */
 export type TaskState = OpenState | { is: End; at: string };
 
-/** One thing that happened to a Task, at an instant held as milliseconds since the epoch. */
-export type TaskEvent = { what: End | "reopened"; at: number };
+/**
+ * One thing that happened to a Task, at an instant held as milliseconds since the epoch: it
+ * reached an end or was reopened, or it was Delegated to a Person or taken back.
+ */
+export type TaskEvent =
+  | { what: End | "reopened" | "taken_back"; at: number }
+  | { what: "delegated"; at: number; to: PersonNamed };
 
 /**
  * A Task's state from its events, oldest first, its dates and today in its Context's time zone.
  * It is the last end it reached and when, unless it was reopened since. A Task nothing has
- * happened to is open. Only an open Task is Deferred or Overdue.
+ * happened to is open. It is Delegated to the last Person it was handed to, until it is taken
+ * back or reaches an end; reopening does not bring the delegation back. Only an open Task is
+ * Delegated, Deferred or Overdue.
  */
 export function taskState(events: TaskEvent[], dates: TaskDates, today: Day): TaskState {
-  const last = events.at(-1);
-  if (last && last.what !== "reopened") return { is: last.what, at: instantToIso(last.at) };
+  let end: { is: End; at: string } | null = null;
+  let delegated: OpenState["delegated"] = null;
+  for (const event of events) {
+    if (event.what === "delegated") delegated = { to: event.to, since: instantToIso(event.at) };
+    else if (event.what === "taken_back") delegated = null;
+    else if (event.what === "reopened") end = null;
+    else {
+      end = { is: event.what, at: instantToIso(event.at) };
+      delegated = null;
+    }
+  }
+  if (end) return end;
   const deferred = dates.defer_date !== null && dates.defer_date > today;
   const overdue = dates.due_date !== null && dates.due_date < today;
   return {
     is: "open",
-    actionable: !deferred,
+    actionable: !deferred && delegated === null,
+    delegated,
     deferred: deferred ? { until: dates.defer_date as Day } : null,
     overdue: overdue ? { since: addDays(dates.due_date as Day, 1) } : null,
   };

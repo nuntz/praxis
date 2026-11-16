@@ -60,12 +60,15 @@ export function createTables(sql: SqlStorage): void {
     CREATE INDEX IF NOT EXISTS tasks_by_entry ON tasks (origin_entry, seq);
     CREATE INDEX IF NOT EXISTS tasks_by_project ON tasks (project, seq);
 
-    -- What has happened to each Task, in order: it reached an end or was reopened.
+    -- What has happened to each Task, in order: it reached an end or was reopened, or it was
+    -- Delegated to a Person or taken back. Delegated holds until the next end or taking back.
     CREATE TABLE IF NOT EXISTS task_events (
       seq INTEGER PRIMARY KEY,
       task TEXT NOT NULL REFERENCES tasks (id),
       what TEXT NOT NULL,
-      at INTEGER NOT NULL
+      at INTEGER NOT NULL,
+      -- The Person it was Delegated to, for a delegation only.
+      person TEXT REFERENCES persons (id)
     );
     CREATE INDEX IF NOT EXISTS task_events_by_task ON task_events (task, seq);
 

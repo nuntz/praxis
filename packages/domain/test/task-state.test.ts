@@ -8,7 +8,13 @@ const today = "2026-11-15";
 const noDates: TaskDates = { due_date: null, defer_date: null };
 const at = Date.parse("2026-11-10T08:00:00.000Z");
 
-const actionable: TaskState = { is: "open", actionable: true, deferred: null, overdue: null };
+const actionable: TaskState = {
+  is: "open",
+  actionable: true,
+  delegated: null,
+  deferred: null,
+  overdue: null,
+};
 
 describe("an open Task's state", () => {
   test("with no dates and nothing happened, it is actionable and nothing else", () => {
@@ -39,6 +45,7 @@ describe("an open Task's state", () => {
     expect(taskState([], { due_date: null, defer_date: "2026-11-16" }, today)).toEqual({
       is: "open",
       actionable: false,
+      delegated: null,
       deferred: { until: "2026-11-16" },
       overdue: null,
     });
@@ -57,6 +64,7 @@ describe("an open Task's state", () => {
     expect(taskState([], dates, today)).toEqual({
       is: "open",
       actionable: false,
+      delegated: null,
       deferred: { until: "2026-11-20" },
       overdue: { since: "2026-11-11" },
     });
@@ -101,4 +109,60 @@ describe("a closed Task's state", () => {
       at: "2026-11-10T08:00:00.002Z",
     });
   });
+});
+
+describe("a Delegated Task's state", () => {
+  const alice = { id: "alice", name: "Alice" };
+  const bob = { id: "bob", name: "Bob" };
+  const delegated = (to = alice, when = at): TaskEvent => ({ what: "delegated", at: when, to });
+  const toAlice = { to: alice, since: "2026-11-10T08:00:00.000Z" };
+
+  test("says who it is Delegated to and since when, and is not actionable", () => {
+    expect(taskState([delegated()], noDates, today)).toEqual({
+      ...actionable,
+      actionable: false,
+      delegated: toAlice,
+    });
+  });
+
+  test("is Delegated to the last Person it was handed to, since then", () => {
+    expect(taskState([delegated(), delegated(bob, at + 1)], noDates, today)).toEqual({
+      ...actionable,
+      actionable: false,
+      delegated: { to: bob, since: "2026-11-10T08:00:00.001Z" },
+    });
+  });
+
+  test("can be Delegated, Deferred and Overdue at once", () => {
+    const dates = { due_date: "2026-11-10", defer_date: "2026-11-20" };
+
+    expect(taskState([delegated()], dates, today)).toEqual({
+      is: "open",
+      actionable: false,
+      delegated: toAlice,
+      deferred: { until: "2026-11-20" },
+      overdue: { since: "2026-11-11" },
+    });
+  });
+
+  test("is actionable again once taken back", () => {
+    const events: TaskEvent[] = [delegated(), { what: "taken_back", at: at + 1 }];
+
+    expect(taskState(events, noDates, today)).toEqual(actionable);
+  });
+
+  test.each(["finished", "dropped"] as const)(
+    "the delegation ends when the Task is %s, and reopening does not bring it back",
+    (end) => {
+      const closed: TaskEvent[] = [delegated(), { what: end, at: at + 1 }];
+
+      expect(taskState(closed, noDates, today)).toEqual({
+        is: end,
+        at: "2026-11-10T08:00:00.001Z",
+      });
+      expect(taskState([...closed, { what: "reopened", at: at + 2 }], noDates, today)).toEqual(
+        actionable,
+      );
+    },
+  );
 });

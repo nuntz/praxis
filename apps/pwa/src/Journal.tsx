@@ -196,6 +196,9 @@ function TaskItem(props: {
           </span>
         )}
       </Show>
+      <Show when={open()?.delegated}>
+        {(delegated) => <span class="task-mark">Delegated to {delegated().to.name}</span>}
+      </Show>
       <Show when={open()?.deferred}>
         {(deferred) => <span class="task-mark">Deferred until {formatDay(deferred().until)}</span>}
       </Show>

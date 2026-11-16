@@ -6,7 +6,13 @@ import { agent, connection, DAY, everyCaller, hand, newContext, value } from "./
 type Context = ReturnType<typeof newContext>;
 
 /** An open Task with no dates: nothing holds for it but that the person could act on it. */
-const actionable = { is: "open", actionable: true, deferred: null, overdue: null };
+const actionable = {
+  is: "open",
+  actionable: true,
+  delegated: null,
+  deferred: null,
+  overdue: null,
+};
 
 describe("record_entry's Tasks", () => {
   test("each Task given is made with the Entry as its Origin Entry, open, and read with it", async () => {
@@ -415,6 +421,7 @@ describe("set_task_dates", () => {
       state: {
         is: "open",
         actionable: false,
+        delegated: null,
         deferred: { until: "2026-11-18" },
         overdue: { since: "2026-11-11" },
       },
@@ -471,8 +478,20 @@ describe("set_task_dates", () => {
     }
 
     expect(states).toEqual([
-      { is: "open", actionable: false, deferred: { until: "2026-11-16" }, overdue: null },
-      { is: "open", actionable: true, deferred: null, overdue: { since: "2026-11-16" } },
+      {
+        is: "open",
+        actionable: false,
+        delegated: null,
+        deferred: { until: "2026-11-16" },
+        overdue: null,
+      },
+      {
+        is: "open",
+        actionable: true,
+        delegated: null,
+        deferred: null,
+        overdue: { since: "2026-11-16" },
+      },
     ]);
   });
 

@@ -21,7 +21,17 @@ export type TaskRow = AuthorColumns & {
   defer_date: string | null;
 };
 
-type EventRow = { task: string; what: TaskEvent["what"]; at: number };
+type EventRow = {
+  task: string;
+  what: TaskEvent["what"];
+  at: number;
+  person: string | null;
+  person_name: string | null;
+};
+
+/** A Task's events with the Person each delegation names, as they are now called. */
+const EVENTS = `SELECT e.task, e.what, e.at, e.person, p.name AS person_name
+  FROM task_events e LEFT JOIN persons p ON p.id = e.person`;
 
 /** Make a Task on an Entry that exists, and return its id. */
 export function insertTask(
@@ -48,16 +58,20 @@ export function setTaskProject(sql: SqlStorage, task: string, project: string | 
 
 /** Add one thing that happened to a Task. Its state follows from these. */
 export function insertTaskEvent(sql: SqlStorage, task: string, event: TaskEvent): void {
-  sql.exec(`INSERT INTO task_events (task, what, at) VALUES (?, ?, ?)`, task, event.what, event.at);
+  sql.exec(
+    `INSERT INTO task_events (task, what, at, person) VALUES (?, ?, ?, ?)`,
+    task,
+    event.what,
+    event.at,
+    event.what === "delegated" ? event.to.id : null,
+  );
 }
 
 /** A Task that exists in this Context, its state read as on `today`. */
 export function readTask(sql: SqlStorage, id: string, today: Day): Task | null {
   const row = sql.exec<TaskRow>(`SELECT * FROM tasks WHERE id = ?`, id).toArray()[0];
   if (!row) return null;
-  const events = sql
-    .exec<EventRow>(`SELECT task, what, at FROM task_events WHERE task = ? ORDER BY seq`, id)
-    .toArray();
+  const events = sql.exec<EventRow>(`${EVENTS} WHERE e.task = ? ORDER BY e.seq`, id).toArray();
   return toTask(row, events, today);
 }
 
@@ -93,8 +107,7 @@ export function tasksFrom(sql: SqlStorage, rows: TaskRow[], today: Day): Task[] 
   const events = Map.groupBy(
     sql
       .exec<EventRow>(
-        `SELECT task, what, at FROM task_events
-         WHERE task IN (SELECT value FROM json_each(?)) ORDER BY seq`,
+        `${EVENTS} WHERE e.task IN (SELECT value FROM json_each(?)) ORDER BY e.seq`,
         JSON.stringify(rows.map((row) => row.id)),
       )
       .toArray(),
@@ -108,8 +121,14 @@ export function taskEffect(task: Task, what: Effect["what"], by: Effect["by"] = 
   return { kind: "task", id: task.id, what, summary: summarizeWords(task.title), by };
 }
 
-function toTask(row: TaskRow, events: EventRow[], today: Day): Task {
+function toTask(row: TaskRow, rows: EventRow[], today: Day): Task {
   const dates = { due_date: row.due_date, defer_date: row.defer_date };
+  const events = rows.map(
+    ({ what, at, person, person_name }): TaskEvent =>
+      what === "delegated"
+        ? { what, at, to: { id: person as string, name: person_name as string } }
+        : { what, at },
+  );
   return {
     id: row.id,
     title: row.title,

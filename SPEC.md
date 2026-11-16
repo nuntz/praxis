@@ -124,7 +124,8 @@ This replaces the single ordered state decided earlier in [Sub-tasks and depende
 
 **Delegated.**
 
-- To one Person, by an explicit act, never inferred from a Mention.
+- To one Person, by an explicit act (`delegate_task`), never inferred from a Mention. Delegating to another Person hands it on, and the delegation runs from then.
+- Only an open Task is Delegated: delegating a closed one is refused until it is reopened, as an end is.
 - The Person has no access to the Deployment. There is no accept or decline.
 - It ends when the person finishes the Task, drops it or takes it back.
 - "Waiting for Alice to reply" is a Task Delegated to Alice that other Tasks can wait on.

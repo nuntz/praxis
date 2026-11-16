@@ -9,7 +9,7 @@ import {
 } from "../person-rows.ts";
 import type { Handlers } from "../registry.ts";
 
-const NO_SUCH_PERSON = "No such Person in this Context.";
+export const NO_SUCH_PERSON = "No such Person in this Context.";
 
 export const personTools: Pick<
   Handlers,

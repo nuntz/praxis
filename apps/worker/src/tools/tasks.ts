@@ -15,6 +15,7 @@ import {
 } from "@praxis/domain";
 import { authorColumns } from "../author.ts";
 import { newestFirst } from "../newest-first.ts";
+import { readPerson } from "../person-rows.ts";
 import type { Handlers, ToolCall } from "../registry.ts";
 import {
   insertTask,
@@ -24,6 +25,7 @@ import {
   taskEffect,
   tasksFrom,
 } from "../task-rows.ts";
+import { NO_SUCH_PERSON } from "./persons.ts";
 
 const NO_SUCH_TASK = "No such Task in this Context.";
 
@@ -35,6 +37,8 @@ export const taskTools: Pick<
   | "reopen_task"
   | "rename_task"
   | "set_task_dates"
+  | "delegate_task"
+  | "take_back_task"
   | "get_task"
   | "list_tasks"
 > = {
@@ -91,6 +95,27 @@ export const taskTools: Pick<
     return success(written(dated, [taskEffect(dated, "changed")]));
   },
 
+  delegate_task({ input, arrivedAt, today, sql }) {
+    const task = readTask(sql, input.id, today);
+    if (!task) return failure("not_found", NO_SUCH_TASK);
+    const person = readPerson(sql, input.person_id);
+    if (!person) return failure("not_found", NO_SUCH_PERSON);
+    // Reaching an end ends a delegation, so a closed Task is reopened before it is handed on.
+    if (task.state.is !== "open") return closedRefusal(task, task.state.is);
+    if (task.state.delegated?.to.id === person.id) return success(written(task, []));
+    const to = { id: person.id, name: person.name };
+    return happened(sql, task, { what: "delegated", at: arrivedAt, to }, today);
+  },
+
+  take_back_task({ input, arrivedAt, today, sql }) {
+    const task = readTask(sql, input.id, today);
+    if (!task) return failure("not_found", NO_SUCH_TASK);
+    if (task.state.is !== "open" || task.state.delegated === null) {
+      return success(written(task, []));
+    }
+    return happened(sql, task, { what: "taken_back", at: arrivedAt }, today);
+  },
+
   get_task({ input, today, sql }) {
     const task = readTask(sql, input.id, today);
     return task ? success(task) : failure("not_found", NO_SUCH_TASK);
@@ -123,13 +148,16 @@ function reach(
   const task = readTask(sql, input.id, today);
   if (!task) return failure("not_found", NO_SUCH_TASK);
   if (task.state.is === end) return success(written(task, []));
-  if (task.state.is !== "open") {
-    const at = task.state.is === "finished" ? "Finished" : "Dropped";
-    return refusal(`The Task is ${at}: reopen it first.`, [
-      { kind: "task", id: task.id, summary: summarizeWords(task.title) },
-    ]);
-  }
+  if (task.state.is !== "open") return closedRefusal(task, task.state.is);
   return happened(sql, task, { what: end, at: arrivedAt }, today);
+}
+
+/** A Task at an end is refused what only an open Task takes, and is named in the way. */
+function closedRefusal(task: Task, end: End): ToolResult<never> {
+  const at = end === "finished" ? "Finished" : "Dropped";
+  return refusal(`The Task is ${at}: reopen it first.`, [
+    { kind: "task", id: task.id, summary: summarizeWords(task.title) },
+  ]);
 }
 
 /** Something happened to a Task: its state follows, and the Task is the call's one Effect. */

@@ -16,6 +16,8 @@ const runsWith: Record<string, () => unknown> = {
   reopen_task: () => ({ id: "no-such-task" }),
   rename_task: () => ({ id: "no-such-task", title: marked("Offered") }),
   set_task_dates: () => ({ id: "no-such-task", due_date: "2026-12-01" }),
+  delegate_task: () => ({ id: "no-such-task", person_id: "no-such-person" }),
+  take_back_task: () => ({ id: "no-such-task" }),
   get_task: () => ({ id: "no-such-task" }),
   list_tasks: () => ({}),
   move_task: () => ({ id: "no-such-task", project_id: null }),
