@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 test("the person records Entries in the Journal's composer and sees them in time order", async ({
   page,
 }, testInfo) => {
-  // Desktop and phone share one Journal, so each run's words are its own.
-  const tag = `${testInfo.project.name}-${Date.now()}`;
+  // Every run shares one Journal, in parallel and repeated, so each run's words are its own.
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
   const first = `Called the landlord ${tag}`;
   const second = `Lease renewal needs a signature ${tag}\n  indented, as typed`;
 
@@ -32,7 +32,7 @@ test("the person records Entries in the Journal's composer and sees them in time
 test("the person records an Entry with an Inline Task and finishes the Task where it is shown", async ({
   page,
 }, testInfo) => {
-  const tag = `${testInfo.project.name}-${Date.now()}`;
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
   const title = `Send the signed lease ${tag}`;
   const words = `Called the landlord ${tag}\n[] ${title}\n- Not a Task ${tag}`;
 

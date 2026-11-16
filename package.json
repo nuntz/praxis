@@ -9,11 +9,13 @@
   ],
   "scripts": {
     "check": "biome check .",
+    "ci": "biome ci . && bun run typecheck && bun run test:lint && bun run test:domain && bun run test:worker && bun run test:e2e:twice",
     "typecheck": "bun run --filter '*' typecheck && tsc -p lint",
     "test:lint": "bun test ./lint",
     "test:domain": "bun test --cwd packages/domain",
     "test:worker": "bun run --cwd apps/worker test",
     "test:e2e": "playwright test",
+    "test:e2e:twice": "playwright test --repeat-each=2",
     "build": "bun run --cwd apps/pwa build",
     "dev": "bun run build && bun run --cwd apps/worker dev"
   },

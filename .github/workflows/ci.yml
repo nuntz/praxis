@@ -26,8 +26,8 @@ jobs:
         run: bun run test:worker
       - name: Install Chromium for Playwright
         run: bunx playwright install --with-deps chromium
-      - name: Browser journeys (Playwright, desktop and phone)
-        run: bun run test:e2e
+      - name: Browser journeys (Playwright, desktop and phone, each twice to catch a journey that needs a fresh server)
+        run: bun run test:e2e:twice
       - uses: actions/upload-artifact@v5
         if: failure()
         with:
