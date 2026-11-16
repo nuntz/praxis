@@ -10,7 +10,7 @@ import {
 } from "@praxis/domain";
 import { type AuthorColumns, authorColumns, toAuthor } from "./author.ts";
 
-type TaskRow = AuthorColumns & {
+export type TaskRow = AuthorColumns & {
   seq: number;
   id: string;
   title: string;
@@ -79,27 +79,28 @@ function tasksBy(
   today: Day,
   key: (task: Task) => string,
 ): Map<string, Task[]> {
-  const json = JSON.stringify(ids);
   const rows = sql
     .exec<TaskRow>(
       `SELECT * FROM tasks WHERE ${column} IN (SELECT value FROM json_each(?)) ORDER BY seq`,
-      json,
+      JSON.stringify(ids),
     )
     .toArray();
+  return Map.groupBy(tasksFrom(sql, rows, today), key);
+}
+
+/** These Tasks, in the order given, each with its state read as on `today`. */
+export function tasksFrom(sql: SqlStorage, rows: TaskRow[], today: Day): Task[] {
   const events = Map.groupBy(
     sql
       .exec<EventRow>(
-        `SELECT e.task, e.what, e.at FROM task_events e JOIN tasks t ON t.id = e.task
-         WHERE t.${column} IN (SELECT value FROM json_each(?)) ORDER BY e.seq`,
-        json,
+        `SELECT task, what, at FROM task_events
+         WHERE task IN (SELECT value FROM json_each(?)) ORDER BY seq`,
+        JSON.stringify(rows.map((row) => row.id)),
       )
       .toArray(),
     (event) => event.task,
   );
-  return Map.groupBy(
-    rows.map((row) => toTask(row, events.get(row.id) ?? [], today)),
-    key,
-  );
+  return rows.map((row) => toTask(row, events.get(row.id) ?? [], today));
 }
 
 /** The Effect of a change to a Task, by the call or a rule, with its one-line summary. */

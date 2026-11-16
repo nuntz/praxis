@@ -2,7 +2,7 @@ import {
   type Day,
   type End,
   failure,
-  PAGE_SIZE,
+  nameHolds,
   type Project,
   type ProjectEvent,
   success,
@@ -11,6 +11,7 @@ import {
   type Written,
   written,
 } from "@praxis/domain";
+import { newestFirst } from "../newest-first.ts";
 import {
   insertProject,
   insertProjectEvent,
@@ -112,36 +113,30 @@ export const projectTools: Pick<
   },
 
   list_projects({ input, today, sql }) {
-    let before = Number.MAX_SAFE_INTEGER;
-    if (input.cursor !== undefined) {
-      const position = decodeCursor(input.cursor);
-      if (position === null) {
-        return failure("invalid_input", "The cursor is not one this list gave.");
-      }
-      before = position;
-    }
-    // Newest first, narrowed by the state the last declaration left it in. One more than a page
-    // is read to learn whether another page follows.
-    const rows = sql
-      .exec<ProjectRow>(
-        `SELECT p.* FROM projects p
-         WHERE p.seq < ?
-           AND (? IS NULL OR ? = coalesce(
-             nullif((SELECT what FROM project_events e WHERE e.project = p.id
-                     ORDER BY e.seq DESC LIMIT 1), 'reopened'),
-             'open'))
-         ORDER BY p.seq DESC LIMIT ?`,
-        before,
-        input.state ?? null,
-        input.state ?? null,
-        PAGE_SIZE + 1,
-      )
-      .toArray();
-    const page = rows.slice(0, PAGE_SIZE);
-    const last = page.at(-1);
+    const { named } = input;
+    // Newest first, narrowed by the state the last declaration left it in.
+    const page = newestFirst(
+      "projects",
+      input.cursor,
+      (before) =>
+        sql.exec<ProjectRow>(
+          `SELECT p.* FROM projects p
+           WHERE p.seq < ?
+             AND (? IS NULL OR ? = coalesce(
+               nullif((SELECT what FROM project_events e WHERE e.project = p.id
+                       ORDER BY e.seq DESC LIMIT 1), 'reopened'),
+               'open'))
+           ORDER BY p.seq DESC`,
+          before,
+          input.state ?? null,
+          input.state ?? null,
+        ),
+      named === undefined ? undefined : (row) => nameHolds(row.name, named),
+    );
+    if (!page.ok) return page;
     return success({
-      items: projectsWithTasks(sql, page, today),
-      next_cursor: rows.length > PAGE_SIZE && last ? encodeCursor(last.seq) : null,
+      items: projectsWithTasks(sql, page.value.rows, today),
+      next_cursor: page.value.next_cursor,
     });
   },
 };
@@ -180,26 +175,4 @@ function declared(
       ...dropped.map((task) => taskEffect(tasks.get(task.id) as Task, "changed", "rule")),
     ]),
   );
-}
-
-function encodeCursor(seq: number): string {
-  return btoa(JSON.stringify(["projects", seq]));
-}
-
-function decodeCursor(cursor: string): number | null {
-  try {
-    const value: unknown = JSON.parse(atob(cursor));
-    if (
-      Array.isArray(value) &&
-      value.length === 2 &&
-      value[0] === "projects" &&
-      Number.isSafeInteger(value[1]) &&
-      value[1] >= 0
-    ) {
-      return value[1];
-    }
-  } catch {
-    // Not base64 or not JSON: not a cursor this list gave.
-  }
-  return null;
 }

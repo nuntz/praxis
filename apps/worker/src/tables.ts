@@ -33,6 +33,14 @@ export function createTables(sql: SqlStorage): void {
     );
     CREATE INDEX IF NOT EXISTS project_events_by_project ON project_events (project, seq);
 
+    -- A Person has a name and nothing else. Two may share one.
+    CREATE TABLE IF NOT EXISTS persons (
+      seq INTEGER PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
+
     -- A Task hangs off its Origin Entry. Its state is not a column: it is derived from its events.
     CREATE TABLE IF NOT EXISTS tasks (
       seq INTEGER PRIMARY KEY,
@@ -60,6 +68,20 @@ export function createTables(sql: SqlStorage): void {
       at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS task_events_by_task ON task_events (task, seq);
+
+    -- An Entry's References and Mentions, kept beside its words and part of the Entry (ADR 0008).
+    -- An anchor keeps the text it spanned, so a span that is gone from the words reads as none.
+    CREATE TABLE IF NOT EXISTS entry_links (
+      seq INTEGER PRIMARY KEY,
+      entry TEXT NOT NULL REFERENCES entries (id),
+      to_kind TEXT NOT NULL,
+      to_id TEXT NOT NULL,
+      anchor_start INTEGER,
+      anchor_end INTEGER,
+      anchor_text TEXT
+    );
+    CREATE INDEX IF NOT EXISTS entry_links_by_entry ON entry_links (entry, seq);
+    CREATE INDEX IF NOT EXISTS entry_links_by_target ON entry_links (to_id);
 
     -- The Context's own settings, in one row with the Context's id. Not a record, but a change to
     -- them is an Effect on the Context.

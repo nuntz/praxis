@@ -7,6 +7,7 @@ import { makeContext, seedSettings } from "./settings.ts";
 import { createTables } from "./tables.ts";
 import { changeTools } from "./tools/changes.ts";
 import { entryTools } from "./tools/entries.ts";
+import { personTools } from "./tools/persons.ts";
 import { projectTools } from "./tools/projects.ts";
 import { settingsTools } from "./tools/settings.ts";
 import { taskTools } from "./tools/tasks.ts";
@@ -15,6 +16,7 @@ const handlers: Handlers = {
   ...entryTools,
   ...taskTools,
   ...projectTools,
+  ...personTools,
   ...settingsTools,
   ...changeTools,
 };

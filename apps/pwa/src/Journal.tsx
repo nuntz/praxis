@@ -1,13 +1,14 @@
 import {
   type Day,
   type Entry,
-  inlineTasks,
+  type Link,
   type Task,
   type TaskDates,
   utcMidnight,
 } from "@praxis/domain";
 import { createSignal, For, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
+import { Composer } from "./Composer.tsx";
 import { callTool, unreachableMessage } from "./tools.ts";
 
 /** A day as the Device's locale writes it. A day has no time zone of its own. */
@@ -116,6 +117,11 @@ function EntryItem(props: {
       <p class="entry-words" data-testid="words">
         {props.entry.words}
       </p>
+      <Show when={props.entry.links.length > 0}>
+        <ul class="link-list" aria-label="Mentions and References">
+          <For each={props.entry.links}>{(link) => <LinkItem link={link} />}</For>
+        </ul>
+      </Show>
       <Show when={props.entry.tasks.length > 0}>
         <ul class="task-list" aria-label="Tasks">
           <For each={props.entry.tasks}>
@@ -123,6 +129,16 @@ function EntryItem(props: {
           </For>
         </ul>
       </Show>
+    </li>
+  );
+}
+
+/** A Mention, a tinted pill, or a Reference, an inset pill, kept beside the Entry's words. */
+function LinkItem(props: { link: Link }) {
+  return (
+    <li class="link" classList={{ [props.link.kind]: true }}>
+      {props.link.kind === "mention" ? "@" : "#"}
+      {props.link.to.summary}
     </li>
   );
 }
@@ -236,63 +252,5 @@ function TaskDatesEditor(props: {
       {field("due_date", "Due Date")}
       {field("defer_date", "Defer Date")}
     </div>
-  );
-}
-
-function Composer(props: {
-  onRecorded: (entry: Entry) => void;
-  onProblem: (message: string) => void;
-}) {
-  const [words, setWords] = createSignal("");
-  const [sending, setSending] = createSignal(false);
-  const canRecord = () => !sending() && words().trim() !== "";
-
-  async function record() {
-    if (!canRecord()) return;
-    setSending(true);
-    try {
-      // The editor finds the Inline Tasks; the server never reads words for them.
-      const result = await callTool("record_entry", {
-        words: words(),
-        tasks: inlineTasks(words()),
-      });
-      if (!result.ok) return props.onProblem(result.error.message);
-      props.onRecorded(result.value.record);
-      setWords("");
-    } catch (error) {
-      props.onProblem(unreachableMessage(error));
-    } finally {
-      setSending(false);
-    }
-  }
-
-  return (
-    <form
-      class="composer"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void record();
-      }}
-    >
-      <label for="new-entry" class="visually-hidden">
-        New Entry
-      </label>
-      <textarea
-        id="new-entry"
-        rows={3}
-        placeholder="Write in the Journal"
-        value={words()}
-        onInput={(event) => setWords(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault();
-            void record();
-          }
-        }}
-      />
-      <button type="submit" disabled={!canRecord()}>
-        Record
-      </button>
-    </form>
   );
 }

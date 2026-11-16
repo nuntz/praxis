@@ -564,6 +564,62 @@ describe("get_task", () => {
   });
 });
 
+describe("list_tasks", () => {
+  test("lists every Task in the Context newest first, whatever its Entry or state, to every caller", async () => {
+    const context = newContext();
+    const first = await aTask(context);
+    const second = await aTask(context);
+    const dropped = value(await context.call(hand, "drop_task", { id: first.task.id })).record;
+
+    for (const caller of everyCaller) {
+      expect(value(await context.call(caller, "list_tasks", {}))).toEqual({
+        items: [second.task, dropped],
+        next_cursor: null,
+      });
+    }
+  });
+
+  test("can be narrowed to the Tasks whose title holds what was typed, whatever its case and accents", async () => {
+    const context = newContext();
+    const entry = value(
+      await context.call(hand, "record_entry", {
+        words: marked("Plans"),
+        tasks: [
+          { title: marked("Résumé the lease") },
+          { title: marked("Buy paint") },
+          { title: marked("Send the RESUME") },
+        ],
+      }),
+    ).record;
+    const [resume, , sendResume] = entry.tasks;
+
+    const { items } = value(await context.call(agent, "list_tasks", { named: "resume" }));
+
+    expect(items).toEqual([sendResume, resume]);
+  });
+
+  test("pages by cursor, 50 to a page, and refuses a cursor it did not give", async () => {
+    const context = newContext();
+    const titles = Array.from({ length: 51 }, (_, i) => ({ title: `Task ${i}` }));
+    const { tasks } = value(
+      await context.call(hand, "record_entry", { words: marked("Many"), tasks: titles }),
+    ).record;
+
+    const first = value(await context.call(hand, "list_tasks", {}));
+    const second = value(
+      await context.call(hand, "list_tasks", { cursor: first.next_cursor as string }),
+    );
+
+    expect(first.items).toHaveLength(50);
+    expect([...first.items, ...second.items]).toEqual(tasks.toReversed());
+    expect(second.next_cursor).toBeNull();
+    for (const cursor of ["not-a-cursor", btoa(JSON.stringify(["projects", 3]))]) {
+      const result = await context.call(hand, "list_tasks", { cursor });
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+    }
+  });
+});
+
 describe("a bare create_task", () => {
   test("does not exist: a Task is made only with an Entry named", async () => {
     const result = await newContext().callAny(hand, "create_task", { title: marked("Bare") });

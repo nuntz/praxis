@@ -3,6 +3,7 @@ import {
   type Day,
   type End,
   failure,
+  nameHolds,
   refusal,
   success,
   summarizeWords,
@@ -13,8 +14,16 @@ import {
   written,
 } from "@praxis/domain";
 import { authorColumns } from "../author.ts";
+import { newestFirst } from "../newest-first.ts";
 import type { Handlers, ToolCall } from "../registry.ts";
-import { insertTask, insertTaskEvent, readTask, taskEffect } from "../task-rows.ts";
+import {
+  insertTask,
+  insertTaskEvent,
+  readTask,
+  type TaskRow,
+  taskEffect,
+  tasksFrom,
+} from "../task-rows.ts";
 
 const NO_SUCH_TASK = "No such Task in this Context.";
 
@@ -27,6 +36,7 @@ export const taskTools: Pick<
   | "rename_task"
   | "set_task_dates"
   | "get_task"
+  | "list_tasks"
 > = {
   add_task({ caller, input, arrivedAt, today, sql }) {
     const entry = sql.exec(`SELECT 1 FROM entries WHERE id = ?`, input.entry_id).toArray();
@@ -84,6 +94,21 @@ export const taskTools: Pick<
   get_task({ input, today, sql }) {
     const task = readTask(sql, input.id, today);
     return task ? success(task) : failure("not_found", NO_SUCH_TASK);
+  },
+
+  list_tasks({ input, today, sql }) {
+    const { named } = input;
+    const page = newestFirst(
+      "tasks",
+      input.cursor,
+      (before) => sql.exec<TaskRow>(`SELECT * FROM tasks WHERE seq < ? ORDER BY seq DESC`, before),
+      named === undefined ? undefined : (row) => nameHolds(row.title, named),
+    );
+    if (!page.ok) return page;
+    return success({
+      items: tasksFrom(sql, page.value.rows, today),
+      next_cursor: page.value.next_cursor,
+    });
   },
 };
 

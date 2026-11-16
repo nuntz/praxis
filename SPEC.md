@@ -869,7 +869,7 @@ ADR 0015, 0019, 0020, 0021.
 
 **Layers.**
 
-- `bun test` for the pure domain package. Direct tests there only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, parsing an Inline Task, and what the Markdown renderer lets through: the set, the addresses and when an image loads.
+- `bun test` for the pure domain package. Direct tests there only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, parsing an Inline Task and what the person types to link something, and what the Markdown renderer lets through: the set, the addresses and when an image loads.
 - Vitest in real workerd for anything touching a Durable Object or SQL. A test can stand up several Context objects and the Deployment object.
 - No domain or tool code reads the real clock. A test sets the time and the Context's time zone and fires alarms itself.
 - CI never calls a model.

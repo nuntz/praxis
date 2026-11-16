@@ -624,6 +624,20 @@ describe("list_projects", () => {
     expect(result).toMatchObject({ ok: false, error: { code: "invalid_input" } });
   });
 
+  test("can be narrowed to the Projects whose name holds what was typed, whatever its case and accents", async () => {
+    const context = newContext();
+    const cafe = await aProject(context, marked("Café renovation"));
+    await aProject(context, marked("Garden"));
+    const cafes = await aProject(context, marked("New CAFES"));
+    value(await context.call(hand, "finish_project", { id: cafes.id }));
+
+    const named = async (input: object) =>
+      value(await context.call(connection, "list_projects", input)).items.map((each) => each.id);
+
+    expect(await named({ named: "cafe" })).toEqual([cafes.id, cafe.id]);
+    expect(await named({ named: "cafe", state: "open" })).toEqual([cafe.id]);
+  });
+
   test("pages by cursor, 50 to a page, and refuses a cursor it did not give", async () => {
     const context = newContext();
     const made = [];

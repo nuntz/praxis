@@ -25,6 +25,7 @@ describe("record_entry", () => {
       author: { kind: "person" },
       through_conversation: false,
       tasks: [],
+      links: [],
     });
     expect(value(await context.call(hand, "get_entry", { id: record.id }))).toEqual(record);
   });

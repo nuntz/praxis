@@ -1,7 +1,7 @@
 import type { Caller } from "./callers.ts";
 
 /** The kinds of record. */
-export type RecordKind = "entry" | "task" | "project";
+export type RecordKind = "entry" | "task" | "project" | "person";
 
 /**
  * What an Effect can name: a record, or the Context itself, whose settings a write can change.

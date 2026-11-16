@@ -2,6 +2,8 @@ export * from "./callers.ts";
 export * from "./day.ts";
 export * from "./effects.ts";
 export * from "./entry.ts";
+export * from "./link.ts";
+export * from "./person.ts";
 export * from "./project.ts";
 export * from "./results.ts";
 export * from "./settings.ts";

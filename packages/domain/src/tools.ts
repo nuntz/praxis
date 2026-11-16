@@ -3,6 +3,7 @@ import type { CallerKind } from "./callers.ts";
 import { day, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
 import type { Entry, Page } from "./entry.ts";
+import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
 import { failure, type ToolResult } from "./results.ts";
 import type { Settings } from "./settings.ts";
@@ -84,16 +85,55 @@ const name = z
       "A Project's name is one line, and a Project has no description: say more in an Entry.",
   });
 
+/** A Person's name: one line, kept exactly as given. Nothing else is kept about a Person. */
+const personName = z
+  .string()
+  .refine((value) => value.trim().length > 0, { message: "A Person needs a name." })
+  .refine((value) => !/[\r\n]/.test(value), {
+    message:
+      "A Person's name is one line, and nothing else is kept about them: say more in an Entry that Mentions them.",
+  });
+
 /** A record's id. */
 const id = z.string().min(1);
+
+/** A list's cursor, as the list gave it. */
+const cursor = z.string().min(1).optional();
+
+/** What was typed after `@` or `#`, to narrow a list to the names that hold it, for a picker. */
+const named = z.string().min(1).optional();
+
+/** What a link names: a Task or Project for a Reference, a Person for a Mention. */
+const linkTarget = z.strictObject({ kind: z.enum(["task", "project", "person"]), id });
+
+/** A span of the words, in UTF-16 code units as JavaScript counts a string, end not included. */
+const anchor = z
+  .strictObject({ start: z.int().min(0), end: z.int().min(1) })
+  .refine((span) => span.end > span.start, {
+    message: "An anchor's end comes after its start.",
+  });
+
+/** What a new link names: a record there is, or a new Person or Project to make in the call. */
+const newLinkTarget = z.discriminatedUnion("kind", [
+  linkTarget,
+  z.strictObject({ kind: z.literal("new_person"), name: personName }),
+  z.strictObject({ kind: z.literal("new_project"), name }),
+]);
+
+/** A link as a write takes it, kept beside the words and optionally anchored to a span of them. */
+const newLink = z.strictObject({ to: newLinkTarget, anchor: anchor.optional() });
 
 /** The Context tools. The schemas live here; the tools run inside a Context's object. */
 export const tools = {
   record_entry: {
     kind: "write",
     description:
-      "Record an Entry in the Journal. The words are kept exactly as given and never read for Tasks: each Task to make with the Entry is given in `tasks`, and has the Entry as its Origin Entry.",
-    input: writeInput({ words, tasks: z.array(z.strictObject({ title })).optional() }),
+      "Record an Entry in the Journal. The words are kept exactly as given and never read for Tasks or links: each Task to make with the Entry is given in `tasks`, and has the Entry as its Origin Entry, and each link in `links`. A link to a Task or Project is a Reference and one to a Person a Mention; it may name a new Person or Project to make, and may be anchored to a span of the words. The words are never refused for a link: one naming a record not in this Context is not kept, and an anchor past the words' end is left off. Read the Entry returned for the links kept.",
+    input: writeInput({
+      words,
+      tasks: z.array(z.strictObject({ title })).optional(),
+      links: z.array(newLink).optional(),
+    }),
     offered: toEveryWriter,
   },
   get_entry: {
@@ -107,6 +147,20 @@ export const tools = {
     description: "List the Journal's Entries, newest first, 50 to a page.",
     input: z.strictObject({ cursor: z.string().min(1).optional() }),
     offered: toEveryCaller,
+  },
+  add_link: {
+    kind: "write",
+    description:
+      "Link an Entry to a Task or Project (a Reference) or to a Person (a Mention), optionally anchored to a span of its words. The words never change, so this is never held. `to` may name a new Person or Project to make. Linking what the Entry already links, at that span or with none, changes nothing.",
+    input: writeInput({ entry_id: id, to: newLinkTarget, anchor: anchor.optional() }),
+    offered: toEveryWriter,
+  },
+  remove_link: {
+    kind: "write",
+    description:
+      "Remove the links from an Entry to a Task, Project or Person: every one, or given an anchor only the one at that span. The words never change, so this is never held, and the record itself stays.",
+    input: writeInput({ entry_id: id, to: linkTarget, anchor: anchor.optional() }),
+    offered: toEveryWriter,
   },
   add_task: {
     kind: "write",
@@ -160,6 +214,13 @@ export const tools = {
     description:
       "Get one Task by its id, with its dates, its derived state and the reason for it: the end it reached and when, or, while open, whether it is actionable, the day it is Deferred until and the day it became Overdue.",
     input: z.strictObject({ id: z.string().min(1) }),
+    offered: toEveryCaller,
+  },
+  list_tasks: {
+    kind: "read",
+    description:
+      "List the Context's Tasks, newest first, 50 to a page, open or closed, each with its derived state. Give `named` to list only those whose title holds it, whatever its case and accents.",
+    input: z.strictObject({ cursor, named }),
     offered: toEveryCaller,
   },
   move_task: {
@@ -227,11 +288,39 @@ export const tools = {
   list_projects: {
     kind: "read",
     description:
-      "List the Context's Projects, newest first, 50 to a page, each with its Tasks. Give a state to list only the open, Finished or Dropped ones.",
+      "List the Context's Projects, newest first, 50 to a page, each with its Tasks. Give a state to list only the open, Finished or Dropped ones, and `named` to list only those whose name holds it, whatever its case and accents.",
     input: z.strictObject({
-      cursor: z.string().min(1).optional(),
+      cursor,
       state: z.enum(["open", "finished", "dropped"]).optional(),
+      named,
     }),
+    offered: toEveryCaller,
+  },
+  create_person: {
+    kind: "write",
+    description:
+      "Make a Person: someone the person deals with, so Entries can Mention them. A Person has a name and nothing else: say more in an Entry that Mentions them. Two Persons may share a name, and are never taken to be the same.",
+    input: writeInput({ name: personName }),
+    offered: toEveryWriter,
+  },
+  rename_person: {
+    kind: "write",
+    description: "Change a Person's name.",
+    input: writeInput({ id, name: personName }),
+    offered: toEveryWriter,
+  },
+  get_person: {
+    kind: "read",
+    description:
+      "Get one Person by their id, with the latest Entry that Mentions them, which tells two Persons with one name apart.",
+    input: z.strictObject({ id }),
+    offered: toEveryCaller,
+  },
+  list_persons: {
+    kind: "read",
+    description:
+      "List the Context's Persons, newest first, 50 to a page, each with the latest Entry that Mentions them. Give `named` to list only those whose name holds it, whatever its case and accents.",
+    input: z.strictObject({ cursor, named }),
     offered: toEveryCaller,
   },
   get_settings: {
@@ -280,6 +369,8 @@ export type ToolOutput = {
   record_entry: Written<Entry>;
   get_entry: Entry;
   list_entries: Page<Entry>;
+  add_link: Written<Entry>;
+  remove_link: Written<Entry>;
   add_task: Written<Task>;
   finish_task: Written<Task>;
   drop_task: Written<Task>;
@@ -287,6 +378,7 @@ export type ToolOutput = {
   rename_task: Written<Task>;
   set_task_dates: Written<Task>;
   get_task: Task;
+  list_tasks: Page<Task>;
   move_task: Written<Task>;
   make_project_from_task: Written<Project>;
   create_project: Written<Project>;
@@ -297,6 +389,10 @@ export type ToolOutput = {
   reopen_project: Written<Project>;
   get_project: Project;
   list_projects: Page<Project>;
+  create_person: Written<Person>;
+  rename_person: Written<Person>;
+  get_person: Person;
+  list_persons: Page<Person>;
   get_settings: Settings;
   set_time_zone: Written<Settings>;
   list_changes: ChangesPage;

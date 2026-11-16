@@ -263,3 +263,60 @@ button.quiet {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.link-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A Mention is a tinted pill and a Reference an inset pill, told apart by shape (section 8.4). */
+.link {
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.link.mention {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.link.reference {
+  background: var(--ground);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.composer-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.link-picker {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.link-picker [role="option"] {
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.link-picker .highlighted {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.choice-detail {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
