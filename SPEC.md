@@ -156,6 +156,7 @@ ADR 0002, 0012.
 - A Project with no open Task is flagged in Attention as needing a next Task or finishing.
 - Finishing or dropping a Project drops the Tasks still open in it and ends their Recurrences, each as an Effect. Closing a Project is never refused: unlike a Task, a Project at one end is declared at the other directly, without being reopened first.
 - A Project can be reopened. The Tasks dropped with it stay Dropped.
+- A Task can join a closed Project, or be reopened in one; the Project stays at its end, and declaring an end again drops its open Tasks.
 - A Task's place in a Project is the Task's own. A Task joining, changing or leaving a Project (`move_task`) changes the Task alone, whatever state it is in, and the Project reads its Tasks.
 - `make_project_from_task` makes a Project named after the Task, unless given a name, with no Due Date, and the Task becomes its first Task with its title and Origin Entry. A Task already in a Project leaves it for the new one, since a Project holds no Project.
 
