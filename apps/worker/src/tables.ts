@@ -60,17 +60,23 @@ export function createTables(sql: SqlStorage): void {
     CREATE INDEX IF NOT EXISTS tasks_by_entry ON tasks (origin_entry, seq);
     CREATE INDEX IF NOT EXISTS tasks_by_project ON tasks (project, seq);
 
-    -- What has happened to each Task, in order: it reached an end or was reopened, or it was
-    -- Delegated to a Person or taken back. Delegated holds until the next end or taking back.
+    -- What has happened to each Task, in order: it reached an end or was reopened, it was
+    -- Delegated to a Person or taken back, or it started waiting on a Task or Project and stopped
+    -- or was released. Delegated holds until the next end or taking back, and a wait until it
+    -- stops, is released or the Task reaches an end.
     CREATE TABLE IF NOT EXISTS task_events (
       seq INTEGER PRIMARY KEY,
       task TEXT NOT NULL REFERENCES tasks (id),
       what TEXT NOT NULL,
       at INTEGER NOT NULL,
       -- The Person it was Delegated to, for a delegation only.
-      person TEXT REFERENCES persons (id)
+      person TEXT REFERENCES persons (id),
+      -- The Task or Project waited on, for a wait, its stopping or its release only.
+      on_kind TEXT,
+      on_id TEXT
     );
     CREATE INDEX IF NOT EXISTS task_events_by_task ON task_events (task, seq);
+    CREATE INDEX IF NOT EXISTS task_events_by_waited_on ON task_events (on_id);
 
     -- An Entry's References and Mentions, kept beside its words and part of the Entry (ADR 0008).
     -- An anchor keeps the text it spanned, so a span that is gone from the words reads as none.

@@ -18,6 +18,8 @@ const runsWith: Record<string, () => unknown> = {
   set_task_dates: () => ({ id: "no-such-task", due_date: "2026-12-01" }),
   delegate_task: () => ({ id: "no-such-task", person_id: "no-such-person" }),
   take_back_task: () => ({ id: "no-such-task" }),
+  wait_on: () => ({ id: "no-such-task", on: { kind: "task", id: "no-such-task" } }),
+  stop_waiting: () => ({ id: "no-such-task", on: { kind: "project", id: "no-such-project" } }),
   get_task: () => ({ id: "no-such-task" }),
   list_tasks: () => ({}),
   move_task: () => ({ id: "no-such-task", project_id: null }),

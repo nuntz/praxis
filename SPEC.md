@@ -117,10 +117,11 @@ This replaces the single ordered state decided earlier in [Sub-tasks and depende
 
 **Waiting.**
 
-- One relation, no types, no lag. A cycle is refused when the wait is made.
+- One relation, no types, no lag. A cycle is refused when the wait is made, listing each Task whose wait would close it. Only a Task waits, so a cycle runs through Tasks alone.
 - A wait is only between Tasks and Projects in one Context, never on a Person. It can cross Projects.
-- A wait ends when the thing waited on is Finished or Dropped. The released Task is an Effect of that change. When it was a drop, the Agent says so.
+- A wait ends when the thing waited on is Finished or Dropped, a Task dropped with its Project among them. The released Task is an Effect of that change, by rule. When it was a drop, the Agent says so. Waiting on something closed is refused.
 - Waiting locks nothing: a Waiting Task can be finished, and what it waited on is left untouched.
+- Only an open Task waits: its waits end when it reaches an end, and a closed Task is refused a wait until it is reopened, as for a delegation.
 
 **Delegated.**
 

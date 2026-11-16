@@ -106,6 +106,9 @@ const named = z.string().min(1).optional();
 /** What a link names: a Task or Project for a Reference, a Person for a Mention. */
 const linkTarget = z.strictObject({ kind: z.enum(["task", "project", "person"]), id });
 
+/** What a Task waits on: a Task or Project in its Context, never a Person. */
+const waitTarget = z.strictObject({ kind: z.enum(["task", "project"]), id });
+
 /** A span of the words, in UTF-16 code units as JavaScript counts a string, end not included. */
 const anchor = z
   .strictObject({ start: z.int().min(0), end: z.int().min(1) })
@@ -223,10 +226,24 @@ export const tools = {
     input: writeInput({ id: z.string().min(1) }),
     offered: toEveryWriter,
   },
+  wait_on: {
+    kind: "write",
+    description:
+      "Set a Task waiting on another Task or a Project in this Context, which can be in another Project. It is not actionable while what it waits on is open, and the wait ends by itself when that one is finished or dropped. A Task can wait on several. It never waits on a Person: delegate the Task, or wait on a Task Delegated to them. Waiting locks nothing: the Task can still be finished. Waiting on what it already waits on changes nothing. A wait that would make a cycle is refused, and so is one on something closed, or from a closed Task until it is reopened.",
+    input: writeInput({ id, on: waitTarget }),
+    offered: toEveryWriter,
+  },
+  stop_waiting: {
+    kind: "write",
+    description:
+      "Stop a Task waiting on a Task or Project. Stopping a wait the Task does not have changes nothing.",
+    input: writeInput({ id, on: waitTarget }),
+    offered: toEveryWriter,
+  },
   get_task: {
     kind: "read",
     description:
-      "Get one Task by its id, with its dates, its derived state and the reason for it: the end it reached and when, or, while open, whether it is actionable, the day it is Deferred until and the day it became Overdue.",
+      "Get one Task by its id, with its dates, its derived state and the reason for it: the end it reached and when, or, while open, whether it is actionable, what it waits on, who it is Delegated to, the day it is Deferred until and the day it became Overdue.",
     input: z.strictObject({ id: z.string().min(1) }),
     offered: toEveryCaller,
   },
@@ -393,6 +410,8 @@ export type ToolOutput = {
   set_task_dates: Written<Task>;
   delegate_task: Written<Task>;
   take_back_task: Written<Task>;
+  wait_on: Written<Task>;
+  stop_waiting: Written<Task>;
   get_task: Task;
   list_tasks: Page<Task>;
   move_task: Written<Task>;

@@ -11,10 +11,12 @@ import { personTools } from "./tools/persons.ts";
 import { projectTools } from "./tools/projects.ts";
 import { settingsTools } from "./tools/settings.ts";
 import { taskTools } from "./tools/tasks.ts";
+import { waitTools } from "./tools/waits.ts";
 
 const handlers: Handlers = {
   ...entryTools,
   ...taskTools,
+  ...waitTools,
   ...projectTools,
   ...personTools,
   ...settingsTools,

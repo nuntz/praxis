@@ -9,6 +9,7 @@ type Context = ReturnType<typeof newContext>;
 const actionable = {
   is: "open",
   actionable: true,
+  waiting: null,
   delegated: null,
   deferred: null,
   overdue: null,
@@ -421,6 +422,7 @@ describe("set_task_dates", () => {
       state: {
         is: "open",
         actionable: false,
+        waiting: null,
         delegated: null,
         deferred: { until: "2026-11-18" },
         overdue: { since: "2026-11-11" },
@@ -481,6 +483,7 @@ describe("set_task_dates", () => {
       {
         is: "open",
         actionable: false,
+        waiting: null,
         delegated: null,
         deferred: { until: "2026-11-16" },
         overdue: null,
@@ -488,6 +491,7 @@ describe("set_task_dates", () => {
       {
         is: "open",
         actionable: true,
+        waiting: null,
         delegated: null,
         deferred: null,
         overdue: { since: "2026-11-16" },

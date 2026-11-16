@@ -22,6 +22,7 @@ function delegatedTo(person: Person, since: string) {
   return {
     is: "open",
     actionable: false,
+    waiting: null,
     delegated: { to: { id: person.id, name: person.name }, since },
     deferred: null,
     overdue: null,
@@ -31,6 +32,7 @@ function delegatedTo(person: Person, since: string) {
 const actionable = {
   is: "open",
   actionable: true,
+  waiting: null,
   delegated: null,
   deferred: null,
   overdue: null,

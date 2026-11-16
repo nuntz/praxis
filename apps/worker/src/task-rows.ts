@@ -7,6 +7,8 @@ import {
   type Task,
   type TaskEvent,
   taskState,
+  type WaitedOn,
+  type WaitTarget,
 } from "@praxis/domain";
 import { type AuthorColumns, authorColumns, toAuthor } from "./author.ts";
 
@@ -27,11 +29,21 @@ type EventRow = {
   at: number;
   person: string | null;
   person_name: string | null;
+  on_kind: WaitTarget["kind"] | null;
+  on_id: string | null;
+  on_name: string | null;
 };
 
-/** A Task's events with the Person each delegation names, as they are now called. */
-const EVENTS = `SELECT e.task, e.what, e.at, e.person, p.name AS person_name
-  FROM task_events e LEFT JOIN persons p ON p.id = e.person`;
+/**
+ * A Task's events with the Person each delegation names and the Task or Project each wait names,
+ * as they are now called.
+ */
+const EVENTS = `SELECT e.task, e.what, e.at, e.person, p.name AS person_name,
+    e.on_kind, e.on_id, coalesce(t.title, pr.name) AS on_name
+  FROM task_events e
+  LEFT JOIN persons p ON p.id = e.person
+  LEFT JOIN tasks t ON e.on_kind = 'task' AND t.id = e.on_id
+  LEFT JOIN projects pr ON e.on_kind = 'project' AND pr.id = e.on_id`;
 
 /** Make a Task on an Entry that exists, and return its id. */
 export function insertTask(
@@ -58,12 +70,15 @@ export function setTaskProject(sql: SqlStorage, task: string, project: string | 
 
 /** Add one thing that happened to a Task. Its state follows from these. */
 export function insertTaskEvent(sql: SqlStorage, task: string, event: TaskEvent): void {
+  const on = "on" in event ? event.on : null;
   sql.exec(
-    `INSERT INTO task_events (task, what, at, person) VALUES (?, ?, ?, ?)`,
+    `INSERT INTO task_events (task, what, at, person, on_kind, on_id) VALUES (?, ?, ?, ?, ?, ?)`,
     task,
     event.what,
     event.at,
     event.what === "delegated" ? event.to.id : null,
+    on?.kind ?? null,
+    on?.id ?? null,
   );
 }
 
@@ -123,12 +138,7 @@ export function taskEffect(task: Task, what: Effect["what"], by: Effect["by"] = 
 
 function toTask(row: TaskRow, rows: EventRow[], today: Day): Task {
   const dates = { due_date: row.due_date, defer_date: row.defer_date };
-  const events = rows.map(
-    ({ what, at, person, person_name }): TaskEvent =>
-      what === "delegated"
-        ? { what, at, to: { id: person as string, name: person_name as string } }
-        : { what, at },
-  );
+  const events = rows.map(toEvent);
   return {
     id: row.id,
     title: row.title,
@@ -139,4 +149,25 @@ function toTask(row: TaskRow, rows: EventRow[], today: Day): Task {
     ...dates,
     state: taskState(events, dates, today),
   };
+}
+
+function toEvent(row: EventRow): TaskEvent {
+  const { what, at } = row;
+  switch (what) {
+    case "delegated":
+      return { what, at, to: { id: row.person as string, name: row.person_name as string } };
+    case "waited_on": {
+      const [id, named] = [row.on_id as string, row.on_name as string];
+      const on: WaitedOn =
+        row.on_kind === "task"
+          ? { kind: "task", id, title: named }
+          : { kind: "project", id, name: named };
+      return { what, at, on };
+    }
+    case "stopped_waiting":
+    case "released":
+      return { what, at, on: { kind: row.on_kind as WaitTarget["kind"], id: row.on_id as string } };
+    default:
+      return { what, at };
+  }
 }

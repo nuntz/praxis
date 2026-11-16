@@ -25,9 +25,10 @@ import {
   taskEffect,
   tasksFrom,
 } from "../task-rows.ts";
+import { releaseWaitsOn } from "../wait-rows.ts";
 import { NO_SUCH_PERSON } from "./persons.ts";
 
-const NO_SUCH_TASK = "No such Task in this Context.";
+export const NO_SUCH_TASK = "No such Task in this Context.";
 
 export const taskTools: Pick<
   Handlers,
@@ -149,19 +150,32 @@ function reach(
   if (!task) return failure("not_found", NO_SUCH_TASK);
   if (task.state.is === end) return success(written(task, []));
   if (task.state.is !== "open") return closedRefusal(task, task.state.is);
-  return happened(sql, task, { what: end, at: arrivedAt }, today);
+  insertTaskEvent(sql, task.id, { what: end, at: arrivedAt });
+  // Its own waits end with it; each Task waiting on it is released, by rule.
+  const released = releaseWaitsOn(sql, [{ kind: "task", id: task.id }], arrivedAt, today);
+  const closed = readTask(sql, task.id, today) as Task;
+  return success(
+    written(closed, [
+      taskEffect(closed, "changed"),
+      ...released.map((waiter) => taskEffect(waiter, "changed", "rule")),
+    ]),
+  );
+}
+
+/** An end as the glossary writes it. */
+export function endWord(end: End): "Finished" | "Dropped" {
+  return end === "finished" ? "Finished" : "Dropped";
 }
 
 /** A Task at an end is refused what only an open Task takes, and is named in the way. */
-function closedRefusal(task: Task, end: End): ToolResult<never> {
-  const at = end === "finished" ? "Finished" : "Dropped";
-  return refusal(`The Task is ${at}: reopen it first.`, [
+export function closedRefusal(task: Task, end: End): ToolResult<never> {
+  return refusal(`The Task is ${endWord(end)}: reopen it first.`, [
     { kind: "task", id: task.id, summary: summarizeWords(task.title) },
   ]);
 }
 
 /** Something happened to a Task: its state follows, and the Task is the call's one Effect. */
-function happened(
+export function happened(
   sql: SqlStorage,
   task: Task,
   event: TaskEvent,

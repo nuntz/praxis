@@ -8,6 +8,7 @@ import {
   success,
   type Task,
   type ToolResult,
+  type WaitTarget,
   type Written,
   written,
 } from "@praxis/domain";
@@ -22,8 +23,9 @@ import {
 } from "../project-rows.ts";
 import type { Handlers, ToolCall } from "../registry.ts";
 import { insertTaskEvent, readTask, setTaskProject, taskEffect } from "../task-rows.ts";
+import { releaseWaitsOn } from "../wait-rows.ts";
 
-const NO_SUCH_PROJECT = "No such Project in this Context.";
+export const NO_SUCH_PROJECT = "No such Project in this Context.";
 const NO_SUCH_TASK = "No such Task in this Context.";
 
 export const projectTools: Pick<
@@ -155,24 +157,32 @@ function declare(
   if (project.state.is === end) return success(written(project, []));
   const stillOpen = project.tasks.filter((task) => task.state.is === "open");
   for (const task of stillOpen) insertTaskEvent(sql, task.id, { what: "dropped", at: arrivedAt });
-  return declared(sql, project, { what: end, at: arrivedAt }, today, stillOpen);
+  // The Project and each Task it dropped are closed, so every wait on one of them ends.
+  const closed: WaitTarget[] = [
+    { kind: "project", id: project.id },
+    ...stillOpen.map((task) => ({ kind: "task" as const, id: task.id })),
+  ];
+  const released = releaseWaitsOn(sql, closed, arrivedAt, today);
+  return declared(sql, project, { what: end, at: arrivedAt }, today, [...stillOpen, ...released]);
 }
 
-/** Something was declared of a Project: it is the call's Effect, and each Task a rule dropped. */
+/**
+ * Something was declared of a Project: it is the call's Effect, and so is each Task a rule
+ * changed with it, as each Task is now.
+ */
 function declared(
   sql: SqlStorage,
   project: Project,
   event: ProjectEvent,
   today: Day,
-  dropped: Task[],
+  byRule: Task[],
 ): ToolResult<Written<Project>> {
   insertProjectEvent(sql, project.id, event);
   const updated = readProject(sql, project.id, today) as Project;
-  const tasks = new Map(updated.tasks.map((task) => [task.id, task]));
   return success(
     written(updated, [
       projectEffect(updated, "changed"),
-      ...dropped.map((task) => taskEffect(tasks.get(task.id) as Task, "changed", "rule")),
+      ...byRule.map((task) => taskEffect(readTask(sql, task.id, today) as Task, "changed", "rule")),
     ]),
   );
 }

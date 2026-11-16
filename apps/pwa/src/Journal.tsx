@@ -5,6 +5,7 @@ import {
   type Task,
   type TaskDates,
   utcMidnight,
+  waitedOnName,
 } from "@praxis/domain";
 import { createSignal, For, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
@@ -165,6 +166,14 @@ function TaskItem(props: {
       const result = await callTool(tool, { id: props.task.id });
       if (!result.ok) return props.onProblem(result.error.message);
       props.onTask(result.value.record);
+      // A Task reaching an end releases each Task waiting on it, by rule: show those as they
+      // now are too, until live updates (section 9.5) bring them.
+      for (const effect of result.value.effects) {
+        if (effect.kind !== "task" || effect.id === props.task.id) continue;
+        const other = await callTool("get_task", { id: effect.id });
+        if (!other.ok) return props.onProblem(other.error.message);
+        props.onTask(other.value);
+      }
     } catch (error) {
       props.onProblem(unreachableMessage(error));
     } finally {
@@ -193,6 +202,16 @@ function TaskItem(props: {
           <span class="task-mark" classList={{ overdue: open()?.overdue != null }}>
             Due {formatDay(due())}
             <Show when={open()?.overdue}>, Overdue</Show>
+          </span>
+        )}
+      </Show>
+      <Show when={open()?.waiting}>
+        {(waiting) => (
+          <span class="task-mark">
+            Waiting on{" "}
+            {waiting()
+              .map(({ on }) => waitedOnName(on))
+              .join(", ")}
           </span>
         )}
       </Show>

@@ -11,6 +11,7 @@ const at = Date.parse("2026-11-10T08:00:00.000Z");
 const actionable: TaskState = {
   is: "open",
   actionable: true,
+  waiting: null,
   delegated: null,
   deferred: null,
   overdue: null,
@@ -45,6 +46,7 @@ describe("an open Task's state", () => {
     expect(taskState([], { due_date: null, defer_date: "2026-11-16" }, today)).toEqual({
       is: "open",
       actionable: false,
+      waiting: null,
       delegated: null,
       deferred: { until: "2026-11-16" },
       overdue: null,
@@ -64,6 +66,7 @@ describe("an open Task's state", () => {
     expect(taskState([], dates, today)).toEqual({
       is: "open",
       actionable: false,
+      waiting: null,
       delegated: null,
       deferred: { until: "2026-11-20" },
       overdue: { since: "2026-11-11" },
@@ -121,6 +124,7 @@ describe("a Delegated Task's state", () => {
     expect(taskState([delegated()], noDates, today)).toEqual({
       ...actionable,
       actionable: false,
+      waiting: null,
       delegated: toAlice,
     });
   });
@@ -139,6 +143,7 @@ describe("a Delegated Task's state", () => {
     expect(taskState([delegated()], dates, today)).toEqual({
       is: "open",
       actionable: false,
+      waiting: null,
       delegated: toAlice,
       deferred: { until: "2026-11-20" },
       overdue: { since: "2026-11-11" },
@@ -160,6 +165,77 @@ describe("a Delegated Task's state", () => {
         is: end,
         at: "2026-11-10T08:00:00.001Z",
       });
+      expect(taskState([...closed, { what: "reopened", at: at + 2 }], noDates, today)).toEqual(
+        actionable,
+      );
+    },
+  );
+});
+
+describe("a Waiting Task's state", () => {
+  const permit = { kind: "task", id: "permit", title: "Get the permit" } as const;
+  const kitchen = { kind: "project", id: "kitchen", name: "Kitchen" } as const;
+  const waitedOn = (on: typeof permit | typeof kitchen, when = at): TaskEvent => ({
+    what: "waited_on",
+    at: when,
+    on,
+  });
+  const since = (when: number) => new Date(when).toISOString();
+
+  test("says what it waits on and since when, in the order waited on, and is not actionable", () => {
+    expect(taskState([waitedOn(permit), waitedOn(kitchen, at + 1)], noDates, today)).toEqual({
+      ...actionable,
+      actionable: false,
+      waiting: [
+        { on: permit, since: since(at) },
+        { on: kitchen, since: since(at + 1) },
+      ],
+    });
+  });
+
+  test.each(["stopped_waiting", "released"] as const)(
+    "a wait that ended by %s is gone, and the Task is actionable once none is left",
+    (what) => {
+      const one: TaskEvent[] = [
+        waitedOn(permit),
+        waitedOn(kitchen, at + 1),
+        { what, at: at + 2, on: { kind: "task", id: "permit" } },
+      ];
+      const none: TaskEvent[] = [
+        ...one,
+        { what, at: at + 3, on: { kind: "project", id: "kitchen" } },
+      ];
+
+      expect(taskState(one, noDates, today)).toEqual({
+        ...actionable,
+        actionable: false,
+        waiting: [{ on: kitchen, since: since(at + 1) }],
+      });
+      expect(taskState(none, noDates, today)).toEqual(actionable);
+    },
+  );
+
+  test("can be Waiting, Delegated, Deferred and Overdue at once", () => {
+    const alice = { id: "alice", name: "Alice" };
+    const events: TaskEvent[] = [waitedOn(permit), { what: "delegated", at, to: alice }];
+    const dates = { due_date: "2026-11-10", defer_date: "2026-11-20" };
+
+    expect(taskState(events, dates, today)).toEqual({
+      is: "open",
+      actionable: false,
+      waiting: [{ on: permit, since: since(at) }],
+      delegated: { to: alice, since: since(at) },
+      deferred: { until: "2026-11-20" },
+      overdue: { since: "2026-11-11" },
+    });
+  });
+
+  test.each(["finished", "dropped"] as const)(
+    "its waits end when it is %s, and reopening does not bring them back",
+    (end) => {
+      const closed: TaskEvent[] = [waitedOn(permit), { what: end, at: at + 1 }];
+
+      expect(taskState(closed, noDates, today)).toEqual({ is: end, at: since(at + 1) });
       expect(taskState([...closed, { what: "reopened", at: at + 2 }], noDates, today)).toEqual(
         actionable,
       );
