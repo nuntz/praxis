@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "bun scripts/access-stand-in.ts",
     "test": "vitest run",
-    "typecheck": "wrangler types --check >/dev/null 2>&1 || wrangler types && tsc -p . && tsc -p test"
+    "typecheck": "wrangler types --check >/dev/null 2>&1 || wrangler types && tsc -p . && tsc -p test && tsc -p scripts"
   },
   "dependencies": {
     "@praxis/domain": "workspace:*"

@@ -7,8 +7,14 @@
     "directory": "../pwa/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    // Every request goes through the Worker first, so none reaches the screen without the
+    // Access sign-in (section 7.1).
+    "run_worker_first": true
   },
+  // The Access application the Deployment sits behind: its team's domain, such as
+  // https://<team>.cloudflareaccess.com, and the application's audience tag. Neither is a secret.
+  // The setup wizard gives each Deployment its own; with none named the Worker lets nothing in.
+  "vars": { "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "" },
   "durable_objects": {
     "bindings": [
       { "name": "CONTEXT", "class_name": "ContextObject" },

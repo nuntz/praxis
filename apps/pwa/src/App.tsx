@@ -12,6 +12,7 @@ import {
   CurrentContextTools,
   callDeploymentTool,
   contextTools,
+  signInLapsed,
   unreachableMessage,
 } from "./tools.ts";
 
@@ -171,6 +172,11 @@ export function App() {
           </button>
         </Show>
       </header>
+      <Show when={signInLapsed()}>
+        <p class="problem" role="alert">
+          Your sign-in has lapsed. <a href="/">Sign in again</a> to carry on.
+        </p>
+      </Show>
       <Show when={problem()}>
         {(message) => (
           <p class="problem" role="alert">

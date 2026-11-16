@@ -99,6 +99,10 @@ button.quiet {
   color: var(--warn);
 }
 
+.problem a {
+  color: inherit;
+}
+
 /* The screen: a top bar over the peers, on the ground. */
 
 .screen {

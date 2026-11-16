@@ -1,18 +1,35 @@
-import { exports } from "cloudflare:workers";
+import { env, exports } from "cloudflare:workers";
 
 // The one test that reaches the objects the way the screen does, over HTTP, so it is the one test
-// whose calls the oracle does not see. It covers only the endpoint's own work: which object,
-// which caller, which tool, and the body. What the tools do is tested at the seam.
-import { describe, expect, test } from "vitest";
+// whose calls the oracle does not see. It covers only the endpoint's own work: the sign-in every
+// request needs, which object, which caller, which tool, and the body. What the tools do is
+// tested at the seam.
+import { beforeEach, describe, expect, test } from "vitest";
+import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
+import { praxis } from "../src/worker.ts";
+import { fakeAccess, TEST_APPLICATION, TOKEN_LIFE } from "./access-fake.ts";
+
+/** The Worker behind a fake Access, and a token Access put on the person's requests. */
+let access: Awaited<ReturnType<typeof fakeAccess>>;
+let worker: ReturnType<typeof praxis>;
+let token: string;
+
+beforeEach(async () => {
+  access = await fakeAccess(TEST_APPLICATION);
+  worker = praxis(() => ({ keySet: access.keySet, application: TEST_APPLICATION }));
+  // The Worker reads the real clock when a request arrives, so the token is signed at it.
+  token = await access.sign(Date.now());
+});
+
+/** A request as it reaches the Worker, with Access's token on it unless another is given. */
+function send(path: string, init: RequestInit = {}, signedWith: string | null = token) {
+  const headers = new Headers(init.headers);
+  if (signedWith !== null) headers.set(ACCESS_TOKEN_HEADER, signedWith);
+  return worker.fetch(new Request(`https://praxis.test${path}`, { ...init, headers }), env);
+}
 
 function post(path: string, body: string) {
-  return exports.default.fetch(
-    new Request(`https://praxis.test${path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body,
-    }),
-  );
+  return send(path, { method: "POST", headers: { "content-type": "application/json" }, body });
 }
 
 async function callTool(path: string, input: unknown) {
@@ -31,6 +48,81 @@ async function makeContext(name: string): Promise<string> {
   });
   return (made.value as { record: { id: string } }).record.id;
 }
+
+/** Every kind of request Praxis answers: the screen, its files, the tool endpoint and MCP. */
+const EVERYWHERE: [string, RequestInit][] = [
+  ["/", {}],
+  ["/index.html", {}],
+  ["/manifest.webmanifest", {}],
+  ["/a/path/the/screen/routes", {}],
+  ["/api/deployment/tools/list_contexts", { method: "POST", body: "{}" }],
+  ["/api/contexts/x/tools/list_entries", { method: "POST", body: "{}" }],
+  ["/api/other", { method: "POST", body: "{}" }],
+  ["/mcp", { method: "POST", body: "{}" }],
+  ["/mcp/an-address", { method: "POST", body: "{}" }],
+];
+
+describe("the Access sign-in every request needs", () => {
+  test("a request with no Access token is refused, wherever it is for", async () => {
+    for (const [path, init] of EVERYWHERE) {
+      expect((await send(path, init, null)).status, path).toBe(401);
+    }
+  });
+
+  test("a token Access did not sign, or that has lapsed, is refused, wherever it is for", async () => {
+    const lapsed = await access.sign(Date.now() - 2 * TOKEN_LIFE);
+    const other = await access.sign(Date.now(), { aud: ["another-application"] });
+
+    for (const signedWith of ["not-a-token", lapsed, other]) {
+      for (const [path, init] of EVERYWHERE) {
+        expect((await send(path, init, signedWith)).status, path).toBe(401);
+      }
+    }
+  });
+
+  test("a refused request reaches no tool", async () => {
+    const id = await makeContext("Home");
+
+    await send(
+      `/api/contexts/${id}/tools/record_entry`,
+      {
+        method: "POST",
+        body: JSON.stringify({ words: "Never recorded" }),
+      },
+      null,
+    );
+
+    expect(await callTool(`/api/contexts/${id}/tools/list_entries`, {})).toMatchObject({
+      value: { items: [] },
+    });
+  });
+
+  test("signed in, the request reaches what it is for", async () => {
+    expect((await send("/mcp", { method: "POST", body: "{}" })).status).toBe(404);
+    expect(await callTool("/api/deployment/tools/list_contexts", {})).toMatchObject({ ok: true });
+  });
+
+  test("when Access's keys cannot be read the request is unavailable, not signed out", async () => {
+    access.setReachable(false);
+
+    for (const [path, init] of EVERYWHERE) {
+      expect((await send(path, init)).status, path).toBe(503);
+    }
+  });
+
+  test("the Worker as deployed lets nothing in until it names its Access application", async () => {
+    // The configuration in the repo names none: the setup wizard gives each Deployment its own.
+    const response = await exports.default.fetch(
+      new Request("https://praxis.test/api/deployment/tools/list_contexts", {
+        method: "POST",
+        headers: { [ACCESS_TOKEN_HEADER]: token },
+        body: "{}",
+      }),
+    );
+
+    expect(response.status).toBe(401);
+  });
+});
 
 describe("the screen's tool endpoint", () => {
   test("the screen calls Deployment tools as the person's hand", async () => {
@@ -101,8 +193,7 @@ describe("the screen's tool endpoint", () => {
       "/api/contexts/x/tools/list_entries",
       "/api/deployment/tools/list_contexts",
     ]) {
-      const response = await exports.default.fetch(`https://praxis.test${path}`);
-      expect(response.status).toBe(405);
+      expect((await send(path)).status).toBe(405);
     }
   });
 
