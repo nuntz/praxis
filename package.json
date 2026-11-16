@@ -10,7 +10,7 @@
   "scripts": {
     "check": "biome check .",
     "ci": "biome ci . && bun run typecheck && bun run test:lint && bun run test:domain && bun run test:pwa && bun run test:worker && bun run test:e2e:twice",
-    "typecheck": "bun run --filter '*' typecheck && tsc -p lint",
+    "typecheck": "bun run --filter '*' typecheck && tsc -p lint && tsc -p e2e",
     "test:lint": "bun test ./lint",
     "check:tickets": "bun lint/tickets.ts",
     "test:domain": "bun test --cwd packages/domain",
@@ -25,6 +25,7 @@
     "@axe-core/playwright": "4.14.0",
     "@biomejs/biome": "2.6.8",
     "@playwright/test": "1.65.1",
+    "@praxis/domain": "workspace:*",
     "@types/bun": "1.4.4",
     "typescript": "7.0.2"
   }

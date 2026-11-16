@@ -12,7 +12,7 @@ const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 export const test = base.extend<{ accessible: undefined }>({
   accessible: [
     async ({ page }, use, testInfo) => {
-      await use();
+      await use(undefined);
       if (testInfo.status !== "passed") return;
       for (const colorScheme of ["light", "dark"] as const) {
         await page.emulateMedia({ colorScheme });
