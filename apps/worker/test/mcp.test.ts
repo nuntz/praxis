@@ -5,6 +5,10 @@ import { env } from "cloudflare:workers";
 // it reaches the objects over HTTP, so the oracle does not see these calls: it covers only what
 // MCP adds, which Connection is calling, what it is offered and what it is refused. What the tools
 // do is tested at the seam.
+//
+// A request Praxis serves goes through the SDK client: a 2026-07-28 request carries headers that
+// must agree with its body, and the SDK sends them. A request written by hand here is one Praxis
+// refuses before it gets that far.
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import {
   type Connection,

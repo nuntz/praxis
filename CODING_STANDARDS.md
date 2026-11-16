@@ -18,6 +18,11 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 - A refusal says whether the person can mend it (sign in again, change what they sent) or can only wait. One that only waiting mends is answered as unavailable, never as their doing.
 - A faked adapter takes the Access key set's shape: the interface in `src/`, the fake in `test/<name>-fake.ts`, and one `contract()` suite run against the fake and, given its environment variables through Vitest's `provide`, against the real service. The adapter is passed in, as `praxis(accessOf)` takes it, since the Vitest plugin cannot intercept outbound requests.
 
+## Browser journeys
+
+- A journey that acts outside the page on what a tap changed waits for that tool's answer (`page.waitForResponse`), or for something on the screen only the answer brings. A control the browser changes at the tap, such as a checkbox, proves nothing about the server.
+
 ## Decisions
 
 - A change follows the ADRs in [`docs/adr/`](docs/adr/) that touch its area. Where it departs from one, the same change amends the ADR and the spec beside it, or the departure goes to the person as a question.
+- A change that widens or narrows what a glossary term covers, such as a new kind of Effect, updates the term in [`GLOSSARY.md`](GLOSSARY.md) and the ADR stating the old scope, in the same change as `SPEC.md`.
