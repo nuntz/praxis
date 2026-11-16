@@ -29,6 +29,8 @@ const domainTables: Record<string, { kind: Effect["kind"]; id: string }> = {
   entries: { kind: "entry", id: "id" },
   tasks: { kind: "task", id: "id" },
   task_events: { kind: "task", id: "task" },
+  projects: { kind: "project", id: "id" },
+  project_events: { kind: "project", id: "project" },
   context_settings: { kind: "context", id: "id" },
 };
 

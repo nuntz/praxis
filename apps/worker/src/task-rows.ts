@@ -16,6 +16,7 @@ type TaskRow = AuthorColumns & {
   title: string;
   origin_entry: string;
   at: number;
+  project: string | null;
   due_date: string | null;
   defer_date: string | null;
 };
@@ -40,6 +41,11 @@ export function insertTask(
   return id;
 }
 
+/** Put a Task in a Project, or in none. Its place in a Project is the Task's own. */
+export function setTaskProject(sql: SqlStorage, task: string, project: string | null): void {
+  sql.exec(`UPDATE tasks SET project = ? WHERE id = ?`, project, task);
+}
+
 /** Add one thing that happened to a Task. Its state follows from these. */
 export function insertTaskEvent(sql: SqlStorage, task: string, event: TaskEvent): void {
   sql.exec(`INSERT INTO task_events (task, what, at) VALUES (?, ?, ?)`, task, event.what, event.at);
@@ -57,32 +63,48 @@ export function readTask(sql: SqlStorage, id: string, today: Day): Task | null {
 
 /** The Tasks of each of these Entries, in the order they were made, by Entry id. */
 export function tasksOf(sql: SqlStorage, entries: string[], today: Day): Map<string, Task[]> {
-  const ids = JSON.stringify(entries);
+  return tasksBy(sql, "origin_entry", entries, today, (task) => task.origin_entry);
+}
+
+/** The Tasks in each of these Projects, in the order they were made, by Project id. */
+export function tasksIn(sql: SqlStorage, projects: string[], today: Day): Map<string, Task[]> {
+  return tasksBy(sql, "project", projects, today, (task) => task.project ?? "");
+}
+
+/** The Tasks whose Origin Entry or Project is one of these ids, grouped by `key`. */
+function tasksBy(
+  sql: SqlStorage,
+  column: "origin_entry" | "project",
+  ids: string[],
+  today: Day,
+  key: (task: Task) => string,
+): Map<string, Task[]> {
+  const json = JSON.stringify(ids);
   const rows = sql
     .exec<TaskRow>(
-      `SELECT * FROM tasks WHERE origin_entry IN (SELECT value FROM json_each(?)) ORDER BY seq`,
-      ids,
+      `SELECT * FROM tasks WHERE ${column} IN (SELECT value FROM json_each(?)) ORDER BY seq`,
+      json,
     )
     .toArray();
   const events = Map.groupBy(
     sql
       .exec<EventRow>(
         `SELECT e.task, e.what, e.at FROM task_events e JOIN tasks t ON t.id = e.task
-         WHERE t.origin_entry IN (SELECT value FROM json_each(?)) ORDER BY e.seq`,
-        ids,
+         WHERE t.${column} IN (SELECT value FROM json_each(?)) ORDER BY e.seq`,
+        json,
       )
       .toArray(),
     (event) => event.task,
   );
   return Map.groupBy(
     rows.map((row) => toTask(row, events.get(row.id) ?? [], today)),
-    (task) => task.origin_entry,
+    key,
   );
 }
 
-/** The Effect of a call on a Task, with its one-line summary. */
-export function taskEffect(task: Task, what: Effect["what"]): Effect {
-  return { kind: "task", id: task.id, what, summary: summarizeWords(task.title), by: "call" };
+/** The Effect of a change to a Task, by the call or a rule, with its one-line summary. */
+export function taskEffect(task: Task, what: Effect["what"], by: Effect["by"] = "call"): Effect {
+  return { kind: "task", id: task.id, what, summary: summarizeWords(task.title), by };
 }
 
 function toTask(row: TaskRow, events: EventRow[], today: Day): Task {
@@ -93,6 +115,7 @@ function toTask(row: TaskRow, events: EventRow[], today: Day): Task {
     origin_entry: row.origin_entry,
     at: instantToIso(row.at),
     author: toAuthor(row),
+    project: row.project,
     ...dates,
     state: taskState(events, dates, today),
   };

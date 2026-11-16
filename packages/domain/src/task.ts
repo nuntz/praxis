@@ -11,6 +11,8 @@ export type Task = {
   /** When it was made, as an ISO 8601 instant. */
   at: string;
   author: Author;
+  /** The id of the Project it is in, or null. A Project is the only thing that contains Tasks. */
+  project: string | null;
   due_date: TaskDates["due_date"];
   defer_date: TaskDates["defer_date"];
   /** Derived from what has happened to it, its dates and today, with the reason (section 3.4). */

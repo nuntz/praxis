@@ -3,6 +3,7 @@ import type { CallerKind } from "./callers.ts";
 import { day, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
 import type { Entry, Page } from "./entry.ts";
+import type { Project } from "./project.ts";
 import { failure, type ToolResult } from "./results.ts";
 import type { Settings } from "./settings.ts";
 import type { Task } from "./task.ts";
@@ -73,6 +74,18 @@ const title = z
   .refine((value) => !/[\r\n]/.test(value), {
     message: "A Task's title is one line: say more in an Entry.",
   });
+
+/** A Project's name: one line, kept exactly as given. A Project has no description. */
+const name = z
+  .string()
+  .refine((value) => value.trim().length > 0, { message: "A Project needs a name." })
+  .refine((value) => !/[\r\n]/.test(value), {
+    message:
+      "A Project's name is one line, and a Project has no description: say more in an Entry.",
+  });
+
+/** A record's id. */
+const id = z.string().min(1);
 
 /** The Context tools. The schemas live here; the tools run inside a Context's object. */
 export const tools = {
@@ -149,6 +162,78 @@ export const tools = {
     input: z.strictObject({ id: z.string().min(1) }),
     offered: toEveryCaller,
   },
+  move_task: {
+    kind: "write",
+    description:
+      "Put a Task in a Project, move it to another, or take it out of any with a project_id of null. A Task is in one Project at most, and a Project is the only thing that contains Tasks.",
+    input: writeInput({ id, project_id: id.nullable() }),
+    offered: toEveryWriter,
+  },
+  make_project_from_task: {
+    kind: "write",
+    description:
+      "Turn a Task that turns out to have parts into a Project, in one call: a Project is made, named after the Task unless a name is given, and the Task becomes its first Task, keeping its Origin Entry. A Task has no parts: add the others to the Project.",
+    input: writeInput({ id, name: name.optional() }),
+    offered: toEveryWriter,
+  },
+  create_project: {
+    kind: "write",
+    description:
+      "Make a Project: work made of several Tasks. It has a name and, optionally, a Due Date written YYYY-MM-DD, which says nothing about its Tasks'. It has no description: say more in an Entry. Two Projects may share a name.",
+    input: writeInput({ name, due_date: day.optional() }),
+    offered: toEveryWriter,
+  },
+  rename_project: {
+    kind: "write",
+    description: "Change a Project's name.",
+    input: writeInput({ id, name }),
+    offered: toEveryWriter,
+  },
+  set_project_due_date: {
+    kind: "write",
+    description:
+      "Set a Project's Due Date, a day written YYYY-MM-DD, or clear it with null. It says nothing about its Tasks' Due Dates. Resolve \"next Friday\" with get_settings first. An open Project is Overdue once its Due Date has passed.",
+    input: writeInput({ id, due_date: day.nullable() }),
+    offered: toEveryWriter,
+  },
+  finish_project: {
+    kind: "write",
+    description:
+      "Declare a Project Finished. It is never Finished by its Tasks running out, only by this. The Tasks still open in it are Dropped. It is never refused.",
+    input: writeInput({ id }),
+    offered: toEveryWriter,
+  },
+  drop_project: {
+    kind: "write",
+    description:
+      "Drop a Project: the person decided not to do it. It stays where it was; dropping is not deleting. The Tasks still open in it are Dropped. It is never refused.",
+    input: writeInput({ id }),
+    offered: toEveryWriter,
+  },
+  reopen_project: {
+    kind: "write",
+    description:
+      "Reopen a Finished or Dropped Project, so it is open again. The Tasks dropped with it stay Dropped: reopen each one wanted.",
+    input: writeInput({ id }),
+    offered: toEveryWriter,
+  },
+  get_project: {
+    kind: "read",
+    description:
+      "Get one Project by its id, with its Due Date, its state (open, perhaps Overdue, or the end declared and when) and its Tasks, each with its derived state.",
+    input: z.strictObject({ id }),
+    offered: toEveryCaller,
+  },
+  list_projects: {
+    kind: "read",
+    description:
+      "List the Context's Projects, newest first, 50 to a page, each with its Tasks. Give a state to list only the open, Finished or Dropped ones.",
+    input: z.strictObject({
+      cursor: z.string().min(1).optional(),
+      state: z.enum(["open", "finished", "dropped"]).optional(),
+    }),
+    offered: toEveryCaller,
+  },
   get_settings: {
     kind: "read",
     description:
@@ -202,6 +287,16 @@ export type ToolOutput = {
   rename_task: Written<Task>;
   set_task_dates: Written<Task>;
   get_task: Task;
+  move_task: Written<Task>;
+  make_project_from_task: Written<Project>;
+  create_project: Written<Project>;
+  rename_project: Written<Project>;
+  set_project_due_date: Written<Project>;
+  finish_project: Written<Project>;
+  drop_project: Written<Project>;
+  reopen_project: Written<Project>;
+  get_project: Project;
+  list_projects: Page<Project>;
   get_settings: Settings;
   set_time_zone: Written<Settings>;
   list_changes: ChangesPage;

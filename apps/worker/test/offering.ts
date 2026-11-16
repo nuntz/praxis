@@ -19,6 +19,18 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   rename_task: [   "yes", "yes", "no",  "yes",      "no"  ],
   set_task_dates: ["yes", "yes", "no",  "yes",      "no"  ],
   get_task: [      "yes", "yes", "yes", "yes",      "yes" ],
+  move_task: [     "yes", "yes", "no",  "yes",      "no"  ],
+  make_project_from_task: [
+                   "yes", "yes", "no",  "yes",      "no"  ],
+  create_project: ["yes", "yes", "no",  "yes",      "no"  ],
+  rename_project: ["yes", "yes", "no",  "yes",      "no"  ],
+  set_project_due_date: [
+                   "yes", "yes", "no",  "yes",      "no"  ],
+  finish_project: ["yes", "yes", "no",  "yes",      "no"  ],
+  drop_project: [  "yes", "yes", "no",  "yes",      "no"  ],
+  reopen_project: ["yes", "yes", "no",  "yes",      "no"  ],
+  get_project: [   "yes", "yes", "yes", "yes",      "yes" ],
+  list_projects: [ "yes", "yes", "yes", "yes",      "yes" ],
   get_settings: [  "yes", "yes", "yes", "yes",      "yes" ],
   set_time_zone: [ "yes", "no",  "no",  "no",       "no"  ],
   list_changes: [  "yes", "yes", "yes", "yes",      "yes" ],

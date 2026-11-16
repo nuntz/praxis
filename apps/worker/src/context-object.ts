@@ -7,10 +7,17 @@ import { makeContext, seedSettings } from "./settings.ts";
 import { createTables } from "./tables.ts";
 import { changeTools } from "./tools/changes.ts";
 import { entryTools } from "./tools/entries.ts";
+import { projectTools } from "./tools/projects.ts";
 import { settingsTools } from "./tools/settings.ts";
 import { taskTools } from "./tools/tasks.ts";
 
-const handlers: Handlers = { ...entryTools, ...taskTools, ...settingsTools, ...changeTools };
+const handlers: Handlers = {
+  ...entryTools,
+  ...taskTools,
+  ...projectTools,
+  ...settingsTools,
+  ...changeTools,
+};
 
 /** How long the alarm sleeps between wakes while it has something to do. */
 const ALARM_GAP = 24 * 60 * 60 * 1000;

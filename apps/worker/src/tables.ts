@@ -15,6 +15,24 @@ export function createTables(sql: SqlStorage): void {
     );
     CREATE INDEX IF NOT EXISTS entries_by_time ON entries (at, seq);
 
+    -- A Project contains Tasks. Its state is not a column: it is derived from what was declared.
+    CREATE TABLE IF NOT EXISTS projects (
+      seq INTEGER PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      due_date TEXT
+    );
+
+    -- What was declared of each Project, in order: it reached an end or was reopened.
+    CREATE TABLE IF NOT EXISTS project_events (
+      seq INTEGER PRIMARY KEY,
+      project TEXT NOT NULL REFERENCES projects (id),
+      what TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS project_events_by_project ON project_events (project, seq);
+
     -- A Task hangs off its Origin Entry. Its state is not a column: it is derived from its events.
     CREATE TABLE IF NOT EXISTS tasks (
       seq INTEGER PRIMARY KEY,
@@ -24,11 +42,15 @@ export function createTables(sql: SqlStorage): void {
       at INTEGER NOT NULL,
       author_kind TEXT NOT NULL,
       author_name TEXT,
+      -- The Project it is in, if any. Membership is the Task's, so a Task joining or leaving one
+      -- changes the Task alone.
+      project TEXT REFERENCES projects (id),
       -- Days as YYYY-MM-DD, with no time of day, so no time zone moves them.
       due_date TEXT,
       defer_date TEXT
     );
     CREATE INDEX IF NOT EXISTS tasks_by_entry ON tasks (origin_entry, seq);
+    CREATE INDEX IF NOT EXISTS tasks_by_project ON tasks (project, seq);
 
     -- What has happened to each Task, in order: it reached an end or was reopened.
     CREATE TABLE IF NOT EXISTS task_events (
