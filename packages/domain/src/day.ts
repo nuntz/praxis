@@ -55,6 +55,11 @@ export function addDays(from: Day, days: number): Day {
   return new Date(utcMidnight(from, days)).toISOString().slice(0, 10);
 }
 
+/** Days from one day to another by the calendar, negative when it comes before. */
+export function daysBetween(from: Day, to: Day): number {
+  return Math.round((utcMidnight(to) - utcMidnight(from)) / (24 * 60 * 60 * 1000));
+}
+
 /**
  * Midnight in UTC at the start of a day, `days` on, in milliseconds since the epoch. A day has no
  * time zone of its own: this only lets the calendar and a formatter in UTC read it.

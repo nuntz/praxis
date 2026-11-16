@@ -139,11 +139,12 @@ ADR 0011.
 - The next Occurrence is made when the current one is Finished or Dropped, as an Effect of that change. The clock never makes one.
 - The rule is one of two kinds:
   - **A schedule**: every N days; every N weeks on chosen weekdays; every N months on a day of the month or its last day; every N years. No nth weekday, end date, count or second rule.
-  - **An interval** counted from the closing day.
-- What the rule sets is the next Occurrence's Due Date. For a schedule: the first date on it after both the current Due Date and the closing day. A day the month lacks falls on that month's last day. For an interval: the closing day plus the interval.
-- A Task with a Recurrence must have a Due Date.
-- The next Occurrence carries the title, the Project, the rule, the delegation, the Origin Entry and the gap in days between its Defer Date and its Due Date. Waits and References stay with the Occurrence they were made on.
-- Changing the rule applies from the next Occurrence. Moving the open Occurrence's Due Date changes that Occurrence only.
+  - **An interval** counted from the closing day: N days, weeks, months or years.
+- What the rule sets is the next Occurrence's Due Date. For a schedule: the first date on it after both the current Due Date and the closing day. A day the month lacks falls on that month's last day. For an interval: the closing day plus the interval. The closing day is the day the Task reached its end, in the Context's time zone.
+- A schedule counts from the Due Date the Task had when the rule was set, and the Task reads it with the rule: every N days from that day, every N weeks from its week (weeks run Monday to Sunday), every N months from its month, every N years on its day and month. Setting the rule a Task already has changes nothing and keeps that day.
+- A Task with a Recurrence must have a Due Date: `set_recurrence` on a Task with none is refused, and so is clearing the Due Date of one that has a Recurrence. Only an open Task takes a Recurrence: a closed one is refused until it is reopened.
+- The next Occurrence carries the title, the Author, the Project, the rule, the delegation, the Origin Entry and the gap in days between its Defer Date and its Due Date. The delegation runs from the closing. Waits and References stay with the Occurrence they were made on, and the Occurrence closed becomes a plain Task. Made by rule, it is an Effect of the change that closed the one before.
+- Changing the rule applies from the next Occurrence. Moving the open Occurrence's Due Date changes that Occurrence only, since the schedule still counts from its own day.
 - Dropping an Occurrence still makes the next one. Ending a Recurrence is removing the rule from the open Occurrence.
 - Reopening an earlier Occurrence gives a plain Task.
 - Future Occurrences do not exist until their turn. A view of the weeks ahead works them out from the rule.

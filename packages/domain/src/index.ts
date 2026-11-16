@@ -5,6 +5,7 @@ export * from "./entry.ts";
 export * from "./link.ts";
 export * from "./person.ts";
 export * from "./project.ts";
+export * from "./recurrence.ts";
 export * from "./results.ts";
 export * from "./settings.ts";
 export * from "./task.ts";

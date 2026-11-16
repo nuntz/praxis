@@ -9,6 +9,7 @@ import { changeTools } from "./tools/changes.ts";
 import { entryTools } from "./tools/entries.ts";
 import { personTools } from "./tools/persons.ts";
 import { projectTools } from "./tools/projects.ts";
+import { recurrenceTools } from "./tools/recurrences.ts";
 import { settingsTools } from "./tools/settings.ts";
 import { taskTools } from "./tools/tasks.ts";
 import { waitTools } from "./tools/waits.ts";
@@ -17,6 +18,7 @@ const handlers: Handlers = {
   ...entryTools,
   ...taskTools,
   ...waitTools,
+  ...recurrenceTools,
   ...projectTools,
   ...personTools,
   ...settingsTools,

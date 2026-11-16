@@ -2,6 +2,7 @@ import type { Author } from "./callers.ts";
 import { addDays, type Day } from "./day.ts";
 import { instantToIso } from "./entry.ts";
 import type { Person } from "./person.ts";
+import type { Recurrence } from "./recurrence.ts";
 
 /** A Person as a Task names them: their id, and their name as it is now. */
 type PersonNamed = Pick<Person, "id" | "name">;
@@ -27,6 +28,11 @@ export type Task = {
   project: string | null;
   due_date: TaskDates["due_date"];
   defer_date: TaskDates["defer_date"];
+  /**
+   * The rule that makes the next Occurrence when this one is Finished or Dropped, or null. Only
+   * the open Occurrence holds it: closing it moves the rule on to the next (section 3.5).
+   */
+  recurrence: Recurrence | null;
   /** Derived from what has happened to it, its dates and today, with the reason (section 3.4). */
   state: TaskState;
 };

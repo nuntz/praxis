@@ -15,6 +15,7 @@ import {
 } from "@praxis/domain";
 import { authorColumns } from "../author.ts";
 import { newestFirst } from "../newest-first.ts";
+import { makeNextOccurrence } from "../occurrence-rows.ts";
 import { readPerson } from "../person-rows.ts";
 import type { Handlers, ToolCall } from "../registry.ts";
 import {
@@ -91,6 +92,13 @@ export const taskTools: Pick<
     const due = input.due_date === undefined ? task.due_date : input.due_date;
     const defer = input.defer_date === undefined ? task.defer_date : input.defer_date;
     if (due === task.due_date && defer === task.defer_date) return success(written(task, []));
+    // What a Recurrence sets is the next Due Date, so a recurring Task keeps one.
+    if (due === null && task.recurrence !== null) {
+      return refusal(
+        "A Task with a Recurrence must have a Due Date: remove its Recurrence first.",
+        [{ kind: "task", id: task.id, summary: summarizeWords(task.title) }],
+      );
+    }
     sql.exec(`UPDATE tasks SET due_date = ?, defer_date = ? WHERE id = ?`, due, defer, task.id);
     const dated = readTask(sql, task.id, today) as Task;
     return success(written(dated, [taskEffect(dated, "changed")]));
@@ -151,12 +159,15 @@ function reach(
   if (task.state.is === end) return success(written(task, []));
   if (task.state.is !== "open") return closedRefusal(task, task.state.is);
   insertTaskEvent(sql, task.id, { what: end, at: arrivedAt });
+  // A recurring Task's rule makes its next Occurrence, whichever end it reached.
+  const next = makeNextOccurrence(sql, task, arrivedAt, today);
   // Its own waits end with it; each Task waiting on it is released, by rule.
   const released = releaseWaitsOn(sql, [{ kind: "task", id: task.id }], arrivedAt, today);
   const closed = readTask(sql, task.id, today) as Task;
   return success(
     written(closed, [
       taskEffect(closed, "changed"),
+      ...(next ? [taskEffect(next, "made", "rule")] : []),
       ...released.map((waiter) => taskEffect(waiter, "changed", "rule")),
     ]),
   );

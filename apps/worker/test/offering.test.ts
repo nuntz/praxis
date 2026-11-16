@@ -16,6 +16,8 @@ const runsWith: Record<string, () => unknown> = {
   reopen_task: () => ({ id: "no-such-task" }),
   rename_task: () => ({ id: "no-such-task", title: marked("Offered") }),
   set_task_dates: () => ({ id: "no-such-task", due_date: "2026-12-01" }),
+  set_recurrence: () => ({ id: "no-such-task", recurrence: { kind: "days", every: 1 } }),
+  remove_recurrence: () => ({ id: "no-such-task" }),
   delegate_task: () => ({ id: "no-such-task", person_id: "no-such-person" }),
   take_back_task: () => ({ id: "no-such-task" }),
   wait_on: () => ({ id: "no-such-task", on: { kind: "task", id: "no-such-task" } }),

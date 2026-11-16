@@ -38,6 +38,7 @@ describe("record_entry's Tasks", () => {
       project: null,
       due_date: null,
       defer_date: null,
+      recurrence: null,
       state: actionable,
     });
     expect(entry.words).toBe(words);
@@ -137,6 +138,7 @@ describe("add_task", () => {
       project: null,
       due_date: null,
       defer_date: null,
+      recurrence: null,
       state: actionable,
     });
     expect(result.effects).toEqual([

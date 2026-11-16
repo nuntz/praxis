@@ -22,7 +22,13 @@ import {
   readProject,
 } from "../project-rows.ts";
 import type { Handlers, ToolCall } from "../registry.ts";
-import { insertTaskEvent, readTask, setTaskProject, taskEffect } from "../task-rows.ts";
+import {
+  insertTaskEvent,
+  readTask,
+  setRecurrence,
+  setTaskProject,
+  taskEffect,
+} from "../task-rows.ts";
 import { releaseWaitsOn } from "../wait-rows.ts";
 
 export const NO_SUCH_PROJECT = "No such Project in this Context.";
@@ -156,7 +162,11 @@ function declare(
   if (!project) return failure("not_found", NO_SUCH_PROJECT);
   if (project.state.is === end) return success(written(project, []));
   const stillOpen = project.tasks.filter((task) => task.state.is === "open");
-  for (const task of stillOpen) insertTaskEvent(sql, task.id, { what: "dropped", at: arrivedAt });
+  // A Task dropped with its Project makes no next Occurrence: its Recurrence ends with it.
+  for (const task of stillOpen) {
+    insertTaskEvent(sql, task.id, { what: "dropped", at: arrivedAt });
+    if (task.recurrence !== null) setRecurrence(sql, task.id, null);
+  }
   // The Project and each Task it dropped are closed, so every wait on one of them ends.
   const closed: WaitTarget[] = [
     { kind: "project", id: project.id },

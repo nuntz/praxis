@@ -55,7 +55,9 @@ export function createTables(sql: SqlStorage): void {
       project TEXT REFERENCES projects (id),
       -- Days as YYYY-MM-DD, with no time of day, so no time zone moves them.
       due_date TEXT,
-      defer_date TEXT
+      defer_date TEXT,
+      -- Its Recurrence as JSON, held by the open Occurrence only: closing it moves the rule on.
+      recurrence TEXT
     );
     CREATE INDEX IF NOT EXISTS tasks_by_entry ON tasks (origin_entry, seq);
     CREATE INDEX IF NOT EXISTS tasks_by_project ON tasks (project, seq);

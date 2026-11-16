@@ -48,15 +48,17 @@ export function Journal(props: { timeZone: string }) {
 
   onMount(() => loadPage());
 
-  /** Show a Task as a write returned it, on the Entry it hangs off. */
+  /**
+   * Show a Task as a write returned it, on the Entry it hangs off: in its place, or after the
+   * others when a rule made it, as a Recurrence makes the next Occurrence on the same Entry.
+   */
   function showTask(task: Task) {
     setProblem(null);
-    setEntries(
-      (entry) => entry.id === task.origin_entry,
-      "tasks",
-      (each) => each.id === task.id,
-      task,
-    );
+    const onEntry = (entry: Entry) => entry.id === task.origin_entry;
+    const shown = entries.find(onEntry)?.tasks.some((each) => each.id === task.id);
+    // Patched in place, so what is open on it stays open.
+    if (shown) setEntries(onEntry, "tasks", (each) => each.id === task.id, task);
+    else setEntries(onEntry, "tasks", (tasks) => [...tasks, task]);
   }
 
   return (
@@ -166,8 +168,8 @@ function TaskItem(props: {
       const result = await callTool(tool, { id: props.task.id });
       if (!result.ok) return props.onProblem(result.error.message);
       props.onTask(result.value.record);
-      // A Task reaching an end releases each Task waiting on it, by rule: show those as they
-      // now are too, until live updates (section 9.5) bring them.
+      // A Task reaching an end releases each Task waiting on it and makes its next Occurrence,
+      // by rule: show those as they now are too, until live updates (section 9.5) bring them.
       for (const effect of result.value.effects) {
         if (effect.kind !== "task" || effect.id === props.task.id) continue;
         const other = await callTool("get_task", { id: effect.id });
@@ -204,6 +206,9 @@ function TaskItem(props: {
             <Show when={open()?.overdue}>, Overdue</Show>
           </span>
         )}
+      </Show>
+      <Show when={props.task.recurrence}>
+        <span class="task-mark">Recurring</span>
       </Show>
       <Show when={open()?.waiting}>
         {(waiting) => (

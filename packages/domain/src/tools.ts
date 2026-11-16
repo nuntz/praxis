@@ -5,6 +5,7 @@ import type { ChangesPage, Written } from "./effects.ts";
 import type { Entry, Page } from "./entry.ts";
 import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
+import { newRecurrence } from "./recurrence.ts";
 import { failure, type ToolResult } from "./results.ts";
 import type { Settings } from "./settings.ts";
 import type { Task } from "./task.ts";
@@ -212,6 +213,20 @@ export const tools = {
     }),
     offered: toEveryWriter,
   },
+  set_recurrence: {
+    kind: "write",
+    description:
+      'Put a Recurrence on a Task, or change the one it has: when the Task is finished or dropped, the next Occurrence is made by rule, a new Task with the same title, Project, Recurrence, delegation and Origin Entry, and its Defer Date as many days before its Due Date as this one\'s. The rule sets the next Due Date. A schedule is every N days, every N weeks on chosen weekdays, every N months on a day of the month or the last day ("last"), or every N years, and the next Due Date is the first day on it after both the current Due Date and the day the Task was closed; it counts from the Task\'s Due Date now, so every 2 weeks runs from this week. A day the month lacks falls on its last day. An interval ("interval") is counted from the day the Task was closed. The Task must have a Due Date and be open. A change applies from the next Occurrence: this one\'s Due Date stays. Setting the rule it has changes nothing.',
+    input: writeInput({ id, recurrence: newRecurrence }),
+    offered: toEveryWriter,
+  },
+  remove_recurrence: {
+    kind: "write",
+    description:
+      "End a Task's Recurrence: closing it makes no next Occurrence. Give the open Occurrence, which is the one holding the rule. Its Due Date stays. Removing it from a Task with none changes nothing.",
+    input: writeInput({ id }),
+    offered: toEveryWriter,
+  },
   delegate_task: {
     kind: "write",
     description:
@@ -408,6 +423,8 @@ export type ToolOutput = {
   reopen_task: Written<Task>;
   rename_task: Written<Task>;
   set_task_dates: Written<Task>;
+  set_recurrence: Written<Task>;
+  remove_recurrence: Written<Task>;
   delegate_task: Written<Task>;
   take_back_task: Written<Task>;
   wait_on: Written<Task>;

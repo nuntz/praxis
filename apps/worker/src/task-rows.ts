@@ -3,8 +3,10 @@ import {
   type Day,
   type Effect,
   instantToIso,
+  type Recurrence,
   summarizeWords,
   type Task,
+  type TaskDates,
   type TaskEvent,
   taskState,
   type WaitedOn,
@@ -21,6 +23,7 @@ export type TaskRow = AuthorColumns & {
   project: string | null;
   due_date: string | null;
   defer_date: string | null;
+  recurrence: string | null;
 };
 
 type EventRow = {
@@ -45,20 +48,37 @@ const EVENTS = `SELECT e.task, e.what, e.at, e.person, p.name AS person_name,
   LEFT JOIN tasks t ON e.on_kind = 'task' AND t.id = e.on_id
   LEFT JOIN projects pr ON e.on_kind = 'project' AND pr.id = e.on_id`;
 
-/** Make a Task on an Entry that exists, and return its id. */
+/**
+ * Make a Task on an Entry that exists, and return its id. A new Task is in no Project, has no
+ * dates and no Recurrence, unless it is an Occurrence carrying them on.
+ */
 export function insertTask(
   sql: SqlStorage,
-  task: { title: string; originEntry: string; at: number; author: Author },
+  task: {
+    title: string;
+    originEntry: string;
+    at: number;
+    author: Author;
+    project?: string | null;
+    dates?: TaskDates;
+    recurrence?: Recurrence | null;
+  },
 ): string {
   const id = crypto.randomUUID();
   sql.exec(
-    `INSERT INTO tasks (id, title, origin_entry, at, author_kind, author_name)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks
+       (id, title, origin_entry, at, author_kind, author_name, project, due_date, defer_date,
+        recurrence)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     task.title,
     task.originEntry,
     task.at,
     ...authorColumns(task.author),
+    task.project ?? null,
+    task.dates?.due_date ?? null,
+    task.dates?.defer_date ?? null,
+    task.recurrence ? JSON.stringify(task.recurrence) : null,
   );
   return id;
 }
@@ -66,6 +86,15 @@ export function insertTask(
 /** Put a Task in a Project, or in none. Its place in a Project is the Task's own. */
 export function setTaskProject(sql: SqlStorage, task: string, project: string | null): void {
   sql.exec(`UPDATE tasks SET project = ? WHERE id = ?`, project, task);
+}
+
+/** Put a Recurrence on a Task, or take it off with null. */
+export function setRecurrence(sql: SqlStorage, task: string, recurrence: Recurrence | null): void {
+  sql.exec(
+    `UPDATE tasks SET recurrence = ? WHERE id = ?`,
+    recurrence === null ? null : JSON.stringify(recurrence),
+    task,
+  );
 }
 
 /** Add one thing that happened to a Task. Its state follows from these. */
@@ -147,6 +176,7 @@ function toTask(row: TaskRow, rows: EventRow[], today: Day): Task {
     author: toAuthor(row),
     project: row.project,
     ...dates,
+    recurrence: row.recurrence === null ? null : (JSON.parse(row.recurrence) as Recurrence),
     state: taskState(events, dates, today),
   };
 }
