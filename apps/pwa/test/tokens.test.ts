@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ACCENTS as DOMAIN_ACCENTS } from "@praxis/domain";
 import { ACCENTS, type ColorToken, colors, type Theme } from "../src/design/tokens.ts";
 
 // Every text pairing the design system names, in light and in dark, is at least 4.5:1 (WCAG 2.2
@@ -44,4 +45,10 @@ test("a known pairing measures as WCAG gives it", () => {
   // Black on white is 21:1 and a colour on itself 1:1, by the formula's own ends.
   expect(contrast("#000000", "#FFFFFF")).toBeCloseTo(21);
   expect(contrast("#2B55C4", "#2B55C4")).toBe(1);
+});
+
+describe("the accents", () => {
+  test("are the set the Deployment tools take", () => {
+    expect([...ACCENTS]).toEqual([...DOMAIN_ACCENTS]);
+  });
 });

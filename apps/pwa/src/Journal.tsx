@@ -11,7 +11,7 @@ import { createSignal, For, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Composer } from "./Composer.tsx";
 import { Peer } from "./design/Peer.tsx";
-import { callTool, unreachableMessage } from "./tools.ts";
+import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /** A day as the Device's locale writes it. A day has no time zone of its own. */
 const dayFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" });
@@ -25,6 +25,7 @@ function formatDay(day: Day): string {
  * Entry's time is shown in the Context's time zone, so the Journal's days agree with today.
  */
 export function Journal(props: { timeZone: string; contextName: string | undefined }) {
+  const callTool = useCallTool();
   const timeFormat = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -156,6 +157,7 @@ function TaskItem(props: {
   onTask: (task: Task) => void;
   onProblem: (message: string) => void;
 }) {
+  const callTool = useCallTool();
   const [sending, setSending] = createSignal(false);
   const [editingDates, setEditingDates] = createSignal(false);
   const finished = () => props.task.state.is === "finished";
@@ -248,6 +250,7 @@ function TaskDatesEditor(props: {
   onTask: (task: Task) => void;
   onProblem: (message: string) => void;
 }) {
+  const callTool = useCallTool();
   async function setDate(field: keyof TaskDates, input: HTMLInputElement) {
     try {
       const result = await callTool("set_task_dates", {

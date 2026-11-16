@@ -52,8 +52,8 @@ const toHandOnly: Record<CallerKind, Offer> = {
  */
 const key = z.string().min(1).max(200).optional();
 
-/** A write's input: its own fields and the key. */
-function writeInput<S extends z.ZodRawShape>(shape: S) {
+/** A write's input: its own fields and the key. Deployment tools' writes take it too. */
+export function writeInput<S extends z.ZodRawShape>(shape: S) {
   return z.strictObject({ ...shape, key });
 }
 
@@ -450,12 +450,16 @@ export type ToolOutput = {
   list_changes: ChangesPage;
 };
 
-export function parseToolInput<N extends ToolName>(
-  name: N,
-  input: unknown,
-): { ok: true; input: ToolInput<N> } | Extract<ToolResult<never>, { ok: false }> {
-  const parsed = tools[name].input.safeParse(input);
-  if (parsed.success) return { ok: true, input: parsed.data as ToolInput<N> };
+/** A tool's input checked against its schema, or the `invalid_input` saying what is wrong. */
+export type Parsed<I> = { ok: true; input: I } | Extract<ToolResult<never>, { ok: false }>;
+
+export function parseInput<I>(schema: z.ZodType, input: unknown): Parsed<I> {
+  const parsed = schema.safeParse(input);
+  if (parsed.success) return { ok: true, input: parsed.data as I };
   const result = failure("invalid_input", z.prettifyError(parsed.error));
   return result as Extract<ToolResult<never>, { ok: false }>;
+}
+
+export function parseToolInput<N extends ToolName>(name: N, input: unknown): Parsed<ToolInput<N>> {
+  return parseInput(tools[name].input, input);
 }

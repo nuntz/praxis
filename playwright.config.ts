@@ -10,15 +10,26 @@ export default defineConfig({
   // Each Device is in a time zone of its own, and neither is UTC, so the journey that sets the
   // Context to UTC and switches it to its Device's zone finds the two different.
   projects: [
+    // The first Context, which the journeys that make none of their own share.
+    {
+      name: "setup",
+      testMatch: /\.setup\.ts$/,
+      use: { ...devices["Desktop Chrome"], timezoneId: "Pacific/Chatham" },
+    },
     {
       name: "desktop",
+      dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1280, height: 800 },
         timezoneId: "Pacific/Chatham",
       },
     },
-    { name: "phone", use: { ...devices["Pixel 7"], timezoneId: "America/Lima" } },
+    {
+      name: "phone",
+      dependencies: ["setup"],
+      use: { ...devices["Pixel 7"], timezoneId: "America/Lima" },
+    },
   ],
   // The built PWA served by the real Worker, on a Journal that starts empty each run.
   webServer: {

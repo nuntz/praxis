@@ -139,15 +139,72 @@ button.quiet {
   color: var(--surface);
 }
 
+/* The Context switcher: the current Context in its accent, opening the list of the others. */
+.switcher {
+  position: relative;
+  min-width: 0;
+}
+
 .context {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
   height: 40px;
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-3) 0 var(--space-4);
   border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--on-accent);
+  font: var(--type-body);
   font-weight: 600;
+}
+
+.context-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-list {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - 2 * var(--space-4)));
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  list-style: none;
+}
+
+.context-choice {
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0 var(--space-3);
+  background: none;
+  color: var(--ink);
+  font: var(--type-body);
+  text-align: left;
+}
+
+.context-choice[aria-current="true"] {
+  background: var(--inset);
+  font-weight: 600;
+}
+
+/* A Context's accent as a dot, always beside its name, never alone. */
+.swatch {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
 }
 
 .top-bar-fill {
@@ -172,6 +229,95 @@ button.quiet {
 
 .settings .column-heading {
   font: var(--type-column-title);
+}
+
+/* Settings open above the peers: the current Context's, then the Deployment's Contexts. */
+.settings-panel {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--panel-gap);
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+
+.settings-panel .settings {
+  flex: 1 1 320px;
+}
+
+.settings input,
+.settings select,
+.first-context input,
+.first-context select {
+  min-height: 40px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.context-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.context-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.context-rename {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.retired {
+  color: var(--muted);
+  font: var(--type-label);
+}
+
+/* The fields side by side where they fit, the button after them. */
+.new-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.new-context h3,
+.new-context .problem {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.new-context h3 {
+  font: var(--type-label);
+}
+
+.new-context label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* A Deployment with no Context yet: only the form that makes the first. */
+.first-context {
+  align-self: center;
+  width: min(420px, 100%);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
 .setting {
@@ -321,8 +467,17 @@ button.quiet {
   }
 
   .problem,
-  .settings {
+  .settings,
+  .first-context {
     margin: 0 var(--space-4) var(--space-3);
+  }
+
+  .settings-panel {
+    gap: 0;
+  }
+
+  .first-context {
+    width: auto;
   }
 
   .peer {

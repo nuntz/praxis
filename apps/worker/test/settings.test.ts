@@ -32,15 +32,6 @@ describe("get_settings", () => {
 
     expect([before.today, after.today]).toEqual(["2026-11-14", "2026-11-15"]);
   });
-
-  test("a Context nobody has made yet is in UTC", async () => {
-    const context = newContext("2026-11-15T23:30:00.000Z");
-
-    expect(value(await context.call(hand, "get_settings", {}))).toMatchObject({
-      time_zone: "UTC",
-      today: "2026-11-15",
-    });
-  });
 });
 
 describe("set_time_zone", () => {

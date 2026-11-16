@@ -2,28 +2,31 @@ import {
   type ContextMade,
   dayIn,
   type Effect,
+  effectOnContext,
   namedZone,
   type Settings,
-  UNMADE_CONTEXT,
 } from "@praxis/domain";
 
 type SettingsRow = { id: string; name: string; time_zone: string };
 
-/** Give a Context its settings row, as an unmade Context, unless it has one. */
-export function seedSettings(sql: SqlStorage, id: string): void {
+/**
+ * Make the Context with its id, name and time zone, as the Deployment object does on
+ * `create_context`. Making it again, as a retry would, makes it as given.
+ */
+export function makeContext(sql: SqlStorage, id: string, made: ContextMade): void {
+  const zone = namedZone(made.time_zone);
+  if (zone === null) throw new Error("A Context is made with a time zone of the IANA database");
   sql.exec(
-    `INSERT OR IGNORE INTO context_settings (id, name, time_zone) VALUES (?, ?, ?)`,
+    `INSERT OR REPLACE INTO context_settings (id, name, time_zone) VALUES (?, ?, ?)`,
     id,
-    UNMADE_CONTEXT.name,
-    UNMADE_CONTEXT.time_zone,
+    made.name,
+    zone,
   );
 }
 
-/** Make the Context with its name and time zone, as the Deployment object does. */
-export function makeContext(sql: SqlStorage, made: ContextMade): void {
-  const zone = namedZone(made.time_zone);
-  if (zone === null) throw new Error("A Context is made with a time zone of the IANA database");
-  sql.exec(`UPDATE context_settings SET name = ?, time_zone = ?`, made.name, zone);
+/** Give the Context the name the Deployment object now lists it by. */
+export function renameContext(sql: SqlStorage, name: string): void {
+  sql.exec(`UPDATE context_settings SET name = ?`, name);
 }
 
 /** The Context's time zone. */
@@ -43,8 +46,7 @@ export function readSettings(sql: SqlStorage, at: number): Settings {
 
 /** The Effect of a call on the Context's settings, summarised by the Context's name. */
 export function contextEffect(sql: SqlStorage): Effect {
-  const { id, name } = row(sql);
-  return { kind: "context", id, what: "changed", summary: name, by: "call" };
+  return effectOnContext(row(sql), "changed");
 }
 
 function row(sql: SqlStorage): SettingsRow {

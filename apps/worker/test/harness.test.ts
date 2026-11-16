@@ -149,6 +149,8 @@ describe("the platform's logs", () => {
 
     const lines = logs().map((line) => JSON.parse(line) as Record<string, unknown>);
     expect(lines).toEqual([
+      // The Deployment object made the Context first.
+      { tool: "create_context", result: "ok", effects: 1, ms: expect.any(Number) },
       { tool: "record_entry", result: "ok", effects: 1, ms: expect.any(Number) },
       { tool: "get_entry", result: "ok", ms: expect.any(Number) },
       { tool: "get_entry", result: "not_found", ms: expect.any(Number) },

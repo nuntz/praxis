@@ -1,5 +1,6 @@
 export * from "./callers.ts";
 export * from "./day.ts";
+export * from "./deployment.ts";
 export * from "./effects.ts";
 export * from "./entry.ts";
 export * from "./link.ts";

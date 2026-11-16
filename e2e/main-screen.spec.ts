@@ -1,18 +1,13 @@
 import type { Page } from "@playwright/test";
-import { expect, onPhone, test } from "./fixtures.ts";
+import { expect, onPhone, sharedContext, test } from "./fixtures.ts";
 
 // The main screen is Attention, the Journal and the Conversation as three peers (section 8.1,
 // ADR 0022), in the Atelier look of section 8.11.
 
-/** Blue, the accent of the one Context there is until a Deployment holds several (#56). */
+/** Blue, the accent of the Context the journeys share. */
 const BLUE = { light: "rgb(43, 85, 196)", dark: "rgb(157, 182, 255)" };
 /** The ground behind the panels. */
 const GROUND = { light: "rgb(236, 238, 242)", dark: "rgb(15, 17, 20)" };
-
-async function contextName(page: Page): Promise<string> {
-  const settings = await page.request.post("/api/tools/get_settings", { data: {} });
-  return (await settings.json()).value.name;
-}
 
 const column = (page: Page, name: string) => page.getByRole("region", { name, exact: true });
 
@@ -91,12 +86,13 @@ test("the person records an Entry by keyboard alone, in a composer that names it
   page,
 }, testInfo) => {
   const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
-  const name = await contextName(page);
+  const { name } = await sharedContext(page);
   await page.goto("/");
 
   const journal = column(page, "Journal");
   const composer = journal.getByRole("textbox", { name: `Record an Entry in ${name}` });
-  await expect(page.getByRole("banner").getByText(name, { exact: true })).toBeVisible();
+  const switcher = page.getByRole("banner").getByRole("button", { name: `Context: ${name}` });
+  await expect(switcher).toBeVisible();
   if (onPhone(testInfo)) {
     // The tabs come after the columns, as they are drawn below them.
     const tab = page.getByRole("navigation", { name: "Columns" }).getByRole("button", {
@@ -121,12 +117,11 @@ test("the person records an Entry by keyboard alone, in a composer that names it
   await expect(journal.getByTestId("entry").filter({ hasText: tag })).toBeVisible();
 
   // The Context's accent marks the top bar and the composer.
-  const context = page.getByRole("banner").getByText(name, { exact: true });
   const frame = journal.getByTestId("composer");
-  await expect(context).toHaveCSS("background-color", BLUE.light);
+  await expect(switcher).toHaveCSS("background-color", BLUE.light);
   await expect(frame).toHaveCSS("border-top-color", BLUE.light);
   await page.emulateMedia({ colorScheme: "dark" });
-  await expect(context).toHaveCSS("background-color", BLUE.dark);
+  await expect(switcher).toHaveCSS("background-color", BLUE.dark);
   await expect(frame).toHaveCSS("border-top-color", BLUE.dark);
 });
 

@@ -1,6 +1,6 @@
 import { namedZone, type Settings } from "@praxis/domain";
 import { createSignal, Show } from "solid-js";
-import { callTool, unreachableMessage } from "./tools.ts";
+import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /** The time zone this Device is in, as its browser names it. */
 export function deviceTimeZone(): string {
@@ -15,6 +15,7 @@ export function ContextSettings(props: {
   settings: Settings;
   onChanged: (settings: Settings) => void;
 }) {
+  const callTool = useCallTool();
   const [sending, setSending] = createSignal(false);
   const [problem, setProblem] = createSignal<string | null>(null);
   const device = deviceTimeZone();
@@ -38,7 +39,7 @@ export function ContextSettings(props: {
   return (
     <section id="context-settings" class="settings" aria-labelledby="settings-heading">
       <h2 id="settings-heading" class="column-heading">
-        Settings
+        Settings for {props.settings.name}
       </h2>
       <dl class="setting">
         <dt>Time zone</dt>

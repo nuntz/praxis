@@ -50,3 +50,14 @@ export type Change = {
  * caller that has read to the end can ask again later for what changed since.
  */
 export type ChangesPage = { items: Change[]; cursor: string; more: boolean };
+
+/**
+ * An Effect on a Context: a change to its settings, or, from the Deployment object, the Context
+ * made, renamed, given another accent, retired or brought back. Summarised by its name.
+ */
+export function effectOnContext(
+  context: { id: string; name: string },
+  what: Effect["what"],
+): Effect {
+  return { kind: "context", id: context.id, what, summary: context.name, by: "call" };
+}

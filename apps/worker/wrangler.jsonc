@@ -10,7 +10,13 @@
     "run_worker_first": ["/api/*"]
   },
   "durable_objects": {
-    "bindings": [{ "name": "CONTEXT", "class_name": "ContextObject" }]
+    "bindings": [
+      { "name": "CONTEXT", "class_name": "ContextObject" },
+      { "name": "DEPLOYMENT", "class_name": "DeploymentObject" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ContextObject"] }]
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ContextObject"] },
+    { "tag": "v2", "new_sqlite_classes": ["DeploymentObject"] }
+  ]
 }

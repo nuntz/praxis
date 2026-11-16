@@ -4,12 +4,6 @@ import type { Day } from "./day.ts";
 export type ContextMade = { name: string; time_zone: string };
 
 /**
- * A Context before the Deployment object has made it: the one Context there is until a
- * Deployment can hold several. The person sets its time zone in its settings.
- */
-export const UNMADE_CONTEXT: ContextMade = { name: "Personal", time_zone: "UTC" };
-
-/**
  * A Context's settings as `get_settings` gives them to every caller (section 4.10), with today's
  * date in its time zone so a caller can resolve "next Friday" for itself.
  */

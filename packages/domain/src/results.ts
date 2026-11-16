@@ -1,4 +1,4 @@
-import type { RecordKind } from "./effects.ts";
+import type { EffectKind } from "./effects.ts";
 
 /** The closed set of error codes of section 4.3. */
 export type ErrorCode =
@@ -9,8 +9,10 @@ export type ErrorCode =
   | "stale"
   | "refused";
 
-/** A record standing in the way of a refused change, with its one-line summary. */
-export type InTheWay = { kind: RecordKind; id: string; summary: string };
+/**
+ * A record standing in the way of a refused change, or a Context, with its one-line summary.
+ */
+export type InTheWay = { kind: EffectKind; id: string; summary: string };
 
 export type ToolError = {
   code: ErrorCode;

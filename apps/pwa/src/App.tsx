@@ -1,22 +1,57 @@
-import type { Settings } from "@praxis/domain";
+import type { ContextListing, Settings } from "@praxis/domain";
 import SettingsIcon from "lucide-solid/icons/settings";
-import { createMemo, createSignal, type JSX, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, type JSX, on, onMount, Show } from "solid-js";
 import { ContextSettings, deviceTimeZone } from "./ContextSettings.tsx";
+import { ContextSwitcher } from "./ContextSwitcher.tsx";
+import { Contexts, NewContext } from "./Contexts.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
-import type { Accent } from "./design/tokens.ts";
 import { Journal } from "./Journal.tsx";
-import { callTool, unreachableMessage } from "./tools.ts";
+import {
+  CurrentContextTools,
+  callDeploymentTool,
+  contextTools,
+  unreachableMessage,
+} from "./tools.ts";
+
+/** Where this browser keeps the Context it last showed. It needs no record on the server. */
+const LAST_SHOWN = "praxis.context";
+
+function lastShown(): string | null {
+  try {
+    return localStorage.getItem(LAST_SHOWN);
+  } catch {
+    return null;
+  }
+}
+
+function rememberShown(id: string): void {
+  try {
+    localStorage.setItem(LAST_SHOWN, id);
+  } catch {
+    // Without storage the screen opens on the first Context next time, which is no fault.
+  }
+}
 
 /**
  * The main screen of the current Context: Attention, the Journal and the Conversation as three
  * peers (section 8.1, ADR 0022). Three columns on a desktop; in between, the Journal and the
  * Conversation, with Attention opened from the top bar; on a phone, three tabs, opening on
- * Attention. The widths are the stylesheet's; this holds only which tab is shown and whether
- * Attention is open.
+ * Attention. The widths are the stylesheet's; this holds which Context is current, which tab is
+ * shown and whether Attention is open.
  */
 export function App() {
+  // The Deployment's Contexts, once read. One is current: the one this browser last showed, or
+  // the first not retired. Everything below the top bar is that Context's alone.
+  const [contexts, setContexts] = createSignal<ContextListing[] | null>(null);
+  const [chosen, setChosen] = createSignal<string | null>(lastShown());
+  const current = createMemo(() => {
+    const shown = (contexts() ?? []).filter((context) => !context.retired);
+    return shown.find((context) => context.id === chosen()) ?? shown[0] ?? null;
+  });
+  const currentId = createMemo(() => current()?.id ?? null);
+
   const [settings, setSettings] = createSignal<Settings | null>(null);
   const [showSettings, setShowSettings] = createSignal(false);
   const [problem, setProblem] = createSignal<string | null>(null);
@@ -27,8 +62,6 @@ export function App() {
   const timeZone = createMemo(
     () => settings()?.time_zone ?? (unread() ? deviceTimeZone() : undefined),
   );
-  // The one Context there is takes Blue until the Deployment holds each Context's accent (#56).
-  const accent = (): Accent => "blue";
   // What the count is made of comes with Attention itself (#49): nothing is counted yet.
   const count = () => 0;
   let attentionButton!: HTMLButtonElement;
@@ -40,23 +73,63 @@ export function App() {
     attentionButton.focus();
   }
 
+  function switchTo(id: string) {
+    setChosen(id);
+    rememberShown(id);
+  }
+
+  /** Show a Context as a Deployment tool that changed it returned it. */
+  function showChangedContext(changed: ContextListing) {
+    setContexts((shown) =>
+      (shown ?? []).map((context) => (context.id === changed.id ? changed : context)),
+    );
+    // The Context's own settings carry its name too.
+    if (changed.id === currentId()) {
+      setSettings((read) => (read ? { ...read, name: changed.name } : read));
+    }
+  }
+
+  function addContext(made: ContextListing) {
+    setContexts((shown) => [...(shown ?? []), made]);
+    switchTo(made.id);
+  }
+
   onMount(async () => {
     try {
-      const result = await callTool("get_settings", {});
-      if (!result.ok) {
-        setUnread(true);
-        return setProblem(result.error.message);
-      }
-      setSettings(result.value);
+      const result = await callDeploymentTool("list_contexts", {});
+      if (!result.ok) return setProblem(result.error.message);
+      setContexts(result.value.items);
     } catch (error) {
-      setUnread(true);
       setProblem(unreachableMessage(error));
     }
   });
 
+  // Each Context's settings are read afresh when it becomes current.
+  createEffect(
+    on(currentId, async (id) => {
+      setSettings(null);
+      setUnread(false);
+      setProblem(null);
+      if (id === null) return;
+      try {
+        const result = await contextTools(id)("get_settings", {});
+        if (id !== currentId()) return;
+        if (!result.ok) {
+          setUnread(true);
+          return setProblem(result.error.message);
+        }
+        setSettings(result.value);
+      } catch (error) {
+        if (id !== currentId()) return;
+        setUnread(true);
+        setProblem(unreachableMessage(error));
+      }
+    }),
+  );
+
   return (
     <div
-      class={`screen accent-${accent()}`}
+      class={`screen accent-${current()?.accent ?? "slate"}`}
       data-tab={tab()}
       data-attention={attentionOpen() ? "open" : "shut"}
     >
@@ -65,27 +138,33 @@ export function App() {
           <Mark />
           Praxis
         </h1>
-        <Show when={settings()}>{(current) => <span class="context">{current().name}</span>}</Show>
-        <button
-          ref={attentionButton}
-          type="button"
-          class="attention-toggle"
-          aria-expanded={attentionOpen()}
-          aria-controls="attention"
-          onClick={() => setAttentionOpen((open) => !open)}
-          onKeyDown={putAttentionAway}
-        >
-          Attention
-          <AttentionCount count={count()} />
-        </button>
+        <Show when={current()}>
+          {(shown) => (
+            <ContextSwitcher current={shown()} contexts={contexts() ?? []} onSwitch={switchTo} />
+          )}
+        </Show>
+        <Show when={current()}>
+          <button
+            ref={attentionButton}
+            type="button"
+            class="attention-toggle"
+            aria-expanded={attentionOpen()}
+            aria-controls="attention"
+            onClick={() => setAttentionOpen((open) => !open)}
+            onKeyDown={putAttentionAway}
+          >
+            Attention
+            <AttentionCount count={count()} />
+          </button>
+        </Show>
         <span class="top-bar-fill" />
-        <Show when={settings()}>
+        <Show when={current()}>
           <button
             type="button"
             class="icon-button"
             aria-label="Settings"
             aria-expanded={showSettings()}
-            aria-controls="context-settings"
+            aria-controls="settings"
             onClick={() => setShowSettings((shown) => !shown)}
           >
             <SettingsIcon size={18} aria-hidden="true" />
@@ -99,42 +178,59 @@ export function App() {
           </p>
         )}
       </Show>
-      <Show when={showSettings() && settings()}>
-        {(current) => <ContextSettings settings={current()} onChanged={setSettings} />}
+      <Show when={contexts()?.length === 0}>
+        <main class="first-context">
+          <NewContext heading="Make your first Context" onMade={addContext} />
+        </main>
       </Show>
-      <main class="peers">
-        <Peer
-          id="attention"
-          title="Attention"
-          aside={<AttentionCount count={count()} />}
-          onKeyDown={putAttentionAway}
-        />
-        {/* Today and the Entries' times follow the time zone, so a new one reads the Journal afresh. */}
-        <Show when={timeZone()} keyed fallback={<Peer id="journal" title="Journal" />}>
-          {(zone) => <Journal timeZone={zone} contextName={settings()?.name} />}
-        </Show>
-        <Peer
-          id="conversation"
-          title="Conversation"
-          aside={
-            <Show when={settings()}>
-              {(current) => <span class="peer-note">with the Agent, in {current().name}</span>}
+      {/* Keyed on the Context, so switching shows only the new one's and calls go only to it. */}
+      <Show when={currentId()} keyed>
+        {(id) => (
+          <CurrentContextTools.Provider value={contextTools(id)}>
+            <Show when={showSettings()}>
+              <div id="settings" class="settings-panel">
+                <Show when={settings()}>
+                  {(read) => <ContextSettings settings={read()} onChanged={setSettings} />}
+                </Show>
+                <Contexts
+                  contexts={contexts() ?? []}
+                  onChanged={showChangedContext}
+                  onMade={addContext}
+                />
+              </div>
             </Show>
-          }
-        />
-      </main>
-      <nav class="tabs" aria-label="Columns">
-        <TabButton tab="attention" shown={tab()} onShow={setTab}>
-          Attention
-          <AttentionCount count={count()} />
-        </TabButton>
-        <TabButton tab="journal" shown={tab()} onShow={setTab}>
-          Journal
-        </TabButton>
-        <TabButton tab="conversation" shown={tab()} onShow={setTab}>
-          Agent
-        </TabButton>
-      </nav>
+            <main class="peers">
+              <Peer
+                id="attention"
+                title="Attention"
+                aside={<AttentionCount count={count()} />}
+                onKeyDown={putAttentionAway}
+              />
+              {/* Today and the Entries' times follow the time zone, so a new one reads afresh. */}
+              <Show when={timeZone()} keyed fallback={<Peer id="journal" title="Journal" />}>
+                {(zone) => <Journal timeZone={zone} contextName={current()?.name} />}
+              </Show>
+              <Peer
+                id="conversation"
+                title="Conversation"
+                aside={<span class="peer-note">with the Agent, in {current()?.name}</span>}
+              />
+            </main>
+            <nav class="tabs" aria-label="Columns">
+              <TabButton tab="attention" shown={tab()} onShow={setTab}>
+                Attention
+                <AttentionCount count={count()} />
+              </TabButton>
+              <TabButton tab="journal" shown={tab()} onShow={setTab}>
+                Journal
+              </TabButton>
+              <TabButton tab="conversation" shown={tab()} onShow={setTab}>
+                Agent
+              </TabButton>
+            </nav>
+          </CurrentContextTools.Provider>
+        )}
+      </Show>
     </div>
   );
 }

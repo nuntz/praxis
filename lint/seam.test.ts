@@ -2,25 +2,29 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { offering } from "../apps/worker/test/offering.ts";
-import { toolNames } from "../packages/domain/src/index.ts";
+import { deploymentToolNames, toolNames } from "../packages/domain/src/index.ts";
 
 // The guard of ADR 0015, in place of a line-coverage threshold: CI fails when a tool in the
-// registry has no row in the offering table or no seam test naming it.
+// registry has no row in the offering table or no seam test naming it. A Deployment tool is
+// offered to the hand alone, by rule rather than by a row, and needs only its seam test.
 
 const seamTests = join(import.meta.dir, "../apps/worker/test");
 
 const table = "apps/worker/test/offering.ts";
 
+/** Whether a seam test names the tool in a describe block of its own. */
+function named(tool: string, testSources: string[]): boolean {
+  return testSources.some((source) => new RegExp(`describe\\(\\s*["'\`]${tool}\\b`).test(source));
+}
+
 /** What is unguarded: a tool with no row or no seam test, or a row for no tool. */
 function unguarded(tools: string[], rows: string[], testSources: string[]): string[] {
-  const named = (tool: string) =>
-    testSources.some((source) => new RegExp(`describe\\(\\s*["'\`]${tool}\\b`).test(source));
   return [
     ...tools
       .filter((tool) => !rows.includes(tool))
       .map((tool) => `${tool} has no row: add one to the offering table in ${table}`),
     ...tools
-      .filter((tool) => !named(tool))
+      .filter((tool) => !named(tool, testSources))
       .map(
         (tool) =>
           `${tool} has no seam test: name a describe block after it, describe("${tool}", …), in a *.test.ts under apps/worker/test`,
@@ -40,6 +44,11 @@ function readSeamTests(): string[] {
 describe("the registry guard", () => {
   test("every tool has a row in the offering table and a seam test naming it", () => {
     expect(unguarded(toolNames, Object.keys(offering), readSeamTests())).toEqual([]);
+  });
+
+  test("every Deployment tool has a seam test naming it", () => {
+    const sources = readSeamTests();
+    expect(deploymentToolNames.filter((tool) => !named(tool, sources))).toEqual([]);
   });
 
   test("fails a tool with no row, a tool with no seam test, and a row for no tool", () => {

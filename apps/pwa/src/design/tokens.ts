@@ -6,7 +6,11 @@
 
 export type Theme = "light" | "dark";
 
-/** The fixed set of Context accents. A Context has one, and nothing else takes an accent. */
+/**
+ * The fixed set of Context accents. A Context has one, and nothing else takes an accent. The
+ * domain package holds the same set for the tools; a test keeps the two equal, since the build
+ * reads this file on its own.
+ */
 export const ACCENTS = ["blue", "rust", "teal", "plum", "moss", "slate"] as const;
 export type Accent = (typeof ACCENTS)[number];
 

@@ -13,7 +13,7 @@ import {
   type Task,
 } from "@praxis/domain";
 import { createSignal, For, Show } from "solid-js";
-import { callTool, unreachableMessage } from "./tools.ts";
+import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /** A link picked in the draft, followed through what is typed after it. */
 type Pick = { to: NewLink["to"]; anchor: Anchor };
@@ -38,6 +38,7 @@ export function Composer(props: {
   onRecorded: (entry: Entry) => void;
   onProblem: (message: string) => void;
 }) {
+  const callTool = useCallTool();
   let field!: HTMLTextAreaElement;
   const [words, setWords] = createSignal("");
   const [picks, setPicks] = createSignal<Pick[]>([]);

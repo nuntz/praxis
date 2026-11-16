@@ -1,6 +1,16 @@
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { Caller, ContextMade, ToolName, ToolOutput, ToolResult } from "@praxis/domain";
+import type {
+  Accent,
+  Caller,
+  ContextMade,
+  DeploymentToolName,
+  DeploymentToolOutput,
+  ToolName,
+  ToolOutput,
+  ToolResult,
+} from "@praxis/domain";
+import { reachContext } from "../src/routing.ts";
 import { throughOracle } from "./oracle.ts";
 
 export const hand: Caller = { kind: "hand" };
@@ -13,37 +23,85 @@ export const everyCaller = [hand, agent, clock, connection, readOnlyConnection];
 export const DAY = 24 * 60 * 60 * 1000;
 
 /**
- * A fresh Context object, reached the way the Worker reaches one: through the registry, as a
- * named caller, at a time the test sets. Every call goes through the oracle. Given `made`, it is
- * made with that name and time zone first, as the Deployment object makes a Context. This stands
- * in for `create_context` (#56), a Deployment tool, until the Deployment object exists: no
- * Context tool can name a Context.
+ * A fresh Deployment object, at a time the test sets, holding no Context until one is made.
+ * Its tools are called as a named caller, and a Context in it is reached the way the Worker
+ * reaches one: the Deployment object says which object it is, and every call to that object
+ * goes through the oracle.
  */
-export function newContext(startAt = "2026-11-15T09:00:00.000Z", made?: ContextMade) {
-  const stub = env.CONTEXT.get(env.CONTEXT.newUniqueId());
-  let now = Date.parse(startAt);
-  const ready = made ? stub.make(made) : Promise.resolve();
+export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
+  const stub = env.DEPLOYMENT.get(env.DEPLOYMENT.newUniqueId());
+  const time = { now: Date.parse(startAt) };
 
+  return {
+    /** Move the Deployment's clock on, and every Context's in it. */
+    advance(ms: number) {
+      time.now += ms;
+    },
+    call<N extends DeploymentToolName>(caller: Caller, tool: N, input: unknown) {
+      return stub.call({ caller, tool, input, arrivedAt: time.now }) as Promise<
+        ToolResult<DeploymentToolOutput[N]>
+      >;
+    },
+    /** For calling a Deployment tool the registry may not have, by any name. */
+    callAny(caller: Caller, tool: string, input: unknown) {
+      return stub.call({ caller, tool, input, arrivedAt: time.now });
+    },
+    /** The Context with this id, reached through the Deployment object as the Worker does. */
+    context(id: string) {
+      return contextHandle(time, () => reachContext(env, stub, id));
+    },
+  };
+}
+
+/**
+ * A fresh Context, made by the hand in a Deployment of its own with this name and time zone, in
+ * UTC unless one is given, and reached through the Deployment object.
+ */
+export function newContext(
+  startAt = "2026-11-15T09:00:00.000Z",
+  made: ContextMade & { accent?: Accent } = { name: "Personal", time_zone: "UTC" },
+) {
+  const deployment = newDeployment(startAt);
+  const context = deployment
+    .call(hand, "create_context", { accent: "blue", ...made })
+    .then((result) => deployment.context(value(result).record.id));
+  return {
+    advance: deployment.advance,
+    fireAlarm: () => context.then((reached) => reached.fireAlarm()),
+    runScheduledAlarm: () => context.then((reached) => reached.runScheduledAlarm()),
+    call<N extends ToolName>(caller: Caller, tool: N, input: unknown) {
+      return context.then((reached) => reached.call(caller, tool, input));
+    },
+    callAny(caller: Caller, tool: string, input: unknown) {
+      return context.then((reached) => reached.callAny(caller, tool, input));
+    },
+  };
+}
+
+/** A Context's object as a test reaches it, once the Deployment object has said which it is. */
+function contextHandle(time: { now: number }, reach: () => ReturnType<typeof reachContext>) {
   const callAny = async (caller: Caller, tool: string, input: unknown) => {
-    await ready;
-    return throughOracle(stub, { caller, tool, input, arrivedAt: now });
+    const reached = await reach();
+    if (!reached.ok) return reached;
+    return throughOracle(reached.value, { caller, tool, input, arrivedAt: time.now });
+  };
+  const stub = async () => {
+    const reached = await reach();
+    if (!reached.ok) throw new Error(`No Context reached: ${reached.error.message}`);
+    return reached.value;
   };
 
   return {
-    /** Move the Context's clock on. */
-    advance(ms: number) {
-      now += ms;
-    },
     /** Fire the Context's alarm at the time the test has set. */
-    fireAlarm() {
-      return stub.wake(now);
+    async fireAlarm() {
+      return (await stub()).wake(time.now);
     },
     /**
      * Run the alarm the platform has scheduled, as the platform would, by the real clock.
      * False when none is scheduled.
      */
-    runScheduledAlarm() {
-      return runDurableObjectAlarm(stub);
+    async runScheduledAlarm() {
+      return runDurableObjectAlarm(await stub());
     },
     call<N extends ToolName>(caller: Caller, tool: N, input: unknown) {
       return callAny(caller, tool, input) as Promise<ToolResult<ToolOutput[N]>>;

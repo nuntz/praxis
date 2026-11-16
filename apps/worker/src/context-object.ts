@@ -1,9 +1,17 @@
 import { DurableObject } from "cloudflare:workers";
-import { type ContextMade, isToolName, isWrite, type ToolResult } from "@praxis/domain";
+import {
+  type Caller,
+  type ContextMade,
+  isToolName,
+  isWrite,
+  type ToolResult,
+} from "@praxis/domain";
 import { arrivalTime, startTimer } from "./arrival.ts";
+import { appendChange } from "./change-log.ts";
 import { forgetOldKeys, holdsKeys } from "./keys.ts";
+import { logCall } from "./log.ts";
 import { dispatch, type Handlers, type ToolRequest } from "./registry.ts";
-import { makeContext, seedSettings } from "./settings.ts";
+import { contextEffect, makeContext, renameContext } from "./settings.ts";
 import { createTables } from "./tables.ts";
 import { changeTools } from "./tools/changes.ts";
 import { entryTools } from "./tools/entries.ts";
@@ -32,26 +40,41 @@ const ALARM_GAP = 24 * 60 * 60 * 1000;
 export class ContextObject extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    ctx.blockConcurrencyWhile(async () => {
-      createTables(ctx.storage.sql);
-      seedSettings(ctx.storage.sql, ctx.id.toString());
-    });
+    ctx.blockConcurrencyWhile(async () => createTables(ctx.storage.sql));
   }
 
   /**
    * Make this Context with its name and time zone. The Deployment object calls it on
-   * `create_context`; until it exists, the one Context is unmade, in UTC, and the person sets its
-   * time zone in its settings.
+   * `create_context`, before it lists the Context, so no request reaches a Context not yet made.
+   * The Context's id is its object's.
    */
   async make(made: ContextMade): Promise<void> {
-    makeContext(this.ctx.storage.sql, made);
+    makeContext(this.ctx.storage.sql, this.ctx.id.toString(), made);
+  }
+
+  /**
+   * Give this Context the name the Deployment object lists it by, on `rename_context`. A change
+   * to its settings is an Effect on it, so the rename goes in its change log with the caller.
+   */
+  async rename(name: string, by: { caller: Caller; at: number }): Promise<void> {
+    const sql = this.ctx.storage.sql;
+    this.ctx.storage.transactionSync(() => {
+      renameContext(sql, name);
+      appendChange(sql, {
+        at: by.at,
+        caller: by.caller,
+        tool: "rename_context",
+        effects: [contextEffect(sql)],
+      });
+    });
   }
 
   /** Call a Context tool through the registry. `arrivedAt` is when the call reached the Worker. */
   async call(request: ToolRequest): Promise<ToolResult<unknown>> {
     const elapsed = startTimer();
     const result = dispatch(handlers, this.ctx.storage, request);
-    logCall(request.tool, result, elapsed());
+    const tool = isToolName(request.tool) ? request.tool : null;
+    logCall({ tool, write: isWrite(request.tool) }, result, elapsed());
     if (isWrite(request.tool)) await this.keepAlarm();
     return result;
   }
@@ -73,20 +96,4 @@ export class ContextObject extends DurableObject<Env> {
       await storage.setAlarm(arrivalTime() + ALARM_GAP);
     }
   }
-}
-
-/**
- * One line per call for the platform's logs. It carries only ids, tool names, result codes,
- * counts and timings, never words (section 2, principle 7).
- */
-function logCall(tool: string, result: ToolResult<unknown>, ms: number): void {
-  const line: Record<string, string | number> = {
-    tool: isToolName(tool) ? tool : "unknown",
-    result: result.ok ? "ok" : result.error.code,
-    ms,
-  };
-  if (result.ok && isWrite(tool)) {
-    line.effects = (result.value as { effects: unknown[] }).effects.length;
-  }
-  console.log(JSON.stringify(line));
 }
