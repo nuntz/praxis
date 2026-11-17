@@ -15,7 +15,7 @@ import {
   type Written,
 } from "@praxis/domain";
 import { appendChange } from "./change-log.ts";
-import { firstWithKey, rememberKey } from "./keys.ts";
+import { rememberKey, repeatedKey } from "./keys.ts";
 import { timeZoneOf } from "./settings.ts";
 
 /** What a Context tool is given to run. It never reads the real clock: `arrivedAt` is the time. */
@@ -91,13 +91,8 @@ function runWrite(
 ): ToolResult<unknown> {
   const { sql, caller, arrivedAt } = call;
   const key = call.input.key;
-  if (key !== undefined) {
-    const first = firstWithKey(sql, caller, key, arrivedAt);
-    if (first && first.tool !== tool) {
-      return failure("invalid_input", "This key was already given with another tool.");
-    }
-    if (first) return first.result;
-  }
+  const repeated = repeatedKey(sql, { caller, key, tool, at: arrivedAt });
+  if (repeated) return repeated;
 
   const result = handler(call);
   if (result.ok && result.value.effects.length > 0) {

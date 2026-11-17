@@ -2,11 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { deploymentOffering, offering } from "../apps/worker/test/offering.ts";
-import { deploymentToolNames, toolNames } from "../packages/domain/src/index.ts";
+import {
+  conversationToolNames,
+  deploymentToolNames,
+  toolNames,
+} from "../packages/domain/src/index.ts";
 
 // The guard of ADR 0015, in place of a line-coverage threshold: CI fails when a tool in the
 // registry has no row in the offering table or no seam test naming it. The Deployment tools have
-// a table of their own, held to the same guard.
+// a table of their own, held to the same guard. The Conversation tools are rows of the Context
+// tools' table, like any other tool (section 4.12).
 
 const seamTests = join(import.meta.dir, "../apps/worker/test");
 
@@ -43,7 +48,9 @@ function readSeamTests(): string[] {
 
 describe("the registry guard", () => {
   test("every tool has a row in the offering table and a seam test naming it", () => {
-    expect(unguarded(toolNames, Object.keys(offering), readSeamTests())).toEqual([]);
+    expect(
+      unguarded([...toolNames, ...conversationToolNames], Object.keys(offering), readSeamTests()),
+    ).toEqual([]);
   });
 
   test("every Deployment tool has a row in its offering table and a seam test naming it", () => {

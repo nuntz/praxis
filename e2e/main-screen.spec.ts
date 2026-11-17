@@ -110,7 +110,11 @@ test("the person records an Entry by keyboard alone, in a composer that names it
     await expect(composer).toBeVisible();
   }
   // The composer is the last thing in the Journal, and the Record button is off while it is empty.
-  await page.keyboard.press("Shift+Tab");
+  // On a desktop the Conversation's own composer comes after it, and is passed going back.
+  for (let presses = 0; presses < 4; presses++) {
+    await page.keyboard.press("Shift+Tab");
+    if (await composer.evaluate((field) => field === document.activeElement)) break;
+  }
   await expect(composer).toBeFocused();
   await page.keyboard.type(`Recorded by keyboard ${tag}`);
   await page.keyboard.press("ControlOrMeta+Enter");

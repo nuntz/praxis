@@ -99,7 +99,9 @@ export function createTables(sql: SqlStorage): void {
     CREATE TABLE IF NOT EXISTS context_settings (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      time_zone TEXT NOT NULL
+      time_zone TEXT NOT NULL,
+      -- The Deployment object that made it, which it asks for the other Contexts' names.
+      deployment TEXT
     );
 
     -- The change log (section 4.4): one row per write that changed something, and its Effects.
@@ -139,5 +141,34 @@ export function createTables(sql: SqlStorage): void {
       PRIMARY KEY (caller, key)
     );
     CREATE INDEX IF NOT EXISTS write_keys_by_time ON write_keys (at);
+
+    -- A Run record (section 5.8): what the Agent did, with no words. Kept for good. What was said
+    -- is in the runtime's own tables, which hold only the Conversation.
+    CREATE TABLE IF NOT EXISTS runs (
+      seq INTEGER PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      -- What started it: for now only a Message from the person.
+      started_by TEXT NOT NULL,
+      -- The id of the person's Message it answers, never its words.
+      message TEXT,
+      -- The runtime's handle on the Message it answers, to learn how it ended after a restart.
+      submission INTEGER NOT NULL,
+      at INTEGER NOT NULL,
+      model TEXT NOT NULL,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+      cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+      -- In US dollars, by the price table shipped with the code.
+      cost REAL NOT NULL DEFAULT 0,
+      -- How it ended, null while it is going.
+      ended TEXT
+    );
+    -- The changes a Run made, as the change log numbers them. One may point at a line pruned since.
+    CREATE TABLE IF NOT EXISTS run_changes (
+      run TEXT NOT NULL REFERENCES runs (id),
+      change INTEGER NOT NULL,
+      PRIMARY KEY (run, change)
+    );
   `);
 }

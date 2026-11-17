@@ -5,11 +5,13 @@ import {
   type Change,
   type Effect,
   instantToIso,
+  isConversationToolName,
   isWrite,
   keysForgottenBy,
   type ToolResult,
 } from "@praxis/domain";
 import { expect } from "vitest";
+import { RUNTIME_TABLES } from "../src/agent.ts";
 
 // The oracle (ADR 0015), the one place tests read tables. It snapshots the Context's domain
 // tables before and after each call, and fails unless the difference is exactly the Effects the
@@ -37,7 +39,15 @@ const domainTables: Record<string, { kind: Effect["kind"]; id: string }> = {
 };
 
 /** The Context object's other tables, which hold no record. */
-const otherTables = ["change_calls", "changes", "change_log_pruned", "write_keys"];
+const otherTables = [
+  "change_calls",
+  "changes",
+  "change_log_pruned",
+  "write_keys",
+  // Run records, which hold no words and no record.
+  "runs",
+  "run_changes",
+];
 
 /** Each record's rows as JSON, by `kind:id`. */
 export type Records = Map<string, string>;
@@ -82,6 +92,7 @@ export function judge(seen: Seen): string[] {
   if (firstWithKey !== null && !same(result, firstWithKey)) {
     problems.push("A repeated key did not return the first result.");
   }
+  if (isConversationToolName(request.tool)) return judgeConversation(changed, logged);
   const write = isWrite(request.tool);
   if (!write || !result.ok || firstWithKey !== null) {
     const why = !write ? "A read" : !result.ok ? "A call that failed" : "A repeated key";
@@ -114,6 +125,30 @@ export function judge(seen: Seen): string[] {
   if (!same(logged, expected)) {
     problems.push(
       `The change log does not hold the same Effects with the caller. Logged: ${canonical(logged)}.`,
+    );
+  }
+  return problems;
+}
+
+/**
+ * A Conversation tool changes no domain table and logs nothing (section 4.12). A Run it starts
+ * goes on after it answers and can change records while the oracle looks, but only through the
+ * Context tools the Agent calls: whatever changed must be named by the Effects the Agent's calls
+ * logged, and the log gains nothing from any other caller.
+ */
+function judgeConversation(changed: Pick<Effect, "kind" | "id" | "what">[], logged: Change[]) {
+  const problems: string[] = [];
+  const others = logged.filter((change) => change.caller.kind !== "agent");
+  if (others.length > 0) {
+    problems.push(`A Conversation tool added to the change log: ${canonical(others)}`);
+  }
+  const named = new Set(
+    logged.flatMap((change) => change.effects.map(({ kind, id }) => `${kind}:${id}`)),
+  );
+  const unreported = changed.filter(({ kind, id }) => !named.has(`${kind}:${id}`));
+  if (unreported.length > 0) {
+    problems.push(
+      `A Conversation tool changed records no Agent call reported: ${canonical(unreported)}`,
     );
   }
   return problems;
@@ -277,7 +312,10 @@ function snapshot(stub: Stub): Promise<{ records: Records; lastChange: number }>
       )
       .toArray()
       .map((row) => row.name);
-    const unknown = tables.filter((name) => !(name in domainTables || otherTables.includes(name)));
+    const unknown = tables.filter(
+      (name) =>
+        !(name in domainTables || otherTables.includes(name) || name.startsWith(RUNTIME_TABLES)),
+    );
     expect(
       unknown,
       "Every table is known to the oracle: add it to domainTables in apps/worker/test/oracle.ts if its rows are records, else to otherTables",

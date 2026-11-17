@@ -4,3 +4,6 @@ dist
 test-results
 playwright-report
 worker-configuration.d.ts
+
+# Local configuration, such as the Agent's model key for `bun run dev`: never committed.
+.dev.vars*

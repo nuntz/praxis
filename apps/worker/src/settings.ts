@@ -13,14 +13,28 @@ type SettingsRow = { id: string; name: string; time_zone: string };
  * Make the Context with its id, name and time zone, as the Deployment object does on
  * `create_context`. Making it again, as a retry would, makes it as given.
  */
-export function makeContext(sql: SqlStorage, id: string, made: ContextMade): void {
+export function makeContext(
+  sql: SqlStorage,
+  id: string,
+  made: ContextMade,
+  deployment: string,
+): void {
   const zone = namedZone(made.time_zone);
   if (zone === null) throw new Error("A Context is made with a time zone of the IANA database");
   sql.exec(
-    `INSERT OR REPLACE INTO context_settings (id, name, time_zone) VALUES (?, ?, ?)`,
+    `INSERT OR REPLACE INTO context_settings (id, name, time_zone, deployment) VALUES (?, ?, ?, ?)`,
     id,
     made.name,
     zone,
+    deployment,
+  );
+}
+
+/** The id of the Deployment object that made the Context, or null for one made before it was kept. */
+export function deploymentOfContext(sql: SqlStorage): string | null {
+  return (
+    sql.exec<{ deployment: string | null }>(`SELECT deployment FROM context_settings`).toArray()[0]
+      ?.deployment ?? null
   );
 }
 

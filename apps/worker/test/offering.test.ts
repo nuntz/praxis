@@ -41,6 +41,8 @@ const runsWith: Record<string, () => unknown> = {
   get_settings: () => ({}),
   set_time_zone: () => ({ time_zone: "Europe/Paris" }),
   list_changes: () => ({}),
+  send_message: () => ({ words: marked("Offered") }),
+  list_messages: () => ({}),
 };
 
 // The generic test of ADR 0015: every tool, as every caller, against the table kept by hand.

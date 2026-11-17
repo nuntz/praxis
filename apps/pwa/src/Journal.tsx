@@ -15,6 +15,12 @@ import { Composer } from "./Composer.tsx";
 import { Peer } from "./design/Peer.tsx";
 import { useLive } from "./live-context.ts";
 import { unreachableMessage, useCallTool } from "./tools.ts";
+import { Words } from "./Words.tsx";
+
+/** Where a record shown in the Journal is, for a link to it from elsewhere on the screen. */
+export function recordAnchor(kind: "entry" | "task", id: string): string {
+  return `${kind}-${id}`;
+}
 
 /** A day as the Device's locale writes it. A day has no time zone of its own. */
 const dayFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" });
@@ -200,13 +206,11 @@ function EntryItem(props: {
   onProblem: (message: string) => void;
 }) {
   return (
-    <li class="entry" data-testid="entry">
+    <li class="entry" id={recordAnchor("entry", props.entry.id)} data-testid="entry" tabIndex={-1}>
       <time class="entry-time" datetime={props.entry.at}>
         {props.time}
       </time>
-      <p class="entry-words" data-testid="words">
-        {props.entry.words}
-      </p>
+      <Words words={props.entry.words} testId="words" />
       <Show when={props.entry.links.length > 0}>
         <ul class="link-list" aria-label="Mentions and References">
           <For each={props.entry.links}>{(link) => <LinkItem link={link} />}</For>
@@ -268,7 +272,12 @@ function TaskItem(props: {
   }
 
   return (
-    <li class="task" classList={{ closed: props.task.state.is !== "open" }}>
+    <li
+      class="task"
+      id={recordAnchor("task", props.task.id)}
+      tabIndex={-1}
+      classList={{ closed: props.task.state.is !== "open" }}
+    >
       <label>
         <input
           type="checkbox"

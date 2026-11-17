@@ -819,3 +819,76 @@ button.quiet {
   color: var(--muted);
   font: var(--type-meta);
 }
+
+/* The Conversation: the person's Messages as typed, the Agent's as an Entry's words are. */
+
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.message.from-person {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--inset);
+}
+
+.message-from {
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.message-words {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.run-calls summary {
+  color: var(--muted);
+  font: var(--type-meta);
+  cursor: pointer;
+}
+
+.run-calls ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+  font: var(--type-meta);
+}
+
+.run-call code {
+  font-family: ui-monospace, monospace;
+}
+
+.call-result {
+  margin-left: var(--space-2);
+  color: var(--muted);
+}
+
+.run-cost {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+/* A Notice is Praxis telling the person about its own condition: never a Message. */
+.notice {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  color: var(--muted);
+}

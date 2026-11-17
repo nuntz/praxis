@@ -1,4 +1,22 @@
-import { type Caller, keysForgottenBy, type ToolResult } from "@praxis/domain";
+import { type Caller, failure, keysForgottenBy, type ToolResult } from "@praxis/domain";
+
+/**
+ * A write's answer when its key was given before (section 4.5): the first result, or
+ * `invalid_input` when the key came with another tool. Null when the key is new, or none was
+ * given, and the write runs. Every registry's writes go through it, and through `rememberKey`.
+ */
+export function repeatedKey(
+  sql: SqlStorage,
+  call: { caller: Caller; key: string | undefined; tool: string; at: number },
+): ToolResult<unknown> | null {
+  if (call.key === undefined) return null;
+  const first = firstWithKey(sql, call.caller, call.key, call.at);
+  if (!first) return null;
+  if (first.tool !== call.tool) {
+    return failure("invalid_input", "This key was already given with another tool.");
+  }
+  return first.result;
+}
 
 /**
  * The first call a caller made with a key, while the key is remembered at `at`. A key past its

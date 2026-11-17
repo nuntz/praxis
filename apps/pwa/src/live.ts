@@ -1,11 +1,20 @@
-import type { Change, ChangesPage, LiveMessage, ToolResult } from "@praxis/domain";
+import type { Change, ChangesPage, LiveMessage, Message, ToolResult } from "@praxis/domain";
 
-/** What hears the changes the live channel brings, to patch what it shows from them. */
+/** What hears what the live channel brings, to patch what it shows from it. */
 export type LiveListener = {
   /** A change in the Context, as `list_changes` gives it. Waited on before the next. */
-  changed(change: Change): Promise<void> | void;
+  changed?(change: Change): Promise<void> | void;
   /** Some changes are gone from the log while the channel was down: read what is shown afresh. */
-  readAfresh(): Promise<void> | void;
+  readAfresh?(): Promise<void> | void;
+  /** The Agent's answer being written: all of it so far. */
+  answer?(words: string): void;
+  /** A Message now whole in the Conversation, to place by its id. */
+  message?(message: Message): void;
+  /**
+   * The channel opened again after a drop. What the Conversation said meanwhile is not replayed:
+   * read it with `list_messages`.
+   */
+  rejoined?(): Promise<void> | void;
 };
 
 /** Opens one live channel, telling `on` what it carries and when it closes. */
@@ -96,7 +105,11 @@ export class Live {
         first = false;
         if (isFirst) this.#pause = FIRST_PAUSE;
         this.#queue = this.#queue
-          .then(() => (isFirst ? this.#opened(message.cursor) : this.#heard(message)))
+          .then(() =>
+            isFirst && message.kind === "changes"
+              ? this.#opened(message.cursor)
+              : this.#heard(message),
+          )
           // What could not be handled is caught up on once the channel opens again.
           .catch(() => this.#drop(opening));
       },
@@ -142,20 +155,32 @@ export class Live {
       this.#cursor = result.value.cursor;
       more = result.value.more;
     }
+    for (const listener of this.#listeners) await listener.rejoined?.();
   }
 
   async #readAfresh(): Promise<void> {
-    for (const listener of this.#listeners) await listener.readAfresh();
+    for (const listener of this.#listeners) {
+      await listener.readAfresh?.();
+      await listener.rejoined?.();
+    }
   }
 
   async #heard(message: LiveMessage): Promise<void> {
+    if (message.kind === "answer") {
+      for (const listener of this.#listeners) listener.answer?.(message.words);
+      return;
+    }
+    if (message.kind === "message") {
+      for (const listener of this.#listeners) listener.message?.(message.message);
+      return;
+    }
     await this.#deliver(message.items);
     this.#cursor = message.cursor;
   }
 
   async #deliver(changes: Change[]): Promise<void> {
     for (const change of changes) {
-      for (const listener of this.#listeners) await listener.changed(change);
+      for (const listener of this.#listeners) await listener.changed?.(change);
     }
   }
 }

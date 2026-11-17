@@ -11,22 +11,22 @@ describe("the live channel", () => {
 
     const channel = await context.listen();
 
-    expect(await channel.next()).toEqual({ kind: "changes", items: [], cursor });
+    expect(await channel.nextChanges()).toEqual({ kind: "changes", items: [], cursor });
   });
 
   test("carries each write's change to every channel open, as list_changes gives it", async () => {
     const context = newContext();
     const [phone, desktop] = [await context.listen(), await context.listen()];
-    const { cursor: from } = await phone.next();
-    await desktop.next();
+    const { cursor: from } = await phone.nextChanges();
+    await desktop.nextChanges();
 
     value(await context.call(hand, "record_entry", { words: marked("By hand") }));
     value(await context.call(connection, "record_entry", { words: marked("By a Connection") }));
 
     const listed = value(await context.call(hand, "list_changes", { cursor: from }));
     for (const channel of [phone, desktop]) {
-      const first = await channel.next();
-      const second = await channel.next();
+      const first = await channel.nextChanges();
+      const second = await channel.nextChanges();
       expect([...first.items, ...second.items]).toEqual(listed.items);
       expect(second.cursor).toBe(listed.cursor);
       const since = value(await context.call(hand, "list_changes", { cursor: first.cursor }));
@@ -41,7 +41,7 @@ describe("the live channel", () => {
     const task = record.tasks[0]?.id;
     value(await context.call(hand, "finish_task", { id: task }));
     const channel = await context.listen();
-    await channel.next();
+    await channel.nextChanges();
 
     await context.call(hand, "list_entries", {});
     await context.call(hand, "record_entry", { words: "" });
@@ -49,7 +49,9 @@ describe("the live channel", () => {
     value(await context.call(hand, "finish_task", { id: task }));
     const written = value(await context.call(agent, "record_entry", { words: marked("Then") }));
 
-    expect((await channel.next()).items.map((change) => change.effects)).toEqual([written.effects]);
+    expect((await channel.nextChanges()).items.map((change) => change.effects)).toEqual([
+      written.effects,
+    ]);
   });
 
   test("carries only its own Context's changes", async () => {
@@ -63,12 +65,14 @@ describe("the live channel", () => {
       deployment.context(await made("Home")),
     ];
     const channel = await work.listen();
-    await channel.next();
+    await channel.nextChanges();
 
     value(await home.call(hand, "record_entry", { words: marked("At home") }));
     const atWork = value(await work.call(hand, "record_entry", { words: marked("At work") }));
 
-    expect((await channel.next()).items.map((change) => change.effects)).toEqual([atWork.effects]);
+    expect((await channel.nextChanges()).items.map((change) => change.effects)).toEqual([
+      atWork.effects,
+    ]);
   });
 
   test("carries a rename of its Context, which the Deployment object makes", async () => {
@@ -81,11 +85,11 @@ describe("the live channel", () => {
       }),
     );
     const channel = await deployment.context(record.id).listen();
-    await channel.next();
+    await channel.nextChanges();
 
     value(await deployment.call(hand, "rename_context", { id: record.id, name: "Day job" }));
 
-    expect((await channel.next()).items).toEqual([
+    expect((await channel.nextChanges()).items).toEqual([
       expect.objectContaining({
         tool: "rename_context",
         effects: [expect.objectContaining({ kind: "context", id: record.id, summary: "Day job" })],
@@ -96,7 +100,7 @@ describe("the live channel", () => {
   test("anything sent up it closes it, since every send is a tool call", async () => {
     const context = newContext();
     const channel = await context.listen();
-    await channel.next();
+    await channel.nextChanges();
 
     channel.send(JSON.stringify({ tool: "record_entry", input: { words: marked("Sent up") } }));
 

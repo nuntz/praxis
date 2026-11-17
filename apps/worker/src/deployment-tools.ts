@@ -23,6 +23,8 @@ export type DeploymentCall<N extends DeploymentToolName> = {
   arrivedAt: number;
   sql: SqlStorage;
   env: Env;
+  /** The Deployment object's own id, which each Context it makes keeps, to ask it things. */
+  deploymentId: string;
 };
 
 export type DeploymentHandlers = {
@@ -49,10 +51,13 @@ export const deploymentHandlers: DeploymentHandlers = {
     return success({ items: rows.map(toListing) });
   },
 
-  async create_context({ input, sql, env }) {
+  async create_context({ input, sql, env, deploymentId }) {
     // The Context's object is made first, so the list never names one that is not there yet.
     const objectId = env.CONTEXT.newUniqueId();
-    await env.CONTEXT.get(objectId).make({ name: input.name, time_zone: input.time_zone });
+    await env.CONTEXT.get(objectId).make(
+      { name: input.name, time_zone: input.time_zone },
+      deploymentId,
+    );
     const id = objectId.toString();
     sql.exec(
       `INSERT INTO contexts (id, name, accent, retired) VALUES (?, ?, ?, 0)`,
@@ -245,6 +250,17 @@ function noSuchConnection(): ToolResult<never> {
 /** Whether the Context with this id was made and is not retired, so requests may reach it. */
 export function isReachable(sql: SqlStorage, id: string): boolean {
   return sql.exec(`SELECT 1 FROM contexts WHERE id = ? AND retired = 0`, id).toArray().length > 0;
+}
+
+/** The names of the Contexts not retired, other than the one with this id, in the order made. */
+export function otherContextNames(sql: SqlStorage, id: string): string[] {
+  return sql
+    .exec<{ name: string }>(
+      `SELECT name FROM contexts WHERE retired = 0 AND id != ? ORDER BY seq`,
+      id,
+    )
+    .toArray()
+    .map((row) => row.name);
 }
 
 function setRetired(sql: SqlStorage, found: ContextListing, retired: boolean): ContextListing {

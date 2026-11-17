@@ -1,0 +1,81 @@
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { describe, expect, inject, test } from "vitest";
+import { type AgentModel, anthropicModel, PRICES } from "../src/model.ts";
+import { lastWords, scriptModel, testModel } from "./model-fake.ts";
+
+// The model's one contract suite (section 13). In CI it runs against the scripted model only, so
+// CI never calls a model. By hand it runs against the real one too, with the person's own key:
+//
+//   AGENT_API_KEY=… [AGENT_MODEL=…] bun run --cwd apps/worker test model
+//
+// It checks what the Agent's runtime needs of a model: words, tokens counted, and tool calls.
+
+/** A tool the contract offers the model, shaped as a Context tool is. */
+const RECORD = {
+  name: "record_note",
+  description: "Record a note in the person's words.",
+  parameters: {
+    type: "object",
+    properties: { words: { type: "string" } },
+    required: ["words"],
+    additionalProperties: false,
+  },
+};
+
+function ask(model: AgentModel, text: string, tools: (typeof RECORD)[] = []) {
+  const found = model.models.getModel(model.provider, model.id);
+  if (!found) throw new Error(`The model ${model.provider}/${model.id} is not there`);
+  return model.models.completeSimple(found, {
+    systemPrompt: "You are a terse assistant. Use a tool when asked to.",
+    messages: [{ role: "user", content: text, timestamp: 0 }],
+    tools,
+  });
+}
+
+function contract(name: string, model: () => AgentModel) {
+  describe(`the model: ${name}`, () => {
+    test("it is one the code ships a price for", () => {
+      expect(PRICES[model().id]).toBeDefined();
+    });
+
+    test("it answers a Message in words, and says how many tokens it took", async () => {
+      const answer = await ask(model(), "Say hello in one word.");
+
+      expect(answer.stopReason).toBe("stop");
+      expect(answer.content.some((block) => block.type === "text" && block.text.trim())).toBe(true);
+      expect(answer.usage.input).toBeGreaterThan(0);
+      expect(answer.usage.output).toBeGreaterThan(0);
+    });
+
+    test("offered a tool and asked to use it, it calls it with input the schema takes", async () => {
+      const answer = await ask(model(), "Use record_note to record: buy milk.", [RECORD]);
+
+      expect(answer.stopReason).toBe("toolUse");
+      const call = answer.content.find((block) => block.type === "toolCall");
+      expect(call).toMatchObject({ name: "record_note", arguments: { words: expect.any(String) } });
+    });
+  });
+}
+
+contract("scripted", () => {
+  // Scripted to do what the contract asks, as a model would.
+  scriptModel((context) =>
+    lastWords(context).includes("record_note")
+      ? fauxAssistantMessage(fauxToolCall("record_note", { words: "buy milk" }), {
+          stopReason: "toolUse",
+        })
+      : fauxAssistantMessage("Hello."),
+  );
+  const scripted = testModel();
+  if (typeof scripted === "string") throw new Error("No scripted model");
+  return scripted;
+});
+
+const real = inject("realModel");
+if (real) {
+  contract("real", () => {
+    const configured = anthropicModel({ AGENT_API_KEY: real.key, AGENT_MODEL: real.model });
+    if (typeof configured === "string") throw new Error(`No model to run against: ${configured}`);
+    return configured;
+  });
+}

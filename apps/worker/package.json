@@ -8,6 +8,9 @@
     "typecheck": "wrangler types --check >/dev/null 2>&1 || wrangler types && tsc -p . && tsc -p test && tsc -p scripts"
   },
   "dependencies": {
+    "@earendil-works/chord": "1.5.2",
+    "@earendil-works/pi-ai": "1.5.2",
+    "@earendil-works/pi-durable": "1.5.2",
     "@modelcontextprotocol/server": "2.4.0",
     "@praxis/domain": "workspace:*"
   },

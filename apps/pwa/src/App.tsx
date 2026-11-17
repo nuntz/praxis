@@ -14,6 +14,7 @@ import { Connections } from "./Connections.tsx";
 import { ContextSettings, deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
 import { Contexts, NewContext } from "./Contexts.tsx";
+import { Conversation } from "./Conversation.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
@@ -92,6 +93,19 @@ export function App() {
     if (event.key !== "Escape" || !attentionOpen()) return;
     setAttentionOpen(false);
     attentionButton.focus();
+  }
+
+  /**
+   * Bring a record shown in the Journal into view, from a change a Run made: on a phone, the
+   * Journal's tab first.
+   */
+  function showRecord(anchor: string) {
+    setTab("journal");
+    requestAnimationFrame(() => {
+      const shown = document.getElementById(anchor);
+      shown?.scrollIntoView({ block: "center" });
+      shown?.focus();
+    });
   }
 
   function switchTo(id: string) {
@@ -286,11 +300,7 @@ export function App() {
                   <Show when={timeZone()} keyed fallback={<Peer id="journal" title="Journal" />}>
                     {(zone) => <Journal timeZone={zone} contextName={current()?.name} />}
                   </Show>
-                  <Peer
-                    id="conversation"
-                    title="Conversation"
-                    aside={<span class="peer-note">with the Agent, in {current()?.name}</span>}
-                  />
+                  <Conversation contextName={current()?.name} onShowRecord={showRecord} />
                 </main>
                 <nav class="tabs" aria-label="Columns">
                   <TabButton tab="attention" shown={tab()} onShow={setTab}>

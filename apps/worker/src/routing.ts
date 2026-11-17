@@ -1,6 +1,6 @@
 import { failure, success, type ToolResult } from "@praxis/domain";
-import type { ContextObject } from "./context-object.ts";
 import type { DeploymentObject } from "./deployment-object.ts";
+import type { ContextObject } from "./index.ts";
 
 export type ContextStub = DurableObjectStub<ContextObject>;
 export type DeploymentStub = DurableObjectStub<DeploymentObject>;

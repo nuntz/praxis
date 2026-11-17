@@ -1,4 +1,7 @@
 import type {
+  ConversationToolInput,
+  ConversationToolName,
+  ConversationToolOutput,
   DeploymentToolInput,
   DeploymentToolName,
   DeploymentToolOutput,
@@ -85,11 +88,26 @@ export async function writeToDeployment<N extends DeploymentToolName>(
   }
 }
 
+/** A tool the screen calls in a Context: a Context tool, or a Conversation tool. */
+type InContext = ToolName | ConversationToolName;
+
+type InputOf<N extends InContext> = N extends ToolName
+  ? ToolInput<N>
+  : N extends ConversationToolName
+    ? ConversationToolInput<N>
+    : never;
+
+type OutputOf<N extends InContext> = N extends ToolName
+  ? ToolOutput[N]
+  : N extends ConversationToolName
+    ? ConversationToolOutput[N]
+    : never;
+
 /** Calls the tools of one Context. No tool names a Context: the address the call goes to does. */
-export type CallTool = <N extends ToolName>(
+export type CallTool = <N extends InContext>(
   tool: N,
-  input: ToolInput<N>,
-) => Promise<ToolResult<ToolOutput[N]>>;
+  input: InputOf<N>,
+) => Promise<ToolResult<OutputOf<N>>>;
 
 /** The caller of one Context's tools. */
 export function contextTools(contextId: string): CallTool {

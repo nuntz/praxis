@@ -6,6 +6,7 @@ import type {
   ContextMade,
   DeploymentToolName,
   DeploymentToolOutput,
+  LiveChanges,
   LiveMessage,
   ToolName,
   ToolOutput,
@@ -81,6 +82,7 @@ export function newContext(
       return context.then((reached) => reached.callAny(caller, tool, input));
     },
     listen: () => context.then((reached) => reached.listen()),
+    runsEnded: () => context.then((reached) => reached.runsEnded()),
   };
 }
 
@@ -114,6 +116,13 @@ function contextHandle(time: { now: number }, reach: () => ReturnType<typeof rea
     },
     /** For calling a tool the registry may not have, by any name. */
     callAny,
+    /**
+     * Wait until every Run in the Context has ended and its record says how: a Run goes on after
+     * `send_message` answers, and the screen learns it ended on the live channel.
+     */
+    async runsEnded() {
+      return (await stub()).runsEnded();
+    },
     /** Open a live channel to the Context's object, as the screen does (section 9.5). */
     async listen() {
       return listenTo(await stub());
@@ -151,6 +160,13 @@ async function listenTo(stub: DurableObjectStub) {
       const message = arrived.shift();
       if (message) return Promise.resolve(message);
       return new Promise((resolve) => waiting.push(resolve));
+    },
+    /** The next message carrying changes, skipping what the Conversation sends. */
+    async nextChanges(): Promise<LiveChanges> {
+      for (;;) {
+        const message = await this.next();
+        if (message.kind === "changes") return message;
+      }
     },
     /** Send something up the channel, which nothing is meant to travel. */
     send(data: string) {

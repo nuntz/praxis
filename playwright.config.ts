@@ -33,9 +33,10 @@ export default defineConfig({
       use: { ...devices["Pixel 7"], timezoneId: "America/Lima" },
     },
   ],
-  // The built PWA served by the real Worker, on a Journal that starts empty each run.
+  // The built PWA served by the real Worker, on a Journal that starts empty each run, with each
+  // Context's Agent on a scripted model (apps/worker/test/journey-worker.ts).
   webServer: {
-    command: `rm -rf .wrangler/e2e && bun run build && bun run --cwd apps/worker dev --port ${port} --persist-to ../../.wrangler/e2e`,
+    command: `rm -rf .wrangler/e2e && bun run build && bun run --cwd apps/worker dev --port ${port} --persist-to ../../.wrangler/e2e test/journey-worker.ts`,
     url: `http://localhost:${port}`,
     reuseExistingServer: false,
     timeout: 120_000,

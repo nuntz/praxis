@@ -16,8 +16,9 @@ import {
   type DeploymentCall,
   deploymentHandlers,
   isReachable,
+  otherContextNames,
 } from "./deployment-tools.ts";
-import { firstWithKey, rememberKey } from "./keys.ts";
+import { rememberKey, repeatedKey } from "./keys.ts";
 import { logCall } from "./log.ts";
 import type { ToolRequest } from "./registry.ts";
 
@@ -62,6 +63,14 @@ export class DeploymentObject extends DurableObject<Env> {
     return callableConnection(this.ctx.storage.sql, id);
   }
 
+  /**
+   * The names of the Contexts shown other than this one, which the Agent of a Context is told at
+   * the start of every Run (section 5.2). Nothing else of them.
+   */
+  async otherContextNames(id: string): Promise<string[]> {
+    return otherContextNames(this.ctx.storage.sql, id);
+  }
+
   private async run<N extends DeploymentToolName>(
     tool: N,
     request: ToolRequest,
@@ -77,6 +86,7 @@ export class DeploymentObject extends DurableObject<Env> {
       arrivedAt: request.arrivedAt,
       sql: this.ctx.storage.sql,
       env: this.env,
+      deploymentId: this.ctx.id.toString(),
     };
     if (!isDeploymentWrite(tool)) return handler(call);
     // A write may wait on a Context's object, which would let another write in between. Writes run
@@ -92,13 +102,8 @@ export class DeploymentObject extends DurableObject<Env> {
   ): Promise<ToolResult<unknown>> {
     const { sql, caller, arrivedAt } = call;
     const key = (call.input as { key?: string }).key;
-    if (key !== undefined) {
-      const first = firstWithKey(sql, caller, key, arrivedAt);
-      if (first && first.tool !== tool) {
-        return failure("invalid_input", "This key was already given with another tool.");
-      }
-      if (first) return first.result;
-    }
+    const repeated = repeatedKey(sql, { caller, key, tool, at: arrivedAt });
+    if (repeated) return repeated;
     const result = await handler(call);
     if (key !== undefined) rememberKey(sql, { caller, key, tool, at: arrivedAt, result });
     return result;
