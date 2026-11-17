@@ -9,3 +9,4 @@ The Agent's loop is Pi Durable, running inside each Context's Durable Object ove
 - The runtime is marked experimental, and a Conversation that has run on one minor version cannot be read after going back to the one before. This is one more reason a deploy is a one-way door (ADR 0019).
 - Because its tables hold only the Conversation, which is not data (ADR 0001), they can be dropped without losing anything true. They are not on the upgrade ladder, and a runtime that cannot open them never blocks the Journal.
 - A tool call interrupted by a crash is run again only if the tool is marked safe to repeat.
+- How the runtime is wired into a Context's object, and what it does that its own documentation does not make plain, is in [`docs/pi-durable.md`](../pi-durable.md).

@@ -2,16 +2,28 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { deploymentOffering, offering } from "../apps/worker/test/offering.ts";
-import {
-  conversationToolNames,
-  deploymentToolNames,
-  toolNames,
-} from "../packages/domain/src/index.ts";
+import { type RegistryName, registries } from "../packages/domain/src/index.ts";
 
 // The guard of ADR 0015, in place of a line-coverage threshold: CI fails when a tool in the
 // registry has no row in the offering table or no seam test naming it. The Deployment tools have
 // a table of their own, held to the same guard. The Conversation tools are rows of the Context
-// tools' table, like any other tool (section 4.12).
+// tools' table, like any other tool (section 4.12). Every registry the domain package lists is
+// guarded, and one with no table here fails the typecheck.
+
+/** The offering table each registry's tools are held to, kept by hand. */
+const tables = {
+  context: offering,
+  conversation: offering,
+  deployment: deploymentOffering,
+} satisfies Record<RegistryName, Record<string, unknown>>;
+
+/** Each table, with every tool of the registries held to it. */
+const guarded = [...new Set(Object.values(tables))].map((rows) => ({
+  rows: Object.keys(rows),
+  tools: (Object.keys(tables) as RegistryName[])
+    .filter((name) => tables[name] === rows)
+    .flatMap((name) => Object.keys(registries[name])),
+}));
 
 const seamTests = join(import.meta.dir, "../apps/worker/test");
 
@@ -47,16 +59,9 @@ function readSeamTests(): string[] {
 }
 
 describe("the registry guard", () => {
-  test("every tool has a row in the offering table and a seam test naming it", () => {
-    expect(
-      unguarded([...toolNames, ...conversationToolNames], Object.keys(offering), readSeamTests()),
-    ).toEqual([]);
-  });
-
-  test("every Deployment tool has a row in its offering table and a seam test naming it", () => {
-    expect(
-      unguarded(deploymentToolNames, Object.keys(deploymentOffering), readSeamTests()),
-    ).toEqual([]);
+  test("every tool, in every registry, has a row in its offering table and a seam test naming it", () => {
+    const sources = readSeamTests();
+    expect(guarded.flatMap(({ tools, rows }) => unguarded(tools, rows, sources))).toEqual([]);
   });
 
   test("fails a tool with no row, a tool with no seam test, and a row for no tool", () => {

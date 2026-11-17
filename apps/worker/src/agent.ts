@@ -47,6 +47,7 @@ import {
  * The Agent of one Context (section 5): Pi Durable, running inside the Context's object over its
  * SQLite (ADR 0024). The runtime's tables, under `pi_`, hold only the Conversation; Praxis's own
  * hold the domain and the Run records. There is one continuing Conversation, the runtime's root.
+ * How it is wired, and the runtime's gotchas: docs/pi-durable.md.
  */
 
 /** The prefix of the runtime's tables in the Context's database. */

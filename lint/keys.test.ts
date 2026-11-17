@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { deploymentTools, tools } from "../packages/domain/src/index.ts";
+import { registries } from "../packages/domain/src/index.ts";
 
-// The guard of ADR 0007's "every write accepts an optional key", over every registry: a write
-// whose input has no `key` field fails here, whichever set of tools it is in.
+// The guard of ADR 0007's "every write accepts an optional key", over every registry the domain
+// package lists: a write whose input has no `key` field fails here, whichever set it is in.
 
 /** A registry as the guard reads it: each tool's kind, and its input's fields. */
 type Registry = Record<string, { kind: "read" | "write"; input: unknown }>;
@@ -18,8 +18,8 @@ function keyless(...registries: Registry[]): string[] {
 }
 
 describe("the key guard", () => {
-  test("every write, Context tool or Deployment tool, accepts a key", () => {
-    expect(keyless(tools, deploymentTools)).toEqual([]);
+  test("every write, in every registry, accepts a key", () => {
+    expect(keyless(...Object.values(registries))).toEqual([]);
   });
 
   test("names a write with no key, and passes over a read", () => {

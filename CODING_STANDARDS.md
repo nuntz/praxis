@@ -6,6 +6,7 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 
 - Name code with the terms of [`GLOSSARY.md`](GLOSSARY.md), in the sense it gives them.
 - A word the glossary gives to a state (open, closed, actionable, Finished, Dropped, Deferred, Overdue, Waiting, Delegated) names that state of a Task or Project only. Other things take their own word: a Context not retired is *reachable* or *shown*.
+- A library's own words are renamed where Praxis code holds them, when they collide with a glossary term: the Agent runtime's entries are its records, never Entries, and its turns and sessions are not Runs.
 - A record is an Entry, Task, Project or Person. Whatever else a write returns, such as a Context or its settings, is named as what it is in its type and doc comment, even in a field called `record`.
 
 ## Registries

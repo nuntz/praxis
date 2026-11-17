@@ -9,6 +9,7 @@ export * from "./live.ts";
 export * from "./person.ts";
 export * from "./project.ts";
 export * from "./recurrence.ts";
+export * from "./registries.ts";
 export * from "./results.ts";
 export * from "./settings.ts";
 export * from "./task.ts";
