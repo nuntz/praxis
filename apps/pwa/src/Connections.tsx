@@ -31,22 +31,36 @@ export function Connections(props: { contexts: ContextListing[] }) {
   const contextName = (id: string) =>
     props.contexts.find((context) => context.id === id)?.name ?? "";
 
-  createEffect(
-    on(
-      () => props.contexts,
-      async () => {
-        try {
-          const result = await callDeploymentTool("list_connections", {});
-          if (!result.ok) return setProblem(result.error.message);
-          setConnections(result.value.items);
-        } catch (error) {
-          setProblem(unreachableMessage(error));
-        }
-      },
-    ),
-  );
+  // A read answers with the list as the Deployment held it when the read was sent. One overtaken
+  // by a later read, or sent before a change made here since, would show the list without that
+  // change: it is dropped, and in the second case the list is read again (#83).
+  let reads = 0;
+  let changes = 0;
+
+  async function read() {
+    const sent = ++reads;
+    const before = changes;
+    try {
+      const result = await callDeploymentTool("list_connections", {});
+      if (sent !== reads) return;
+      if (changes !== before) return void read();
+      if (!result.ok) return setProblem(result.error.message);
+      setConnections(result.value.items);
+    } catch (error) {
+      if (sent !== reads) return;
+      setProblem(unreachableMessage(error));
+    }
+  }
+
+  createEffect(on(() => props.contexts, read));
+
+  function made(connection: Connection) {
+    changes++;
+    setConnections((listed) => [...listed, connection]);
+  }
 
   function show(changed: Connection) {
+    changes++;
     setConnections((listed) =>
       changed.ended
         ? listed.filter((connection) => connection.id !== changed.id)
@@ -88,10 +102,7 @@ export function Connections(props: { contexts: ContextListing[] }) {
         )}
       </Show>
       <Show when={shown().length > 0}>
-        <NewConnection
-          contexts={shown()}
-          onMade={(made) => setConnections((listed) => [...listed, made])}
-        />
+        <NewConnection contexts={shown()} onMade={made} />
       </Show>
     </section>
   );

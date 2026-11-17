@@ -27,10 +27,24 @@ test("the person makes a Connection to one Context, and its address reaches that
   const tag = crypto.randomUUID().slice(0, 8);
   const work = await makeContext(page, { name: `Work ${tag}`, time_zone: "UTC", accent: "teal" });
   await lastShown(page, work.id);
-  await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
   const connections = page.getByRole("region", { name: "Connections" });
   const name = `Claude ${tag}`;
+  const row = connections.getByTestId("connection-row").filter({
+    has: page.getByRole("textbox", { name: `Name of ${name}` }),
+  });
+  // The settings' first read of the Connections answers only once the new one shows, as it can
+  // on a busy Deployment: what it answers was read before the Connection was made (#83).
+  await page.route(
+    /\/list_connections$/,
+    async (route) => {
+      const answer = await route.fetch();
+      await row.waitFor();
+      await route.fulfill({ response: answer });
+    },
+    { times: 1 },
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
 
   const form = connections.getByRole("form", { name: "New Connection" });
   await form.getByLabel("Name", { exact: true }).fill(name);
@@ -39,9 +53,6 @@ test("the person makes a Connection to one Context, and its address reaches that
     .selectOption({ label: work.name });
   await form.getByRole("button", { name: "Make the Connection" }).click();
 
-  const row = connections.getByTestId("connection-row").filter({
-    has: page.getByRole("textbox", { name: `Name of ${name}` }),
-  });
   await expect(row.getByText(`in ${work.name}`)).toBeVisible();
   await expect(row.getByLabel("Reading only", { exact: true })).not.toBeChecked();
   const address = await row.getByLabel(`Address of ${name}`, { exact: true }).inputValue();
