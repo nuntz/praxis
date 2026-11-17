@@ -296,10 +296,14 @@ export function App() {
                     aside={<AttentionCount count={count()} />}
                     onKeyDown={putAttentionAway}
                   />
-                  {/* Today and the Entries' times follow the time zone, so a new one reads afresh. */}
-                  <Show when={timeZone()} keyed fallback={<Peer id="journal" title="Journal" />}>
-                    {(zone) => <Journal timeZone={zone} contextName={current()?.name} />}
-                  </Show>
+                  {/* Today and the Entries' times follow the time zone, so a new one reads afresh,
+                      inside a column that stays: the region is the same one before the zone is read
+                      and after. */}
+                  <Peer id="journal" title="Journal">
+                    <Show when={timeZone()} keyed>
+                      {(zone) => <Journal timeZone={zone} contextName={current()?.name} />}
+                    </Show>
+                  </Peer>
                   <Conversation contextName={current()?.name} onShowRecord={showRecord} />
                 </main>
                 <nav class="tabs" aria-label="Columns">

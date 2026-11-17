@@ -15,7 +15,6 @@ import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
-import { Peer } from "./design/Peer.tsx";
 import { EntryEditor } from "./EntryEditor.tsx";
 import { useLive } from "./live-context.ts";
 import { unreachableMessage, useCallTool } from "./tools.ts";
@@ -36,7 +35,8 @@ function formatDay(day: Day): string {
 
 /**
  * The Journal: Entries in time order, and the composer that records one with no model turn. Each
- * Entry's time is shown in the Context's time zone, so the Journal's days agree with today.
+ * Entry's time is shown in the Context's time zone, so the Journal's days agree with today. What
+ * its column holds; the column itself is the screen's, so it stays while a new zone is read.
  */
 export function Journal(props: { timeZone: string; contextName: string | undefined }) {
   const callTool = useCallTool();
@@ -189,7 +189,7 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
   }
 
   return (
-    <Peer id="journal" title="Journal">
+    <>
       <div class="peer-body">
         <Show when={earlierCursor()}>
           {(cursor) => (
@@ -240,7 +240,7 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
           onProblem={setProblem}
         />
       </div>
-    </Peer>
+    </>
   );
 }
 

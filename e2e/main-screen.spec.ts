@@ -30,6 +30,31 @@ test("on a desktop, Attention, the Journal and the Conversation stand side by si
   await expect(page.getByRole("banner").getByRole("button", { name: /^Attention/ })).toBeHidden();
 });
 
+test("the Journal's column is the same one before the Context's time zone is read and after", async ({
+  page,
+}) => {
+  // Every column the page ever mounts, counted as it lands, so a swap is seen however fast.
+  await page.addInitScript(() => {
+    const seen = new Set<Element>();
+    const mounted: Record<string, number> = {};
+    Object.assign(window, { mounted });
+    new MutationObserver(() => {
+      for (const region of document.querySelectorAll("section[aria-labelledby$='-heading']")) {
+        if (seen.has(region)) continue;
+        seen.add(region);
+        const name = region.id;
+        mounted[name] = (mounted[name] ?? 0) + 1;
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.goto("/");
+  // The composer comes with the zone. On a phone it is behind the Journal's tab, so hidden.
+  const composer = page.getByRole("textbox", { name: /^Record an Entry in /, includeHidden: true });
+  await expect(composer).toBeAttached();
+  const mounted = await page.evaluate(() => (window as unknown as { mounted: object }).mounted);
+  expect(mounted).toEqual({ attention: 1, journal: 1, conversation: 1 });
+});
+
 test("in between, the Journal and the Conversation stand side by side and Attention opens from the top bar", async ({
   page,
 }, testInfo) => {
