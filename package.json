@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "check": "biome check .",
-    "ci": "biome ci . && bun run typecheck && bun run test:lint && bun run test:domain && bun run test:pwa && bun run test:worker && bun run test:e2e:twice",
+    "ci": "biome ci --colors=off . && bun run typecheck && bun run test:lint && bun run check:tickets && bun run test:domain && bun run test:pwa && bun run test:worker && bun run test:e2e:twice",
     "typecheck": "bun run --filter '*' typecheck && tsc -p lint && tsc -p e2e",
     "test:lint": "bun test ./lint",
     "check:tickets": "bun lint/tickets.ts",

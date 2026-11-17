@@ -881,8 +881,8 @@ ADR 0015, 0019, 0020, 0021.
 
 **Layers.**
 
-- `bun test` for the pure domain package. Direct tests there only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, parsing an Inline Task and what the person types to link something, comparing a Version against the current words, and what the Markdown renderer lets through: the set, the addresses and when an image loads.
-- `bun test` for the design tokens in the PWA, for one thing only: every text pairing the design system names is at least 4.5:1 in light and in dark, for all six accents. The browser's accessibility check sees only the accent the screen shows.
+- `bun test` for the pure domain package. Direct tests there only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, the shapes an Entry's words can take on the way in, parsing an Inline Task and what the person types to link something, comparing a Version against the current words, and what the Markdown renderer lets through: the set, the addresses and when an image loads.
+- `bun test` for the PWA, for two things only. The design tokens: every text pairing the design system names is at least 4.5:1 in light and in dark, for all six accents, since the browser's accessibility check sees only the accent the screen shows. And the screen's end of the live channel: reconnecting and catching up, since a journey cannot stage a dropped channel or a log pruned since reliably.
 - Vitest in real workerd for anything touching a Durable Object or SQL. A test can stand up several Context objects and the Deployment object.
 - No domain or tool code reads the real clock. A test sets the time and the Context's time zone and fires alarms itself.
 - CI never calls a model.

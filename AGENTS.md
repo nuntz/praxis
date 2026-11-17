@@ -8,6 +8,10 @@ Issues and specs live in this repo's GitHub Issues, managed with the `gh` CLI. S
 
 The five default triage labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), unchanged. See `docs/agents/triage-labels.md`.
 
+### Testing seams
+
+Fixed by ADR 0015 and SPEC section 13: `/tdd` works at them without asking.
+
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

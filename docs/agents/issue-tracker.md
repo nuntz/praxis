@@ -36,6 +36,8 @@ Read it as in **Read an issue** above.
 
 A ticket is one **slice** of `SPEC.md`, and its open siblings own the rest. When reviewing a ticket against the spec or the ADRs, list the open tickets (`gh issue list --state open --json number,title`) and report what a sibling owns as deferred to that ticket, by number, rather than as missing.
 
+A ticket whose tool meets a rule a sibling ticket owns says what stands in until that sibling lands, such as a call refused until the Held Change it should leave exists. The implementer builds the stand-in, with a placeholder comment naming the sibling.
+
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.

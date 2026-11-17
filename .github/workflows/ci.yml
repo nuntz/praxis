@@ -26,6 +26,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Domain package (bun test)
         run: bun run test:domain
+      - name: PWA (bun test)
+        run: bun run test:pwa
       - name: Context object (Vitest in workerd)
         run: bun run test:worker
       - name: Install Chromium for Playwright
