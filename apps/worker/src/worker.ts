@@ -14,6 +14,9 @@ const DEPLOYMENT_TOOL_PATH = /^\/api\/deployment\/tools\/([a-z_]+)$/;
  */
 const CONTEXT_TOOL_PATH = /^\/api\/contexts\/([0-9A-Za-z_-]+)\/tools\/([a-z_]+)$/;
 
+/** The screen opens the live channel of its current Context at this path (section 9.5). */
+const LIVE_PATH = /^\/api\/contexts\/([0-9A-Za-z_-]+)\/live$/;
+
 /** MCP is served under this path, a Connection at an address holding its id (section 7.2). */
 const MCP_PATH = /^\/mcp(\/|$)/;
 
@@ -46,6 +49,8 @@ export function praxis(accessOf: (env: Env) => Access) {
       const { pathname } = new URL(request.url);
       if (MCP_PATH.test(pathname)) return serveMcp(request, env, pathname, arrivedAt);
       if (!pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+      const live = LIVE_PATH.exec(pathname);
+      if (live) return openLive(request, env, live[1] ?? "");
       const deploymentTool = DEPLOYMENT_TOOL_PATH.exec(pathname);
       const contextTool = CONTEXT_TOOL_PATH.exec(pathname);
       if (!deploymentTool && !contextTool) return new Response("Not found", { status: 404 });
@@ -114,6 +119,16 @@ async function serveMcp(
   return serveConnection(request, caller, (tool, input) =>
     context.call({ caller, tool, input, arrivedAt }),
   );
+}
+
+/**
+ * Open the live channel to a Context's object, asking the Deployment object first, as for a tool
+ * call, so a retired Context opens none. The object answers a request that is no WebSocket.
+ */
+async function openLive(request: Request, env: Env, contextId: string): Promise<Response> {
+  const reached = await reachContext(env, deploymentOf(env), contextId);
+  if (!reached.ok) return new Response(reached.error.message, { status: 404 });
+  return reached.value.fetch(request);
 }
 
 /** Ask the Deployment object which Context the request is for, then call that Context's object. */

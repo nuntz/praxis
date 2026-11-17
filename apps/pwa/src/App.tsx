@@ -1,6 +1,15 @@
 import type { ContextListing, Settings } from "@praxis/domain";
 import SettingsIcon from "lucide-solid/icons/settings";
-import { createEffect, createMemo, createSignal, type JSX, on, onMount, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js";
 import { Connections } from "./Connections.tsx";
 import { ContextSettings, deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
@@ -9,6 +18,8 @@ import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
 import { Journal } from "./Journal.tsx";
+import { Live, socketOpener } from "./live.ts";
+import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
 import {
   CurrentContextTools,
   callDeploymentTool,
@@ -16,6 +27,14 @@ import {
   signInLapsed,
   unreachableMessage,
 } from "./tools.ts";
+
+/**
+ * How long the screen waits for the live channel before reading anyway, as behind a proxy that
+ * refuses WebSockets. Once the channel opens, what was read is read afresh.
+ */
+const READY_WITHIN = 3000;
+
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Where this browser keeps the Context it last showed. It needs no record on the server. */
 const LAST_SHOWN = "praxis.context";
@@ -106,28 +125,74 @@ export function App() {
     }
   });
 
-  // Each Context's settings are read afresh when it becomes current.
+  /** Read a Context's settings, while it is still current. */
+  async function readSettings(id: string) {
+    try {
+      const result = await contextTools(id)("get_settings", {});
+      if (id !== currentId()) return;
+      if (!result.ok) {
+        setUnread(true);
+        return setProblem(result.error.message);
+      }
+      setSettings(result.value);
+    } catch (error) {
+      if (id !== currentId()) return;
+      setUnread(true);
+      setProblem(unreachableMessage(error));
+    }
+  }
+
+  // Each Context starts with no settings shown, until its live channel has opened to read them.
   createEffect(
-    on(currentId, async (id) => {
+    on(currentId, () => {
       setSettings(null);
       setUnread(false);
       setProblem(null);
-      if (id === null) return;
-      try {
-        const result = await contextTools(id)("get_settings", {});
-        if (id !== currentId()) return;
-        if (!result.ok) {
-          setUnread(true);
-          return setProblem(result.error.message);
-        }
-        setSettings(result.value);
-      } catch (error) {
-        if (id !== currentId()) return;
-        setUnread(true);
-        setProblem(unreachableMessage(error));
-      }
     }),
   );
+
+  /**
+   * The live channel of the Context now current, open while it is (section 9.5): switching closes
+   * it, and the next Context opens its own. What it brings about the Context itself, a new name
+   * or time zone, is read here; the rest is heard by what shows it.
+   */
+  function openLive(id: string): CurrentLive {
+    const tools = contextTools(id);
+    const live = new Live({
+      open: socketOpener(liveAddress(id)),
+      listChanges: (input) => tools("list_changes", input),
+      wait: pause,
+      readyBy: pause(READY_WITHIN),
+    });
+    const wake = () => live.wake();
+    window.addEventListener("online", wake);
+    document.addEventListener("visibilitychange", wake);
+    onCleanup(() => {
+      window.removeEventListener("online", wake);
+      document.removeEventListener("visibilitychange", wake);
+      live.close();
+    });
+
+    live.listen({
+      async changed(change) {
+        const onThis = change.effects.find((effect) => effect.kind === "context");
+        if (!onThis) return;
+        setContexts(
+          (shown) =>
+            shown?.map((context) =>
+              context.id === onThis.id ? { ...context, name: onThis.summary } : context,
+            ) ?? shown,
+        );
+        await readSettings(id);
+      },
+      async readAfresh() {
+        await readSettings(id);
+      },
+    });
+
+    void live.ready.then(() => readSettings(id));
+    return { listen: (listener) => live.listen(listener), ready: live.ready };
+  }
 
   return (
     <div
@@ -192,52 +257,57 @@ export function App() {
       </Show>
       {/* Keyed on the Context, so switching shows only the new one's and calls go only to it. */}
       <Show when={currentId()} keyed>
-        {(id) => (
-          <CurrentContextTools.Provider value={contextTools(id)}>
-            <Show when={showSettings()}>
-              <div id="settings" class="settings-panel">
-                <Show when={settings()}>
-                  {(read) => <ContextSettings settings={read()} onChanged={setSettings} />}
+        {(id) => {
+          const live = openLive(id);
+          return (
+            <CurrentContextTools.Provider value={contextTools(id)}>
+              <CurrentContextLive.Provider value={live}>
+                <Show when={showSettings()}>
+                  <div id="settings" class="settings-panel">
+                    <Show when={settings()}>
+                      {(read) => <ContextSettings settings={read()} onChanged={setSettings} />}
+                    </Show>
+                    <Contexts
+                      contexts={contexts() ?? []}
+                      onChanged={showChangedContext}
+                      onMade={addContext}
+                    />
+                    <Connections contexts={contexts() ?? []} />
+                  </div>
                 </Show>
-                <Contexts
-                  contexts={contexts() ?? []}
-                  onChanged={showChangedContext}
-                  onMade={addContext}
-                />
-                <Connections contexts={contexts() ?? []} />
-              </div>
-            </Show>
-            <main class="peers">
-              <Peer
-                id="attention"
-                title="Attention"
-                aside={<AttentionCount count={count()} />}
-                onKeyDown={putAttentionAway}
-              />
-              {/* Today and the Entries' times follow the time zone, so a new one reads afresh. */}
-              <Show when={timeZone()} keyed fallback={<Peer id="journal" title="Journal" />}>
-                {(zone) => <Journal timeZone={zone} contextName={current()?.name} />}
-              </Show>
-              <Peer
-                id="conversation"
-                title="Conversation"
-                aside={<span class="peer-note">with the Agent, in {current()?.name}</span>}
-              />
-            </main>
-            <nav class="tabs" aria-label="Columns">
-              <TabButton tab="attention" shown={tab()} onShow={setTab}>
-                Attention
-                <AttentionCount count={count()} />
-              </TabButton>
-              <TabButton tab="journal" shown={tab()} onShow={setTab}>
-                Journal
-              </TabButton>
-              <TabButton tab="conversation" shown={tab()} onShow={setTab}>
-                Agent
-              </TabButton>
-            </nav>
-          </CurrentContextTools.Provider>
-        )}
+                <main class="peers">
+                  <Peer
+                    id="attention"
+                    title="Attention"
+                    aside={<AttentionCount count={count()} />}
+                    onKeyDown={putAttentionAway}
+                  />
+                  {/* Today and the Entries' times follow the time zone, so a new one reads afresh. */}
+                  <Show when={timeZone()} keyed fallback={<Peer id="journal" title="Journal" />}>
+                    {(zone) => <Journal timeZone={zone} contextName={current()?.name} />}
+                  </Show>
+                  <Peer
+                    id="conversation"
+                    title="Conversation"
+                    aside={<span class="peer-note">with the Agent, in {current()?.name}</span>}
+                  />
+                </main>
+                <nav class="tabs" aria-label="Columns">
+                  <TabButton tab="attention" shown={tab()} onShow={setTab}>
+                    Attention
+                    <AttentionCount count={count()} />
+                  </TabButton>
+                  <TabButton tab="journal" shown={tab()} onShow={setTab}>
+                    Journal
+                  </TabButton>
+                  <TabButton tab="conversation" shown={tab()} onShow={setTab}>
+                    Agent
+                  </TabButton>
+                </nav>
+              </CurrentContextLive.Provider>
+            </CurrentContextTools.Provider>
+          );
+        }}
       </Show>
     </div>
   );

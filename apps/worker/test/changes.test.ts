@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { marked, marker } from "./markers.ts";
-import { agent, connection, everyCaller, hand, newContext, value } from "./seam.ts";
+import { agent, connection, DAY, everyCaller, hand, newContext, value } from "./seam.ts";
 
 describe("record_entry's Effects", () => {
   test("name the Entry it made, by the call, with its first line as the summary", async () => {
@@ -116,7 +116,7 @@ describe("list_changes", () => {
     const { cursor } = value(await context.call(connection, "list_changes", {}));
 
     const nothingYet = value(await context.call(connection, "list_changes", { cursor }));
-    expect(nothingYet).toEqual({ items: [], cursor, more: false });
+    expect(nothingYet).toEqual({ items: [], cursor, more: false, read_afresh: false });
 
     const later = value(await context.call(agent, "record_entry", { words: marked("Later") }));
     const since = value(await context.call(connection, "list_changes", { cursor }));
@@ -138,6 +138,61 @@ describe("list_changes", () => {
     for (const caller of everyCaller) {
       expect(value(await context.call(caller, "list_changes", {})).items).toHaveLength(1);
     }
+  });
+
+  test("the alarm drops each change once it is 90 days old, and the list starts after them", async () => {
+    const context = newContext("2026-01-01T09:00:00.000Z");
+    value(await context.call(hand, "record_entry", { words: marked("Old") }));
+    context.advance(10 * DAY);
+    const newer = value(await context.call(hand, "record_entry", { words: marked("Newer") }));
+
+    context.advance(90 * DAY - 10 * DAY - 1);
+    await context.fireAlarm();
+    expect(value(await context.call(hand, "list_changes", {})).items).toHaveLength(2);
+
+    context.advance(1);
+    await context.fireAlarm();
+    const kept = value(await context.call(hand, "list_changes", {}));
+    expect(kept.items.map((change) => change.effects)).toEqual([newer.effects]);
+    expect(kept.read_afresh).toBe(false);
+  });
+
+  test("a cursor older than what is kept is told to read afresh, with a cursor to carry on from", async () => {
+    const context = newContext("2026-01-01T09:00:00.000Z");
+    const { cursor: fromTheStart } = value(await context.call(hand, "list_changes", {}));
+    value(await context.call(hand, "record_entry", { words: marked("Pruned") }));
+    context.advance(91 * DAY);
+    await context.fireAlarm();
+    value(await context.call(hand, "record_entry", { words: marked("Kept") }));
+
+    const told = value(await context.call(hand, "list_changes", { cursor: fromTheStart }));
+    expect(told).toEqual({ items: [], cursor: expect.any(String), more: false, read_afresh: true });
+
+    const later = value(await context.call(agent, "record_entry", { words: marked("Later") }));
+    const since = value(await context.call(hand, "list_changes", { cursor: told.cursor }));
+    expect(since.items.map((change) => change.effects)).toEqual([later.effects]);
+    expect(since.read_afresh).toBe(false);
+  });
+
+  test("a cursor that had read past every change pruned carries on", async () => {
+    const context = newContext("2026-01-01T09:00:00.000Z");
+    value(await context.call(hand, "record_entry", { words: marked("Pruned") }));
+    const { cursor } = value(await context.call(hand, "list_changes", {}));
+    context.advance(91 * DAY);
+    await context.fireAlarm();
+    const kept = value(await context.call(hand, "record_entry", { words: marked("Kept") }));
+
+    const since = value(await context.call(hand, "list_changes", { cursor }));
+
+    expect(since.items.map((change) => change.effects)).toEqual([kept.effects]);
+    expect(since.read_afresh).toBe(false);
+  });
+
+  test("a write with no key sets the alarm that prunes the log", async () => {
+    const context = newContext();
+    value(await context.call(hand, "record_entry", { words: marked("No key") }));
+
+    expect(await context.runScheduledAlarm()).toBe(true);
   });
 
   test("a cursor this list did not give is invalid input", async () => {

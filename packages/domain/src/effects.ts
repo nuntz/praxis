@@ -1,4 +1,5 @@
 import type { Caller } from "./callers.ts";
+import { daysBefore } from "./day.ts";
 
 /** The kinds of record. */
 export type RecordKind = "entry" | "task" | "project" | "person";
@@ -50,7 +51,25 @@ export type Change = {
  * A page of the change log, oldest first. Unlike other lists the cursor is always given, so a
  * caller that has read to the end can ask again later for what changed since.
  */
-export type ChangesPage = { items: Change[]; cursor: string; more: boolean };
+export type ChangesPage = {
+  items: Change[];
+  cursor: string;
+  more: boolean;
+  /**
+   * True when the cursor asked from is older than the change log keeps, so some of what changed
+   * since is gone from it. The page then holds nothing, and its cursor is where the log stands:
+   * the caller reads what it shows afresh and asks from there.
+   */
+  read_afresh: boolean;
+};
+
+/** Days the change log keeps a change (section 4.4). */
+export const CHANGE_LOG_DAYS = 90;
+
+/** A change that arrived at or before the instant this returns is pruned by `at`. */
+export function changesPrunedBy(at: number): number {
+  return daysBefore(at, CHANGE_LOG_DAYS);
+}
 
 /**
  * An Effect on a Connection: made, renamed, switched to or from reading only, or ended, by the

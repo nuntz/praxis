@@ -123,6 +123,11 @@ export function createTables(sql: SqlStorage): void {
       by TEXT NOT NULL,
       PRIMARY KEY (call, ord)
     );
+    -- How far the log has been pruned, at 90 days, so a cursor from before is told to read afresh.
+    CREATE TABLE IF NOT EXISTS change_log_pruned (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      through INTEGER NOT NULL
+    );
 
     -- Each caller's keys for its writes and the first result, remembered 30 days (section 4.5).
     CREATE TABLE IF NOT EXISTS write_keys (

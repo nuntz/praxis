@@ -60,6 +60,7 @@ const EVERYWHERE: [string, RequestInit][] = [
   ["/api/other", { method: "POST", body: "{}" }],
   ["/mcp", { method: "POST", body: "{}" }],
   ["/mcp/an-address", { method: "POST", body: "{}" }],
+  ["/api/contexts/x/live", { headers: { upgrade: "websocket" } }],
 ];
 
 describe("the Access sign-in every request needs", () => {
@@ -198,8 +199,64 @@ describe("the screen's tool endpoint", () => {
   });
 
   test("any other path under /api is not found", async () => {
+    for (const path of ["/api/contexts/x/live/more", "/api/contexts/live"]) {
+      expect((await send(path, { headers: { upgrade: "websocket" } })).status).toBe(404);
+    }
     for (const path of ["/api/tools/list_entries", "/api/contexts/x/list_entries", "/api/other"]) {
       expect((await post(path, "{}")).status).toBe(404);
+    }
+  });
+});
+
+describe("the live channel's address", () => {
+  /** Open the live channel at a Context's address, as the screen does. */
+  function openLive(id: string, headers: HeadersInit = { upgrade: "websocket" }) {
+    return send(`/api/contexts/${id}/live`, { headers });
+  }
+
+  test("signed in, it opens the channel of the Context the address names", async () => {
+    const work = await makeContext("Work");
+    await makeContext("Home");
+
+    const response = await openLive(work);
+    const socket = response.webSocket;
+    if (!socket) throw new Error(`No channel opened: ${response.status}`);
+    socket.accept();
+    const messages: { items: { tool: string }[] }[] = [];
+    const twoArrived = new Promise<void>((resolve) =>
+      socket.addEventListener("message", (event) => {
+        messages.push(JSON.parse(String(event.data)));
+        if (messages.length === 2) resolve();
+      }),
+    );
+    await callTool(`/api/contexts/${work}/tools/record_entry`, { words: "Seen live" });
+    await twoArrived;
+
+    expect(response.status).toBe(101);
+    expect(messages.map((message) => message.items.map((change) => change.tool))).toEqual([
+      [],
+      ["record_entry"],
+    ]);
+    socket.close(1000, "Done");
+  });
+
+  test("an address naming no Context, or a retired one, opens nothing", async () => {
+    const work = await makeContext("Work");
+    await makeContext("Home");
+    await callTool("/api/deployment/tools/retire_context", { id: work });
+
+    for (const id of [work, "no-such-context", "0".repeat(64)]) {
+      const response = await openLive(id);
+      expect(response.status, id).toBe(404);
+      expect(response.webSocket).toBeNull();
+    }
+  });
+
+  test("a request that is not for a WebSocket is told to upgrade", async () => {
+    const work = await makeContext("Work");
+
+    for (const headers of [{ upgrade: "h2c" }, {}]) {
+      expect((await openLive(work, headers)).status).toBe(426);
     }
   });
 });

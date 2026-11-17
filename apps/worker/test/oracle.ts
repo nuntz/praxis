@@ -37,7 +37,7 @@ const domainTables: Record<string, { kind: Effect["kind"]; id: string }> = {
 };
 
 /** The Context object's other tables, which hold no record. */
-const otherTables = ["change_calls", "changes", "write_keys"];
+const otherTables = ["change_calls", "changes", "change_log_pruned", "write_keys"];
 
 /** Each record's rows as JSON, by `kind:id`. */
 export type Records = Map<string, string>;

@@ -265,7 +265,7 @@ A result is a success or an error from a closed set of codes:
 - A Connection is not a record either. A Deployment tool that makes or changes one returns an Effect on it, carrying its id and its name as the summary. Retiring a Context ends its Connections, each an Effect by rule. None of these goes in a change log.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
 - `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since its last turn.
-- The change log is kept 90 days. A caller whose cursor is older is told to read afresh.
+- The change log is kept 90 days, pruned by the Context's alarm. A caller whose cursor is older is told to read afresh: `list_changes` gives no changes, says so, and gives the cursor where the log now stands, to ask from once it has.
 - A connected PWA receives the Effects of each change and patches what it shows.
 
 ### 4.5 One call, one transaction
@@ -782,7 +782,8 @@ ADR 0023. From [Recall](https://github.com/nuntz/praxis/issues/21).
 
 - The PWA holds one WebSocket to its current Context's object, which hibernates when idle.
 - It carries two things, both downward: the Effects of each change in that Context, from which the PWA patches what it shows, and the Agent's answer as it is written.
-- Nothing travels up it. Every send is a tool call.
+- On opening, it first says where the change log stands. Each change after comes with the cursor after it, as `list_changes` would give it.
+- Nothing travels up it. Every send is a tool call, and anything sent up closes it.
 - A PWA that was away catches up from `list_changes` and `list_messages`. An answer missed part-way is not replayed: the Message is read once it is whole.
 - Switching Context closes the socket and opens one to the other object.
 - A Connection has no live channel. It polls `list_changes`.

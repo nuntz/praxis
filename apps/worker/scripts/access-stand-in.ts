@@ -1,3 +1,4 @@
+import type { Server, ServerWebSocket } from "bun";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
 import { fakeAccess } from "../test/access-fake.ts";
 
@@ -54,9 +55,61 @@ const LOGIN_PAGE = `<!doctype html>
 <main><h1>Sign in</h1><p>A stand-in for Cloudflare Access's login page.</p>
 <p><a href="${origin}/cdn-cgi/access/sign-in">Sign in as the person</a></p></main></html>`;
 
-Bun.serve({
+/**
+ * A live channel through the stand-in: the browser's socket on one side, one to the Worker, with
+ * Access's token on it, on the other. What the Worker sends before the browser's side is up waits.
+ */
+type Piped = { upstream: WebSocket; waiting: string[]; browser: ServerWebSocket<Piped> | null };
+
+/** A close code to send on: one only a closing end may report, such as 1006, becomes `otherwise`. */
+function sendable(code: number, otherwise: number): number {
+  return code >= 1005 && code <= 1015 ? otherwise : code;
+}
+
+/** Bun's own WebSocket, which takes headers, as the DOM's typing of it does not say. */
+const BunWebSocket = WebSocket as unknown as new (
+  url: string,
+  options: Bun.WebSocketOptions,
+) => WebSocket;
+
+async function pipeLive(request: Request, url: URL, server: Server<Piped>) {
+  const upstream = new BunWebSocket(`ws://localhost:${workerPort}${url.pathname}${url.search}`, {
+    headers: { [ACCESS_TOKEN_HEADER]: await access.sign(Date.now()) },
+  });
+  const piped: Piped = { upstream, waiting: [], browser: null };
+  upstream.addEventListener("message", (event) => {
+    if (piped.browser) piped.browser.send(String(event.data));
+    else piped.waiting.push(String(event.data));
+  });
+  upstream.addEventListener("close", ({ code, reason }) => {
+    piped.browser?.close(sendable(code, 1011), reason);
+  });
+  const opened = await new Promise<boolean>((resolve) => {
+    upstream.addEventListener("open", () => resolve(true), { once: true });
+    upstream.addEventListener("error", () => resolve(false), { once: true });
+  });
+  if (!opened) return new Response("The Worker opened no live channel.", { status: 502 });
+  if (server.upgrade(request, { data: piped })) return undefined;
+  upstream.close();
+  return new Response("Not a WebSocket.", { status: 400 });
+}
+
+Bun.serve<Piped>({
   port,
-  async fetch(request) {
+  websocket: {
+    open(browser) {
+      browser.data.browser = browser;
+      for (const message of browser.data.waiting.splice(0)) browser.send(message);
+    },
+    // Passed on as sent, so the Worker answers it as it would anything sent up the channel.
+    message(browser, message) {
+      browser.data.upstream.send(message);
+    },
+    close(browser, code, reason) {
+      browser.data.upstream.close(sendable(code, 1000), reason);
+    },
+  },
+  async fetch(request, server) {
     const url = new URL(request.url);
     if (url.pathname === "/cdn-cgi/access/certs") {
       return Response.json({ keys: await access.keySet.keys() });
@@ -72,6 +125,10 @@ Bun.serve({
     }
     if (request.headers.get("cookie")?.includes(`${SIGNED_OUT}=yes`)) {
       return Response.redirect(`${loginOrigin}/cdn-cgi/access/login`, 302);
+    }
+
+    if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
+      return pipeLive(request, url, server);
     }
 
     const headers = new Headers(request.headers);

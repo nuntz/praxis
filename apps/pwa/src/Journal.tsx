@@ -1,5 +1,7 @@
 import {
+  type Change,
   type Day,
+  type Effect,
   type Entry,
   type Link,
   type Task,
@@ -7,10 +9,11 @@ import {
   utcMidnight,
   waitedOnName,
 } from "@praxis/domain";
-import { createSignal, For, onMount, Show } from "solid-js";
-import { createStore } from "solid-js/store";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import { Composer } from "./Composer.tsx";
 import { Peer } from "./design/Peer.tsx";
+import { useLive } from "./live-context.ts";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /** A day as the Device's locale writes it. A day has no time zone of its own. */
@@ -26,6 +29,7 @@ function formatDay(day: Day): string {
  */
 export function Journal(props: { timeZone: string; contextName: string | undefined }) {
   const callTool = useCallTool();
+  const live = useLive();
   const timeFormat = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -41,14 +45,95 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
     try {
       const result = await callTool("list_entries", cursor === undefined ? {} : { cursor });
       if (!result.ok) return setProblem(result.error.message);
-      setEntries((shown) => [...result.value.items.toReversed(), ...shown]);
+      // An Entry the live channel brought while the page was read is shown once.
+      setEntries((shown) => {
+        const page = result.value.items.filter((read) => !shown.some((e) => e.id === read.id));
+        return [...page.toReversed(), ...shown];
+      });
       setEarlierCursor(result.value.next_cursor);
     } catch (error) {
       setProblem(unreachableMessage(error));
     }
   }
 
-  onMount(() => loadPage());
+  // Read once the live channel is open, so a change made meanwhile is either read or brought.
+  onMount(async () => {
+    await live.ready;
+    await loadPage();
+  });
+  onCleanup(live.listen({ changed: patch, readAfresh }));
+
+  /** Show what a change did, by reading each record its Effects name as it now is. */
+  async function patch(change: Change) {
+    for (const effect of change.effects) {
+      if (effect.kind === "entry") await refreshEntry(effect.id);
+      if (effect.kind === "task") await refreshTask(effect.id);
+      if (effect.what !== "deleted") renameLinksTo(effect);
+      await refreshTasksNaming(effect.id);
+    }
+  }
+
+  /** Some changes are gone from the log, so the Journal is read again from its newest page. */
+  async function readAfresh() {
+    setEntries([]);
+    setEarlierCursor(null);
+    await loadPage();
+  }
+
+  /** Show an Entry as it now is: in place, in time order, or gone if it is. */
+  async function refreshEntry(id: string) {
+    const result = await callTool("get_entry", { id });
+    if (!result.ok) {
+      if (result.error.code === "not_found")
+        setEntries((shown) => shown.filter((e) => e.id !== id));
+      return;
+    }
+    const entry = result.value;
+    const at = entries.findIndex((shown) => shown.id === id);
+    // Patched in place, so what is open on it stays open.
+    if (at !== -1) return setEntries(at, reconcile(entry, { key: "id" }));
+    const oldest = entries[0];
+    // Earlier than the earliest shown, with earlier ones still to load: it shows when they do.
+    if (earlierCursor() !== null && oldest && entry.at < oldest.at) return;
+    const after = entries.findIndex((shown) => shown.at > entry.at);
+    setEntries((shown) => shown.toSpliced(after === -1 ? shown.length : after, 0, entry));
+  }
+
+  /** Show a Task as it now is, on the Entry it hangs off, or gone from it if it is. */
+  async function refreshTask(id: string) {
+    const result = await callTool("get_task", { id });
+    if (result.ok) return showTask(result.value);
+    if (result.error.code !== "not_found") return;
+    setEntries(
+      (entry) => entry.tasks.some((task) => task.id === id),
+      "tasks",
+      (tasks) => tasks.filter((task) => task.id !== id),
+    );
+  }
+
+  /** A record's summary is what a link to it shows: a Task's title, a Project's or Person's name. */
+  function renameLinksTo(effect: Effect) {
+    setEntries(
+      (entry) => entry.links.some((link) => link.to.id === effect.id),
+      "links",
+      (link) => link.to.id === effect.id,
+      "to",
+      "summary",
+      effect.summary,
+    );
+  }
+
+  /** Read again each Task shown that names this record, waiting on it or Delegated to it. */
+  async function refreshTasksNaming(id: string) {
+    const naming = entries
+      .flatMap((entry) => entry.tasks)
+      .filter((task) => {
+        if (task.id === id || task.state.is !== "open") return false;
+        const { waiting, delegated } = task.state;
+        return delegated?.to.id === id || (waiting ?? []).some(({ on }) => on.id === id);
+      });
+    for (const task of naming) await refreshTask(task.id);
+  }
 
   /**
    * Show a Task as a write returned it, on the Entry it hangs off: in its place, or after the
@@ -170,15 +255,9 @@ function TaskItem(props: {
       const tool = box.checked ? "finish_task" : "reopen_task";
       const result = await callTool(tool, { id: props.task.id });
       if (!result.ok) return props.onProblem(result.error.message);
+      // What a rule did besides, releasing a Task waiting on it or making the next Occurrence,
+      // comes over the live channel.
       props.onTask(result.value.record);
-      // A Task reaching an end releases each Task waiting on it and makes its next Occurrence,
-      // by rule: show those as they now are too, until live updates (section 9.5) bring them.
-      for (const effect of result.value.effects) {
-        if (effect.kind !== "task" || effect.id === props.task.id) continue;
-        const other = await callTool("get_task", { id: effect.id });
-        if (!other.ok) return props.onProblem(other.error.message);
-        props.onTask(other.value);
-      }
     } catch (error) {
       props.onProblem(unreachableMessage(error));
     } finally {

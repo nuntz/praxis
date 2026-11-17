@@ -68,3 +68,8 @@ export function utcMidnight(day: Day, days = 0): number {
   const [year, month, date] = day.split("-").map(Number) as [number, number, number];
   return Date.UTC(year, month - 1, date + days);
 }
+
+/** The instant this many whole days of 24 hours before `at`, for what is kept a number of days. */
+export function daysBefore(at: number, days: number): number {
+  return at - days * 24 * 60 * 60 * 1000;
+}

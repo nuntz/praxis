@@ -6,6 +6,7 @@ import type {
   ContextMade,
   DeploymentToolName,
   DeploymentToolOutput,
+  LiveMessage,
   ToolName,
   ToolOutput,
   ToolResult,
@@ -79,6 +80,7 @@ export function newContext(
     callAny(caller: Caller, tool: string, input: unknown) {
       return context.then((reached) => reached.callAny(caller, tool, input));
     },
+    listen: () => context.then((reached) => reached.listen()),
   };
 }
 
@@ -112,6 +114,52 @@ function contextHandle(time: { now: number }, reach: () => ReturnType<typeof rea
     },
     /** For calling a tool the registry may not have, by any name. */
     callAny,
+    /** Open a live channel to the Context's object, as the screen does (section 9.5). */
+    async listen() {
+      return listenTo(await stub());
+    },
+  };
+}
+
+/**
+ * A live channel open on a Context's object. What it carries is read in order with `next`, and
+ * `closed` settles with the code and reason when the object closes it.
+ */
+async function listenTo(stub: DurableObjectStub) {
+  const response = await stub.fetch("https://praxis.test/live", {
+    headers: { upgrade: "websocket" },
+  });
+  const socket = response.webSocket;
+  if (!socket) throw new Error(`The object did not open a live channel: ${response.status}`);
+  socket.accept();
+
+  const arrived: LiveMessage[] = [];
+  const waiting: ((message: LiveMessage) => void)[] = [];
+  socket.addEventListener("message", (event) => {
+    const message = JSON.parse(String(event.data)) as LiveMessage;
+    const waiter = waiting.shift();
+    if (waiter) waiter(message);
+    else arrived.push(message);
+  });
+  const closed = new Promise<{ code: number; reason: string }>((resolve) =>
+    socket.addEventListener("close", ({ code, reason }) => resolve({ code, reason })),
+  );
+
+  return {
+    /** The next message the channel carries, once it arrives. */
+    next(): Promise<LiveMessage> {
+      const message = arrived.shift();
+      if (message) return Promise.resolve(message);
+      return new Promise((resolve) => waiting.push(resolve));
+    },
+    /** Send something up the channel, which nothing is meant to travel. */
+    send(data: string) {
+      socket.send(data);
+    },
+    closed,
+    close() {
+      socket.close(1000, "Done");
+    },
   };
 }
 

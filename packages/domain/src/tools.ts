@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { CallerKind } from "./callers.ts";
-import { day, timeZone } from "./day.ts";
+import { day, daysBefore, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
 import type { Entry, Page } from "./entry.ts";
 import type { Person } from "./person.ts";
@@ -72,7 +72,7 @@ export const KEY_DAYS = 30;
 
 /** A key given at or before the instant this returns is forgotten by `at`. */
 export function keysForgottenBy(at: number): number {
-  return at - KEY_DAYS * 24 * 60 * 60 * 1000;
+  return daysBefore(at, KEY_DAYS);
 }
 
 const words = z
@@ -422,7 +422,7 @@ export const tools = {
   list_changes: {
     kind: "read",
     description:
-      "List what changed in this Context since a cursor, oldest first: each write's Effects, its caller and when it arrived. Without a cursor it starts from the oldest change kept. Keep the cursor it gives to ask again later.",
+      "List what changed in this Context since a cursor, oldest first: each write's Effects, its caller and when it arrived. Without a cursor it starts from the oldest change kept. Keep the cursor it gives to ask again later. The log keeps 90 days: when `read_afresh` is true the cursor was older than that, so read what you hold afresh and ask from the new cursor.",
     input: z.strictObject({ cursor: z.string().min(1).optional() }),
     offered: toEveryCaller,
   },
