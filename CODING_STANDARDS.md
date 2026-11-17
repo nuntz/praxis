@@ -23,9 +23,9 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 
 - A journey that acts outside the page on what a tap changed waits for that tool's answer (`page.waitForResponse`), or for something on the screen only the answer brings. A control the browser changes at the tap, such as a checkbox, proves nothing about the server.
 
-## The live channel
+## Reads and changes
 
-- What a column shows comes from its read and from the live channel, in either order. It reads once `live.ready` settles, and places a record from either by its id, so the record shows once and a change made meanwhile is read or brought.
+- What a list shows comes from its read and from the changes it learns of meanwhile, its own writes or the live channel's, in either order. A change that lands while the read is out outlives the read's answer: the list places a record from either by its id, so the record shows once, or it drops an answer a later read or change overtook and reads again. A column reads once `live.ready` settles, so a change made meanwhile is read or brought.
 
 ## Decisions
 
