@@ -22,6 +22,10 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 
 - A journey that acts outside the page on what a tap changed waits for that tool's answer (`page.waitForResponse`), or for something on the screen only the answer brings. A control the browser changes at the tap, such as a checkbox, proves nothing about the server.
 
+## The live channel
+
+- What a column shows comes from its read and from the live channel, in either order. It reads once `live.ready` settles, and places a record from either by its id, so the record shows once and a change made meanwhile is read or brought.
+
 ## Decisions
 
 - A change follows the ADRs in [`docs/adr/`](docs/adr/) that touch its area. Where it departs from one, the same change amends the ADR and the spec beside it, or the departure goes to the person as a question.

@@ -22,6 +22,10 @@
       "plugins": ["./lint/no-real-clock.grit"]
     },
     {
+      "includes": ["e2e/**"],
+      "plugins": ["./lint/exact-label.grit"]
+    },
+    {
       "includes": ["packages/domain/src/**"],
       "linter": {
         "rules": {

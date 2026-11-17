@@ -1,0 +1,6 @@
+language js
+
+`$found.getByLabel($label)` as $call where {
+  not $label <: contains `exact: true`,
+  register_diagnostic(span=$call, message="Find a control by its exact name: getByLabel(label, { exact: true }), or getByRole(\"combobox\", { name, exact: true }) for a select, whose label holds its options. Every journey shares one Deployment, so what the others make can hold these words.")
+}

@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = 8788;
+// The stand-in for Access listens here and starts the Worker on the next port up, so the pair is
+// kept clear of `bun run dev`'s, 8787 and 8788, and the journeys run beside it.
+const port = 8790;
 
 export default defineConfig({
   testDir: "e2e",

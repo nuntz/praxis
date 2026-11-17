@@ -33,16 +33,18 @@ test("the person makes a Connection to one Context, and its address reaches that
   const name = `Claude ${tag}`;
 
   const form = connections.getByRole("form", { name: "New Connection" });
-  await form.getByLabel("Name").fill(name);
-  await form.getByLabel("Context").selectOption({ label: work.name });
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form
+    .getByRole("combobox", { name: "Context", exact: true })
+    .selectOption({ label: work.name });
   await form.getByRole("button", { name: "Make the Connection" }).click();
 
   const row = connections.getByTestId("connection-row").filter({
     has: page.getByRole("textbox", { name: `Name of ${name}` }),
   });
   await expect(row.getByText(`in ${work.name}`)).toBeVisible();
-  await expect(row.getByLabel("Reading only")).not.toBeChecked();
-  const address = await row.getByLabel(`Address of ${name}`).inputValue();
+  await expect(row.getByLabel("Reading only", { exact: true })).not.toBeChecked();
+  const address = await row.getByLabel(`Address of ${name}`, { exact: true }).inputValue();
   // An address under /mcp on this Deployment, holding an opaque id that never names the Context.
   expect(address).toMatch(new RegExp(`^${new URL(page.url()).origin}/mcp/[0-9A-Za-z_-]{20,}$`));
   expect(address).not.toContain(work.id);
@@ -54,9 +56,9 @@ test("the person makes a Connection to one Context, and its address reaches that
   // Limited to reading from its next call on.
   // The box shows checked at the tap; the Connection is limited once the tool has answered.
   const switched = page.waitForResponse(/\/set_connection_reading_only$/);
-  await row.getByLabel("Reading only").check();
+  await row.getByLabel("Reading only", { exact: true }).check();
   await switched;
-  await expect(row.getByLabel("Reading only")).toBeChecked();
+  await expect(row.getByLabel("Reading only", { exact: true })).toBeChecked();
   expect(await call(agent, "record_entry", { words: `Never recorded ${tag}` })).toMatchObject({
     ok: false,
     error: { code: "not_offered" },

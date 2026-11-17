@@ -13,11 +13,13 @@ test("the person makes the first Context, in the Device's time zone, from a scre
 
   await page.goto("/");
   const form = page.getByRole("form", { name: "Make your first Context" });
-  await expect(form.getByLabel("Time zone")).toHaveValue(testInfo.project.use.timezoneId ?? "");
+  await expect(form.getByLabel("Time zone", { exact: true })).toHaveValue(
+    testInfo.project.use.timezoneId ?? "",
+  );
   await expect(page.getByRole("region", { name: "Journal" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Context: / })).toHaveCount(0);
 
-  await form.getByLabel("Name").fill("Personal");
+  await form.getByLabel("Name", { exact: true }).fill("Personal");
   // The time zone left as this Device's; the accent left as the first, Blue.
   await form.getByRole("button", { name: "Make the Context" }).click();
 

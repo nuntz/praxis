@@ -40,6 +40,12 @@ const fixtures: Record<string, string> = {
   "apps/worker/test/oracle.ts": 'export { runInDurableObject } from "cloudflare:test";',
   "apps/worker/test/endpoint.test.ts": 'export { exports } from "cloudflare:workers";',
   "apps/worker/test/mcp.test.ts": 'export { env } from "cloudflare:workers";',
+  // A journey finds a control by its exact label, since every journey shares one Deployment.
+  "e2e/inexact.spec.ts": [
+    "declare const form: { getByLabel(label: string, options?: { exact: boolean }): unknown };",
+    'export const loose = form.getByLabel("Name");',
+    'export const exact = form.getByLabel("Name", { exact: true });',
+  ].join("\n"),
   // The recommended rules are on.
   "apps/pwa/src/recommended.ts": "export function f(a: number) {\n  debugger;\n  return a;\n}",
 };
@@ -72,6 +78,7 @@ function rulesAt(path: string): string[] {
 
 const restrictedImport = "lint/style/noRestrictedImports";
 const clockRead = "plugin";
+const inexactLabel = "plugin";
 
 describe("the lint guards", () => {
   test("the domain package cannot import Cloudflare or Bun", () => {
@@ -109,6 +116,10 @@ describe("the lint guards", () => {
     expect(rulesAt("apps/worker/test/oracle.ts")).toEqual([]);
     expect(rulesAt("apps/worker/test/endpoint.test.ts")).toEqual([]);
     expect(rulesAt("apps/worker/test/mcp.test.ts")).toEqual([]);
+  });
+
+  test("a journey cannot find a control by a label it only contains", () => {
+    expect(rulesAt("e2e/inexact.spec.ts")).toEqual([inexactLabel]);
   });
 
   test("the recommended rules are on", () => {

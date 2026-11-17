@@ -89,18 +89,24 @@ test("the Deployment's settings list the Contexts with their accents, and make, 
     });
 
   // Each Context with its accent.
-  await expect(row(work.name).getByLabel(`Accent of ${work.name}`)).toHaveValue("rust");
+  await expect(
+    row(work.name).getByRole("combobox", { name: `Accent of ${work.name}`, exact: true }),
+  ).toHaveValue("rust");
 
   // A new Context, made here, in this Device's time zone, becomes the current one.
   const form = contexts.getByRole("form", { name: "New Context" });
-  await form.getByLabel("Name").fill(`Side ${tag}`);
-  await form.getByLabel("Accent").selectOption("plum");
+  await form.getByLabel("Name", { exact: true }).fill(`Side ${tag}`);
+  await form.getByRole("combobox", { name: "Accent", exact: true }).selectOption("plum");
   await form.getByRole("button", { name: "Make the Context" }).click();
   await expect(switcher(page)).toHaveAccessibleName(`Context: Side ${tag}`);
-  await expect(row(`Side ${tag}`).getByLabel(`Accent of Side ${tag}`)).toHaveValue("plum");
+  await expect(
+    row(`Side ${tag}`).getByRole("combobox", { name: `Accent of Side ${tag}`, exact: true }),
+  ).toHaveValue("plum");
 
   // Another accent, shown at once in the switcher.
-  await row(`Side ${tag}`).getByLabel(`Accent of Side ${tag}`).selectOption("moss");
+  await row(`Side ${tag}`)
+    .getByRole("combobox", { name: `Accent of Side ${tag}`, exact: true })
+    .selectOption("moss");
   await expect(switcher(page)).toHaveCSS("background-color", MOSS);
 
   // Retired, it leaves the switcher and the screen moves to a Context that is not; brought
