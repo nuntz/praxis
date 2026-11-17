@@ -2,7 +2,8 @@
  * The offering table of section 4.10 (ADR 0015), kept by hand and never derived from the
  * registry, so a change in who is offered what always shows as a diff to this file. One row per
  * tool in the registry, one column per caller, in the order of `everyCaller`. It grows a row with each tool and must equal the
- * spec's table for the tools it has.
+ * spec's table for the tools it has. A write the spec marks held is offered: holding is a rule
+ * of the tool on the person's words (section 4.7), not whether the caller may call it.
  */
 export type Offer = "yes" | "no";
 
@@ -12,6 +13,11 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   record_entry: [  "yes", "yes", "no",  "yes",      "no"  ],
   get_entry: [     "yes", "yes", "yes", "yes",      "yes" ],
   list_entries: [  "yes", "yes", "yes", "yes",      "yes" ],
+  edit_entry: [    "yes", "yes", "no",  "yes",      "no"  ],
+  restore_entry_version: [
+                   "yes", "yes", "no",  "yes",      "no"  ],
+  list_entry_versions: [
+                   "yes", "yes", "yes", "yes",      "yes" ],
   add_link: [      "yes", "yes", "no",  "yes",      "no"  ],
   remove_link: [   "yes", "yes", "no",  "yes",      "no"  ],
   add_task: [      "yes", "yes", "no",  "yes",      "no"  ],

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { inlineTasks } from "../src/index.ts";
+import { inlineTasks, inlineTasksAdded } from "../src/index.ts";
 
 // Parsing an Inline Task is one of the few places with direct tests (section 13): what the person
 // types at the start of a line is too varied for scenarios at the tool seam.
@@ -51,6 +51,37 @@ describe("an Inline Task", () => {
     expect(inlineTasks("\n\n[] One\n\n- Two\n[ ] Three\n")).toEqual([
       { title: "One" },
       { title: "Three" },
+    ]);
+  });
+});
+
+describe("the Inline Tasks an edit adds", () => {
+  test("are the marked lines the new words have and the old did not, in the order typed", () => {
+    const before = "Lease\n[] Sign it";
+    const after = "[] Read it\nLease\n[] Sign it\n[ ] Send it back";
+
+    expect(inlineTasksAdded(before, after)).toEqual([
+      { title: "Read it" },
+      { title: "Send it back" },
+    ]);
+  });
+
+  test.each([
+    ["moving a marked line", "[] One\n[] Two", "[] Two\n[] One"],
+    ["changing its marker", "[] One", "- [ ] One"],
+    ["deleting a marked line", "[] One\n[] Two", "[] Two"],
+    ["changing an unmarked line", "Lease\n[] One", "The lease\n[] One"],
+  ])("%s adds none", (_, before, after) => {
+    expect(inlineTasksAdded(before, after)).toEqual([]);
+  });
+
+  test("a line whose title changed adds a Task by its new title, and the old one stays", () => {
+    expect(inlineTasksAdded("[] Call Ali", "[] Call Bea")).toEqual([{ title: "Call Bea" }]);
+  });
+
+  test("a second line with a title already marked adds one more", () => {
+    expect(inlineTasksAdded("[] Call Ali", "[] Call Ali\n[] Call Ali")).toEqual([
+      { title: "Call Ali" },
     ]);
   });
 });

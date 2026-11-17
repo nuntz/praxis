@@ -2,6 +2,7 @@ import {
   type Anchor,
   type End,
   type Entry,
+  type EntryNamed,
   followAnchor,
   inlineTasks,
   type LinkQuery,
@@ -30,11 +31,14 @@ const dayFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
  * The Journal's composer, which records an Entry with no model turn. `@` opens a picker of the
  * Context's Persons and `#` one of its Tasks and Projects. Only a pick makes a link: the editor
  * keeps each beside the words and passes them to `record_entry`, and never matches a name to a
- * record.
+ * record. The Entry it records may be a Follow-up to one the person chose.
  */
 export function Composer(props: {
   /** The Context the Entry is recorded in, named on the composer once known. */
   contextName: string | undefined;
+  /** The earlier Entry the one recorded continues or corrects, if the person chose one. */
+  followingUp: EntryNamed | null;
+  onStopFollowingUp: () => void;
   onRecorded: (entry: Entry) => void;
   onProblem: (message: string) => void;
 }) {
@@ -142,6 +146,7 @@ export function Composer(props: {
         words: words(),
         tasks: inlineTasks(words()),
         links: picks(),
+        ...(props.followingUp ? { follow_up_to: props.followingUp.id } : {}),
       });
       if (!result.ok) return props.onProblem(result.error.message);
       props.onRecorded(result.value.record);
@@ -229,6 +234,16 @@ export function Composer(props: {
         <label for="new-entry" class="composer-label">
           {props.contextName ? `Record an Entry in ${props.contextName}` : "Record an Entry"}
         </label>
+        <Show when={props.followingUp}>
+          {(earlier) => (
+            <p class="composer-follow-up">
+              <span>Following up “{earlier().summary}”</span>
+              <button type="button" class="quiet" onClick={() => props.onStopFollowingUp()}>
+                Not a Follow-up
+              </button>
+            </p>
+          )}
+        </Show>
         <div class="composer-row">
           <textarea
             ref={field}

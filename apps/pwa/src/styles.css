@@ -892,3 +892,121 @@ button.quiet {
   border-radius: var(--radius-lg);
   color: var(--muted);
 }
+
+/* Editing an Entry: its marks and controls beside its time, the editor showing the words as typed. */
+
+.entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+}
+
+button.quiet.entry-mark {
+  color: var(--muted);
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+.entry-follows,
+.follow-ups {
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.entry-follows a,
+.follow-ups a {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.follow-ups-title {
+  margin: 0;
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+.follow-ups ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+
+/* On the composer's tint, where only ink is legible. */
+.composer-follow-up {
+  color: var(--ink);
+  font: var(--type-meta);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.entry-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.entry-editor textarea {
+  width: 100%;
+  max-width: 620px;
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--type-words);
+  resize: vertical;
+}
+
+.entry-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* A Version compared against the current words, as typed: what is gone struck, what came underlined. */
+
+.versions {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+}
+
+.version-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.version {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.version-meta {
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.version-words {
+  max-width: 620px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.version-words del {
+  color: var(--muted);
+}
+
+.version-words ins {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

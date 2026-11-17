@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { anchorIn, followAnchor, linkQueryAt, pickLink } from "../src/index.ts";
+import { followAnchor, linkQueryAt, pickLink } from "../src/index.ts";
 
 // What the person types to link something is one of the few places with direct tests
 // (section 13): the words around a picker are too varied for scenarios at the tool seam.
@@ -101,23 +101,5 @@ describe("a pick followed through what is typed after it", () => {
     ["replacing all the words", "Something else"],
   ])("is lost on %s", (_, after) => {
     expect(followAnchor(before, after, anchor)).toBeNull();
-  });
-});
-
-// Until an Entry's words can change (#51), a kept anchor going stale cannot be reached at the
-// tool seam, so the rule is tested here; a scenario there should take its place.
-describe("a kept anchor", () => {
-  const kept = { start: 4, end: 8, text: "@Ali" };
-
-  test("is the anchor while the words hold its text there", () => {
-    expect(anchorIn("Met @Ali today", kept)).toEqual({ start: 4, end: 8 });
-  });
-
-  test.each([
-    ["the text changed", "Met @Bea today"],
-    ["the text moved", "We met @Ali today"],
-    ["the words are shorter", "Met"],
-  ])("is gone when %s, and the link stays without one", (_, words) => {
-    expect(anchorIn(words, kept)).toBeNull();
   });
 });

@@ -11,9 +11,26 @@ export function createTables(sql: SqlStorage): void {
       at INTEGER NOT NULL,
       author_kind TEXT NOT NULL,
       author_name TEXT,
-      through_conversation INTEGER NOT NULL
+      through_conversation INTEGER NOT NULL,
+      -- The one earlier Entry it is a Follow-up to, if any.
+      follow_up_to TEXT REFERENCES entries (id)
     );
     CREATE INDEX IF NOT EXISTS entries_by_time ON entries (at, seq);
+    CREATE INDEX IF NOT EXISTS entries_by_follow_up_to ON entries (follow_up_to);
+
+    -- Every earlier state of an Entry's words, part of the Entry: the words it had at a version,
+    -- and who changed them and when. Never pruned and never coalesced. An Entry's version is how
+    -- many it has.
+    CREATE TABLE IF NOT EXISTS entry_versions (
+      seq INTEGER PRIMARY KEY,
+      entry TEXT NOT NULL REFERENCES entries (id),
+      version INTEGER NOT NULL,
+      words TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      author_kind TEXT NOT NULL,
+      author_name TEXT,
+      UNIQUE (entry, version)
+    );
 
     -- A Project contains Tasks. Its state is not a column: it is derived from what was declared.
     CREATE TABLE IF NOT EXISTS projects (

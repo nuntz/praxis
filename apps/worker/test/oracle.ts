@@ -35,6 +35,7 @@ const domainTables: Record<string, { kind: Effect["kind"]; id: string }> = {
   project_events: { kind: "project", id: "project" },
   persons: { kind: "person", id: "id" },
   entry_links: { kind: "entry", id: "entry" },
+  entry_versions: { kind: "entry", id: "entry" },
   context_settings: { kind: "context", id: "id" },
 };
 

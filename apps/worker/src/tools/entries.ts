@@ -1,23 +1,42 @@
 import {
   authorOf,
+  type Caller,
   type Day,
   type Effect,
   type Entry,
+  type EntryNamed,
   failure,
+  HELD_FOR_A_CONNECTION,
   instantToIso,
   type Link,
   type NewLink,
+  type NewTask,
   PAGE_SIZE,
   success,
   summarizeWords,
+  type ToolResult,
+  type Version,
+  type Written,
   written,
 } from "@praxis/domain";
 import { type AuthorColumns, authorColumns, toAuthor } from "../author.ts";
-import { checkLink, deleteLinks, insertLinks, keepableLinks, linksOf } from "../link-rows.ts";
+import {
+  checkLink,
+  deleteLinks,
+  followAnchors,
+  insertLinks,
+  keepableLinks,
+  linksOf,
+} from "../link-rows.ts";
+import { newestFirst } from "../newest-first.ts";
 import type { Handlers } from "../registry.ts";
 import { insertTask, taskEffect, tasksOf } from "../task-rows.ts";
 
 const NO_SUCH_ENTRY = "No such Entry in this Context.";
+
+/** Said to a caller whose change to the words was made against a Version no longer current. */
+const STALE =
+  "The Entry's words have changed since the version this change was made against: read the Entry again.";
 
 type EntryRow = AuthorColumns & {
   seq: number;
@@ -25,26 +44,49 @@ type EntryRow = AuthorColumns & {
   words: string;
   at: number;
   through_conversation: number;
+  follow_up_to: string | null;
+};
+
+type VersionRow = AuthorColumns & {
+  seq: number;
+  entry: string;
+  version: number;
+  words: string;
+  at: number;
 };
 
 export const entryTools: Pick<
   Handlers,
-  "record_entry" | "get_entry" | "list_entries" | "add_link" | "remove_link"
+  | "record_entry"
+  | "get_entry"
+  | "list_entries"
+  | "edit_entry"
+  | "restore_entry_version"
+  | "list_entry_versions"
+  | "add_link"
+  | "remove_link"
 > = {
   record_entry({ caller, input, arrivedAt, today, sql }) {
     const links = keepableLinks(sql, input.words, input.links ?? []);
+    // Like a link, a Follow-up naming no Entry here is not kept: the words are never refused.
+    const followUpTo =
+      input.follow_up_to !== undefined && entryExists(sql, input.follow_up_to)
+        ? input.follow_up_to
+        : null;
     const author = authorOf(caller);
     const id = crypto.randomUUID();
     // Only the Agent works from the Conversation: whatever it records came through it.
     const throughConversation = caller.kind === "agent";
     sql.exec(
-      `INSERT INTO entries (id, words, at, author_kind, author_name, through_conversation)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO entries
+         (id, words, at, author_kind, author_name, through_conversation, follow_up_to)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       id,
       input.words,
       arrivedAt,
       ...authorColumns(author),
       throughConversation ? 1 : 0,
+      followUpTo,
     );
     // The Tasks come as a list beside the words. The words are never read to find them.
     for (const { title } of input.tasks ?? []) {
@@ -60,6 +102,55 @@ export const entryTools: Pick<
         ...made,
       ]),
     );
+  },
+
+  edit_entry({ caller, input, arrivedAt, today, sql }) {
+    const entry = readEntry(sql, input.id, today);
+    if (!entry) return failure("not_found", NO_SUCH_ENTRY);
+    return changeWords(
+      { caller, arrivedAt, today, sql },
+      entry,
+      { version: input.version, words: input.words },
+      input.tasks ?? [],
+    );
+  },
+
+  restore_entry_version({ caller, input, arrivedAt, today, sql }) {
+    const entry = readEntry(sql, input.id, today);
+    if (!entry) return failure("not_found", NO_SUCH_ENTRY);
+    const restored = sql
+      .exec<{ words: string }>(
+        `SELECT words FROM entry_versions WHERE entry = ? AND version = ?`,
+        entry.id,
+        input.restore,
+      )
+      .toArray()[0];
+    if (!restored) return failure("not_found", "No such Version of this Entry.");
+    // Restored words make no Task, whatever markers they hold: the words are never read for one.
+    return changeWords(
+      { caller, arrivedAt, today, sql },
+      entry,
+      { version: input.version, words: restored.words },
+      [],
+    );
+  },
+
+  list_entry_versions({ input, sql }) {
+    if (!entryExists(sql, input.id)) return failure("not_found", NO_SUCH_ENTRY);
+    // An Entry's Versions arrive in the order they are numbered, so newest first is by arrival,
+    // and a cursor is one Entry's own.
+    const page = newestFirst(`entry_versions:${input.id}`, input.cursor, (before) =>
+      sql.exec<VersionRow>(
+        `SELECT * FROM entry_versions WHERE entry = ? AND seq < ? ORDER BY seq DESC`,
+        input.id,
+        before,
+      ),
+    );
+    if (!page.ok) return page;
+    return success({
+      items: page.value.rows.map(toVersion),
+      next_cursor: page.value.next_cursor,
+    });
   },
 
   add_link({ input, arrivedAt, today, sql }) {
@@ -111,11 +202,78 @@ export const entryTools: Pick<
     const page = rows.slice(0, PAGE_SIZE);
     const last = page.at(-1);
     return success({
-      items: withTasks(sql, page, today),
+      items: readEntries(sql, page, today),
       next_cursor: rows.length > PAGE_SIZE && last ? encodeCursor(last) : null,
     });
   },
 };
+
+/** What a change to an Entry's words is given to run. */
+type WordsCall = { caller: Caller; arrivedAt: number; today: Day; sql: SqlStorage };
+
+/**
+ * Change an Entry's words, as `edit_entry` and `restore_entry_version` both do: against the
+ * version it was made against, keeping the words before as a Version, moving each anchor with
+ * the change, and making the Tasks given. The person's words are theirs alone to change, and an
+ * Entry the person edits becomes theirs.
+ */
+function changeWords(
+  { caller, arrivedAt, today, sql }: WordsCall,
+  entry: Entry,
+  change: { version: number; words: string },
+  tasks: NewTask[],
+): ToolResult<Written<Entry>> {
+  const wordsChanged = change.words !== entry.words;
+  // Asking for the words it has, with no Task to make, is asking for what is already so.
+  if (!wordsChanged && tasks.length === 0) return success(written(entry, []));
+  // The Agent's call leaves a Held Change for the person's tap with #62. Until then it is refused.
+  if (wordsChanged && entry.author.kind === "person" && caller.kind !== "hand") {
+    return failure("held", HELD_FOR_A_CONNECTION);
+  }
+  if (change.version !== entry.version) return failure("stale", STALE);
+  const by = authorOf(caller);
+  if (wordsChanged) {
+    sql.exec(
+      `INSERT INTO entry_versions (entry, version, words, at, author_kind, author_name)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      entry.id,
+      entry.version,
+      entry.words,
+      arrivedAt,
+      ...authorColumns(by),
+    );
+    const author = caller.kind === "hand" ? by : entry.author;
+    sql.exec(
+      `UPDATE entries SET words = ?, author_kind = ?, author_name = ? WHERE id = ?`,
+      change.words,
+      ...authorColumns(author),
+      entry.id,
+    );
+    followAnchors(sql, entry.id, entry.words, change.words);
+  }
+  const made = tasks.map(({ title }) =>
+    insertTask(sql, { title, originEntry: entry.id, at: arrivedAt, author: by }),
+  );
+  const changed = readEntry(sql, entry.id, today) as Entry;
+  return success(
+    written(changed, [
+      ...(wordsChanged ? [entryEffect(changed, "changed")] : []),
+      ...changed.tasks.filter((task) => made.includes(task.id)).map((t) => taskEffect(t, "made")),
+    ]),
+  );
+}
+
+function entryExists(sql: SqlStorage, id: string): boolean {
+  return sql.exec(`SELECT 1 FROM entries WHERE id = ?`, id).toArray().length > 0;
+}
+
+function toVersion(row: VersionRow): Version {
+  return {
+    version: row.version,
+    words: row.words,
+    changed: { by: toAuthor(row), at: instantToIso(row.at) },
+  };
+}
 
 /**
  * Whether an Entry already links what a new link names: at that span, or at all when it has no
@@ -140,26 +298,81 @@ function entryEffect(entry: Entry, what: Effect["what"]): Effect {
 /** An Entry that exists in this Context, with its Tasks and links. */
 function readEntry(sql: SqlStorage, id: string, today: Day): Entry | null {
   const rows = sql.exec<EntryRow>(`SELECT * FROM entries WHERE id = ?`, id).toArray();
-  return withTasks(sql, rows, today)[0] ?? null;
+  return readEntries(sql, rows, today)[0] ?? null;
 }
 
-/** The Entries with their Tasks and links, each Task's state read as on `today`. */
-function withTasks(sql: SqlStorage, rows: EntryRow[], today: Day): Entry[] {
-  const tasks = tasksOf(
-    sql,
-    rows.map((row) => row.id),
-    today,
-  );
+/**
+ * The Entries their rows hold, each with its Tasks, links, last change to its words and
+ * Follow-ups, each Task's state read as on `today`.
+ */
+function readEntries(sql: SqlStorage, rows: EntryRow[], today: Day): Entry[] {
+  const ids = rows.map((row) => row.id);
+  const tasks = tasksOf(sql, ids, today);
   const links = linksOf(sql, rows);
-  return rows.map((row) => ({
-    id: row.id,
-    words: row.words,
-    at: instantToIso(row.at),
-    author: toAuthor(row),
-    through_conversation: row.through_conversation === 1,
-    tasks: tasks.get(row.id) ?? [],
-    links: links.get(row.id) ?? [],
-  }));
+  const edits = lastEdits(sql, ids);
+  const followed = entriesNamed(
+    sql,
+    rows.flatMap((row) => (row.follow_up_to === null ? [] : [row.follow_up_to])),
+  );
+  const followUps = followUpsOf(sql, ids);
+  return rows.map((row) => {
+    const edit = edits.get(row.id);
+    return {
+      id: row.id,
+      words: row.words,
+      at: instantToIso(row.at),
+      author: toAuthor(row),
+      through_conversation: row.through_conversation === 1,
+      tasks: tasks.get(row.id) ?? [],
+      links: links.get(row.id) ?? [],
+      version: edit ? edit.version + 1 : 0,
+      edited: edit ? { by: toAuthor(edit), at: instantToIso(edit.at) } : null,
+      follow_up_to: (row.follow_up_to !== null && followed.get(row.follow_up_to)) || null,
+      follow_ups: followUps.get(row.id) ?? [],
+    };
+  });
+}
+
+/** The latest Version of each of these Entries that has one: the last change to its words. */
+function lastEdits(sql: SqlStorage, ids: string[]): Map<string, VersionRow> {
+  const rows = sql
+    .exec<VersionRow>(
+      `SELECT v.* FROM entry_versions v
+       WHERE v.entry IN (SELECT value FROM json_each(?))
+         AND v.version = (SELECT max(version) FROM entry_versions WHERE entry = v.entry)`,
+      JSON.stringify(ids),
+    )
+    .toArray();
+  return new Map(rows.map((row) => [row.entry, row]));
+}
+
+/** Each of these Entries as another names it, by id. */
+function entriesNamed(sql: SqlStorage, ids: string[]): Map<string, EntryNamed> {
+  const rows = sql
+    .exec<{ id: string; words: string }>(
+      `SELECT id, words FROM entries WHERE id IN (SELECT value FROM json_each(?))`,
+      JSON.stringify(ids),
+    )
+    .toArray();
+  return new Map(rows.map((row) => [row.id, { id: row.id, summary: summarizeWords(row.words) }]));
+}
+
+/** The Follow-ups to each of these Entries, in the order they were made. */
+function followUpsOf(sql: SqlStorage, ids: string[]): Map<string, EntryNamed[]> {
+  const rows = sql
+    .exec<{ id: string; words: string; follow_up_to: string }>(
+      `SELECT id, words, follow_up_to FROM entries
+       WHERE follow_up_to IN (SELECT value FROM json_each(?))
+       ORDER BY at, seq`,
+      JSON.stringify(ids),
+    )
+    .toArray();
+  const followUps = new Map<string, EntryNamed[]>();
+  for (const row of rows) {
+    const named = { id: row.id, summary: summarizeWords(row.words) };
+    followUps.set(row.follow_up_to, [...(followUps.get(row.follow_up_to) ?? []), named]);
+  }
+  return followUps;
 }
 
 /** Where a page ended: the last Entry's time and its order of arrival. */

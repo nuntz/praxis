@@ -181,8 +181,28 @@ describe("what a Connection is offered", () => {
     }
   });
 
-  // No tool is held yet: the first, edit_entry (#51), brings the test that a Connection's held
-  // call is refused, with the error saying to add a Follow-up or ask the person to make the edit.
+  test("a held call is refused, with the error saying to add a Follow-up or ask the person to make the edit", async () => {
+    const work = await makeContext("Work");
+    const theirs = await byHand<{ record: Entry }>(`/api/contexts/${work}/tools/record_entry`, {
+      words: "The person's own words",
+    });
+    const client = await connectTo((await makeConnection(work)).address);
+
+    const edited = await call(client, "edit_entry", {
+      id: theirs.record.id,
+      words: "Rewritten from outside",
+      version: theirs.record.version,
+    });
+
+    expect(edited).toMatchObject({
+      isError: true,
+      result: {
+        ok: false,
+        error: { code: "held", message: expect.stringMatching(/Follow-up.*ask the person/s) },
+      },
+    });
+    expect((await entriesOf(work)).items).toEqual([theirs.record]);
+  });
 });
 
 describe("what a Connection reaches", () => {

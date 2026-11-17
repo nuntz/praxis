@@ -61,7 +61,7 @@ Rules:
 - The person writes an Entry directly in the Journal's composer with no model turn.
 - An Entry recorded by the Agent from the Conversation holds the person's words verbatim, trimmed of filler and never paraphrased, with no Markdown added. The Agent composes prose only when asked, and such an Entry has the Agent as Author. What was said together becomes one Entry; the Agent splits only on a plain change of subject.
 - Adding or removing a link never changes the words, makes no Version and is never a Held Change.
-- **Inline Task**: a marker the person types in an editor. The editor, using a parser in the domain package, turns it into the list of Tasks passed to `record_entry`. The Task it makes is the same as any other, and editing the words later cannot delete it. The same holds for what the person types to link something.
+- **Inline Task**: a marker the person types in an editor. The editor, using a parser in the domain package, turns it into the list of Tasks passed to `record_entry`, or to `edit_entry` for a marked line an edit adds. The Task it makes is the same as any other, and editing the words later cannot delete it. The same holds for what the person types to link something.
 
 **What the person types.**
 
@@ -293,6 +293,8 @@ ADR 0005. Glossary: Held Change.
 ### 4.8 Entries, Tasks and links in the tools
 
 - `record_entry` takes the words, a list of Tasks to make with it, a list of links, and optionally the Entry it is a Follow-up to.
+- `edit_entry` takes the new words, the Version they were made against, and a list of Tasks to make with them: the Inline Tasks the edit added. `restore_entry_version` makes none.
+- A change to an Entry's words moves each anchor with what is typed before it and keeps it through what is typed after. A change that touches an anchor's span leaves the link on the Entry without its anchor.
 - `add_task` attaches a Task to an Entry that exists. There is no bare `create_task`.
 - A link in `record_entry` or `add_link` may name a new Person or Project to make in the same call.
 - A link that names a record now in the Trash is recorded dormant. An Entry's words are never refused for a link.
@@ -879,7 +881,7 @@ ADR 0015, 0019, 0020, 0021.
 
 **Layers.**
 
-- `bun test` for the pure domain package. Direct tests there only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, parsing an Inline Task and what the person types to link something, and what the Markdown renderer lets through: the set, the addresses and when an image loads.
+- `bun test` for the pure domain package. Direct tests there only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, parsing an Inline Task and what the person types to link something, comparing a Version against the current words, and what the Markdown renderer lets through: the set, the addresses and when an image loads.
 - `bun test` for the design tokens in the PWA, for one thing only: every text pairing the design system names is at least 4.5:1 in light and in dark, for all six accents. The browser's accessibility check sees only the accent the screen shows.
 - Vitest in real workerd for anything touching a Durable Object or SQL. A test can stand up several Context objects and the Deployment object.
 - No domain or tool code reads the real clock. A test sets the time and the Context's time zone and fires alarms itself.

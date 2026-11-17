@@ -151,3 +151,18 @@ export function inlineTasks(words: string): NewTask[] {
     return title ? [{ title }] : [];
   });
 }
+
+/**
+ * The Inline Tasks an edit of an Entry's words adds: those its new words have beyond the old, by
+ * title, in the order typed. The editor passes them to `edit_entry`. A marked line moved, or given
+ * another marker, adds none, and one deleted deletes no Task (section 3.2).
+ */
+export function inlineTasksAdded(before: string, after: string): NewTask[] {
+  const had = new Map<string, number>();
+  for (const { title } of inlineTasks(before)) had.set(title, (had.get(title) ?? 0) + 1);
+  return inlineTasks(after).filter(({ title }) => {
+    const left = had.get(title) ?? 0;
+    had.set(title, left - 1);
+    return left <= 0;
+  });
+}

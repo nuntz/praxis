@@ -4,6 +4,7 @@ import {
   type Effect,
   type Entry,
   failure,
+  followAnchor,
   type Link,
   type LinkTarget,
   liesWithin,
@@ -179,4 +180,41 @@ function makeTarget(sql: SqlStorage, to: NewLinkTarget, at: number): LinkTarget 
 function madeEffect(target: LinkTarget, name: string): Effect {
   const record = { id: target.id, name };
   return target.kind === "person" ? personEffect(record, "made") : projectEffect(record, "made");
+}
+
+/**
+ * Move each anchored link of an Entry with a change to its words from `before` to `after`: along
+ * with what the change put before it, and through what it put after. A link whose span the change
+ * touches stays on the Entry without its anchor (section 3.2); only a draft's pick is dropped.
+ */
+export function followAnchors(sql: SqlStorage, entry: string, before: string, after: string) {
+  const rows = sql
+    .exec<{ seq: number; anchor_start: number; anchor_end: number; anchor_text: string }>(
+      `SELECT seq, anchor_start, anchor_end, anchor_text FROM entry_links
+       WHERE entry = ? AND anchor_start IS NOT NULL`,
+      entry,
+    )
+    .toArray();
+  for (const row of rows) {
+    const kept = anchorIn(before, {
+      start: row.anchor_start,
+      end: row.anchor_end,
+      text: row.anchor_text,
+    });
+    const moved = kept && followAnchor(before, after, kept);
+    if (!moved) {
+      sql.exec(
+        `UPDATE entry_links SET anchor_start = NULL, anchor_end = NULL, anchor_text = NULL
+         WHERE seq = ?`,
+        row.seq,
+      );
+    } else if (moved.start !== row.anchor_start) {
+      sql.exec(
+        `UPDATE entry_links SET anchor_start = ?, anchor_end = ? WHERE seq = ?`,
+        moved.start,
+        moved.end,
+        row.seq,
+      );
+    }
+  }
 }

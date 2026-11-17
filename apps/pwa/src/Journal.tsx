@@ -3,7 +3,9 @@ import {
   type Day,
   type Effect,
   type Entry,
+  type EntryNamed,
   type Link,
+  summarizeWords,
   type Task,
   type TaskDates,
   utcMidnight,
@@ -11,10 +13,13 @@ import {
 } from "@praxis/domain";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
+import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
 import { Peer } from "./design/Peer.tsx";
+import { EntryEditor } from "./EntryEditor.tsx";
 import { useLive } from "./live-context.ts";
 import { unreachableMessage, useCallTool } from "./tools.ts";
+import { Versions } from "./Versions.tsx";
 import { Words } from "./Words.tsx";
 
 /** Where a record shown in the Journal is, for a link to it from elsewhere on the screen. */
@@ -46,6 +51,8 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
   const [entries, setEntries] = createStore<Entry[]>([]);
   const [earlierCursor, setEarlierCursor] = createSignal<string | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
+  // The Entry the composer's next Entry is a Follow-up to, if the person chose one.
+  const [followingUp, setFollowingUp] = createSignal<EntryNamed | null>(null);
 
   async function loadPage(cursor?: string) {
     try {
@@ -72,7 +79,7 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
   /** Show what a change did, by reading each record its Effects name as it now is. */
   async function patch(change: Change) {
     for (const effect of change.effects) {
-      if (effect.kind === "entry") await refreshEntry(effect.id);
+      if (effect.kind === "entry") await refreshAround(effect.id);
       if (effect.kind === "task") await refreshTask(effect.id);
       if (effect.what !== "deleted") renameLinksTo(effect);
       await refreshTasksNaming(effect.id);
@@ -86,16 +93,43 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
     await loadPage();
   }
 
+  /**
+   * Show an Entry as it now is, and each Entry shown with it as a Follow-up or as the one it
+   * follows up, which names it by its summary and lists it among its Follow-ups.
+   */
+  async function refreshAround(id: string) {
+    const entry = await refreshEntry(id);
+    const related = new Set(
+      entries
+        .filter(
+          (shown) =>
+            shown.follow_up_to?.id === id || shown.follow_ups.some((each) => each.id === id),
+        )
+        .map((shown) => shown.id),
+    );
+    if (entry?.follow_up_to) related.add(entry.follow_up_to.id);
+    related.delete(id);
+    for (const each of related) {
+      if (entries.some((shown) => shown.id === each)) await refreshEntry(each);
+    }
+  }
+
   /** Show an Entry as it now is: in place, in time order, or gone if it is. */
-  async function refreshEntry(id: string) {
+  async function refreshEntry(id: string): Promise<Entry | null> {
     const result = await callTool("get_entry", { id });
     if (!result.ok) {
       if (result.error.code === "not_found")
         setEntries((shown) => shown.filter((e) => e.id !== id));
-      return;
+      return null;
     }
     const entry = result.value;
-    const at = entries.findIndex((shown) => shown.id === id);
+    showEntry(entry);
+    return entry;
+  }
+
+  /** Show an Entry as a read or a write gave it: in place, or in time order. */
+  function showEntry(entry: Entry) {
+    const at = entries.findIndex((shown) => shown.id === entry.id);
     // Patched in place, so what is open on it stays open.
     if (at !== -1) return setEntries(at, reconcile(entry, { key: "id" }));
     const oldest = entries[0];
@@ -169,7 +203,15 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
             {(entry) => (
               <EntryItem
                 entry={entry}
-                time={timeFormat.format(new Date(entry.at))}
+                formatTime={(at) => timeFormat.format(new Date(at))}
+                onEntry={(changed) => {
+                  setProblem(null);
+                  showEntry(changed);
+                }}
+                onFollowUp={() => {
+                  setFollowingUp({ id: entry.id, summary: summarizeWords(entry.words) });
+                  document.getElementById("new-entry")?.focus();
+                }}
                 onTask={showTask}
                 onProblem={setProblem}
               />
@@ -187,9 +229,13 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
         </Show>
         <Composer
           contextName={props.contextName}
+          followingUp={followingUp()}
+          onStopFollowingUp={() => setFollowingUp(null)}
           onRecorded={(entry) => {
             setProblem(null);
-            setEntries((shown) => [...shown, entry]);
+            setFollowingUp(null);
+            showEntry(entry);
+            if (entry.follow_up_to) void refreshEntry(entry.follow_up_to.id);
           }}
           onProblem={setProblem}
         />
@@ -200,17 +246,70 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
 
 function EntryItem(props: {
   entry: Entry;
-  /** When it was made, as shown in the Context's time zone. */
-  time: string;
+  /** An instant as shown in the Context's time zone. */
+  formatTime: (at: string) => string;
+  /** The Entry as a change to it returned it. */
+  onEntry: (entry: Entry) => void;
+  /** The person chose to record a Follow-up to it. */
+  onFollowUp: () => void;
   onTask: (task: Task) => void;
   onProblem: (message: string) => void;
 }) {
+  const [editing, setEditing] = createSignal(false);
+  const [showingVersions, setShowingVersions] = createSignal(false);
   return (
     <li class="entry" id={recordAnchor("entry", props.entry.id)} data-testid="entry" tabIndex={-1}>
-      <time class="entry-time" datetime={props.entry.at}>
-        {props.time}
-      </time>
-      <Words words={props.entry.words} testId="words" />
+      <div class="entry-head">
+        <time class="entry-time" datetime={props.entry.at}>
+          {props.formatTime(props.entry.at)}
+        </time>
+        <Show when={props.entry.edited}>
+          {(edited) => (
+            <button
+              type="button"
+              class="quiet entry-mark"
+              aria-expanded={showingVersions()}
+              onClick={() => setShowingVersions((shown) => !shown)}
+            >
+              {edited().by.kind === "person" ? "Edited" : `Edited by ${authorName(edited().by)}`}
+            </button>
+          )}
+        </Show>
+        <Show when={!editing()}>
+          <button type="button" class="quiet entry-mark" onClick={() => setEditing(true)}>
+            Edit
+          </button>
+        </Show>
+        <button type="button" class="quiet entry-mark" onClick={() => props.onFollowUp()}>
+          Follow up
+        </button>
+      </div>
+      <Show when={props.entry.follow_up_to}>
+        {(to) => (
+          <p class="entry-follows">
+            Follows up <a href={`#${recordAnchor("entry", to().id)}`}>“{to().summary}”</a>
+          </p>
+        )}
+      </Show>
+      <Show when={editing()} fallback={<Words words={props.entry.words} testId="words" />}>
+        <EntryEditor
+          entry={props.entry}
+          onSaved={(entry) => {
+            setEditing(false);
+            props.onEntry(entry);
+          }}
+          onCancel={() => setEditing(false)}
+          onProblem={props.onProblem}
+        />
+      </Show>
+      <Show when={showingVersions() && props.entry.edited}>
+        <Versions
+          entry={props.entry}
+          formatTime={props.formatTime}
+          onEntry={props.onEntry}
+          onProblem={props.onProblem}
+        />
+      </Show>
       <Show when={props.entry.links.length > 0}>
         <ul class="link-list" aria-label="Mentions and References">
           <For each={props.entry.links}>{(link) => <LinkItem link={link} />}</For>
@@ -222,6 +321,20 @@ function EntryItem(props: {
             {(task) => <TaskItem task={task} onTask={props.onTask} onProblem={props.onProblem} />}
           </For>
         </ul>
+      </Show>
+      <Show when={props.entry.follow_ups.length > 0}>
+        <section class="follow-ups">
+          <h3 class="follow-ups-title">Follow-ups</h3>
+          <ul aria-label="Follow-ups">
+            <For each={props.entry.follow_ups}>
+              {(each) => (
+                <li>
+                  <a href={`#${recordAnchor("entry", each.id)}`}>{each.summary}</a>
+                </li>
+              )}
+            </For>
+          </ul>
+        </section>
       </Show>
     </li>
   );

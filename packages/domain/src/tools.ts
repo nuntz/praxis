@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { CallerKind } from "./callers.ts";
 import { day, daysBefore, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
-import type { Entry, Page } from "./entry.ts";
+import type { Entry, Page, Version } from "./entry.ts";
 import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
 import { newRecurrence } from "./recurrence.ts";
@@ -137,17 +137,31 @@ const newLinkTarget = z.discriminatedUnion("kind", [
 /** A link as a write takes it, kept beside the words and optionally anchored to a span of them. */
 const newLink = z.strictObject({ to: newLinkTarget, anchor: anchor.optional() });
 
+/** Tasks to make with an Entry, each with it as its Origin Entry. */
+const newTasks = z.array(z.strictObject({ title })).optional();
+
+/** The Version of an Entry's words a change to them was made against (section 4.8). */
+const version = z.int().min(0);
+
+/**
+ * What a Connection is told when the words it would change are the person's (section 4.7), in
+ * the refusal and in the description of each tool that can be held.
+ */
+export const HELD_FOR_A_CONNECTION =
+  "Refused when the Entry's Author is the person: their words are changed only by them. Add a Follow-up with record_entry instead, or ask the person to make the edit.";
+
 /** The Context tools. The schemas live here; the tools run inside a Context's object. */
 export const tools = {
   record_entry: {
     kind: "write",
     destructive: false,
     description:
-      "Record an Entry in the Journal. The words are kept exactly as given and never read for Tasks or links: each Task to make with the Entry is given in `tasks`, and has the Entry as its Origin Entry, and each link in `links`. A link to a Task or Project is a Reference and one to a Person a Mention; it may name a new Person or Project to make, and may be anchored to a span of the words. The words are never refused for a link: one naming a record not in this Context is not kept, and an anchor past the words' end is left off. Read the Entry returned for the links kept.",
+      "Record an Entry in the Journal. The words are kept exactly as given and never read for Tasks or links: each Task to make with the Entry is given in `tasks`, and has the Entry as its Origin Entry, and each link in `links`. A link to a Task or Project is a Reference and one to a Person a Mention; it may name a new Person or Project to make, and may be anchored to a span of the words. `follow_up_to` names the one earlier Entry this one continues or corrects, if any: a Follow-up. The words are never refused for a link: one naming a record not in this Context is not kept, and an anchor past the words' end is left off. Read the Entry returned for the links kept.",
     input: writeInput({
       words,
-      tasks: z.array(z.strictObject({ title })).optional(),
+      tasks: newTasks,
       links: z.array(newLink).optional(),
+      follow_up_to: id.optional(),
     }),
     offered: toEveryWriter,
   },
@@ -161,6 +175,27 @@ export const tools = {
     kind: "read",
     description: "List the Journal's Entries, newest first, 50 to a page.",
     input: z.strictObject({ cursor: z.string().min(1).optional() }),
+    offered: toEveryCaller,
+  },
+  edit_entry: {
+    kind: "write",
+    destructive: true,
+    description: `Change an Entry's words, stating the \`version\` of them read with the Entry: a change against one no longer current is \`stale\`, so read the Entry again. The words before are kept as a Version, listed by list_entry_versions. Each Task to make with the new words is given in \`tasks\`, as for record_entry; words that lose a Task's line delete no Task. Its links stay: an anchor moves with what is changed around it, and one whose span the change touches stays without one. ${HELD_FOR_A_CONNECTION}`,
+    input: writeInput({ id, words, version, tasks: newTasks }),
+    offered: toEveryWriter,
+  },
+  restore_entry_version: {
+    kind: "write",
+    destructive: true,
+    description: `Put an Entry's words back to one of its Versions, numbered \`restore\` as list_entry_versions gave it, stating the \`version\` the Entry is at, as for edit_entry. It is a new change: the words it replaces become a Version and the others stay. It makes no Task, whatever the words hold. ${HELD_FOR_A_CONNECTION}`,
+    input: writeInput({ id, restore: version, version }),
+    offered: toEveryWriter,
+  },
+  list_entry_versions: {
+    kind: "read",
+    description:
+      "List an Entry's Versions, newest first, 50 to a page: every earlier state of its words, each with who changed them and when. A Version covers the words only, not the links.",
+    input: z.strictObject({ id, cursor }),
     offered: toEveryCaller,
   },
   add_link: {
@@ -461,6 +496,9 @@ export type ToolOutput = {
   record_entry: Written<Entry>;
   get_entry: Entry;
   list_entries: Page<Entry>;
+  edit_entry: Written<Entry>;
+  restore_entry_version: Written<Entry>;
+  list_entry_versions: Page<Version>;
   add_link: Written<Entry>;
   remove_link: Written<Entry>;
   add_task: Written<Task>;

@@ -1,4 +1,5 @@
 export * from "./callers.ts";
+export * from "./compare.ts";
 export * from "./conversation.ts";
 export * from "./day.ts";
 export * from "./deployment.ts";

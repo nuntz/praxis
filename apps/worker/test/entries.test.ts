@@ -26,6 +26,10 @@ describe("record_entry", () => {
       through_conversation: false,
       tasks: [],
       links: [],
+      version: 0,
+      edited: null,
+      follow_up_to: null,
+      follow_ups: [],
     });
     expect(value(await context.call(hand, "get_entry", { id: record.id }))).toEqual(record);
   });
@@ -155,5 +159,70 @@ describe("list_entries", () => {
     const result = await newContext().call(hand, "list_entries", { cursor: "not-a-cursor" });
 
     expect(result).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+  });
+});
+
+describe("record_entry's Follow-up", () => {
+  test("names the one earlier Entry it continues or corrects, and that Entry is read with its Follow-ups", async () => {
+    const context = newContext();
+    const earlier = value(
+      await context.call(hand, "record_entry", { words: marked("Quote from the roofer") }),
+    ).record;
+    expect(earlier.follow_up_to).toBeNull();
+    expect(earlier.follow_ups).toEqual([]);
+
+    const first = value(
+      await context.call(hand, "record_entry", {
+        words: marked("The quote was wrong"),
+        follow_up_to: earlier.id,
+      }),
+    );
+    const second = value(
+      await context.call(connection, "record_entry", {
+        words: marked("A new quote came"),
+        follow_up_to: earlier.id,
+      }),
+    ).record;
+
+    expect(first.record.follow_up_to).toEqual({ id: earlier.id, summary: earlier.words });
+    // The earlier Entry is not changed by it: a Follow-up is the later Entry's own.
+    expect(first.effects).toEqual([
+      { kind: "entry", id: first.record.id, what: "made", summary: first.record.words, by: "call" },
+    ]);
+    expect(value(await context.call(hand, "get_entry", { id: earlier.id })).follow_ups).toEqual([
+      { id: first.record.id, summary: first.record.words },
+      { id: second.id, summary: second.words },
+    ]);
+  });
+
+  test("names at most one Entry", async () => {
+    const context = newContext();
+    const [a, b] = [
+      value(await context.call(hand, "record_entry", { words: marked("A") })).record,
+      value(await context.call(hand, "record_entry", { words: marked("B") })).record,
+    ];
+
+    const result = await context.call(hand, "record_entry", {
+      words: marked("Both"),
+      follow_up_to: [a.id, b.id],
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+  });
+
+  test("naming an Entry not in this Context keeps the words, with no Follow-up", async () => {
+    const context = newContext();
+    const elsewhere = value(
+      await newContext().call(hand, "record_entry", { words: marked("Elsewhere") }),
+    ).record;
+
+    const { record } = value(
+      await context.call(hand, "record_entry", {
+        words: marked("Here"),
+        follow_up_to: elsewhere.id,
+      }),
+    );
+
+    expect(record.follow_up_to).toBeNull();
   });
 });

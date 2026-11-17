@@ -467,3 +467,86 @@ describe("a Person's latest Mention", () => {
     ]);
   });
 });
+
+describe("an Entry's links when its words change", () => {
+  /** "Met @Ali today", Mentioning a Person anchored to "@Ali", and Referencing a Project. */
+  async function linked(context: Context) {
+    const { person, project } = await someRecords(context);
+    const entry = value(
+      await context.call(hand, "record_entry", {
+        words: "Met @Ali today",
+        links: [
+          { to: { kind: "person", id: person.id }, anchor: { start: 4, end: 8 } },
+          { to: { kind: "project", id: project.id } },
+        ],
+      }),
+    ).record;
+    return { entry, person, project };
+  }
+
+  const edit = (context: Context, id: string, words: string, version = 0) =>
+    context.call(hand, "edit_entry", { id, words, version });
+
+  test.each([
+    ["typing before it moves it along", "I met @Ali today", { start: 6, end: 10 }],
+    ["typing after it keeps it", "Met @Ali today, again", { start: 4, end: 8 }],
+    ["deleting before it moves it back", "@Ali today", { start: 0, end: 4 }],
+  ])("an anchor %s, and the Entry is the one Effect", async (_, words, anchor) => {
+    const context = newContext();
+    const { entry, person } = await linked(context);
+
+    const result = value(await edit(context, entry.id, words));
+
+    expect(result.record.links.map((link) => link.anchor)).toEqual([anchor, null]);
+    expect(result.effects).toEqual([
+      { kind: "entry", id: entry.id, what: "changed", summary: words, by: "call" },
+    ]);
+    // It holds through a later change, as the words read then.
+    const later = value(await edit(context, entry.id, `${words}!`, 1)).record;
+    expect(later.links[0]).toEqual({
+      kind: "mention",
+      to: { kind: "person", id: person.id, summary: person.name },
+      anchor,
+    });
+  });
+
+  test.each([
+    ["typing inside its span", "Met @Alxi today"],
+    ["deleting part of its span", "Met @Al today"],
+    ["replacing all the words", "Something else"],
+  ])("a change %s keeps the link without its anchor", async (_, words) => {
+    const context = newContext();
+    const { entry, person, project } = await linked(context);
+
+    const { record } = value(await edit(context, entry.id, words));
+
+    expect(record.links).toEqual([
+      {
+        kind: "mention",
+        to: { kind: "person", id: person.id, summary: person.name },
+        anchor: null,
+      },
+      {
+        kind: "reference",
+        to: { kind: "project", id: project.id, summary: project.name },
+        anchor: null,
+      },
+    ]);
+    // Gone for good: words that hold its text there again do not bring it back.
+    const back = value(await edit(context, entry.id, "Met @Ali today", 1)).record;
+    expect(back.links.map((link) => link.anchor)).toEqual([null, null]);
+  });
+
+  test("a restore moves anchors as an edit does, and a Version keeps no links of its own", async () => {
+    const context = newContext();
+    const { entry } = await linked(context);
+    value(await edit(context, entry.id, "Yesterday I met @Ali today"));
+
+    const { record } = value(
+      await context.call(hand, "restore_entry_version", { id: entry.id, restore: 0, version: 1 }),
+    );
+
+    expect(record.words).toBe("Met @Ali today");
+    expect(record.links.map((link) => link.anchor)).toEqual([{ start: 4, end: 8 }, null]);
+  });
+});
