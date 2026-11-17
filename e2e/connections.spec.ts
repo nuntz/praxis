@@ -33,7 +33,7 @@ test("the person makes a Connection to one Context, and its address reaches that
     has: page.getByRole("textbox", { name: `Name of ${name}` }),
   });
   // The settings' first read of the Connections answers only once the new one shows, as it can
-  // on a busy Deployment: what it answers was read before the Connection was made (#83).
+  // on a busy Deployment: what it answers was read before the Connection was made.
   await page.route(
     /\/list_connections$/,
     async (route) => {

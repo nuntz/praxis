@@ -33,7 +33,7 @@ export function Connections(props: { contexts: ContextListing[] }) {
 
   // A read answers with the list as the Deployment held it when the read was sent. One overtaken
   // by a later read, or sent before a change made here since, would show the list without that
-  // change: it is dropped, and in the second case the list is read again (#83).
+  // change: it is dropped, and in the second case the list is read again.
   let reads = 0;
   let changes = 0;
 
