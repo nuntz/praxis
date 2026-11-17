@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues and specs live in this repo's GitHub Issues, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues and specs live in this repo's GitHub Issues: read one with `gh issue view <n> --json title,body,labels,comments`; the rest is in `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -15,3 +15,7 @@ Fixed by ADR 0015 and SPEC section 13: `/tdd` works at them without asking.
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Flaky journeys
+
+A journey that fails only under load: `docs/flaky-journeys.md`.
