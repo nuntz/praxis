@@ -3,6 +3,4 @@
 interface Env {
   /** The Agent's provider key, the person's own (ADR 0017). Optional: without it there is no Agent. */
   AGENT_API_KEY?: string;
-  /** The Agent's model, one the code ships a price for. Optional: the default otherwise. */
-  AGENT_MODEL?: string;
 }

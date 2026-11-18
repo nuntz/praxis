@@ -5,6 +5,10 @@ on:
     branches: [master]
   pull_request:
 
+# Only the deploy job adds `id-token: write`, to sign in to Pulumi Cloud through OIDC.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -20,6 +24,8 @@ jobs:
         run: bun run typecheck
       - name: Guards still fire (lint rules, the registry guard)
         run: bun run test:lint
+      - name: The deploy's own code (infra, the wizard's scripts)
+        run: bun run test:deploy
       - name: No placeholder names a closed ticket
         run: bun run check:tickets
         env:
@@ -40,3 +46,124 @@ jobs:
           name: playwright-traces
           path: test-results/
           retention-days: 7
+
+  # A Deployment's values live in Pulumi ESC (section 12, docs/deployment.md). `bun run wizard` sets
+  # up the secrets and variables this job reads; until then, and on a fork, it is skipped. The logs
+  # are public, so every configuration value is masked before anything runs. Pulumi Cloud trusts
+  # only this job on a push to master, so a run started by hand only tests.
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && vars.PULUMI_STACK != ''
+    needs: check
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      # Pulumi runs infra/index.ts on Node, which must strip its types itself to load its imports.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: pulumi/actions@v7
+        with:
+          pulumi-version: 3.272.0
+
+      # The stack and its organization are fine to show. PULUMI_CI_USER is a secret, so GitHub
+      # masks it everywhere.
+      - name: Check the CI user and read the organization
+        id: names
+        env:
+          PULUMI_STACK: ${{ vars.PULUMI_STACK }}
+          PULUMI_CI_USER: ${{ secrets.PULUMI_CI_USER }}
+        run: |
+          if [ -z "$PULUMI_CI_USER" ]; then
+            echo "::error::The PULUMI_CI_USER secret is not set: run 'bun run wizard' (docs/deployment.md)"
+            exit 1
+          fi
+          echo "organization=${PULUMI_STACK%%/*}" >> "$GITHUB_OUTPUT"
+
+      # Exchanges this job's GitHub ID token for a personal token of PULUMI_CI_USER, exported as
+      # PULUMI_ACCESS_TOKEN; the action masks both. Pulumi Cloud grants it only to this job on a
+      # push to master (scripts/trust-pulumi-ci.ts). A first deploy runs `pulumi up` twice: half an
+      # hour leaves room, as a token that expires mid-`pulumi up` leaves the stack locked. Pinned to
+      # the commit of v2.1.1.
+      - name: Sign in to Pulumi Cloud through OIDC
+        uses: pulumi/auth-actions@159c3e431aab767d4519b96f3f784d7d3d725622
+        with:
+          organization: ${{ steps.names.outputs.organization }}
+          requested-token-type: urn:pulumi:token-type:access_token:personal
+          scope: user:${{ secrets.PULUMI_CI_USER }}
+          token-expiration: 1800
+
+      - name: Select the stack and its ESC environment
+        working-directory: infra
+        env:
+          PULUMI_STACK: ${{ vars.PULUMI_STACK }}
+          PULUMI_ESC_ENVIRONMENT: ${{ vars.PULUMI_ESC_ENVIRONMENT }}
+          PULUMI_CI_USER: ${{ secrets.PULUMI_CI_USER }}
+        run: |
+          if [ "$(pulumi whoami)" != "$PULUMI_CI_USER" ]; then
+            echo "::error::Signed in to Pulumi Cloud as someone other than PULUMI_CI_USER"
+            exit 1
+          fi
+          pulumi stack select "$PULUMI_STACK"
+          pulumi config env add "$PULUMI_ESC_ENVIRONMENT" --yes > /dev/null
+          pulumi config --show-secrets --json | jq -r '.. | strings | select(length >= 4)' |
+            while IFS= read -r value; do echo "::add-mask::$value"; done
+
+      # A model with no price shipped with Praxis fails the deploy before anything changes (ADR 0017).
+      - name: Check the model has a price
+        run: |
+          AGENT_MODEL="$(pulumi config get --cwd infra praxis:agentModel 2>/dev/null || true)" \
+            bun apps/worker/scripts/check-model.ts
+
+      # Fails before changing anything when the configuration names another jurisdiction than the
+      # deployed Worker's (infra/jurisdiction.ts).
+      - name: pulumi up
+        run: pulumi up --cwd infra --yes --skip-preview
+
+      # The Worker's code and its Durable Object classes, with the vars and secrets Pulumi gives.
+      # Every var is set afresh; secrets are only added, so a key the configuration no longer has
+      # is deleted, and without one there is no Agent (ADR 0017).
+      - name: wrangler deploy
+        working-directory: apps/worker
+        run: |
+          secrets="$RUNNER_TEMP/worker-secrets.json"
+          trap 'rm -f "$secrets"' EXIT
+          pulumi stack output --cwd ../../infra workerSecrets --show-secrets --json > "$secrets"
+          account="$(pulumi stack output --cwd ../../infra cloudflareAccountId --show-secrets)"
+          given="$(pulumi stack output --cwd ../../infra workerVars --show-secrets --json)"
+          jq -r '.[] | select(length >= 4)' <<< "$given" |
+            while IFS= read -r value; do echo "::add-mask::$value"; done
+          # An empty var keeps wrangler.jsonc's, which is empty too.
+          vars=()
+          while IFS= read -r pair; do vars+=(--var "$pair"); done < <(
+            jq -r 'to_entries[] | select(.value != "") | "\(.key):\(.value)"' <<< "$given"
+          )
+          CLOUDFLARE_ACCOUNT_ID="$account" bunx wrangler deploy --secrets-file "$secrets" "${vars[@]}"
+          if ! jq -e 'has("AGENT_API_KEY")' "$secrets" > /dev/null; then
+            status="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$account/workers/scripts/praxis/secrets/AGENT_API_KEY")"
+            case "$status" in
+              200 | 404) ;;
+              *) echo "::error::Could not delete the Agent's key from the Worker: HTTP $status"; exit 1 ;;
+            esac
+          fi
+
+      # The custom domain needs the Worker, so a new Deployment binds it after its first deploy.
+      - name: Bind the hostname on a first deploy
+        run: |
+          if [ "$(pulumi stack output --cwd infra hostnameBound)" != "true" ]; then
+            pulumi up --cwd infra --yes --skip-preview
+          fi

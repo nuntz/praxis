@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    // Pulumi runs the program on Node; its tests run on Bun.
+    "types": ["node", "bun"]
+  },
+  "include": ["."]
+}

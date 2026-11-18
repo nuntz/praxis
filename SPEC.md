@@ -495,7 +495,7 @@ ADR 0017.
 
 ADR 0010, 0017.
 
-- One cap, in money, per calendar month, for the whole Deployment. Set by the person's hand. There is always one: setup asks for it and offers 20 US dollars. The month is UTC's, since the Contexts may each keep another time zone.
+- One cap, in money, per calendar month, for the whole Deployment. Set by the person's hand. There is always one: a Deployment starts with 20 US dollars, which setup says. The month is UTC's, since the Contexts may each keep another time zone.
 - Counted from Run records, Call records and embedding, against a price table shipped with the code. Each Context's object reports what it spent to the Deployment object, which keeps the month's running total and answers whether a Run or a Call may start. A report is the Context's whole total for the month, so one repeated or overtaken counts once. A Run counts in the month it started. The provider's own spend limit is the hard backstop, and setup says to set one.
 - A warning shows at 80%.
 - At the cap: no new Run starts, whether the person or the clock would start it, and `send_message` is refused with the cap in the way and its Message kept nowhere; a Run already going finishes, and so does one for a Message accepted before the cap was reached, waiting behind it; no Call starts; embedding of newly saved Entries stops. The Conversation's composer is replaced by a Notice that links to the cap in settings. The Journal's composer, the screen and Connections keep working.
@@ -765,7 +765,7 @@ ADR 0006, 0010, 0017, 0023, 0024.
 - A Context's object keeps its own name, for its settings and the summary of an Effect on it. The Deployment object is its only writer, writes it before its own list, and runs its writes one at a time, so the two never disagree (ADR 0006).
 - Revoking a Connection or retiring a Context takes effect on the next request.
 - Each Context has its own alarm, which schedules its Brief and Review, expires its Trash, prunes its change log and finishes an interrupted move.
-- A jurisdiction is chosen once at setup, optionally, for every object. It cannot be changed except by Export and restore into a new Deployment.
+- A jurisdiction (`eu`, `us` or `fedramp`) is chosen once at setup, optionally, for every object. It cannot be changed except by Export and restore into a new Deployment.
 - An Entry is text only. Nothing but Backups needs R2.
 
 ### 9.3 What is outside the objects
@@ -864,24 +864,24 @@ ADR 0019.
 - **A stuck Context** is named in a standing Notice, and the other Contexts keep working. Everything on its clock stops: no Brief or Review, no Trash expiry, no finishing of an interrupted move. It tries again only when woken under a different release. The last Backup that holds it is kept past 30 days until it upgrades, and the Notice says so.
 - **A stuck Deployment object** means nothing can be routed. The Worker shows one plain page saying the upgrade failed and under which release.
 - **A deploy is a one-way door** once any object has woken under it. There is no gradual rollout. Going back is by fixing forward, or by restoring a Backup into a fresh Deployment.
-- The upgrade command checks that a Backup from the last day exists and stops with a warning if not, which the person can override.
+- The deploy (section 12, ADR 0026) checks that a Backup from the last day exists and stops with a warning if not, which the person can override.
 - The runtime's tables are not on the ladder. A runtime that cannot open its tables never blocks the Journal: the screen and Connections keep working, the Conversation shows as unavailable, and starting it afresh is the person's choice.
 - The Export's format version is a separate number with its own ladder, which brings an old file forward as it is read and reaches back to format 1 for good.
 
 ## 12. Setup and configuration
 
-ADR 0009, 0017, 0018, 0021. The mechanics follow [mise](https://github.com/nuntz/mise): Pulumi, a setup wizard, and Deployment configuration kept outside the repo.
+ADR 0009, 0017, 0018, 0021, 0026. The mechanics follow [mise](https://github.com/nuntz/mise): Pulumi, a setup wizard, and Deployment configuration kept outside the repo, in a Pulumi ESC environment. The repository's CI deploys on every push to master: Pulumi makes everything around the Worker, then `wrangler deploy` makes the Worker and its Durable Object classes with the vars and secrets Pulumi gives. `docs/deployment.md` walks through it.
 
 The setup wizard:
 
 - Creates the Worker, the Durable Object classes, the R2 bucket for Backups and the meaning index.
-- Creates one Access application for the hostname, switches on managed OAuth, lists the redirect addresses of Claude and ChatGPT (the latter with a wildcard), and allows clients on localhost and loopback.
-- Offers the jurisdiction, once.
+- Creates one Access application for the hostname, with Google as the way in for the person's own address or Workspace domain, switches on managed OAuth, lists the redirect addresses of Claude and ChatGPT (the latter with a wildcard), and allows clients on localhost and loopback.
+- Offers the jurisdiction, once: `eu`, `us`, `fedramp` or none. A deploy that would change it fails before changing anything.
 - Takes the Agent's provider key and the model's name, both optional, and says to set a spend limit with the provider.
 - Takes the voice provider key, optional, and says what reaches that provider.
-- Asks for the monthly spend cap, offering 20 US dollars.
+- Says the monthly spend cap starts at 20 US dollars, and where on the screen to change it.
 - Makes the Web Push signing key pair.
-- Either makes the first Context, with its name, time zone and accent colour, through `create_context`, or restores an Export.
+- Either leads the person to the screen, signed in through Access, to make the first Context with its name, time zone and accent colour, through `create_context`, or restores an Export.
 
 Changing a key or the model is a change to the configuration and a deploy, never something done in Praxis.
 

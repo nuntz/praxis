@@ -5,13 +5,15 @@
   "packageManager": "bun@1.4.4",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "infra"
   ],
   "scripts": {
     "check": "biome check .",
-    "ci": "biome ci --colors=off . && bun run typecheck && bun run test:lint && bun run check:tickets && bun run test:domain && bun run test:pwa && bun run test:worker && bun run test:e2e:twice",
-    "typecheck": "bun run --filter '*' typecheck && tsc -p lint && tsc -p e2e",
+    "ci": "biome ci --colors=off . && bun run typecheck && bun run test:lint && bun run test:deploy && bun run check:tickets && bun run test:domain && bun run test:pwa && bun run test:worker && bun run test:e2e:twice",
+    "typecheck": "bun run --filter '*' typecheck && tsc -p lint && tsc -p e2e && tsc -p scripts",
     "test:lint": "bun test ./lint",
+    "test:deploy": "bun test ./infra ./scripts",
     "check:tickets": "bun lint/tickets.ts",
     "test:domain": "bun test --cwd packages/domain",
     "test:pwa": "bun test --cwd apps/pwa",
@@ -20,7 +22,9 @@
     "test:e2e:twice": "playwright test --repeat-each=2",
     "test:e2e:stress": "playwright test --repeat-each=8 --workers=16",
     "build": "bun run --cwd apps/pwa build",
-    "dev": "bun run build && bun run --cwd apps/worker dev"
+    "dev": "bun run build && bun run --cwd apps/worker dev",
+    "wizard": "bash scripts/setup-deployment.sh",
+    "trust:pulumi-ci": "bun scripts/trust-pulumi-ci.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",

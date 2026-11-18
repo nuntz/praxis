@@ -7,3 +7,7 @@ worker-configuration.d.ts
 
 # Local configuration, such as the Agent's model key for `bun run dev`: never committed.
 .dev.vars*
+
+# A Deployment's Pulumi stack file only imports its ESC environment, and names it: never committed.
+Pulumi.*.yaml
+!Pulumi.example.yaml

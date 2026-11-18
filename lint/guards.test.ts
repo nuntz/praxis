@@ -60,6 +60,17 @@ const fixtures: Record<string, string> = {
     "];",
     "export const followed = [on(currentId, () => {}), on(() => props.contexts, () => {})];",
   ].join("\n"),
+  // The Worker makes or names an object only in routing.ts, in the Deployment's jurisdiction.
+  "apps/worker/src/made-elsewhere.ts": [
+    "declare const env: Env;",
+    "export const made = env.CONTEXT.newUniqueId();",
+    'export const named = env.DEPLOYMENT.idFromName("deployment");',
+    'export const found = env.CONTEXT.idFromString("0123");',
+  ].join("\n"),
+  "apps/worker/src/routing.ts": [
+    "declare const env: Env;",
+    'export const named = env.DEPLOYMENT.idFromName("deployment");',
+  ].join("\n"),
   // The recommended rules are on.
   "apps/pwa/src/recommended.ts": "export function f(a: number) {\n  debugger;\n  return a;\n}",
 };
@@ -94,6 +105,7 @@ const restrictedImport = "lint/style/noRestrictedImports";
 const clockRead = "plugin";
 const inexactLabel = "plugin";
 const computedOn = "plugin";
+const outsideJurisdiction = "plugin";
 
 describe("the lint guards", () => {
   test("the domain package cannot import Cloudflare or Bun", () => {
@@ -139,6 +151,14 @@ describe("the lint guards", () => {
 
   test("an effect cannot follow a value computed in on(), only a signal or a memo", () => {
     expect(rulesAt("apps/pwa/src/on-computed.ts")).toEqual(Array(4).fill(computedOn));
+  });
+
+  test("the Worker makes or names an object only in routing.ts, which finds it in the jurisdiction", () => {
+    expect(rulesAt("apps/worker/src/made-elsewhere.ts")).toEqual([
+      outsideJurisdiction,
+      outsideJurisdiction,
+    ]);
+    expect(rulesAt("apps/worker/src/routing.ts")).toEqual([]);
   });
 
   test("the recommended rules are on", () => {

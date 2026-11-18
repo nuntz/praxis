@@ -14,7 +14,11 @@
   // The Access application the Deployment sits behind: its team's domain, such as
   // https://<team>.cloudflareaccess.com, and the application's audience tag. Neither is a secret.
   // The setup wizard gives each Deployment its own; with none named the Worker lets nothing in.
-  "vars": { "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "" },
+  // JURISDICTION is where every object of the Deployment is kept: "eu", "us" or "fedramp", or none
+  // when empty. The wizard offers it once, and a deploy that would change it fails (section 9.2).
+  // AGENT_MODEL is the Agent's model, one the code ships a price for, or the default when empty.
+  // A deploy gives each with --var (infra/index.ts), and one it leaves out is empty, as here.
+  "vars": { "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "", "JURISDICTION": "", "AGENT_MODEL": "" },
   "durable_objects": {
     "bindings": [
       { "name": "CONTEXT", "class_name": "ContextObject" },

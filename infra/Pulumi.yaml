@@ -1,0 +1,6 @@
+name: praxis
+description: A Praxis Deployment on the person's own Cloudflare account
+runtime:
+  name: nodejs
+  options:
+    packagemanager: bun

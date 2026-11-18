@@ -1,0 +1,39 @@
+# The settings a Praxis Deployment needs. Real values never go in this repo (section 12): keep them in
+# a Pulumi ESC environment and point your stack at it. `bun run wizard` walks you through it, and
+# docs/deployment.md says what each step does.
+#
+# 1. Create the ESC environment (such as `<your-org>/praxis/production`) with this definition:
+#
+#    values:
+#      pulumiConfig:
+#        # Your Cloudflare account ID, and the zone and hostname Praxis is served at.
+#        praxis:accountId: 0123456789abcdef0123456789abcdef
+#        praxis:zone: example.com
+#        praxis:hostname: praxis.example.com
+#        # Your Zero Trust team domain (Zero Trust → Settings → Team name and domain).
+#        praxis:accessTeamDomain: example.cloudflareaccess.com
+#        # Who may sign in: your Google account, or a Google Workspace domain.
+#        praxis:allowedEmails:
+#          - person@example.com
+#        # praxis:allowedEmailDomain: example.com
+#        # A Google OAuth client for Access's Google login.
+#        praxis:googleClientId: 000000000000-example.apps.googleusercontent.com
+#        praxis:googleClientSecret:
+#          fn::secret: GOCSPX-example
+#        # Optional: the Agent's Anthropic API key (console.anthropic.com → API keys). Set a spend
+#        # limit there too: it is the backstop behind Praxis's own cap. Without a key there is no
+#        # Agent, and the rest of Praxis works as normal.
+#        praxis:agentApiKey:
+#          fn::secret: sk-ant-api03-example
+#        # Optional: the Agent's model, one Praxis ships a price for; a deploy with any other fails.
+#        # Without it, claude-sonnet-5-5.
+#        # praxis:agentModel: claude-sonnet-5-5
+#        # Optional, and chosen once: where every object is kept, "eu", "us" or "fedramp". Without
+#        # it, wherever Cloudflare places them. A deploy that would change it fails: moving takes an
+#        # Export restored into a new Deployment.
+#        # praxis:jurisdiction: eu
+#
+# 2. The stack file then only imports it. CI writes this file on every deploy from the
+#    PULUMI_ESC_ENVIRONMENT repository variable; locally, `pulumi config env add` writes it.
+environment:
+  - praxis/production

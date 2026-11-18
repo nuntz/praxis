@@ -22,6 +22,10 @@
       "plugins": ["./lint/no-real-clock.grit"]
     },
     {
+      "includes": ["apps/worker/src/**", "!apps/worker/src/routing.ts"],
+      "plugins": ["./lint/outside-jurisdiction.grit"]
+    },
+    {
       "includes": ["e2e/**"],
       "plugins": ["./lint/exact-label.grit"]
     },

@@ -1,0 +1,8 @@
+language js
+
+or {
+  `$namespace.newUniqueId($args)`,
+  `$namespace.idFromName($args)`
+} as $made where {
+  register_diagnostic(span=$made, message="Make or name a Durable Object through routing.ts, which finds it in the Deployment's jurisdiction, chosen once at setup (section 9.2). An id from idFromString carries its jurisdiction already.")
+}

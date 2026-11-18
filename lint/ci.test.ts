@@ -23,9 +23,21 @@ function localChecks(packageJson: string): string[] {
   return ci.split("&&").map((command) => checkOf(command.trim()));
 }
 
-/** The checks the workflow's steps run, in order, leaving out its setup. */
+/** The text of one job of the workflow, from its name to the next job's. */
+function jobIn(workflow: string, job: string): string {
+  const header = new RegExp(`^ {2}${job}:$`, "m").exec(workflow);
+  if (header === null) throw new Error(`The workflow has no ${job} job.`);
+  const rest = workflow.slice(header.index + header[0].length);
+  const next = rest.search(/^ {2}[a-z][\w-]*:$/m);
+  return next === -1 ? rest : rest.slice(0, next);
+}
+
+/**
+ * The checks the workflow's check job runs, in order, leaving out its setup. The deploy job runs
+ * after it and checks nothing of the code.
+ */
 function workflowChecks(workflow: string): string[] {
-  return [...workflow.matchAll(/^\s*(?:- )?run: (.+)$/gm)]
+  return [...jobIn(workflow, "check").matchAll(/^\s*(?:- )?run: (.+)$/gm)]
     .map((match) => (match[1] ?? "").trim())
     .filter((command) => !SETUP.some((setup) => setup.test(command)))
     .map(checkOf);
@@ -51,7 +63,7 @@ describe("the CI guard", () => {
     expect(drift(local, workflow)).toEqual([]);
   });
 
-  test("fails a check in one and not the other, whatever its flags, and leaves the setup out", () => {
+  test("fails a check in one and not the other, whatever its flags, and leaves the setup and the deploy out", () => {
     const local = localChecks(
       JSON.stringify({
         scripts: { ci: "biome ci --colors=off . && bun run typecheck && bun run test:pwa" },
@@ -59,12 +71,20 @@ describe("the CI guard", () => {
     );
     const workflow = workflowChecks(
       [
+        "jobs:",
+        "  check:",
+        "    steps:",
         "      - run: bun install --frozen-lockfile",
         "      - name: Biome",
         "        run: bunx biome ci .",
         "      - run: bun run typecheck",
         "      - run: bunx playwright install --with-deps chromium",
         "        run: bun run check:tickets",
+        "",
+        "  deploy:",
+        "    steps:",
+        "      - run: bun run build",
+        "      - run: pulumi up --cwd infra --yes",
       ].join("\n"),
     );
 

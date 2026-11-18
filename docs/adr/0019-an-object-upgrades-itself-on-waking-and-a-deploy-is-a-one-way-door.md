@@ -15,7 +15,7 @@ Each Durable Object upgrades its own tables when it wakes, before it serves anyt
 ## Consequences
 
 - There is no gradual rollout. Once any object has woken under a release, going back is by fixing forward, or by restoring a Backup into a fresh Deployment. A fix to a bad step is a new step.
-- The upgrade command checks that a Backup from the last day exists and stops with a warning if not, which the person can override. Skipping releases needs no ceremony.
+- The deploy, which ADR 0026 makes the repository's CI run on a push to master, checks that a Backup from the last day exists and stops with a warning if not, which the person can override. Skipping releases needs no ceremony.
 - Before its first pending step an object notes the platform's point-in-time bookmark. Returning one object to that moment is an operator's escape hatch described in the docs, not a feature.
 - A step changes shape, never meaning. It writes nothing to the change log, has no Author, makes no Version and never touches an Entry's words. Every read through a tool returns the same before and after, apart from what the release adds. A change in meaning to existing records is a rule of the release that the spec states.
 - A step carries across what the Export does not hold: the change log, Devices and their push subscriptions, and a Connection's standing. An upgrade never ends a Connection, silences a Device or shortens the change log.

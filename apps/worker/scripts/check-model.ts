@@ -6,7 +6,8 @@ import { unpricedModel } from "../src/model.ts";
 //
 //   AGENT_MODEL=… bun scripts/check-model.ts
 //
-// The deploy itself, with Pulumi and the setup wizard, is #41, which runs this first.
+// The deploy (.github/workflows/ci.yml) runs it before `wrangler deploy`, so the Worker keeps its
+// configuration, and the setup wizard runs it as the model is named.
 
 const reason = unpricedModel({ AGENT_MODEL: process.env.AGENT_MODEL ?? "" });
 if (reason !== null) {

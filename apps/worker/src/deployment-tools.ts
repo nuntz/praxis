@@ -16,6 +16,7 @@ import {
   type ToolResult,
   written,
 } from "@praxis/domain";
+import { newContextObject } from "./routing.ts";
 import { readCap, readSpend, writeCap } from "./spend-rows.ts";
 
 /** What a Deployment tool is given to run. Like a Context tool, it never reads the real clock. */
@@ -55,12 +56,9 @@ export const deploymentHandlers: DeploymentHandlers = {
 
   async create_context({ input, sql, env, deploymentId }) {
     // The Context's object is made first, so the list never names one that is not there yet.
-    const objectId = env.CONTEXT.newUniqueId();
-    await env.CONTEXT.get(objectId).make(
-      { name: input.name, time_zone: input.time_zone },
-      deploymentId,
-    );
-    const id = objectId.toString();
+    const object = newContextObject(env);
+    await object.stub.make({ name: input.name, time_zone: input.time_zone }, deploymentId);
+    const id = object.id.toString();
     sql.exec(
       `INSERT INTO contexts (id, name, accent, retired) VALUES (?, ?, ?, 0)`,
       id,

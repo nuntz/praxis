@@ -6,8 +6,8 @@ import { DEFAULT_SPEND_CAP, monthOf, type Spend, spendNotice } from "@praxis/dom
  */
 
 /**
- * The monthly cap, in US dollars. The setup wizard (#41) asks for it and offers 20; until a
- * Deployment's has, it has that cap, since there is always one.
+ * The monthly cap, in US dollars. A Deployment starts with 20, which the setup wizard tells the
+ * person and where to change it, and keeps it until the person sets one, since there is always one.
  */
 export function readCap(sql: SqlStorage): number {
   const row = sql.exec<{ dollars: number }>(`SELECT dollars FROM spend_cap`).toArray()[0];
