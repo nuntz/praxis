@@ -1,0 +1,12 @@
+language js
+
+`on(() => $value, $_)` as $call where {
+  $value <: or {
+    JsBinaryExpression(),
+    JsLogicalExpression(),
+    JsUnaryExpression(),
+    JsConditionalExpression(),
+    JsParenthesizedExpression()
+  },
+  register_diagnostic(span=$call, message="Give on() a signal or a createMemo, never a value computed in it: on() follows every signal its function reads, so the effect runs on each read, not when the value changes.")
+}

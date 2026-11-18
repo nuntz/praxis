@@ -46,6 +46,20 @@ const fixtures: Record<string, string> = {
     'export const loose = form.getByLabel("Name");',
     'export const exact = form.getByLabel("Name", { exact: true });',
   ].join("\n"),
+  // An effect follows a signal or a memo, so it runs when the value changes, not on every read.
+  "apps/pwa/src/on-computed.ts": [
+    "declare function on<T>(deps: () => T, fn: (value: T) => void): unknown;",
+    "declare const spend: () => { notice: string } | null;",
+    "declare const props: { contexts: string[] };",
+    "declare const currentId: () => string;",
+    "export const computed = [",
+    '  on(() => spend()?.notice === "cap_reached", () => {}),',
+    "  on(() => !spend(), () => {}),",
+    "  on(() => (spend() ? 1 : 0), () => {}),",
+    "  on(() => spend() && props.contexts, () => {}),",
+    "];",
+    "export const followed = [on(currentId, () => {}), on(() => props.contexts, () => {})];",
+  ].join("\n"),
   // The recommended rules are on.
   "apps/pwa/src/recommended.ts": "export function f(a: number) {\n  debugger;\n  return a;\n}",
 };
@@ -79,6 +93,7 @@ function rulesAt(path: string): string[] {
 const restrictedImport = "lint/style/noRestrictedImports";
 const clockRead = "plugin";
 const inexactLabel = "plugin";
+const computedOn = "plugin";
 
 describe("the lint guards", () => {
   test("the domain package cannot import Cloudflare or Bun", () => {
@@ -120,6 +135,10 @@ describe("the lint guards", () => {
 
   test("a journey cannot find a control by a label it only contains", () => {
     expect(rulesAt("e2e/inexact.spec.ts")).toEqual([inexactLabel]);
+  });
+
+  test("an effect cannot follow a value computed in on(), only a signal or a memo", () => {
+    expect(rulesAt("apps/pwa/src/on-computed.ts")).toEqual(Array(4).fill(computedOn));
   });
 
   test("the recommended rules are on", () => {

@@ -18,4 +18,4 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ### Flaky journeys
 
-A journey that fails only under load: `docs/flaky-journeys.md`.
+A new journey, or one that fails only under load: `docs/flaky-journeys.md`.

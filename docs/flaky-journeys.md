@@ -1,6 +1,6 @@
 # Flaky journeys
 
-A journey that fails only under load, a few runs in a hundred, as #85's did. Every journey shares one Deployment, so `bun run test:e2e:stress` is where they show.
+A journey that fails only under load, a few runs in a hundred, as #85's did. Every journey shares one Deployment, so `bun run test:e2e:stress` is where they show. A new journey is looped (step 1) before the full suite runs it, as one racing its own repeats is a full run lost.
 
 1. **Loop it alone.** `bunx playwright test <file> -g "<title>" --project=desktop --repeat-each=128 --workers=16` takes about 25 seconds, and a race failing one run in twenty shows several times in each. Each failure keeps its own folder under `test-results/`.
 2. **Log what the journey read, from a throwaway spec.** A trace holds each call and the page, not what `boundingBox()` or `evaluate()` returned, so a value read off the page is seen only by logging it. Log too whether the element seen a moment before is still attached (`elementHandle()`, then `isConnected`): one that is not was replaced, and what replaced it is the lead.
