@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { placeholdersIn } from "./tickets.ts";
+import { placeholdersIn, ticketsClosing } from "./tickets.ts";
 
 // What counts as a placeholder naming a ticket. Whether the ticket is closed is asked of GitHub,
-// in CI, by `bun run check:tickets`.
+// in CI, by `bun run check:tickets`, or taken from `--closing` before a ticket is closed.
 
 describe("the ticket placeholders", () => {
   test("are tickets named in line, block and JSX comments", () => {
@@ -32,5 +32,19 @@ describe("the ticket placeholders", () => {
     ].join("\n");
 
     expect(placeholdersIn("f.ts", source)).toEqual([]);
+  });
+});
+
+describe("the tickets about to be closed", () => {
+  test("are each one given after --closing, counted closed whatever GitHub says", () => {
+    expect(ticketsClosing(["--closing", "52"])).toEqual([52]);
+    expect(ticketsClosing(["--closing", "52", "--closing", "62"])).toEqual([52, 62]);
+    expect(ticketsClosing([])).toEqual([]);
+  });
+
+  test("are refused when not a ticket's number", () => {
+    expect(() => ticketsClosing(["--closing"])).toThrow(/--closing takes a ticket's number/);
+    expect(() => ticketsClosing(["--closing", "#52"])).toThrow(/--closing takes/);
+    expect(() => ticketsClosing(["--clsoing", "52"])).toThrow(/--clsoing/);
   });
 });
