@@ -128,7 +128,7 @@ export const projectTools: Pick<
       input.cursor,
       (before) =>
         sql.exec<ProjectRow>(
-          `SELECT p.* FROM projects p
+          `SELECT p.* FROM untrashed_projects p
            WHERE p.seq < ?
              AND (? IS NULL OR ? = coalesce(
                nullif((SELECT what FROM project_events e WHERE e.project = p.id

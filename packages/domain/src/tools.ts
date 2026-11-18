@@ -10,6 +10,7 @@ import { newRecurrence } from "./recurrence.ts";
 import { failure, type ToolResult } from "./results.ts";
 import type { Settings } from "./settings.ts";
 import type { Task } from "./task.ts";
+import type { Removal, TrashItem } from "./trash.ts";
 
 /** Whether a caller is offered a tool (section 4.10). */
 export type Offer = "yes" | "no";
@@ -192,6 +193,13 @@ export const tools = {
     input: writeInput({ id, restore: version, version }),
     offered: toEveryWriter,
   },
+  delete_entry: {
+    kind: "write",
+    destructive: true,
+    description: `Send an Entry to the Trash, from which it can be restored for 30 days. The Tasks it is the Origin Entry of go with it, open or closed, with every Occurrence of a recurring one, and so do its own References and Mentions; each Task waiting on one of them stops waiting. A Follow-up of it stays, and shows that it continues a deleted Entry; every other link to it is kept, shown as deleted until it is restored. No Entry's words change. It is never refused for what hangs off it. ${HELD_FOR_A_CONNECTION}`,
+    input: writeInput({ id }),
+    offered: toEveryWriter,
+  },
   list_entry_versions: {
     kind: "read",
     description:
@@ -316,6 +324,14 @@ export const tools = {
     input: writeInput({ id, on: waitTarget }),
     offered: toEveryWriter,
   },
+  delete_task: {
+    kind: "write",
+    destructive: true,
+    description:
+      "Send a Task to the Trash, from which it can be restored for 30 days. Its Recurrence goes with it when it is the open Occurrence, and no next Occurrence is made: deleting is not closing, so drop a Task the person decided not to do. Each Task waiting on it stops waiting. Its Origin Entry and earlier Occurrences stay, and an Entry that References it shows the link as deleted until it is restored. It is never refused for what hangs off it.",
+    input: writeInput({ id }),
+    offered: toEveryWriter,
+  },
   get_task: {
     kind: "read",
     description:
@@ -393,6 +409,14 @@ export const tools = {
     input: writeInput({ id }),
     offered: toEveryWriter,
   },
+  delete_project: {
+    kind: "write",
+    destructive: true,
+    description:
+      "Send a Project to the Trash, from which it can be restored for 30 days. Nothing goes with it: its Tasks stay, Finished ones among them, and show no Project, and each Task waiting on it stops waiting. To give up the work in it, drop the Project first. An Entry that References it shows the link as deleted until it is restored. It is never refused for what hangs off it.",
+    input: writeInput({ id }),
+    offered: toEveryWriter,
+  },
   get_project: {
     kind: "read",
     description:
@@ -424,6 +448,14 @@ export const tools = {
     destructive: true,
     description: "Change a Person's name.",
     input: writeInput({ id, name: personName }),
+    offered: toEveryWriter,
+  },
+  delete_person: {
+    kind: "write",
+    destructive: true,
+    description:
+      "Send a Person to the Trash, from which they can be restored for 30 days. Nothing goes with them: each open Task Delegated to them is taken back, and an Entry that Mentions them shows the Mention as deleted until they are restored. It is never refused for what hangs off them.",
+    input: writeInput({ id }),
     offered: toEveryWriter,
   },
   get_person: {
@@ -460,6 +492,37 @@ export const tools = {
     description:
       "What in this Context is open for the person to act on, derived by rule and the same for every caller, in five sections in this order. `due`: every open Task that is Overdue or due today, whatever else holds for it, and every open Project that is, oldest Due Date first. `newly_actionable`: actionable Tasks whose wait ended, that were taken back or whose Defer Date came in the last seven days, newest first, each with why and when it came up. `delegated`: every other Delegated Task that is neither Waiting nor Deferred, oldest delegation first. `projects`: every open Project by name, with its count of actionable Tasks, flagged with `no_open_task` when it needs a next Task or finishing. `loose`: every other actionable Task in no Project, oldest first. A Task appears once, in the first section it fits; a Project in `due` is still in `projects`. A Waiting or Deferred Task that is not due is not shown: reach it through its Project, its Entry or search.",
     input: z.strictObject({}),
+    offered: toEveryCaller,
+  },
+  restore: {
+    kind: "write",
+    destructive: false,
+    description:
+      "Bring back from the Trash the item holding a record, given the id of any record in it: the record deleted and everything that went with it come back together, as they were. A Task whose Origin Entry is in the Trash brings that Entry back, with what went with it. Each link the delete took away comes back unless its other end has changed since: a Task moved to another Project stays there, one Delegated to someone else stays so, and a wait resumes only if the waiting Task is still open. References, Mentions and Follow-up links always come back.",
+    input: writeInput({ id }),
+    offered: { ...toEveryWriter, connection: "no" },
+  },
+  remove_for_good: {
+    kind: "write",
+    destructive: true,
+    description:
+      "Remove for good the item in the Trash holding a record, given the id of any record in it, before its 30 days are up: the record, everything deleted with it and all its Versions go, with every dormant link to it, and nothing of it is left. A Follow-up of a removed Entry becomes an ordinary Entry. Its summaries in the change log are blanked. It cannot be undone.",
+    input: writeInput({ id }),
+    offered: toHandOnly,
+  },
+  empty_trash: {
+    kind: "write",
+    destructive: true,
+    description:
+      "Remove everything in the Trash for good, as remove_for_good does for one item. It cannot be undone.",
+    input: writeInput({}),
+    offered: toHandOnly,
+  },
+  list_trash: {
+    kind: "read",
+    description:
+      "List what is in the Trash, newest delete first, 50 to a page: each item is what one delete sent there, the record deleted and what went with it, with when it was deleted and when it will be removed for good, 30 days after. Nothing in the Trash is in any other read: restore an item to read or change it again.",
+    input: z.strictObject({ cursor }),
     offered: toEveryCaller,
   },
   list_changes: {
@@ -506,6 +569,7 @@ export type ToolOutput = {
   list_entries: Page<Entry>;
   edit_entry: Written<Entry>;
   restore_entry_version: Written<Entry>;
+  delete_entry: Written<TrashItem>;
   list_entry_versions: Page<Version>;
   add_link: Written<Entry>;
   remove_link: Written<Entry>;
@@ -521,6 +585,7 @@ export type ToolOutput = {
   take_back_task: Written<Task>;
   wait_on: Written<Task>;
   stop_waiting: Written<Task>;
+  delete_task: Written<TrashItem>;
   get_task: Task;
   list_tasks: Page<Task>;
   move_task: Written<Task>;
@@ -531,15 +596,21 @@ export type ToolOutput = {
   finish_project: Written<Project>;
   drop_project: Written<Project>;
   reopen_project: Written<Project>;
+  delete_project: Written<TrashItem>;
   get_project: Project;
   list_projects: Page<Project>;
   create_person: Written<Person>;
   rename_person: Written<Person>;
+  delete_person: Written<TrashItem>;
   get_person: Person;
   list_persons: Page<Person>;
   get_settings: Settings;
   set_time_zone: Written<Settings>;
   view_attention: Attention;
+  restore: Written<TrashItem>;
+  remove_for_good: Written<Removal>;
+  empty_trash: Written<Removal>;
+  list_trash: Page<TrashItem>;
   list_changes: ChangesPage;
 };
 

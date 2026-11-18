@@ -42,7 +42,10 @@ export const personTools: Pick<
       "persons",
       input.cursor,
       (before) =>
-        sql.exec<PersonRow>(`SELECT * FROM persons WHERE seq < ? ORDER BY seq DESC`, before),
+        sql.exec<PersonRow>(
+          `SELECT * FROM untrashed_persons WHERE seq < ? ORDER BY seq DESC`,
+          before,
+        ),
       named === undefined ? undefined : (row) => nameHolds(row.name, named),
     );
     if (!page.ok) return page;

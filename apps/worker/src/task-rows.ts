@@ -114,7 +114,7 @@ export function insertTaskEvent(sql: SqlStorage, task: string, event: TaskEvent)
 
 /** A Task that exists in this Context, its state read as on `today`. */
 export function readTask(sql: SqlStorage, id: string, today: Day): Task | null {
-  const row = sql.exec<TaskRow>(`SELECT * FROM tasks WHERE id = ?`, id).toArray()[0];
+  const row = sql.exec<TaskRow>(`SELECT * FROM untrashed_tasks WHERE id = ?`, id).toArray()[0];
   if (!row) return null;
   const events = sql.exec<EventRow>(`${EVENTS} WHERE e.task = ? ORDER BY e.seq`, id).toArray();
   return toTask(row, events.map(toEvent), today);
@@ -140,7 +140,7 @@ function tasksBy(
 ): Map<string, Task[]> {
   const rows = sql
     .exec<TaskRow>(
-      `SELECT * FROM tasks WHERE ${column} IN (SELECT value FROM json_each(?)) ORDER BY seq`,
+      `SELECT * FROM untrashed_tasks WHERE ${column} IN (SELECT value FROM json_each(?)) ORDER BY seq`,
       JSON.stringify(ids),
     )
     .toArray();
@@ -160,7 +160,7 @@ export function openTasks(sql: SqlStorage, today: Day): TaskWithEvents[] {
   // Open is derived: a Task is open unless the last end it reached was not reopened since.
   const rows = sql
     .exec<TaskRow>(
-      `SELECT t.* FROM tasks t
+      `SELECT t.* FROM untrashed_tasks t
        WHERE coalesce((SELECT what FROM task_events e
                        WHERE e.task = t.id AND e.what IN ('finished', 'dropped', 'reopened')
                        ORDER BY e.seq DESC LIMIT 1), 'reopened') = 'reopened'

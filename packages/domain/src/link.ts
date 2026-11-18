@@ -16,11 +16,12 @@ export type NewLink = { to: LinkTarget | NewLinkTarget; anchor?: Anchor | undefi
 /**
  * A Reference or a Mention as every read returns it, kept beside the Entry's words (ADR 0008):
  * what it names, with that record's one-line summary, and its anchor, or null when it has none
- * or its span is gone.
+ * or its span is gone. While the record it names is in the Trash the link is dormant, marked
+ * `deleted`, and comes back on restore (section 3.8).
  */
 export type Link = {
   kind: "reference" | "mention";
-  to: LinkTarget & { summary: string };
+  to: LinkTarget & { summary: string; deleted?: true };
   anchor: Anchor | null;
 };
 

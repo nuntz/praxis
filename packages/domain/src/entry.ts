@@ -32,8 +32,11 @@ export type Entry = {
 /** A change to an Entry's words: who made it, and when it arrived, as an ISO 8601 instant. */
 export type WordsChange = { by: Author; at: string };
 
-/** An Entry as another Entry names it: its id and its one-line summary. */
-export type EntryNamed = { id: string; summary: string };
+/**
+ * An Entry as another Entry names it: its id and its one-line summary, marked `deleted` while it
+ * is in the Trash, as a Follow-up's link to it is then (section 3.8).
+ */
+export type EntryNamed = { id: string; summary: string; deleted?: true };
 
 /**
  * The words an Entry had before a change to them (section 3.2), numbered as the Entry's `version`

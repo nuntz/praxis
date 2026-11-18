@@ -32,7 +32,7 @@ import { newestFirst } from "../newest-first.ts";
 import type { Handlers } from "../registry.ts";
 import { insertTask, taskEffect, tasksOf } from "../task-rows.ts";
 
-const NO_SUCH_ENTRY = "No such Entry in this Context.";
+export const NO_SUCH_ENTRY = "No such Entry in this Context.";
 
 /** Said to a caller whose change to the words was made against a Version no longer current. */
 const STALE =
@@ -68,9 +68,10 @@ export const entryTools: Pick<
 > = {
   record_entry({ caller, input, arrivedAt, today, sql }) {
     const links = keepableLinks(sql, input.words, input.links ?? []);
-    // Like a link, a Follow-up naming no Entry here is not kept: the words are never refused.
+    // Like a link, a Follow-up naming no Entry here is not kept: the words are never refused. One
+    // naming an Entry in the Trash is kept dormant, as a link is.
     const followUpTo =
-      input.follow_up_to !== undefined && entryExists(sql, input.follow_up_to)
+      input.follow_up_to !== undefined && entryEvenIfTrashed(sql, input.follow_up_to)
         ? input.follow_up_to
         : null;
     const author = authorOf(caller);
@@ -189,13 +190,13 @@ export const entryTools: Pick<
     const rows = (
       after
         ? sql.exec<EntryRow>(
-            `SELECT * FROM entries WHERE (at, seq) < (?, ?) ORDER BY at DESC, seq DESC LIMIT ?`,
+            `SELECT * FROM untrashed_entries WHERE (at, seq) < (?, ?) ORDER BY at DESC, seq DESC LIMIT ?`,
             after.at,
             after.seq,
             PAGE_SIZE + 1,
           )
         : sql.exec<EntryRow>(
-            `SELECT * FROM entries ORDER BY at DESC, seq DESC LIMIT ?`,
+            `SELECT * FROM untrashed_entries ORDER BY at DESC, seq DESC LIMIT ?`,
             PAGE_SIZE + 1,
           )
     ).toArray();
@@ -263,7 +264,13 @@ function changeWords(
   );
 }
 
+/** Whether an Entry is in this Context and not in the Trash. */
 function entryExists(sql: SqlStorage, id: string): boolean {
+  return sql.exec(`SELECT 1 FROM untrashed_entries WHERE id = ?`, id).toArray().length > 0;
+}
+
+/** Whether an Entry is in this Context, in the Trash or not. */
+function entryEvenIfTrashed(sql: SqlStorage, id: string): boolean {
   return sql.exec(`SELECT 1 FROM entries WHERE id = ?`, id).toArray().length > 0;
 }
 
@@ -295,9 +302,9 @@ function entryEffect(entry: Entry, what: Effect["what"]): Effect {
   return { kind: "entry", id: entry.id, what, summary: summarizeWords(entry.words), by: "call" };
 }
 
-/** An Entry that exists in this Context, with its Tasks and links. */
-function readEntry(sql: SqlStorage, id: string, today: Day): Entry | null {
-  const rows = sql.exec<EntryRow>(`SELECT * FROM entries WHERE id = ?`, id).toArray();
+/** An Entry that exists in this Context and is not in the Trash, with its Tasks and links. */
+export function readEntry(sql: SqlStorage, id: string, today: Day): Entry | null {
+  const rows = sql.exec<EntryRow>(`SELECT * FROM untrashed_entries WHERE id = ?`, id).toArray();
   return readEntries(sql, rows, today)[0] ?? null;
 }
 
@@ -346,22 +353,33 @@ function lastEdits(sql: SqlStorage, ids: string[]): Map<string, VersionRow> {
   return new Map(rows.map((row) => [row.entry, row]));
 }
 
-/** Each of these Entries as another names it, by id. */
+/** Each of these Entries as another names it, by id, marked while it is in the Trash. */
 function entriesNamed(sql: SqlStorage, ids: string[]): Map<string, EntryNamed> {
   const rows = sql
-    .exec<{ id: string; words: string }>(
-      `SELECT id, words FROM entries WHERE id IN (SELECT value FROM json_each(?))`,
+    .exec<{ id: string; words: string; in_trash: number }>(
+      `SELECT id, words,
+         EXISTS (SELECT 1 FROM trashed WHERE kind = 'entry' AND record_id = id) AS in_trash
+       FROM entries WHERE id IN (SELECT value FROM json_each(?))`,
       JSON.stringify(ids),
     )
     .toArray();
-  return new Map(rows.map((row) => [row.id, { id: row.id, summary: summarizeWords(row.words) }]));
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        summary: summarizeWords(row.words),
+        ...(row.in_trash === 1 ? { deleted: true as const } : {}),
+      },
+    ]),
+  );
 }
 
 /** The Follow-ups to each of these Entries, in the order they were made. */
 function followUpsOf(sql: SqlStorage, ids: string[]): Map<string, EntryNamed[]> {
   const rows = sql
     .exec<{ id: string; words: string; follow_up_to: string }>(
-      `SELECT id, words, follow_up_to FROM entries
+      `SELECT id, words, follow_up_to FROM untrashed_entries
        WHERE follow_up_to IN (SELECT value FROM json_each(?))
        ORDER BY at, seq`,
       JSON.stringify(ids),

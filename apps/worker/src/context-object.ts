@@ -51,7 +51,9 @@ import { projectTools } from "./tools/projects.ts";
 import { recurrenceTools } from "./tools/recurrences.ts";
 import { settingsTools } from "./tools/settings.ts";
 import { taskTools } from "./tools/tasks.ts";
+import { trashTools } from "./tools/trash.ts";
 import { waitTools } from "./tools/waits.ts";
+import { expireTrash, nextExpiry } from "./trash-rows.ts";
 
 /** A message of the live channel: these changes, and the cursor standing after `last`. */
 function changesMessage(items: Change[], last: number): LiveMessage {
@@ -68,6 +70,7 @@ const handlers: Handlers = {
   ...settingsTools,
   ...changeTools,
   ...attentionTools,
+  ...trashTools,
 };
 
 /** How long the alarm sleeps between wakes while it has something to do. */
@@ -335,13 +338,14 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
     }
 
     /**
-     * Everything the Context's clock does, as at `at`: for now, forgetting keys past 30 days and
-     * pruning the change log at 90.
+     * Everything the Context's clock does, as at `at`: for now, forgetting keys past 30 days,
+     * removing for good what has been in the Trash 30 days, and pruning the change log at 90.
      */
     wake(at: number): void {
       const sql = this.ctx.storage.sql;
       this.ctx.storage.transactionSync(() => {
         forgetOldKeys(sql, at);
+        expireTrash(sql, at);
         pruneChanges(sql, at);
       });
     }
@@ -364,6 +368,8 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
       const now = arrivalTime();
       const wanted: number[] = [];
       if (holdsKeys(storage.sql) || holdsChanges(storage.sql)) wanted.push(now + ALARM_GAP);
+      const expiry = nextExpiry(storage.sql);
+      if (expiry !== null) wanted.push(expiry);
       if (this.#agentWake.active) wanted.push(now + RUN_HEARTBEAT);
       if (this.#agentWake.at !== undefined) wanted.push(this.#agentWake.at);
       const set = await storage.getAlarm();

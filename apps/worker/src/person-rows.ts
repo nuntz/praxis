@@ -11,7 +11,7 @@ export function insertPerson(sql: SqlStorage, person: { name: string; at: number
 
 /** A Person who exists in this Context. */
 export function readPerson(sql: SqlStorage, id: string): Person | null {
-  const rows = sql.exec<PersonRow>(`SELECT * FROM persons WHERE id = ?`, id).toArray();
+  const rows = sql.exec<PersonRow>(`SELECT * FROM untrashed_persons WHERE id = ?`, id).toArray();
   return personsOf(sql, rows)[0] ?? null;
 }
 
@@ -22,7 +22,7 @@ export function personsOf(sql: SqlStorage, rows: PersonRow[]): Person[] {
   const latest = new Map<string, MentionRow>();
   const mentions = sql.exec<MentionRow>(
     `SELECT l.to_id AS person, e.id AS entry, e.at, e.words
-     FROM entry_links l JOIN entries e ON e.id = l.entry
+     FROM entry_links l JOIN untrashed_entries e ON e.id = l.entry
      WHERE l.to_kind = 'person' AND l.to_id IN (SELECT value FROM json_each(?))
      ORDER BY e.at DESC, e.seq DESC`,
     JSON.stringify(rows.map((row) => row.id)),

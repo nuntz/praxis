@@ -47,7 +47,7 @@ export function insertProjectEvent(sql: SqlStorage, project: string, event: Proj
 
 /** A Project that exists in this Context, with its Tasks, read as on `today`. */
 export function readProject(sql: SqlStorage, id: string, today: Day): Project | null {
-  const rows = sql.exec<ProjectRow>(`SELECT * FROM projects WHERE id = ?`, id).toArray();
+  const rows = sql.exec<ProjectRow>(`SELECT * FROM untrashed_projects WHERE id = ?`, id).toArray();
   return projectsWithTasks(sql, rows, today)[0] ?? null;
 }
 
@@ -56,7 +56,7 @@ export function openProjects(sql: SqlStorage, today: Day): Project[] {
   // Open is derived: a Project is open unless the last thing declared of it was an end.
   const rows = sql
     .exec<ProjectRow>(
-      `SELECT p.* FROM projects p
+      `SELECT p.* FROM untrashed_projects p
        WHERE coalesce((SELECT what FROM project_events e WHERE e.project = p.id
                        ORDER BY e.seq DESC LIMIT 1), 'reopened') = 'reopened'
        ORDER BY p.seq`,

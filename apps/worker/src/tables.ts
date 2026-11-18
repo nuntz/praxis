@@ -111,6 +111,56 @@ export function createTables(sql: SqlStorage): void {
     CREATE INDEX IF NOT EXISTS entry_links_by_entry ON entry_links (entry, seq);
     CREATE INDEX IF NOT EXISTS entry_links_by_target ON entry_links (to_id);
 
+    -- The Trash (section 3.8). An item is what one delete sent there: the record deleted, and when,
+    -- from which its one clock runs. Its records stay in their own tables, out of every read.
+    CREATE TABLE IF NOT EXISTS trash_items (
+      seq INTEGER PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      kind TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS trash_items_by_time ON trash_items (at);
+
+    -- Each record in the Trash and the item it went in: the one deleted, and what went with it.
+    CREATE TABLE IF NOT EXISTS trashed (
+      seq INTEGER PRIMARY KEY,
+      kind TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      item TEXT NOT NULL REFERENCES trash_items (id),
+      UNIQUE (kind, record_id)
+    );
+    CREATE INDEX IF NOT EXISTS trashed_by_item ON trashed (item, seq);
+
+    -- A link from a Task not in the Trash to a record a delete sent there, which the delete took
+    -- away by rule and a restore can bring back: the Task's place in a Project, its delegation, or
+    -- a wait. A Reference, Mention or Follow-up link stays where it is, dormant while what it names
+    -- is in the Trash.
+    CREATE TABLE IF NOT EXISTS dormant_links (
+      seq INTEGER PRIMARY KEY,
+      item TEXT NOT NULL REFERENCES trash_items (id),
+      task TEXT NOT NULL REFERENCES tasks (id),
+      what TEXT NOT NULL,
+      to_kind TEXT NOT NULL,
+      to_id TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS dormant_links_by_item ON dormant_links (item);
+
+    -- The records not in the Trash, which every read and every change goes through: a record in
+    -- the Trash is in no view or list, and cannot be changed or linked to.
+    CREATE VIEW IF NOT EXISTS untrashed_entries AS
+      SELECT * FROM entries
+      WHERE id NOT IN (SELECT record_id FROM trashed WHERE kind = 'entry');
+    CREATE VIEW IF NOT EXISTS untrashed_tasks AS
+      SELECT * FROM tasks
+      WHERE id NOT IN (SELECT record_id FROM trashed WHERE kind = 'task');
+    CREATE VIEW IF NOT EXISTS untrashed_projects AS
+      SELECT * FROM projects
+      WHERE id NOT IN (SELECT record_id FROM trashed WHERE kind = 'project');
+    CREATE VIEW IF NOT EXISTS untrashed_persons AS
+      SELECT * FROM persons
+      WHERE id NOT IN (SELECT record_id FROM trashed WHERE kind = 'person');
+
     -- The Context's own settings, in one row with the Context's id. Not a record, but a change to
     -- them is an Effect on the Context.
     CREATE TABLE IF NOT EXISTS context_settings (

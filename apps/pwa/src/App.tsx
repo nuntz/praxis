@@ -22,6 +22,7 @@ import { Peer, type PeerId } from "./design/Peer.tsx";
 import { Journal } from "./Journal.tsx";
 import { Live, socketOpener } from "./live.ts";
 import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
+import { Trash } from "./Trash.tsx";
 import {
   CurrentContextTools,
   callDeploymentTool,
@@ -282,7 +283,12 @@ export function App() {
                 <Show when={showSettings()}>
                   <div id="settings" class="settings-panel">
                     <Show when={settings()}>
-                      {(read) => <ContextSettings settings={read()} onChanged={setSettings} />}
+                      {(read) => (
+                        <>
+                          <ContextSettings settings={read()} onChanged={setSettings} />
+                          <Trash timeZone={read().time_zone} />
+                        </>
+                      )}
                     </Show>
                     <Contexts
                       contexts={contexts() ?? []}

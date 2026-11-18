@@ -1,5 +1,4 @@
 import {
-  type Change,
   type Effect,
   type Entry,
   type EntryNamed,
@@ -64,14 +63,16 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
     await live.ready;
     await loadPage();
   });
-  onCleanup(live.listen({ changed: patch, readAfresh }));
+  onCleanup(live.listen({ changed: (change) => patch(change.effects), readAfresh }));
 
   /** Show what a change did, by reading each record its Effects name as it now is. */
-  async function patch(change: Change) {
-    for (const effect of change.effects) {
+  async function patch(effects: Effect[]) {
+    for (const effect of effects) {
       if (effect.kind === "entry") await refreshAround(effect.id);
       if (effect.kind === "task") await refreshTask(effect.id);
-      if (effect.what !== "deleted") renameLinksTo(effect);
+      if (effect.what === "changed") renameLinksTo(effect);
+      // Sent to the Trash or back from it, a record's links show it deleted or not.
+      else await refreshEntriesLinking(effect.id);
       await refreshTasksNaming(effect.id);
     }
   }
@@ -153,6 +154,12 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
     );
   }
 
+  /** Read again each Entry shown that links to this record. */
+  async function refreshEntriesLinking(id: string) {
+    const linking = entries.filter((entry) => entry.links.some((link) => link.to.id === id));
+    for (const entry of linking) await refreshEntry(entry.id);
+  }
+
   /** Read again each Task shown that names this record, waiting on it or Delegated to it. */
   async function refreshTasksNaming(id: string) {
     const naming = entries
@@ -204,6 +211,10 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
                   document.getElementById("new-entry")?.focus();
                 }}
                 onTask={showTask}
+                onDeleted={(effects) => {
+                  setProblem(null);
+                  void patch(effects);
+                }}
                 onProblem={setProblem}
               />
             )}
@@ -246,10 +257,28 @@ function EntryItem(props: {
   /** The person chose to record a Follow-up to it. */
   onFollowUp: () => void;
   onTask: (task: Task) => void;
+  /** The Entry went to the Trash, with what went with it: what the delete changed. */
+  onDeleted: (effects: Effect[]) => void;
   onProblem: (message: string) => void;
 }) {
+  const callTool = useCallTool();
   const [editing, setEditing] = createSignal(false);
   const [showingVersions, setShowingVersions] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
+
+  // No asking first: what is deleted is put back from the Trash.
+  async function deleteEntry() {
+    setDeleting(true);
+    try {
+      const result = await callTool("delete_entry", { id: props.entry.id });
+      if (!result.ok) return props.onProblem(result.error.message);
+      props.onDeleted(result.value.effects);
+    } catch (error) {
+      props.onProblem(unreachableMessage(error));
+    } finally {
+      setDeleting(false);
+    }
+  }
   return (
     <li class="entry" id={recordAnchor("entry", props.entry.id)} data-testid="entry" tabIndex={-1}>
       <div class="entry-head">
@@ -276,12 +305,25 @@ function EntryItem(props: {
         <button type="button" class="quiet entry-mark" onClick={() => props.onFollowUp()}>
           Follow up
         </button>
+        <button
+          type="button"
+          class="quiet entry-mark"
+          disabled={deleting()}
+          onClick={() => void deleteEntry()}
+        >
+          Delete
+        </button>
       </div>
       <Show when={props.entry.follow_up_to}>
         {(to) => (
-          <p class="entry-follows">
-            Follows up <a href={`#${recordAnchor("entry", to().id)}`}>“{to().summary}”</a>
-          </p>
+          <Show
+            when={!to().deleted}
+            fallback={<p class="entry-follows">Continues a deleted Entry</p>}
+          >
+            <p class="entry-follows">
+              Follows up <a href={`#${recordAnchor("entry", to().id)}`}>“{to().summary}”</a>
+            </p>
+          </Show>
         )}
       </Show>
       <Show when={editing()} fallback={<Words words={props.entry.words} testId="words" />}>
@@ -341,12 +383,21 @@ function EntryItem(props: {
   );
 }
 
-/** A Mention, a tinted pill, or a Reference, an inset pill, kept beside the Entry's words. */
+/**
+ * A Mention, a tinted pill, or a Reference, an inset pill, kept beside the Entry's words. One to a
+ * record in the Trash is dormant, and says it is deleted.
+ */
 function LinkItem(props: { link: Link }) {
   return (
-    <li class="link" classList={{ [props.link.kind]: true }}>
+    <li
+      class="link"
+      classList={{ [props.link.kind]: !props.link.to.deleted, deleted: !!props.link.to.deleted }}
+    >
       {props.link.kind === "mention" ? "@" : "#"}
       {props.link.to.summary}
+      <Show when={props.link.to.deleted}>
+        <span class="link-deleted">, deleted</span>
+      </Show>
     </li>
   );
 }

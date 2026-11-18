@@ -45,7 +45,9 @@ export const taskTools: Pick<
   | "list_tasks"
 > = {
   add_task({ caller, input, arrivedAt, today, sql }) {
-    const entry = sql.exec(`SELECT 1 FROM entries WHERE id = ?`, input.entry_id).toArray();
+    const entry = sql
+      .exec(`SELECT 1 FROM untrashed_entries WHERE id = ?`, input.entry_id)
+      .toArray();
     if (entry.length === 0) return failure("not_found", "No such Entry in this Context.");
     const id = insertTask(sql, {
       title: input.title,
@@ -135,7 +137,8 @@ export const taskTools: Pick<
     const page = newestFirst(
       "tasks",
       input.cursor,
-      (before) => sql.exec<TaskRow>(`SELECT * FROM tasks WHERE seq < ? ORDER BY seq DESC`, before),
+      (before) =>
+        sql.exec<TaskRow>(`SELECT * FROM untrashed_tasks WHERE seq < ? ORDER BY seq DESC`, before),
       named === undefined ? undefined : (row) => nameHolds(row.title, named),
     );
     if (!page.ok) return page;

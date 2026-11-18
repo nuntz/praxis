@@ -184,9 +184,13 @@ A delete sends to the Trash the record and only what cannot exist without it. It
 
 - Every other link to a deleted record is kept but **dormant**: shown as deleted, back on restore, removed only with the record. A dormant link is not an Effect. No Entry's words change at any point.
 - What was deleted together is one item in the Trash with one clock, and comes back together. Restoring a Task whose Origin Entry is in the Trash restores that Entry and everything that went with it.
-- On restore a dormant link comes back unless its other end has changed since: a Task moved to another Project stays there; a Task goes back to Delegated only if still open and Delegated to nobody else; a wait resumes only if the waiting Task is still open. References, Mentions and Follow-up links always come back. Each link that comes back to a Task is an Effect.
+- On restore a dormant link comes back unless its other end has changed since: a Task moved to another Project stays there; a Task goes back to Delegated only if still open and Delegated to nobody else; a wait resumes only if the waiting Task is still open, and never to close a cycle made while it was away. References, Mentions and Follow-up links always come back. Each link that comes back to a Task is an Effect.
+- A dormant link whose Task is in the Trash too waits there with it, and comes back by the same rules when the Task does.
+- A record that comes back is an Effect `made`, the one asked for by the call and the rest by rule. A Task that comes back holds no link to a record in the Trash now: the link is taken as that record's delete would have taken it, and kept dormant with it. A wait on something that reached an end meanwhile is released.
+- `restore` and `remove_for_good` take the id of any record in the item.
 - A trashed record is left out of every view, list and search. It cannot be changed or linked to. The only calls on it are restore and, by the person's hand, removal for good.
-- **Removal for good** happens 30 days after the delete, or when the person empties the Trash. It takes the record, everything deleted with it, all its Versions and every dormant link to it, and leaves no marker. A Follow-up of it becomes an ordinary Entry. Its summaries in the change log are blanked. It leaves both search indexes.
+- **Removal for good** happens 30 days after the delete, or when the person empties the Trash. It takes the record, everything deleted with it, all its Versions and every dormant link to it, and leaves no marker. A Follow-up of it becomes an ordinary Entry, and a Task once Delegated to a Person removed keeps no trace of it. A Task deleted on its own goes with its Origin Entry's removal, since no Task is left without one. Its summaries in the change log are blanked. It leaves both search indexes.
+- A removal's Effects are each record removed, `deleted` with an empty summary, and each record not in the Trash that lost a link to one, `changed` by rule. Removal at 30 days is the Context's alarm, not a call, so it goes in no change log; a reader learns of it by reading.
 - A record removed for good is gone from everything Praxis holds within 30 days of its removal, not at once, because a Backup lives 30 days (section 10). The screens for emptying the Trash and deleting a Context say that Praxis cannot reach a file the person downloaded.
 
 ### 3.9 Moving a record between Contexts
@@ -891,7 +895,7 @@ ADR 0015, 0019, 0020, 0021.
 **At the tool seam.**
 
 - A test calls a tool through the registry as one of the five callers against a real Context object, and asserts only the result, the Effects and later reads. Tests never read tables and never seed by writing rows.
-- **The oracle**: the harness wraps every write, snapshots the domain tables before and after, and fails unless the difference is exactly the Effects returned and the change log holds the same Effects with the right caller. A refused, stale or repeated-key call changes nothing. A held call changes nothing but its Held Change.
+- **The oracle**: the harness wraps every write, snapshots the domain tables before and after, and fails unless the difference is exactly the Effects returned and the change log holds the same Effects with the right caller. A refused, stale or repeated-key call changes nothing. A held call changes nothing but its Held Change. It sees a record as a caller does: one sent to the Trash, or removed from it for good, is deleted, and one restored is made.
 - **Offering**: checked against the tables of sections 4.10 and 4.11, kept by hand in the repo. A generic test calls every tool as every caller.
 - **Guard**: CI fails when a tool has no row in the offering table or no seam test naming it. No line-coverage threshold.
 - **No words leave**: tests seed Entries and Messages with marker strings, and the harness fails any test where a marker appears in anything logged, in a Notification or in a Run record.

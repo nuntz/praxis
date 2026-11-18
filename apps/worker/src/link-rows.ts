@@ -16,6 +16,7 @@ import {
 } from "@praxis/domain";
 import { insertPerson, personEffect } from "./person-rows.ts";
 import { insertProject, projectEffect } from "./project-rows.ts";
+import { tableOf, untrashed } from "./record-tables.ts";
 
 type LinkRow = {
   entry: string;
@@ -26,21 +27,16 @@ type LinkRow = {
   anchor_text: string | null;
   /** The title or name of the record it names, read with it. */
   target_name: string;
+  /** 1 while the record it names is in the Trash, when the link is dormant. */
+  dormant: number;
 };
 
 /** An Entry's id and its words, against which its links' anchors are read. */
 type EntryWords = Pick<Entry, "id" | "words">;
 
-/** The table each kind of record a link names is kept in. */
-const tableOf: Record<LinkTarget["kind"], string> = {
-  task: "tasks",
-  project: "projects",
-  person: "persons",
-};
-
 /**
  * Whether a link can be added to an Entry with these words: its anchor lies within them, and the
- * record it names is in this Context. Checked before anything is written, since a failed call
+ * record it names is in this Context and not in the Trash, which nothing is linked to. Checked before anything is written, since a failed call
  * changes nothing.
  */
 export function checkLink(
@@ -54,7 +50,7 @@ export function checkLink(
       `An anchor is a span of the words, which end at ${words.length}.`,
     );
   }
-  if (!isNew(to) && !found(sql, to)) {
+  if (!isNew(to) && !untrashed(sql, to)) {
     return failure("not_found", `No such ${to.kind} in this Context.`);
   }
   return { ok: true, value: null };
@@ -63,16 +59,17 @@ export function checkLink(
 /**
  * The links that can be kept beside new words, which are never refused for a link (section
  * 4.8): one naming a record not in this Context is not kept, and an anchor past the words' end
- * is not, so its link is kept without one.
+ * is not, so its link is kept without one. One naming a record in the Trash is kept dormant.
  */
 export function keepableLinks(sql: SqlStorage, words: string, links: NewLink[]): NewLink[] {
   return links.flatMap(({ to, anchor }) => {
-    if (!isNew(to) && !found(sql, to)) return [];
+    if (!isNew(to) && !kept(sql, to)) return [];
     return [{ to, anchor: anchor && liesWithin(words, anchor) ? anchor : undefined }];
   });
 }
 
-function found(sql: SqlStorage, to: LinkTarget): boolean {
+/** Whether a record a link names is in this Context, in the Trash or not. */
+function kept(sql: SqlStorage, to: LinkTarget): boolean {
   return sql.exec(`SELECT 1 FROM ${tableOf[to.kind]} WHERE id = ?`, to.id).toArray().length > 0;
 }
 
@@ -134,7 +131,8 @@ export function linksOf(sql: SqlStorage, entries: EntryWords[]): Map<string, Lin
   const words = new Map(entries.map((entry) => [entry.id, entry.words]));
   const rows = sql
     .exec<LinkRow>(
-      `SELECT l.*, coalesce(t.title, p.name, pe.name) AS target_name
+      `SELECT l.*, coalesce(t.title, p.name, pe.name) AS target_name,
+         EXISTS (SELECT 1 FROM trashed WHERE record_id = l.to_id) AS dormant
        FROM entry_links l
        LEFT JOIN tasks t ON l.to_kind = 'task' AND t.id = l.to_id
        LEFT JOIN projects p ON l.to_kind = 'project' AND p.id = l.to_id
@@ -162,7 +160,11 @@ function toLink(row: LinkRow, words: string): Link {
       : { start: row.anchor_start, end: row.anchor_end, text: row.anchor_text };
   return {
     kind: linkKind(to),
-    to: { ...to, summary: summarizeWords(row.target_name) },
+    to: {
+      ...to,
+      summary: summarizeWords(row.target_name),
+      ...(row.dormant === 1 ? { deleted: true as const } : {}),
+    },
     anchor: kept && anchorIn(words, kept),
   };
 }

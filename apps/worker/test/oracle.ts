@@ -39,6 +39,16 @@ const domainTables: Record<string, { kind: Effect["kind"]; id: string }> = {
   context_settings: { kind: "context", id: "id" },
 };
 
+/**
+ * The Trash's tables (section 3.8). They hold which records are in the Trash, which the oracle
+ * reads to see each as a caller does: a record sent there is deleted, and one restored is made
+ * again. A record in the Trash cannot change, so what it holds while there is not compared.
+ */
+const trashTables = ["trash_items", "trashed", "dormant_links"];
+
+/** What a record in the Trash is in a snapshot, whatever its rows hold. */
+const IN_THE_TRASH = "in the Trash";
+
 /** The Context object's other tables, which hold no record. */
 const otherTables = [
   "change_calls",
@@ -297,7 +307,14 @@ function differences(before: Records, after: Records): Pick<Effect, "kind" | "id
     const was = before.get(record);
     const is = after.get(record);
     if (was === is) continue;
-    const what = was === undefined ? "made" : is === undefined ? "deleted" : "changed";
+    // Sent to the Trash is deleted, as a caller sees it, and so is removed for good from it.
+    // Brought back from it is made again.
+    const what =
+      is === undefined || is === IN_THE_TRASH
+        ? "deleted"
+        : was === undefined || was === IN_THE_TRASH
+          ? "made"
+          : "changed";
     found.push({ kind, id, what });
   }
   return found;
@@ -315,7 +332,12 @@ function snapshot(stub: Stub): Promise<{ records: Records; lastChange: number }>
       .map((row) => row.name);
     const unknown = tables.filter(
       (name) =>
-        !(name in domainTables || otherTables.includes(name) || name.startsWith(RUNTIME_TABLES)),
+        !(
+          name in domainTables ||
+          trashTables.includes(name) ||
+          otherTables.includes(name) ||
+          name.startsWith(RUNTIME_TABLES)
+        ),
     );
     expect(
       unknown,
@@ -334,6 +356,9 @@ function snapshot(stub: Stub): Promise<{ records: Records; lastChange: number }>
     const records: Records = new Map(
       [...rows].map(([record, tables]) => [record, canonical(tables)]),
     );
+    for (const row of sql.exec<{ kind: string; record_id: string }>(`SELECT * FROM trashed`)) {
+      records.set(`${row.kind}:${row.record_id}`, IN_THE_TRASH);
+    }
     const { seq } = sql
       .exec<{ seq: number | null }>(`SELECT max(seq) AS seq FROM change_calls`)
       .one();

@@ -314,6 +314,39 @@ button.quiet {
   gap: var(--space-2) var(--space-3);
 }
 
+/* An item in the Trash: what was deleted, what went with it, when it goes, and what to do with it. */
+.trash-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trash-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.trash-record {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.trash-kind {
+  color: var(--muted);
+  font: var(--type-label);
+}
+
+.trash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .connection-context {
   color: var(--muted);
 }
@@ -651,6 +684,13 @@ button.quiet {
 .link.reference {
   background: var(--inset);
   color: var(--ink);
+}
+
+/* A link to a record in the Trash is dormant: inset and muted, whichever kind, and says so in words. */
+.link.deleted {
+  background: var(--inset);
+  color: var(--muted);
+  font-weight: 400;
 }
 
 .task-list {
