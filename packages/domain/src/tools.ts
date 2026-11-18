@@ -4,6 +4,7 @@ import type { CallerKind } from "./callers.ts";
 import { day, daysBefore, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
 import { type Entry, type Page, STANDING_CEILING, type Version } from "./entry.ts";
+import type { Held, HeldChange } from "./held-change.ts";
 import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
 import { newRecurrence } from "./recurrence.ts";
@@ -152,6 +153,13 @@ const version = z.int().min(0);
 export const HELD_FOR_A_CONNECTION =
   "Refused when the Entry's Author is the person: their words are changed only by them. Add a Follow-up with record_entry instead, or ask the person to make the edit.";
 
+/**
+ * What the description of each tool that can be held says (section 4.7): the Agent's call leaves
+ * a Held Change, and a Connection's is refused.
+ */
+const HELD =
+  "When the Entry's Author is the person, their words are changed only by their tap. From the Agent the call changes nothing and returns, with `held: true`, the Held Change it left for the tap, which a typed or spoken yes never makes. From a Connection it is refused: add a Follow-up with record_entry instead, or ask the person to make the edit.";
+
 /** The Context tools. The schemas live here; the tools run inside a Context's object. */
 export const tools = {
   record_entry: {
@@ -186,21 +194,21 @@ export const tools = {
   edit_entry: {
     kind: "write",
     destructive: true,
-    description: `Change an Entry's words, stating the \`version\` of them read with the Entry: a change against one no longer current is \`stale\`, so read the Entry again. The words before are kept as a Version, listed by list_entry_versions. Each Task to make with the new words is given in \`tasks\`, as for record_entry; words that lose a Task's line delete no Task. Its links stay: an anchor moves with what is changed around it, and one whose span the change touches stays without one. ${HELD_FOR_A_CONNECTION}`,
+    description: `Change an Entry's words, stating the \`version\` of them read with the Entry: a change against one no longer current is \`stale\`, so read the Entry again. The words before are kept as a Version, listed by list_entry_versions. Each Task to make with the new words is given in \`tasks\`, as for record_entry; words that lose a Task's line delete no Task. Its links stay: an anchor moves with what is changed around it, and one whose span the change touches stays without one. ${HELD}`,
     input: writeInput({ id, words, version, tasks: newTasks }),
     offered: toEveryWriter,
   },
   restore_entry_version: {
     kind: "write",
     destructive: true,
-    description: `Put an Entry's words back to one of its Versions, numbered \`restore\` as list_entry_versions gave it, stating the \`version\` the Entry is at, as for edit_entry. It is a new change: the words it replaces become a Version and the others stay. It makes no Task, whatever the words hold. ${HELD_FOR_A_CONNECTION}`,
+    description: `Put an Entry's words back to one of its Versions, numbered \`restore\` as list_entry_versions gave it, stating the \`version\` the Entry is at, as for edit_entry. It is a new change: the words it replaces become a Version and the others stay. It makes no Task, whatever the words hold. ${HELD}`,
     input: writeInput({ id, restore: version, version }),
     offered: toEveryWriter,
   },
   delete_entry: {
     kind: "write",
     destructive: true,
-    description: `Send an Entry to the Trash, from which it can be restored for 30 days. The Tasks it is the Origin Entry of go with it, open or closed, with every Occurrence of a recurring one, and so do its own References and Mentions; each Task waiting on one of them stops waiting. A Follow-up of it stays, and shows that it continues a deleted Entry; every other link to it is kept, shown as deleted until it is restored. No Entry's words change. It is never refused for what hangs off it. ${HELD_FOR_A_CONNECTION}`,
+    description: `Send an Entry to the Trash, from which it can be restored for 30 days. The Tasks it is the Origin Entry of go with it, open or closed, with every Occurrence of a recurring one, and so do its own References and Mentions; each Task waiting on one of them stops waiting. A Follow-up of it stays, and shows that it continues a deleted Entry; every other link to it is kept, shown as deleted until it is restored. No Entry's words change. It is never refused for what hangs off it. ${HELD}`,
     input: writeInput({ id }),
     offered: toEveryWriter,
   },
@@ -544,6 +552,29 @@ export const tools = {
     input: z.strictObject({ cursor }),
     offered: toEveryCaller,
   },
+  make_held_change: {
+    kind: "write",
+    destructive: true,
+    description:
+      "Make a Held Change, by the person's tap: the change the Agent asked for is made as it was shown, its words the Agent's, and the Held Change is gone. One no longer waiting, made, cancelled or lapsed, is not found.",
+    input: writeInput({ id }),
+    offered: toHandOnly,
+  },
+  cancel_held_change: {
+    kind: "write",
+    destructive: true,
+    description:
+      "Cancel a Held Change waiting for the person's tap: the Entry stays as it is. The Agent cancels one when the person tells it to. One no longer waiting, made, cancelled or lapsed, is not found.",
+    input: writeInput({ id }),
+    offered: { ...toHandOnly, agent: "yes" },
+  },
+  list_held_changes: {
+    kind: "read",
+    description:
+      "List the Held Changes waiting for the person's tap, newest first, 50 to a page: each a change to or delete of an Entry the person wrote that the Agent asked for, with the Entry's words before and after and, for a delete, the Tasks that would go with it. One lapses the moment its Entry changes underneath it.",
+    input: z.strictObject({ cursor }),
+    offered: { ...toEveryCaller, connection: "no", read_only_connection: "no" },
+  },
   list_changes: {
     kind: "read",
     description:
@@ -586,9 +617,9 @@ export type ToolOutput = {
   record_entry: Written<Entry>;
   get_entry: Entry;
   list_entries: Page<Entry>;
-  edit_entry: Written<Entry>;
-  restore_entry_version: Written<Entry>;
-  delete_entry: Written<TrashItem>;
+  edit_entry: Written<Entry> | Held;
+  restore_entry_version: Written<Entry> | Held;
+  delete_entry: Written<TrashItem> | Held;
   list_entry_versions: Page<Version>;
   add_link: Written<Entry>;
   remove_link: Written<Entry>;
@@ -633,6 +664,9 @@ export type ToolOutput = {
   empty_trash: Written<Removal>;
   list_trash: Page<TrashItem>;
   list_changes: ChangesPage;
+  make_held_change: Written<HeldChange>;
+  cancel_held_change: Written<HeldChange>;
+  list_held_changes: Page<HeldChange>;
 };
 
 /** A tool's input checked against its schema, or the `invalid_input` saying what is wrong. */

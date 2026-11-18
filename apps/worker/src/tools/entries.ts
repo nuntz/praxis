@@ -1,4 +1,5 @@
 import {
+  type Author,
   authorOf,
   type Caller,
   type Day,
@@ -7,6 +8,7 @@ import {
   type EntryNamed,
   failure,
   HELD_FOR_A_CONNECTION,
+  type Held,
   instantToIso,
   type Link,
   type NewLink,
@@ -21,6 +23,7 @@ import {
   written,
 } from "@praxis/domain";
 import { type AuthorColumns, authorColumns, toAuthor } from "../author.ts";
+import { leaveHeldChange } from "../held-change-rows.ts";
 import {
   checkLink,
   deleteLinks,
@@ -114,6 +117,7 @@ export const entryTools: Pick<
     if (!entry) return failure("not_found", NO_SUCH_ENTRY);
     return changeWords(
       { caller, arrivedAt, today, sql },
+      "edit_entry",
       entry,
       { version: input.version, words: input.words },
       input.tasks ?? [],
@@ -134,6 +138,7 @@ export const entryTools: Pick<
     // Restored words make no Task, whatever markers they hold: the words are never read for one.
     return changeWords(
       { caller, arrivedAt, today, sql },
+      "restore_entry_version",
       entry,
       { version: input.version, words: restored.words },
       [],
@@ -243,30 +248,69 @@ type WordsCall = { caller: Caller; arrivedAt: number; today: Day; sql: SqlStorag
 /**
  * Change an Entry's words, as `edit_entry` and `restore_entry_version` both do: against the
  * version it was made against, keeping the words before as a Version, moving each anchor with
- * the change, and making the Tasks given. The person's words are theirs alone to change, and an
- * Entry the person edits becomes theirs.
+ * the change, and making the Tasks given. The person's words are theirs alone to change: the
+ * Agent's call leaves a Held Change for their tap, and a Connection's is refused. An Entry the
+ * person edits becomes theirs.
  */
 function changeWords(
   { caller, arrivedAt, today, sql }: WordsCall,
+  tool: "edit_entry" | "restore_entry_version",
   entry: Entry,
   change: { version: number; words: string },
   tasks: NewTask[],
-): ToolResult<Written<Entry>> {
+): ToolResult<Written<Entry> | Held> {
   const wordsChanged = change.words !== entry.words;
   // Asking for the words it has, with no Task to make, is asking for what is already so.
   if (!wordsChanged && tasks.length === 0) return success(written(entry, []));
-  // The Agent's call leaves a Held Change for the person's tap with #62. Until then it is refused.
-  if (wordsChanged && entry.author.kind === "person" && caller.kind !== "hand") {
-    return failure("held", HELD_FOR_A_CONNECTION);
-  }
+  const held = wordsChanged && entry.author.kind === "person" && caller.kind !== "hand";
+  if (held && caller.kind !== "agent") return failure("held", HELD_FOR_A_CONNECTION);
+  // Checked before a Held Change is left, so none is left already lapsed, or bound to be refused.
   if (change.version !== entry.version) return failure("stale", STALE);
-  // A Standing Entry's words are held to the ceiling, or a mark could be made short and then grow.
-  // Only words that grow bring anything to it: shorter ones are never refused.
-  if (wordsChanged && entry.standing && standingSize(change.words) > standingSize(entry.words)) {
-    const refused = pastTheCeiling(sql, { id: entry.id, words: change.words });
-    if (refused) return refused;
+  const refused = wordsChanged ? pastTheCeilingWith(sql, entry, change.words) : null;
+  if (refused) return refused;
+  if (held) {
+    return success(
+      leaveHeldChange(sql, { tool, entry, words: change.words, newTasks: tasks, at: arrivedAt }),
+    );
   }
-  const by = authorOf(caller);
+  return success(
+    putWords(sql, entry, change.words, tasks, {
+      by: authorOf(caller),
+      becomesTheirs: caller.kind === "hand",
+      at: arrivedAt,
+      today,
+    }),
+  );
+}
+
+/**
+ * The refusal of new words for a Standing Entry that would take the Standing Entries past the
+ * ceiling, or null. Only words that grow bring anything to it, so shorter ones are never refused,
+ * and words of an Entry not standing are never held to it.
+ */
+export function pastTheCeilingWith(
+  sql: SqlStorage,
+  entry: Entry,
+  words: string,
+): ToolResult<never> | null {
+  if (!entry.standing || standingSize(words) <= standingSize(entry.words)) return null;
+  return pastTheCeiling(sql, { id: entry.id, words });
+}
+
+/**
+ * Give an Entry new words and make the Tasks given with them, as a change by `by`: the words
+ * before become a Version, and each anchor moves with the change. The Entry becomes the person's
+ * when they made it with their own hand.
+ */
+export function putWords(
+  sql: SqlStorage,
+  entry: Entry,
+  words: string,
+  tasks: NewTask[],
+  change: { by: Author; becomesTheirs: boolean; at: number; today: Day },
+): Written<Entry> {
+  const { by, at, today } = change;
+  const wordsChanged = words !== entry.words;
   if (wordsChanged) {
     sql.exec(
       `INSERT INTO entry_versions (entry, version, words, at, author_kind, author_name)
@@ -274,28 +318,26 @@ function changeWords(
       entry.id,
       entry.version,
       entry.words,
-      arrivedAt,
+      at,
       ...authorColumns(by),
     );
-    const author = caller.kind === "hand" ? by : entry.author;
+    const author = change.becomesTheirs ? by : entry.author;
     sql.exec(
       `UPDATE entries SET words = ?, author_kind = ?, author_name = ? WHERE id = ?`,
-      change.words,
+      words,
       ...authorColumns(author),
       entry.id,
     );
-    followAnchors(sql, entry.id, entry.words, change.words);
+    followAnchors(sql, entry.id, entry.words, words);
   }
   const made = tasks.map(({ title }) =>
-    insertTask(sql, { title, originEntry: entry.id, at: arrivedAt, author: by }),
+    insertTask(sql, { title, originEntry: entry.id, at, author: by }),
   );
   const changed = readEntry(sql, entry.id, today) as Entry;
-  return success(
-    written(changed, [
-      ...(wordsChanged ? [entryEffect(changed, "changed")] : []),
-      ...changed.tasks.filter((task) => made.includes(task.id)).map((t) => taskEffect(t, "made")),
-    ]),
-  );
+  return written(changed, [
+    ...(wordsChanged ? [entryEffect(changed, "changed")] : []),
+    ...changed.tasks.filter((task) => made.includes(task.id)).map((t) => taskEffect(t, "made")),
+  ]);
 }
 
 /** Whether an Entry is in this Context and not in the Trash. */

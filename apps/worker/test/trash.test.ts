@@ -157,16 +157,18 @@ describe("delete_entry", () => {
     expect(recorded.follow_up_to).toMatchObject({ id: entry.id, deleted: true });
   });
 
-  test("the Agent's delete of the person's Entry is held, and a Connection's refused", async () => {
+  test("the Agent's delete of the person's Entry leaves a Held Change, and a Connection's is refused", async () => {
     const context = newContext();
     const entry = await anEntry(context, marked("House"), [marked("Paint")]);
 
-    for (const caller of [agent, connection]) {
-      expect(await context.call(caller, "delete_entry", { id: entry.id })).toMatchObject({
-        ok: false,
-        error: { code: "held" },
-      });
-    }
+    expect(await context.call(agent, "delete_entry", { id: entry.id })).toMatchObject({
+      ok: true,
+      value: { held: true, record: { tool: "delete_entry", entry: { id: entry.id } } },
+    });
+    expect(await context.call(connection, "delete_entry", { id: entry.id })).toMatchObject({
+      ok: false,
+      error: { code: "held" },
+    });
     expect(value(await context.call(hand, "get_entry", { id: entry.id }))).toEqual(entry);
   });
 

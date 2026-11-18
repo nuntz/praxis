@@ -2,7 +2,7 @@ import type { Change, Effect, ToolResult } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { forget, leakedMarkers, logs, marked } from "./markers.ts";
 import { judge, judgeDeployment, type Records, type Seen, type SeenDeployment } from "./oracle.ts";
-import { connection, hand, newContext, value } from "./seam.ts";
+import { agent, connection, hand, newContext, value } from "./seam.ts";
 
 // The harness is what every seam test leans on, so it is tested for what it must catch.
 
@@ -30,9 +30,46 @@ function aGoodWrite(): Seen {
   };
 }
 
+/**
+ * The Agent's edit_entry on the person's words, which left a Held Change, and with it changed
+ * these Effects too, reported and logged.
+ */
+function aHeldCall(alsoChanged: Effect[]): Seen {
+  const left: Effect = {
+    kind: "held_change",
+    id: "h1",
+    what: "made",
+    summary: "Edit your Entry's words",
+    by: "call",
+  };
+  const effects = [left, ...alsoChanged];
+  return {
+    request: { caller: agent, tool: "edit_entry", input: {}, arrivedAt: Date.parse(at) },
+    result: { ok: true, value: { record: { id: "h1" }, effects, changed: true, held: true } },
+    before: records({ e1: "row" }),
+    after: new Map([
+      ["entry:e1", alsoChanged.length > 0 ? "row, changed" : "row"],
+      ["held_change:h1", "waiting"],
+    ]),
+    logged: [{ at, caller: agent, tool: "edit_entry", effects }],
+    firstWithKey: null,
+  };
+}
+
 describe("the oracle", () => {
   test("passes a write whose Effects are exactly what changed, logged with its caller", () => {
     expect(judge(aGoodWrite())).toEqual([]);
+  });
+
+  test("passes a held call that left its Held Change and changed nothing else", () => {
+    expect(judge(aHeldCall([]))).toEqual([]);
+  });
+
+  test("fails a held call that changed anything but its Held Change, even saying so", () => {
+    const changed: Effect = { ...made, what: "changed" };
+    const seen = aHeldCall([changed]);
+
+    expect(judge(seen)).toEqual([expect.stringContaining("nothing but its Held Change")]);
   });
 
   test("fails a write that changed a record its Effects leave out", () => {

@@ -466,6 +466,7 @@ export const REFERENCES_CLEARED = {
   "task_events.person": "a delegation to a removed Person is removed",
   "project_events.project": "removed with the Project",
   "dormant_links.task": "removed with the Task",
+  "held_changes.entry": "removed with the Entry, though one lapses as its Entry goes to the Trash",
 } as const;
 
 /**
@@ -516,6 +517,7 @@ export function removeForGood(
     ["entry_links", "entry"],
     ["entry_versions", "entry"],
     ["standing_marks", "entry"],
+    ["held_changes", "entry"],
     ["task_events", "task"],
     ["project_events", "project"],
     ["tasks", "id"],

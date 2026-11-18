@@ -39,6 +39,27 @@ export function createTables(sql: SqlStorage): void {
       entry TEXT PRIMARY KEY REFERENCES entries (id)
     );
 
+    -- The Held Changes waiting for the person's tap (section 4.7): a call from the Agent to change
+    -- or delete the words of an Entry the person wrote. None is a record. Each holds what the tap
+    -- does, and what it was left against: the Entry's version and, for a delete, the Tasks that
+    -- would go with it. Once either moves on it lapses, so one is never left on an Entry in the
+    -- Trash.
+    CREATE TABLE IF NOT EXISTS held_changes (
+      seq INTEGER PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      entry TEXT NOT NULL REFERENCES entries (id),
+      tool TEXT NOT NULL,
+      -- The words the tap gives the Entry, or null for a delete.
+      words TEXT,
+      -- The Tasks the tap makes with them, as JSON: the titles of the Inline Tasks an edit added.
+      new_tasks TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      -- The ids of the Tasks a delete would take, as JSON, in the order made.
+      goes_with TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS held_changes_by_entry ON held_changes (entry);
+
     -- A Project contains Tasks. Its state is not a column: it is derived from what was declared.
     CREATE TABLE IF NOT EXISTS projects (
       seq INTEGER PRIMARY KEY,

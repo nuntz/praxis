@@ -2,6 +2,7 @@ import type { AgentMessage, Effect, Message, MessagesPage, RunCall } from "@prax
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { Peer } from "./design/Peer.tsx";
+import { HeldChangeItem, useHeldChanges } from "./HeldChanges.tsx";
 import { recordAnchor } from "./Journal.tsx";
 import { useLive } from "./live-context.ts";
 import { CapNotice, readSpend, spend } from "./Spend.tsx";
@@ -181,12 +182,21 @@ function AgentMessageItem(props: {
   onShowRecord: (anchor: string) => void;
 }) {
   const run = () => props.message.run;
+  const heldChanges = useHeldChanges();
+  // A Held Change the Run left waits here, where the Agent left it, until it is made, cancelled or
+  // lapses (section 8.5).
+  const leftWaiting = () =>
+    run()
+      .calls.flatMap((call) => call.effects)
+      .filter((effect) => effect.kind === "held_change" && effect.what === "made")
+      .flatMap((effect) => heldChanges.find(effect.id) ?? []);
   return (
     <li class="message from-agent" data-testid="message">
       <span class="message-from">Agent</span>
       <Show when={props.message.words}>
         <Words words={props.message.words} />
       </Show>
+      <For each={leftWaiting()}>{(held) => <HeldChangeItem held={held} />}</For>
       {/* Opened, it shows the Run's calls, and once it has ended, what it cost. */}
       <Show when={run().calls.length > 0 || run().cost !== null}>
         <details class="run-calls">
@@ -222,6 +232,7 @@ const KIND: Record<Effect["kind"], string> = {
   project: "Project",
   person: "Person",
   context: "Context",
+  held_change: "Held Change",
   connection: "Connection",
   spend_cap: "Spend cap",
 };

@@ -50,6 +50,7 @@ import { createTables } from "./tables.ts";
 import { attentionTools } from "./tools/attention.ts";
 import { changeTools } from "./tools/changes.ts";
 import { entryTools } from "./tools/entries.ts";
+import { heldChangeTools } from "./tools/held-changes.ts";
 import { personTools } from "./tools/persons.ts";
 import { projectTools } from "./tools/projects.ts";
 import { recurrenceTools } from "./tools/recurrences.ts";
@@ -75,6 +76,7 @@ const handlers: Handlers = {
   ...changeTools,
   ...attentionTools,
   ...trashTools,
+  ...heldChangeTools,
 };
 
 /** How long the alarm sleeps between wakes while it has something to do. */

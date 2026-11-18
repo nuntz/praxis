@@ -1,4 +1,4 @@
-import { compareWords, type Entry, type Version } from "@praxis/domain";
+import { compareWords, type Entry, isHeld, type Version } from "@praxis/domain";
 import { createEffect, createSignal, For, on, Show } from "solid-js";
 import { authorName } from "./authors.ts";
 import { unreachableMessage, useCallTool } from "./tools.ts";
@@ -56,6 +56,8 @@ export function Versions(props: {
             : result.error.message,
         );
       }
+      // A change by the person's own hand is never held.
+      if (isHeld(result.value)) throw new Error("A change by hand was held");
       props.onEntry(result.value.record);
     } catch (error) {
       props.onProblem(unreachableMessage(error));

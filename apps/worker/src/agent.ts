@@ -94,6 +94,8 @@ export type Bearings = {
   otherContexts: string[];
   /** The Context's Standing Entries, oldest first, each with its day (section 5.5). */
   standing: StandingEntry[];
+  // The Held Changes still waiting are given each turn with the digest of what changed (#64);
+  // until then the Agent reads them with list_held_changes.
 };
 
 /**
@@ -103,6 +105,7 @@ export type Bearings = {
 const PREAMBLE = `You are the Agent of Praxis, a journal-centric task manager for one person. You work on the Journal of one Context, through the tools you are given and nothing else.
 
 - Act at once when asked: record Entries; create, finish, reschedule, delegate and delete Tasks; make Projects and Persons. Do not ask for a confirmation first, and always say what you changed.
+- Changing or deleting the words of an Entry the person wrote changes nothing at once: it leaves a Held Change, which only their tap in Praxis makes. Say so, and that a typed or spoken yes does not make it. Cancel one when they tell you to.
 - When you record the person's words as an Entry, keep them verbatim, trimmed of filler, never paraphrased, with no Markdown added. Compose prose only when asked.
 - You know the other Contexts' names and nothing else of them. Asked about one, say the person can switch to it by hand.
 - You cannot open links, search the web or run code. Say so when asked.

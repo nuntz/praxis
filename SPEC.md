@@ -267,6 +267,7 @@ A result is a success or an error from a closed set of codes:
 - A Context is not a record, but a change to its settings, such as its time zone, is an Effect on the Context, carrying its id and its name as the summary. A time zone change changes no Task: its dates are days, and what today makes of them is derived when read.
 - A Deployment tool that changes a Context returns its Effect on the Context to its caller. Only a rename goes in that Context's change log, since it is the one such change a reader of the Context sees: the accent shows only on the person's screen, a retired Context cannot be read, and a new Context's log starts empty. The Deployment object keeps no change log.
 - A Connection is not a record either. A Deployment tool that makes or changes one returns an Effect on it, carrying its id and its name as the summary. Retiring a Context ends its Connections, each an Effect by rule. None of these goes in a change log.
+- Nor is a Held Change (section 4.7). Leaving one is an Effect on it, made, and making, cancelling or lapsing one an Effect on it, deleted, carrying its id and its summary. These go in the change log, so the screen hears them, but `list_changes` gives a Connection none of them, and no change whose Effects were all on Held Changes. The person's tap still shows to it as the change it made to the Entry, under `make_held_change`.
 - Neither is the spend cap. `set_spend_cap` returns an Effect on it, carrying its fixed id and its new amount as the summary, and it goes in no change log.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
 - `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since its last turn.
@@ -287,10 +288,12 @@ A result is a success or an error from a closed set of codes:
 ADR 0005. Glossary: Held Change.
 
 - One thing is held: a call from the Agent that changes or deletes the words of an Entry whose Author is the person. That covers `edit_entry`, `delete_entry` and `restore_entry_version`.
-- The Held Change shows the Entry before and after. For a delete it lists the Tasks that would go with the Entry, so the tap covers them.
-- Only the person's tap makes it (`make_held_change`). A typed or spoken "yes" never does, and the Agent says so.
+- The held call changes nothing but the Held Change it leaves, and returns it, marked `held`. It is first checked as the change would be: words it already has change nothing, a change against a Version no longer current is `stale`, and one that would take the Standing Entries past their ceiling is refused, so no Held Change is left already lapsed or bound to be refused.
+- The Held Change shows the Entry before and after, and an edit's Inline Tasks it would make. For a delete it lists the Tasks that would go with the Entry, so the tap covers them. Its one-line summary says what the tap does, in none of the Entry's words.
+- Only the person's tap makes it (`make_held_change`). A typed or spoken "yes" never does, and the Agent says so. Made, the change is the Agent's: its Version and the edited mark name the Agent, and the Entry stays the person's.
 - It can be cancelled by a tap or by telling the Agent.
-- It lapses the moment the Entry changes underneath it, so a tap never makes a change other than the one shown.
+- It lapses the moment the Entry changes underneath it, so a tap never makes a change other than the one shown: when its words change, by any caller or another Held Change made, when it goes to the Trash, and for a delete when the Tasks that would go with it change, as when one is added or a Recurrence makes its next Occurrence on the Entry. A link, a Standing mark, or a change to one of its Tasks that makes no other leaves it waiting. A lapse is an Effect by rule of the change that caused it.
+- Leaving, making, cancelling and lapsing are each an Effect on the Held Change (section 4.4).
 - Each turn the Agent is told which Held Changes are still waiting.
 - An Entry the Agent composed becomes the person's once they edit it, and its words are held from then on.
 - There is no undo of a turn and no cap on how many changes a turn makes. Things are put back by ordinary means: the Trash, Versions, reopening.

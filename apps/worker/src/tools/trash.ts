@@ -1,13 +1,16 @@
 import {
   type Day,
+  type Entry,
   failure,
   HELD_FOR_A_CONNECTION,
   type Removal,
   success,
   type ToolResult,
+  type TrashItem,
   type Written,
   written,
 } from "@praxis/domain";
+import { leaveHeldChange } from "../held-change-rows.ts";
 import { newestFirst } from "../newest-first.ts";
 import { readPerson } from "../person-rows.ts";
 import { readProject } from "../project-rows.ts";
@@ -39,6 +42,24 @@ function removal(sql: SqlStorage, items: string[], today: Day): ToolResult<Writt
   return success(written({ items: count }, effects));
 }
 
+/**
+ * Send an Entry to the Trash. The Tasks it is the Origin Entry of cannot exist without it, every
+ * Occurrence among them, open or closed, and so do its own References and Mentions. A Follow-up
+ * of it stays, and so does every other link to it, dormant. A Task already in the Trash stays in
+ * its own item.
+ */
+export function sendEntryToTrash(
+  sql: SqlStorage,
+  entry: Entry,
+  at: number,
+  today: Day,
+): Written<TrashItem> {
+  const tasks = entry.tasks.map((task) => ({ kind: "task" as const, id: task.id }));
+  const item = sendToTrash(sql, { kind: "entry", id: entry.id }, tasks, at);
+  const waiters = stopWaitsOn(sql, item, tasks, at, today);
+  return deleted(sql, item, waiters, today);
+}
+
 export const trashTools: Pick<
   Handlers,
   | "delete_entry"
@@ -54,17 +75,20 @@ export const trashTools: Pick<
     const entry = readEntry(sql, input.id, today);
     if (!entry) return failure("not_found", NO_SUCH_ENTRY);
     // Deleting the person's words is theirs alone. The Agent's call leaves a Held Change for the
-    // person's tap with #62, listing the Tasks that would go with it. Until then it is refused.
+    // person's tap, listing the Tasks that would go with it; a Connection's is refused.
     if (entry.author.kind === "person" && caller.kind !== "hand") {
-      return failure("held", HELD_FOR_A_CONNECTION);
+      if (caller.kind !== "agent") return failure("held", HELD_FOR_A_CONNECTION);
+      return success(
+        leaveHeldChange(sql, {
+          tool: "delete_entry",
+          entry,
+          words: null,
+          newTasks: [],
+          at: arrivedAt,
+        }),
+      );
     }
-    // The Tasks it is the Origin Entry of cannot exist without it, every Occurrence among them,
-    // open or closed, and so do its own References and Mentions. A Follow-up of it stays, and so
-    // does every other link to it, dormant. A Task already in the Trash stays in its own item.
-    const tasks = entry.tasks.map((task) => ({ kind: "task" as const, id: task.id }));
-    const item = sendToTrash(sql, { kind: "entry", id: entry.id }, tasks, arrivedAt);
-    const waiters = stopWaitsOn(sql, item, tasks, arrivedAt, today);
-    return success(deleted(sql, item, waiters, today));
+    return success(sendEntryToTrash(sql, entry, arrivedAt, today));
   },
 
   delete_task({ input, arrivedAt, today, sql }) {

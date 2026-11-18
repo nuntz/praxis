@@ -1,16 +1,18 @@
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type {
-  Accent,
-  Caller,
-  ContextMade,
-  DeploymentToolName,
-  DeploymentToolOutput,
-  LiveChanges,
-  LiveMessage,
-  ToolName,
-  ToolOutput,
-  ToolResult,
+import {
+  type Accent,
+  type Caller,
+  type ContextMade,
+  type DeploymentToolName,
+  type DeploymentToolOutput,
+  type Held,
+  isHeld,
+  type LiveChanges,
+  type LiveMessage,
+  type ToolName,
+  type ToolOutput,
+  type ToolResult,
 } from "@praxis/domain";
 import { reachContext } from "../src/routing.ts";
 import { throughDeploymentOracle, throughOracle } from "./oracle.ts";
@@ -184,4 +186,21 @@ export function value<T>(result: ToolResult<T>): T {
   if (!result.ok)
     throw new Error(`Expected success, got ${result.error.code}: ${result.error.message}`);
   return result.value;
+}
+
+/**
+ * The value of a write that ran at once, failing the test on an error or on a Held Change left in
+ * its place (section 4.7).
+ */
+export function atOnce<T extends object>(result: ToolResult<T>): Exclude<T, Held> {
+  const got = value(result);
+  if (isHeld(got)) throw new Error("Expected the change made at once, got a Held Change");
+  return got as Exclude<T, Held>;
+}
+
+/** The Held Change a held call left, failing the test on an error or on a change made at once. */
+export function left<T extends object>(result: ToolResult<T>): Held {
+  const got = value(result);
+  if (!isHeld(got)) throw new Error("Expected a Held Change left, got the change made at once");
+  return got;
 }

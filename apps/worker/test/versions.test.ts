@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
-import { agent, connection, DAY, everyCaller, hand, newContext, value } from "./seam.ts";
+import { agent, atOnce, connection, DAY, everyCaller, hand, newContext, value } from "./seam.ts";
 
 type Context = ReturnType<typeof newContext>;
 
@@ -87,11 +87,11 @@ describe("edit_entry", () => {
   test("the words it already has change nothing and keep no Version, whatever version is stated", async () => {
     const context = newContext();
     const entry = await recorded(context, marked("Unchanged"));
-    const now = value(
+    const now = atOnce(
       await context.call(hand, "edit_entry", { id: entry.id, words: marked("Now"), version: 0 }),
     ).record;
 
-    const result = value(
+    const result = atOnce(
       await context.call(hand, "edit_entry", { id: entry.id, words: now.words, version: 0 }),
     );
 
@@ -120,7 +120,7 @@ describe("edit_entry", () => {
     const entry = await recorded(context, marked("From outside"), connection);
     expect(entry.author).toEqual({ kind: "connection", name: "Claude Code" });
 
-    const { record } = value(
+    const { record } = atOnce(
       await context.call(hand, "edit_entry", {
         id: entry.id,
         words: marked("Mine now"),
@@ -136,14 +136,14 @@ describe("edit_entry", () => {
     const context = newContext();
     const entry = await recorded(context, marked("Composed"), agent);
 
-    const byConnection = value(
+    const byConnection = atOnce(
       await context.call(connection, "edit_entry", {
         id: entry.id,
         words: marked("Amended outside"),
         version: 0,
       }),
     ).record;
-    const byAgent = value(
+    const byAgent = atOnce(
       await context.call(agent, "edit_entry", {
         id: entry.id,
         words: marked("Amended again"),
@@ -174,18 +174,22 @@ describe("edit_entry", () => {
     expect(value(await context.call(hand, "get_entry", { id: entry.id }))).toEqual(entry);
   });
 
-  test("the Agent is held from the person's words, and nothing changes", async () => {
-    // The Held Change it leaves for the person's tap comes with #62.
+  test("the Agent's change to the person's words leaves a Held Change, and nothing else changes", async () => {
     const context = newContext();
     const entry = await recorded(context, marked("The person's own"));
 
-    const result = await context.call(agent, "edit_entry", {
-      id: entry.id,
-      words: marked("Rewritten"),
-      version: 0,
-    });
+    const result = value(
+      await context.call(agent, "edit_entry", {
+        id: entry.id,
+        words: marked("Rewritten"),
+        version: 0,
+      }),
+    );
 
-    expect(result).toMatchObject({ ok: false, error: { code: "held" } });
+    expect(result).toMatchObject({
+      held: true,
+      record: { tool: "edit_entry", entry: { id: entry.id } },
+    });
     expect(value(await context.call(hand, "get_entry", { id: entry.id }))).toEqual(entry);
   });
 
@@ -200,7 +204,7 @@ describe("edit_entry", () => {
     const signIt = entry.tasks[0];
 
     const words = `${entry.words}\n[] Send it back`;
-    const result = value(
+    const result = atOnce(
       await context.call(hand, "edit_entry", {
         id: entry.id,
         words,
@@ -235,7 +239,7 @@ describe("edit_entry", () => {
       }),
     ).record;
 
-    const { record } = value(
+    const { record } = atOnce(
       await context.call(hand, "edit_entry", {
         id: entry.id,
         words: marked("Lease"),
@@ -305,7 +309,7 @@ describe("restore_entry_version", () => {
       await context.call(hand, "edit_entry", { id: entry.id, words: marked("Lease"), version: 0 }),
     );
 
-    const result = value(
+    const result = atOnce(
       await context.call(hand, "restore_entry_version", { id: entry.id, restore: 0, version: 1 }),
     );
 

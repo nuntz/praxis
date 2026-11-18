@@ -7,6 +7,7 @@ import {
   isToolName,
   isWrite,
   parseToolInput,
+  success,
   type ToolInput,
   type ToolName,
   type ToolOutput,
@@ -15,6 +16,7 @@ import {
   type Written,
 } from "@praxis/domain";
 import { appendChange } from "./change-log.ts";
+import { lapseHeldChanges } from "./held-change-rows.ts";
 import { rememberKey, repeatedKey } from "./keys.ts";
 import { timeZoneOf } from "./settings.ts";
 
@@ -84,6 +86,20 @@ function runTool<N extends ToolName>(
   );
 }
 
+/**
+ * A write's result with the Held Changes it lapsed among its Effects, by rule: a change to an
+ * Entry lapses each one waiting on it, whoever made the change (section 4.7).
+ */
+function withLapses(
+  sql: SqlStorage,
+  result: ToolResult<Written<unknown>>,
+): ToolResult<Written<unknown>> {
+  if (!result.ok || result.value.effects.length === 0) return result;
+  const lapsed = lapseHeldChanges(sql);
+  if (lapsed.length === 0) return result;
+  return success({ ...result.value, effects: [...result.value.effects, ...lapsed] });
+}
+
 function runWrite(
   tool: WriteName,
   handler: (call: ToolCall<WriteName>) => ToolResult<Written<unknown>>,
@@ -94,7 +110,7 @@ function runWrite(
   const repeated = repeatedKey(sql, { caller, key, tool, at: arrivedAt });
   if (repeated) return repeated;
 
-  const result = handler(call);
+  const result = withLapses(sql, handler(call));
   if (result.ok && result.value.effects.length > 0) {
     appendChange(sql, { at: arrivedAt, caller, tool, effects: result.value.effects });
   }

@@ -7,14 +7,16 @@ import type {
   Task,
 } from "@praxis/domain";
 import { createSignal, For, type JSX, onCleanup, onMount, Show } from "solid-js";
+import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { useLive } from "./live-context.ts";
 import { CapNotice } from "./Spend.tsx";
 import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /**
- * What the Attention column holds: the sections of `view_attention`, in their order (section
- * 8.3). It has no composer. A Task is finished from it, and a Project opened to show its Tasks.
+ * What the Attention column holds: the standing Notices, the Held Changes waiting for the
+ * person's tap, then the sections of `view_attention`, in their order (section 8.3). It has no
+ * composer. A Task is finished from it, and a Project opened to show its Tasks.
  * Its sections are derived on the server from the whole Context, so any change to a Task, a
  * Project or the Context's settings is answered by reading the view again.
  */
@@ -25,6 +27,7 @@ export function Attention(props: {
 }) {
   const callTool = useCallTool();
   const live = useLive();
+  const heldChanges = useHeldChanges();
   const [view, setView] = createSignal<AttentionView | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
   // Each read is numbered: an answer a later read overtook is dropped, so the last read wins.
@@ -99,6 +102,13 @@ export function Attention(props: {
           </p>
         )}
       </Show>
+      <Section id="held-changes" title="Held Changes" items={heldChanges.waiting()}>
+        {(held) => (
+          <li>
+            <HeldChangeItem held={held} anchor={heldAnchor(held.id)} />
+          </li>
+        )}
+      </Section>
       <Show when={view()}>
         {(shown) => (
           <>
@@ -131,7 +141,12 @@ export function Attention(props: {
             <Section id="loose" title="Loose" items={shown().loose}>
               {(task) => taskItem(task)}
             </Section>
-            <Show when={Object.values(shown()).every((items) => items.length === 0)}>
+            <Show
+              when={
+                heldChanges.waiting().length === 0 &&
+                Object.values(shown()).every((items) => items.length === 0)
+              }
+            >
               <p class="peer-note">Nothing is open to act on.</p>
             </Show>
           </>

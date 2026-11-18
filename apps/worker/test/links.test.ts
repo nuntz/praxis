@@ -1,7 +1,7 @@
 import type { Entry } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
-import { agent, connection, everyCaller, hand, newContext, value } from "./seam.ts";
+import { agent, atOnce, connection, everyCaller, hand, newContext, value } from "./seam.ts";
 
 type Context = ReturnType<typeof newContext>;
 
@@ -496,14 +496,14 @@ describe("an Entry's links when its words change", () => {
     const context = newContext();
     const { entry, person } = await linked(context);
 
-    const result = value(await edit(context, entry.id, words));
+    const result = atOnce(await edit(context, entry.id, words));
 
     expect(result.record.links.map((link) => link.anchor)).toEqual([anchor, null]);
     expect(result.effects).toEqual([
       { kind: "entry", id: entry.id, what: "changed", summary: words, by: "call" },
     ]);
     // It holds through a later change, as the words read then.
-    const later = value(await edit(context, entry.id, `${words}!`, 1)).record;
+    const later = atOnce(await edit(context, entry.id, `${words}!`, 1)).record;
     expect(later.links[0]).toEqual({
       kind: "mention",
       to: { kind: "person", id: person.id, summary: person.name },
@@ -520,7 +520,7 @@ describe("an Entry's links when its words change", () => {
     const context = newContext();
     const { entry, person, project } = await linked(context);
 
-    const { record } = value(await edit(context, entry.id, words));
+    const { record } = atOnce(await edit(context, entry.id, words));
 
     expect(record.links).toEqual([
       {
@@ -535,7 +535,7 @@ describe("an Entry's links when its words change", () => {
       },
     ]);
     // Gone for good: words that hold its text there again do not bring it back.
-    const back = value(await edit(context, entry.id, "Met @Ali today", 1)).record;
+    const back = atOnce(await edit(context, entry.id, "Met @Ali today", 1)).record;
     expect(back.links.map((link) => link.anchor)).toEqual([null, null]);
   });
 
@@ -544,7 +544,7 @@ describe("an Entry's links when its words change", () => {
     const { entry } = await linked(context);
     value(await edit(context, entry.id, "I met @Ali yesterday"));
 
-    const { record } = value(
+    const { record } = atOnce(
       await context.call(hand, "restore_entry_version", { id: entry.id, restore: 0, version: 1 }),
     );
 
@@ -567,13 +567,13 @@ describe("an Entry's links when its words change", () => {
     ).record;
 
     const words = "I met @Ali, and then @Ali yesterday";
-    const { record } = value(await edit(context, entry.id, words));
+    const { record } = atOnce(await edit(context, entry.id, words));
 
     expect(record.links.map((link) => link.anchor)).toEqual([
       { start: 6, end: 10 },
       { start: 21, end: 25 },
     ]);
-    const back = value(
+    const back = atOnce(
       await context.call(hand, "restore_entry_version", { id: entry.id, restore: 0, version: 1 }),
     ).record;
     expect(back.links.map((link) => link.anchor)).toEqual([
@@ -616,7 +616,7 @@ describe("an Entry's links when its words change", () => {
       }),
     ).record;
 
-    const { record } = value(await edit(context, entry.id, edited));
+    const { record } = atOnce(await edit(context, entry.id, edited));
 
     expect(record.links.map((link) => link.anchor)).toEqual([moved]);
   });

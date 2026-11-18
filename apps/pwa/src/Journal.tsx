@@ -11,6 +11,7 @@ import { createStore, reconcile } from "solid-js/store";
 import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
 import { EntryEditor } from "./EntryEditor.tsx";
+import { heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { useLive } from "./live-context.ts";
 import { TaskItem } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
@@ -27,7 +28,12 @@ export function recordAnchor(kind: "entry" | "task", id: string): string {
  * Entry's time is shown in the Context's time zone, so the Journal's days agree with today. What
  * its column holds; the column itself is the screen's, so it stays while a new zone is read.
  */
-export function Journal(props: { timeZone: string; contextName: string | undefined }) {
+export function Journal(props: {
+  timeZone: string;
+  contextName: string | undefined;
+  /** Bring a Held Change into view in Attention, by its anchor there. */
+  onShowHeldChange: (anchor: string) => void;
+}) {
   const callTool = useCallTool();
   const live = useLive();
   const timeFormat = new Intl.DateTimeFormat(undefined, {
@@ -211,6 +217,7 @@ export function Journal(props: { timeZone: string; contextName: string | undefin
                   document.getElementById("new-entry")?.focus();
                 }}
                 onTask={showTask}
+                onShowHeldChange={props.onShowHeldChange}
                 onDeleted={(effects) => {
                   setProblem(null);
                   void patch(effects);
@@ -257,11 +264,16 @@ function EntryItem(props: {
   /** The person chose to record a Follow-up to it. */
   onFollowUp: () => void;
   onTask: (task: Task) => void;
+  /** Bring a Held Change on it into view in Attention. */
+  onShowHeldChange: (anchor: string) => void;
   /** The Entry went to the Trash, with what went with it: what the delete changed. */
   onDeleted: (effects: Effect[]) => void;
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();
+  const heldChanges = useHeldChanges();
+  // The newest Held Change waiting on it, which its marker leads to in Attention.
+  const held = () => heldChanges.waiting().find((each) => each.entry.id === props.entry.id);
   const [editing, setEditing] = createSignal(false);
   const [showingVersions, setShowingVersions] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
@@ -314,6 +326,20 @@ function EntryItem(props: {
             >
               {edited().by.kind === "person" ? "Edited" : `Edited by ${authorName(edited().by)}`}
             </button>
+          )}
+        </Show>
+        <Show when={held()}>
+          {(waiting) => (
+            <a
+              class="entry-mark held-mark"
+              href={`#${heldAnchor(waiting().id)}`}
+              onClick={(event) => {
+                event.preventDefault();
+                props.onShowHeldChange(heldAnchor(waiting().id));
+              }}
+            >
+              Held Change waiting
+            </a>
           )}
         </Show>
         <Show when={!editing()}>

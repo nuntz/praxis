@@ -1,4 +1,4 @@
-import { type Entry, inlineTasksAdded } from "@praxis/domain";
+import { type Entry, inlineTasksAdded, isHeld } from "@praxis/domain";
 import { createSignal, onMount } from "solid-js";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
@@ -44,6 +44,8 @@ export function EntryEditor(props: {
             : result.error.message,
         );
       }
+      // A change by the person's own hand is never held.
+      if (isHeld(result.value)) throw new Error("A change by hand was held");
       props.onSaved(result.value.record);
     } catch (error) {
       props.onProblem(unreachableMessage(error));

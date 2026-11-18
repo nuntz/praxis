@@ -7,6 +7,7 @@ import {
   type Effect,
   instantToIso,
   isConversationToolName,
+  isHeld,
   isWrite,
   keysForgottenBy,
   SPEND_CAP_ID,
@@ -41,6 +42,8 @@ const domainTables: Record<string, { kind: Effect["kind"]; id: string }> = {
   entry_versions: { kind: "entry", id: "entry" },
   standing_marks: { kind: "entry", id: "entry" },
   context_settings: { kind: "context", id: "id" },
+  // Not a record, but leaving one, making it, cancelling it and its lapsing are each an Effect.
+  held_changes: { kind: "held_change", id: "id" },
 };
 
 /**
@@ -125,6 +128,16 @@ export function judge(seen: Seen): string[] {
     problems.push(
       `The records changed are not the Effects returned. Changed: ${canonical(sorted(changed))}. Effects: ${canonical(sorted(named))}.`,
     );
+  }
+  // A held call changes nothing but the Held Change it leaves (section 13), whatever it reports.
+  if (isHeld(result.value as object)) {
+    const others = changed.filter(({ kind }) => kind !== "held_change");
+    const left = changed.filter(({ kind, what }) => kind === "held_change" && what === "made");
+    if (others.length > 0 || left.length !== 1) {
+      problems.push(
+        `A held call changes nothing but its Held Change, yet changed: ${canonical(sorted(changed))}.`,
+      );
+    }
   }
   if (says !== effects.length > 0) {
     problems.push("The result does not say whether anything changed.");

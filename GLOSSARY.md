@@ -169,7 +169,7 @@ Something Praxis shows the person about its own condition, such as a failed Run 
 _Avoid_: Alert, warning, banner, error message, toast
 
 **Held Change**:
-A change to the words of an Entry whose Author is the person, asked for by the Agent and not yet made. It shows the Entry before and after, and only the person's tap makes it.
+A change to or delete of the words of an Entry whose Author is the person, asked for by the Agent and not yet made. It shows the Entry before and after, only the person's tap makes it, and it lapses the moment the Entry changes underneath it. It is not a record.
 _Avoid_: Confirmation, pending confirmation, approval, draft
 
 **Record**:
@@ -177,7 +177,7 @@ An Entry, Task, Project or Person: one of the things a Context keeps, each with 
 _Avoid_: Object, row
 
 **Effect**:
-One thing a change brought about: a record made, changed or deleted, a Context's settings changed, a Connection made, changed or ended, or the spend cap changed, whether directly or by a rule that followed from the change. A record sent to the Trash is deleted, one restored from it is made again, and one removed for good from it is deleted, with no summary. Every change reports all of its Effects, and says so when there are none.
+One thing a change brought about: a record made, changed or deleted, a Context's settings changed, a Held Change left, made, cancelled or lapsed, a Connection made, changed or ended, or the spend cap changed, whether directly or by a rule that followed from the change. A record sent to the Trash is deleted, one restored from it is made again, and one removed for good from it is deleted, with no summary. Every change reports all of its Effects, and says so when there are none.
 _Avoid_: Side effect, consequence, cascade
 
 **Trash**:
