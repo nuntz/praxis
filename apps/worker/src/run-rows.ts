@@ -1,11 +1,11 @@
-import type { RunEnd, RunStart } from "@praxis/domain";
+import { monthBounds, type RunEnd, type RunStart } from "@praxis/domain";
 
 /** A Run record as the Context's object keeps it (section 5.8). It holds no words. */
 export type RunRow = {
   id: string;
   started_by: RunStart;
   message: string | null;
-  submission: number;
+  submission: number | null;
   at: number;
   model: string;
   input_tokens: number;
@@ -42,6 +42,19 @@ export function startRun(
       run.model,
     )
     .one();
+}
+
+/**
+ * Keep the record of a Run not started because the month's spend had reached the cap (section
+ * 5.8): no Message was kept for it to answer, and it spent nothing. `list_runs` (#69) lists it.
+ */
+export function recordRunNotStarted(sql: SqlStorage, run: { at: number; model: string }): void {
+  sql.exec(
+    `INSERT INTO runs (id, started_by, at, model, ended) VALUES (?, 'message', ?, ?, 'cap_reached')`,
+    crypto.randomUUID(),
+    run.at,
+    run.model,
+  );
 }
 
 /** Say how a Run ended, and what it spent. */
@@ -88,4 +101,19 @@ export function runsAnswering(sql: SqlStorage, messages: string[]): Map<string, 
     )
     .toArray();
   return new Map(rows.map((row) => [row.message ?? "", row]));
+}
+
+/**
+ * What this Context's Runs started in the calendar month `at` falls in have spent, in all, in US
+ * dollars: what it reports to the Deployment object, which counts it against the cap.
+ */
+export function spentInMonth(sql: SqlStorage, at: number): number {
+  const { start, end } = monthBounds(at);
+  return sql
+    .exec<{ cost: number }>(
+      `SELECT coalesce(sum(cost), 0) AS cost FROM runs WHERE at >= ? AND at < ?`,
+      start,
+      end,
+    )
+    .one().cost;
 }

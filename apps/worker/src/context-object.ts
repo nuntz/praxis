@@ -6,11 +6,14 @@ import {
   type ContextMade,
   type ConversationToolInput,
   type ConversationToolName,
+  capInTheWay,
+  dollars,
   failure,
   isConversationToolName,
   isToolName,
   isWrite,
   type LiveMessage,
+  monthOf,
   NOTHING_GOES_UP,
   type NoAgent,
   offeredConversationTool,
@@ -34,7 +37,7 @@ import { logCall } from "./log.ts";
 import type { AgentModel } from "./model.ts";
 import { dispatch, type Handlers, type ToolRequest } from "./registry.ts";
 import { deploymentOf } from "./routing.ts";
-import { runsNotEnded } from "./run-rows.ts";
+import { recordRunNotStarted, runsNotEnded, spentInMonth } from "./run-rows.ts";
 import {
   contextEffect,
   deploymentOfContext,
@@ -193,31 +196,57 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
       const keyed = { caller, key: input.key, tool, at: arrivedAt };
       const repeated = repeatedKey(sql, keyed);
       if (repeated) return repeated;
-      // The Agent's calls are timed by the clock the caller's requests arrive by.
-      this.#clockSkew = arrivedAt - arrivalTime();
-      const message = await agent.send(
-        this.ctx.storage,
-        { words: input.words, spoken: input.spoken ?? false, at: arrivedAt },
-        await this.bearings(arrivedAt),
-      );
-      const result = success({ message });
+      const result = await this.startRun(agent, input, arrivedAt);
       if (input.key !== undefined) rememberKey(sql, { ...keyed, key: input.key, result });
       return result;
+    }
+
+    /**
+     * Start a Run for the person's Message, once the Deployment object has said one may: at the
+     * cap none starts, and the Message is refused and kept nowhere, though the Run still leaves a
+     * record (section 5.7).
+     */
+    private async startRun(
+      agent: ContextAgent,
+      input: ConversationToolInput<"send_message">,
+      at: number,
+    ): Promise<ToolResult<unknown>> {
+      const { otherContexts, spend } = await this.deployment().beforeRun(
+        this.ctx.id.toString(),
+        at,
+      );
+      if (spend.notice === "cap_reached") {
+        recordRunNotStarted(this.ctx.storage.sql, { at, model: agent.model });
+        return refusal(
+          `This month's spend has reached the cap of ${dollars(spend.cap)}, so no new Run starts. Raising the cap in the Deployment's settings lets one start at once; otherwise Runs start again when the month turns.`,
+          [capInTheWay(spend.cap)],
+        );
+      }
+      // The Agent's calls are timed by the clock the caller's requests arrive by.
+      this.#clockSkew = at - arrivalTime();
+      const message = await agent.send(
+        this.ctx.storage,
+        { words: input.words, spoken: input.spoken ?? false, at },
+        this.bearings(at, otherContexts),
+      );
+      return success({ message });
     }
 
     /**
      * What the Agent is told at the start of a Run: today, this Context's name, and the other
      * Contexts' names, which this object asks the Deployment object for (section 5.2).
      */
-    private async bearings(at: number): Promise<Bearings> {
+    private bearings(at: number, otherContexts: string[]): Bearings {
       const settings = readSettings(this.ctx.storage.sql, at);
-      const kept = deploymentOfContext(this.ctx.storage.sql);
-      const deployment =
-        kept === null
-          ? deploymentOf(this.env)
-          : this.env.DEPLOYMENT.get(this.env.DEPLOYMENT.idFromString(kept));
-      const otherContexts = await deployment.otherContextNames(this.ctx.id.toString());
       return { today: settings.today, context: settings.name, otherContexts };
+    }
+
+    /** The Deployment object this Context was made by, which it asks things of (section 9.2). */
+    private deployment() {
+      const kept = deploymentOfContext(this.ctx.storage.sql);
+      return kept === null
+        ? deploymentOf(this.env)
+        : this.env.DEPLOYMENT.get(this.env.DEPLOYMENT.idFromString(kept));
     }
 
     /** The Agent of this Context, or why the Deployment has none. */
@@ -236,6 +265,12 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
                   this.#agentWake = wake;
                   return this.keepAlarm();
                 },
+                reportSpend: (at) =>
+                  this.deployment().takeSpendReport({
+                    context: this.ctx.id.toString(),
+                    month: monthOf(at),
+                    spent: spentInMonth(this.ctx.storage.sql, at),
+                  }),
               },
               model,
             );

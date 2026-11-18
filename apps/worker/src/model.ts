@@ -44,6 +44,21 @@ export function costOf(model: string, usage: Pick<Usage, keyof Price>): number {
 /** What the Deployment's configuration says of the model: a key, which is a secret, and a name. */
 export type ModelConfiguration = { AGENT_API_KEY?: string; AGENT_MODEL?: string };
 
+/** The model the configuration names, or the default when it names none. */
+function configuredModel(env: ModelConfiguration): string {
+  return env.AGENT_MODEL?.trim() || DEFAULT_MODEL;
+}
+
+/**
+ * Why the configured model cannot be deployed, or null when it can: one with no price shipped with
+ * the code fails the deploy with this reason (ADR 0017). `scripts/check-model.ts` runs it.
+ */
+export function unpricedModel(env: ModelConfiguration): string | null {
+  const id = configuredModel(env);
+  if (id in PRICES) return null;
+  return `The configured model ${JSON.stringify(id)} has no price shipped with Praxis, so its Runs could not be counted against the spend cap. Name one of: ${Object.keys(PRICES).join(", ")}.`;
+}
+
 /**
  * The Agent's model as the Deployment's configuration names it, called with the person's own key,
  * or why there is no Agent: no key, or a model the code ships no price for, which is no Agent
@@ -53,7 +68,7 @@ export type ModelConfiguration = { AGENT_API_KEY?: string; AGENT_MODEL?: string 
 export function anthropicModel(env: ModelConfiguration): AgentModel | NoAgent {
   const key = env.AGENT_API_KEY?.trim();
   if (!key) return "no_key";
-  const id = env.AGENT_MODEL?.trim() || DEFAULT_MODEL;
+  const id = configuredModel(env);
   if (!(id in PRICES)) return "model_has_no_price";
   const models = createModels({
     authContext: {

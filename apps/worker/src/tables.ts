@@ -220,7 +220,8 @@ export function createTables(sql: SqlStorage): void {
       -- The id of the person's Message it answers, never its words.
       message TEXT,
       -- The runtime's handle on the Message it answers, to learn how it ended after a restart.
-      submission INTEGER NOT NULL,
+      -- None for a Run never started, because the month's spend had reached the cap.
+      submission INTEGER,
       at INTEGER NOT NULL,
       model TEXT NOT NULL,
       input_tokens INTEGER NOT NULL DEFAULT 0,

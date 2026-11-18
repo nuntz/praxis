@@ -5,11 +5,11 @@ import { daysBefore } from "./day.ts";
 export type RecordKind = "entry" | "task" | "project" | "person";
 
 /**
- * What an Effect can name: a record, the Context itself, whose settings a write can change, or a
- * Connection, which the Deployment object keeps. Neither a Context nor a Connection is a record,
- * but a change to one is a change like any other.
+ * What an Effect can name: a record, the Context itself, whose settings a write can change, a
+ * Connection, or the spend cap, both of which the Deployment object keeps. None of these but the
+ * records is a record, but a change to one is a change like any other.
  */
-export type EffectKind = RecordKind | "context" | "connection";
+export type EffectKind = RecordKind | "context" | "connection" | "spend_cap";
 
 /**
  * One thing a change brought about (section 4.4): a record made, changed or deleted, or the

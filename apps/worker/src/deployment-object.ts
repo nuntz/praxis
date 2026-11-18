@@ -7,6 +7,7 @@ import {
   isDeploymentWrite,
   offeredDeploymentTool,
   parseDeploymentToolInput,
+  type Spend,
   type ToolResult,
 } from "@praxis/domain";
 import { startTimer } from "./arrival.ts";
@@ -21,6 +22,7 @@ import {
 import { rememberKey, repeatedKey } from "./keys.ts";
 import { logCall } from "./log.ts";
 import type { ToolRequest } from "./registry.ts";
+import { readSpend, type SpendReport, takeSpendReport } from "./spend-rows.ts";
 
 /**
  * The one object that belongs to the Deployment rather than to a Context (ADR 0006). It holds the
@@ -64,11 +66,22 @@ export class DeploymentObject extends DurableObject<Env> {
   }
 
   /**
-   * The names of the Contexts shown other than this one, which the Agent of a Context is told at
-   * the start of every Run (section 5.2). Nothing else of them.
+   * What a Context's object asks at the start of every Run (section 5.2): the names of the
+   * Contexts shown other than this one, and nothing else of them, and the month's spend against
+   * the cap, which says whether a Run may start. Embedding a newly saved Entry (#58) will ask
+   * the same before it spends, and stop at the cap.
    */
-  async otherContextNames(id: string): Promise<string[]> {
-    return otherContextNames(this.ctx.storage.sql, id);
+  async beforeRun(id: string, at: number): Promise<{ otherContexts: string[]; spend: Spend }> {
+    const sql = this.ctx.storage.sql;
+    return { otherContexts: otherContextNames(sql, id), spend: readSpend(sql, at) };
+  }
+
+  /**
+   * A Context's report of what its Runs have spent in a calendar month, in all, counted against
+   * the cap (section 5.7). Embedding (#58) will report through here too.
+   */
+  async takeSpendReport(report: SpendReport): Promise<void> {
+    takeSpendReport(this.ctx.storage.sql, report);
   }
 
   private async run<N extends DeploymentToolName>(

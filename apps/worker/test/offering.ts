@@ -90,6 +90,8 @@ export const deploymentOffering: Record<string, [Offer, Offer, Offer, Offer, Off
   set_connection_reading_only: [
                         "yes", "no",  "no",  "no",       "no"  ],
   end_connection: [     "yes", "no",  "no",  "no",       "no"  ],
+  get_spend: [          "yes", "no",  "no",  "no",       "no"  ],
+  set_spend_cap: [      "yes", "no",  "no",  "no",       "no"  ],
 };
 
 /**
@@ -162,4 +164,6 @@ export const deploymentRunsWith: Record<string, (id: string) => unknown> = {
   rename_connection: () => ({ id: "no-such-connection", name: "Laptop" }),
   set_connection_reading_only: () => ({ id: "no-such-connection", reading_only: true }),
   end_connection: () => ({ id: "no-such-connection" }),
+  get_spend: () => ({}),
+  set_spend_cap: () => ({ cap: 25 }),
 };

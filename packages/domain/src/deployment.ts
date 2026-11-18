@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Caller, CallerKind } from "./callers.ts";
 import { timeZone } from "./day.ts";
 import type { Written } from "./effects.ts";
+import type { Spend, SpendCap } from "./spend.ts";
 import { type Parsed, parseInput, writeInput } from "./tools.ts";
 
 /** The fixed set of Context accents (section 8.11). A Context has one, and nothing else does. */
@@ -64,6 +65,11 @@ const connectionName = z
   .string()
   .refine((value) => value.trim().length > 0, { message: "A Connection needs a name." })
   .refine((value) => !/[\r\n]/.test(value), { message: "A Connection's name is one line." });
+
+/** A spend cap in US dollars a month, more than nothing. */
+const cap = z
+  .number({ message: "A spend cap is an amount of US dollars." })
+  .positive({ message: "A spend cap is more than nothing." });
 
 /**
  * The Deployment tools (section 4.11). They run on the Deployment object and are offered to the
@@ -134,6 +140,18 @@ export const deploymentTools = {
       "End a Connection: its next call is refused, and it is never brought back. Its name stays on what it made. Ending one already ended changes nothing.",
     input: writeInput({ id }),
   },
+  get_spend: {
+    kind: "read",
+    description:
+      "Read what the Deployment has spent this calendar month (UTC) on the model, in US dollars, against its monthly cap, and the standing Notice that gives: the cap nearly reached past 80% of it, or the cap reached, when no new Run starts.",
+    input: z.strictObject({}),
+  },
+  set_spend_cap: {
+    kind: "write",
+    description:
+      "Set the Deployment's monthly spend cap, in US dollars. It takes effect at once: raising it past what was spent lets Runs start again. Setting the cap it has changes nothing.",
+    input: writeInput({ cap }),
+  },
 } as const;
 
 export type DeploymentToolName = keyof typeof deploymentTools;
@@ -166,6 +184,8 @@ export type DeploymentToolOutput = {
   rename_connection: Written<Connection>;
   set_connection_reading_only: Written<Connection>;
   end_connection: Written<Connection>;
+  get_spend: Spend;
+  set_spend_cap: Written<SpendCap>;
 };
 
 export function parseDeploymentToolInput<N extends DeploymentToolName>(

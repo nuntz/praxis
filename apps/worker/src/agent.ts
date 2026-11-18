@@ -76,6 +76,11 @@ export type AgentHost = {
   send(message: LiveMessage): void;
   /** Keep the object's alarm armed for what the runtime says it needs next. */
   arm(wake: Wake): Promise<void>;
+  /**
+   * Tell the Deployment object what this Context's Runs have spent in the calendar month `at`
+   * falls in, so it counts against the cap.
+   */
+  reportSpend(at: number): Promise<void>;
 };
 
 /**
@@ -173,6 +178,11 @@ export class ContextAgent {
   constructor(host: AgentHost, model: AgentModel) {
     this.#host = host;
     this.#model = model;
+  }
+
+  /** The model's name, as the Run records keep it. */
+  get model(): string {
+    return this.#model.id;
   }
 
   /** Open the runtime on the Context's SQLite, and take up any Run a lost instance left going. */
@@ -298,17 +308,32 @@ export class ContextAgent {
     const submission = await harness.submission(run.submission as SubmissionId, context);
     if (!submission) {
       endRun(this.#host.sql, run.id, "failed", NOTHING_SPENT);
+      await this.#reportSpend(run.at);
       return;
     }
     const settled = await submission.wait(context);
     const ended: RunEnd = settled.status === "done" ? "answered" : "failed";
     const entries = settled.entry === undefined ? [] : await runRecords(root, settled.entry);
     endRun(this.#host.sql, run.id, ended, spendOf(run.model, entries));
+    // Counted before the screen learns the Run ended, so the spend it reads then holds it.
+    await this.#reportSpend(run.at);
     // A Message sent meanwhile may already be newer than this Run's.
     const answer = (await this.page(root, undefined, RECENT_MESSAGES)).items.find(
       (message) => message.from === "agent" && message.run.id === run.id,
     );
     if (answer) this.#host.send({ kind: "message", message: answer });
+  }
+
+  /**
+   * Report the month's spend. A report is the month's whole total, so one that fails is made good
+   * by the next Run's.
+   */
+  async #reportSpend(at: number): Promise<void> {
+    try {
+      await this.#host.reportSpend(at);
+    } catch {
+      console.error(JSON.stringify({ agent: "spend_not_reported" }));
+    }
   }
 
   /**

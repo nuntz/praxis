@@ -22,6 +22,7 @@ import { Peer, type PeerId } from "./design/Peer.tsx";
 import { Journal } from "./Journal.tsx";
 import { Live, socketOpener } from "./live.ts";
 import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
+import { focusCapField, followSpend, SpendSettings } from "./Spend.tsx";
 import { Trash } from "./Trash.tsx";
 import {
   CurrentContextTools,
@@ -131,6 +132,14 @@ export function App() {
     setContexts((shown) => [...(shown ?? []), made]);
     switchTo(made.id);
   }
+
+  /** Open the settings at the spend cap, from the Notice that says it is reached. */
+  function showCap() {
+    setShowSettings(true);
+    requestAnimationFrame(focusCapField);
+  }
+
+  onMount(() => onCleanup(followSpend()));
 
   onMount(async () => {
     try {
@@ -296,6 +305,7 @@ export function App() {
                       onMade={addContext}
                     />
                     <Connections contexts={contexts() ?? []} />
+                    <SpendSettings />
                   </div>
                 </Show>
                 <main class="peers">
@@ -317,7 +327,11 @@ export function App() {
                       {(zone) => <Journal timeZone={zone} contextName={current()?.name} />}
                     </Show>
                   </Peer>
-                  <Conversation contextName={current()?.name} onShowRecord={showRecord} />
+                  <Conversation
+                    contextName={current()?.name}
+                    onShowRecord={showRecord}
+                    onShowCap={showCap}
+                  />
                 </main>
                 <nav class="tabs" aria-label="Columns">
                   <TabButton tab="attention" shown={tab()} onShow={setTab}>

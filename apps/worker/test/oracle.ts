@@ -3,11 +3,13 @@ import type { env } from "cloudflare:workers";
 import {
   type Caller,
   type Change,
+  DEFAULT_SPEND_CAP,
   type Effect,
   instantToIso,
   isConversationToolName,
   isWrite,
   keysForgottenBy,
+  SPEND_CAP_ID,
   type ToolResult,
 } from "@praxis/domain";
 import { expect } from "vitest";
@@ -168,9 +170,9 @@ function judgeConversation(changed: Pick<Effect, "kind" | "id" | "what">[], logg
 // The same promise for a Deployment write, which can reach into a Context's object (to make it or
 // rename it): every Context listed is snapshotted before and after, and what changed in each must
 // be Effects the call returned, logged in that Context with the caller. A Context the call made
-// holds its settings and nothing else, and its change log starts empty. The Connections the
-// Deployment object keeps are held the same way: the ones changed are exactly the ones its
-// Effects name, and the Deployment object keeps no change log for them.
+// holds its settings and nothing else, and its change log starts empty. The Connections and the
+// spend cap the Deployment object keeps are held the same way: the ones changed are exactly the
+// ones its Effects name, and the Deployment object keeps no change log for them.
 
 type DeploymentStub = ReturnType<typeof env.DEPLOYMENT.get>;
 
@@ -181,8 +183,11 @@ export type SeenDeployment = {
   request: Request;
   result: ToolResult<unknown>;
   contexts: Map<string, SeenContext>;
-  /** The Deployment object's Connections, each as a record is, before and after the call. */
-  connections: { before: Records; after: Records };
+  /**
+   * What the Deployment object keeps other than its Contexts, its Connections and its spend cap,
+   * each as a record is, before and after the call.
+   */
+  kept: { before: Records; after: Records };
 };
 
 /** Call a Deployment tool through the oracle, failing the test on anything it finds. */
@@ -194,10 +199,10 @@ export async function throughDeploymentOracle(
   const listedBefore = await listedContexts(deployment);
   const before = new Map<string, { records: Records; lastChange: number }>();
   for (const id of listedBefore) before.set(id, await snapshot(contextOf(id)));
-  const connectionsBefore = await connectionRecords(deployment);
+  const keptBefore = await keptByDeployment(deployment);
   const result = await deployment.call(request);
   const listedAfter = await listedContexts(deployment);
-  const connections = { before: connectionsBefore, after: await connectionRecords(deployment) };
+  const kept = { before: keptBefore, after: await keptByDeployment(deployment) };
 
   const contexts = new Map<string, SeenContext>();
   for (const id of listedAfter) {
@@ -211,7 +216,7 @@ export async function throughDeploymentOracle(
 
   const problems = [
     ...gone.map((id) => `The Context ${id} left the list.`),
-    ...judgeDeployment({ request, result, contexts, connections }),
+    ...judgeDeployment({ request, result, contexts, kept }),
   ];
   expect(problems, `The oracle, on ${request.tool} as ${request.caller.kind}`).toEqual([]);
   return result;
@@ -223,13 +228,13 @@ export function judgeDeployment(seen: SeenDeployment): string[] {
   const effects = result.ok ? ((result.value as { effects?: Effect[] }).effects ?? []) : [];
   const problems: string[] = [];
 
-  const connectionsChanged = differences(seen.connections.before, seen.connections.after);
-  const onConnections = effects
-    .filter((e) => e.kind === "connection")
+  const keptChanged = differences(seen.kept.before, seen.kept.after);
+  const onKept = effects
+    .filter((e) => e.kind === "connection" || e.kind === "spend_cap")
     .map(({ kind, id, what }) => ({ kind, id, what }));
-  if (!same(sorted(connectionsChanged), sorted(onConnections))) {
+  if (!same(sorted(keptChanged), sorted(onKept))) {
     problems.push(
-      `The Connections changed are not the Effects on Connections returned. Changed: ${canonical(sorted(connectionsChanged))}. Effects: ${canonical(sorted(onConnections))}.`,
+      `The Connections and cap changed are not the Effects on them returned. Changed: ${canonical(sorted(keptChanged))}. Effects: ${canonical(sorted(onKept))}.`,
     );
   }
 
@@ -291,11 +296,19 @@ function listedContexts(deployment: DeploymentStub): Promise<string[]> {
   );
 }
 
-/** The Deployment object's Connections, each as a record is, by `connection:id`. */
-function connectionRecords(deployment: DeploymentStub): Promise<Records> {
+/**
+ * The Deployment object's Connections, each as a record is, by `connection:id`, and its spend cap
+ * by `spend_cap:spend_cap`, which there always is: before the person sets one, the default.
+ */
+function keptByDeployment(deployment: DeploymentStub): Promise<Records> {
   return runInDurableObject(deployment, (_, state) => {
-    const rows = state.storage.sql.exec<{ id: string }>(`SELECT * FROM connections ORDER BY seq`);
-    return new Map([...rows].map((row) => [`connection:${row.id}`, canonical(row)]));
+    const sql = state.storage.sql;
+    const rows = sql.exec<{ id: string }>(`SELECT * FROM connections ORDER BY seq`);
+    const set = sql.exec<{ dollars: number }>(`SELECT dollars FROM spend_cap`).toArray()[0];
+    return new Map([
+      ...[...rows].map((row): [string, string] => [`connection:${row.id}`, canonical(row)]),
+      [`spend_cap:${SPEND_CAP_ID}`, canonical({ dollars: set?.dollars ?? DEFAULT_SPEND_CAP })],
+    ]);
   });
 }
 

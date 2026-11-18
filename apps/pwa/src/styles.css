@@ -977,6 +977,14 @@ button.quiet.attention-project-toggle {
   color: var(--muted);
 }
 
+/* At the spend cap, the cap's Notice in place of the Conversation's composer, and a way to it. */
+.cap-reached {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
 /* Editing an Entry: its marks and controls beside its time, the editor showing the words as typed. */
 
 .entry-head {

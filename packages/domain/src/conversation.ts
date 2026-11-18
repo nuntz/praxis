@@ -50,8 +50,11 @@ export type RunFold = {
  */
 export type RunCall = { tool: string; result: "ok" | ErrorCode | "running"; effects: Effect[] };
 
-/** How a Run ended: it answered, or it failed and the person may try again. */
-export type RunEnd = "answered" | "failed";
+/**
+ * How a Run ended: it answered, it failed and the person may try again, or it never started
+ * because the month's spend had reached the cap (section 5.7), which still leaves a record.
+ */
+export type RunEnd = "answered" | "failed" | "cap_reached";
 
 /** What started a Run. Only a Message from the person, for now; the clock starts Briefs and Reviews. */
 export type RunStart = "message";
@@ -68,7 +71,7 @@ export type MessagesPage = {
   next_cursor: string | null;
   /**
    * Whether there is an Agent at all: without the model's key there is none, and the Conversation
-   * says so in place of its composer (ADR 0017).
+   * says so in place of its composer (ADR 0017). Whether the cap lets a Run start is `get_spend`'s.
    */
   agent: "available" | NoAgent;
 };

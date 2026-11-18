@@ -267,6 +267,7 @@ A result is a success or an error from a closed set of codes:
 - A Context is not a record, but a change to its settings, such as its time zone, is an Effect on the Context, carrying its id and its name as the summary. A time zone change changes no Task: its dates are days, and what today makes of them is derived when read.
 - A Deployment tool that changes a Context returns its Effect on the Context to its caller. Only a rename goes in that Context's change log, since it is the one such change a reader of the Context sees: the accent shows only on the person's screen, a retired Context cannot be read, and a new Context's log starts empty. The Deployment object keeps no change log.
 - A Connection is not a record either. A Deployment tool that makes or changes one returns an Effect on it, carrying its id and its name as the summary. Retiring a Context ends its Connections, each an Effect by rule. None of these goes in a change log.
+- Neither is the spend cap. `set_spend_cap` returns an Effect on it, carrying its fixed id and its new amount as the summary, and it goes in no change log.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
 - `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since its last turn.
 - The change log is kept 90 days, pruned by the Context's alarm. A caller whose cursor is older is told to read afresh: `list_changes` gives no changes, says so, and gives the cursor where the log now stands, to ask from once it has.
@@ -490,10 +491,10 @@ ADR 0017.
 
 ADR 0010, 0017.
 
-- One cap, in money, per calendar month, for the whole Deployment. Set by the person's hand. There is always one: setup asks for it and offers 20 US dollars.
-- Counted from Run records, Call records and embedding, against a price table shipped with the code. Each Context's object reports what it spent to the Deployment object, which keeps the month's running total and answers whether a Run or a Call may start. The provider's own spend limit is the hard backstop, and setup says to set one.
+- One cap, in money, per calendar month, for the whole Deployment. Set by the person's hand. There is always one: setup asks for it and offers 20 US dollars. The month is UTC's, since the Contexts may each keep another time zone.
+- Counted from Run records, Call records and embedding, against a price table shipped with the code. Each Context's object reports what it spent to the Deployment object, which keeps the month's running total and answers whether a Run or a Call may start. A report is the Context's whole total for the month, so one repeated or overtaken counts once. A Run counts in the month it started. The provider's own spend limit is the hard backstop, and setup says to set one.
 - A warning shows at 80%.
-- At the cap: no new Run starts, whether the person or the clock would start it; a Run already going finishes; no Call starts; embedding of newly saved Entries stops. The Conversation's composer is replaced by a Notice that links to the cap in settings. The Journal's composer, the screen and Connections keep working.
+- At the cap: no new Run starts, whether the person or the clock would start it, and `send_message` is refused with the cap in the way and its Message kept nowhere; a Run already going finishes; no Call starts; embedding of newly saved Entries stops. The Conversation's composer is replaced by a Notice that links to the cap in settings. The Journal's composer, the screen and Connections keep working.
 - A Brief or Review due at the cap waits for the cap to be raised or the month to turn, and is dropped once the next one is due.
 - Raising the cap takes effect at once.
 - The spend of a deleted Context stays as monthly totals with no name attached, so the month's count never goes down.

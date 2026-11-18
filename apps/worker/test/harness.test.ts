@@ -161,7 +161,7 @@ describe("the oracle, on a Deployment write", () => {
           },
         ],
       ]),
-      connections: { before: new Map(), after: new Map() },
+      kept: { before: new Map(), after: new Map() },
     };
   }
 
@@ -200,7 +200,7 @@ describe("the oracle, on a Deployment write", () => {
           },
         ],
       ]),
-      connections: { before: new Map(), after: new Map() },
+      kept: { before: new Map(), after: new Map() },
     };
 
     expect(judgeDeployment(seen)).toEqual([
@@ -215,7 +215,7 @@ describe("the oracle, on a Deployment write", () => {
       request: { caller: hand, tool: "end_connection", input: {}, arrivedAt: Date.parse(at) },
       result: { ok: true, value: { record: {}, effects, changed: effects.length > 0 } },
       contexts: new Map(),
-      connections: {
+      kept: {
         before: new Map([["connection:k1", "not ended"]]),
         after: new Map([["connection:k1", "ended"]]),
       },
@@ -235,10 +235,37 @@ describe("the oracle, on a Deployment write", () => {
 
   test("fails a change to a Connection that no Effect reports, or an Effect on one unchanged", () => {
     expect(judgeDeployment(anEnding([]))).toEqual([
-      expect.stringMatching(/Connections changed are not the Effects/),
+      expect.stringMatching(/Connections and cap changed are not the Effects/),
     ]);
     expect(judgeDeployment(anEnding([ended, { ...ended, id: "k2" }]))).toEqual([
-      expect.stringMatching(/Connections changed are not the Effects/),
+      expect.stringMatching(/Connections and cap changed are not the Effects/),
+    ]);
+  });
+
+  /** Setting the spend cap from 20 to 30 US dollars, with these Effects. */
+  function aCapSet(effects: Effect[]): SeenDeployment {
+    return {
+      request: { caller: hand, tool: "set_spend_cap", input: {}, arrivedAt: Date.parse(at) },
+      result: { ok: true, value: { record: {}, effects, changed: effects.length > 0 } },
+      contexts: new Map(),
+      kept: {
+        before: new Map([["spend_cap:spend_cap", "20"]]),
+        after: new Map([["spend_cap:spend_cap", "30"]]),
+      },
+    };
+  }
+  const capSet: Effect = {
+    kind: "spend_cap",
+    id: "spend_cap",
+    what: "changed",
+    summary: "30 US dollars a month",
+    by: "call",
+  };
+
+  test("passes a change to the spend cap its Effects report, and fails one they leave out", () => {
+    expect(judgeDeployment(aCapSet([capSet]))).toEqual([]);
+    expect(judgeDeployment(aCapSet([]))).toEqual([
+      expect.stringMatching(/Connections and cap changed are not the Effects/),
     ]);
   });
 });

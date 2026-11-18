@@ -4,6 +4,7 @@ import { createStore, reconcile } from "solid-js/store";
 import { Peer } from "./design/Peer.tsx";
 import { recordAnchor } from "./Journal.tsx";
 import { useLive } from "./live-context.ts";
+import { CapNotice, readSpend, spend } from "./Spend.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 import { Words } from "./Words.tsx";
 
@@ -17,12 +18,15 @@ const moneyFormat = new Intl.NumberFormat(undefined, {
  * The Conversation with the Agent in the current Context (section 8.5): every Message, scrollable
  * to the start, and the composer that sends one. The Agent's answer is shown as it is written, and
  * a Run's calls fold under the Message it left. Without the model's key there is no Agent, and the
- * Conversation says so in place of its composer.
+ * Conversation says so in place of its composer; at the spend cap, the cap's Notice and a way to
+ * the cap in settings take the composer's place.
  */
 export function Conversation(props: {
   contextName: string | undefined;
   /** Bring a record a Run changed into view, wherever it is shown. */
   onShowRecord: (anchor: string) => void;
+  /** Open the settings at the spend cap. */
+  onShowCap: () => void;
 }) {
   const callTool = useCallTool();
   const live = useLive();
@@ -61,10 +65,16 @@ export function Conversation(props: {
   /** A Message now whole: in its place by its id, or after the others as the newest. */
   function place(message: Message) {
     if (message.from === "agent") setWriting(null);
+    // What a Run spent is counted once it ends, and may bring the warning or the cap.
+    if (message.from === "agent" && message.run.ended !== null) void readSpend();
     const at = messages.findIndex((shown) => shown.id === message.id);
     if (at !== -1) return setMessages(at, reconcile(message, { key: "id" }));
     setMessages((shown) => [...shown, message]);
   }
+
+  // At the cap the composer gives way to a Notice. Whether the cap is reached is the spend's to say,
+  // read for the whole screen.
+  const capReached = () => spend()?.notice === "cap_reached";
 
   // Read once the live channel is open, so a Message added meanwhile is either read or brought.
   onMount(async () => {
@@ -142,7 +152,15 @@ export function Conversation(props: {
             price for. The Journal works as ever.
           </p>
         </Show>
-        <Show when={agent() === "available"}>
+        <Show when={agent() === "available" && capReached()}>
+          <div class="cap-reached">
+            <CapNotice />
+            <button type="button" class="quiet" onClick={() => props.onShowCap()}>
+              Raise the cap in settings
+            </button>
+          </div>
+        </Show>
+        <Show when={agent() === "available" && !capReached()}>
           <MessageComposer
             contextName={props.contextName}
             onSent={(message) => {
@@ -205,6 +223,7 @@ const KIND: Record<Effect["kind"], string> = {
   person: "Person",
   context: "Context",
   connection: "Connection",
+  spend_cap: "Spend cap",
 };
 
 /** What each way a change touched a record is called. */
@@ -273,7 +292,13 @@ function MessageComposer(props: {
     setSending(true);
     try {
       const result = await callTool("send_message", { words: words() });
-      if (!result.ok) return props.onProblem(result.error.message);
+      if (!result.ok) {
+        // Refused for the cap: read the spend, so the Notice takes the composer's place.
+        if (result.error.in_the_way?.some((thing) => thing.kind === "spend_cap")) {
+          void readSpend();
+        }
+        return props.onProblem(result.error.message);
+      }
       setWords("");
       props.onSent(result.value.message);
     } catch (error) {

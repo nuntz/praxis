@@ -1,8 +1,8 @@
 /**
  * The Deployment object's own tables. It holds nothing from any Journal (ADR 0006): for now the
- * list of Contexts with their names and accents, the Connections, and the keys of the writes made
- * to it. The
- * upgrade ladder of section 11 replaces this with numbered steps before the first release.
+ * list of Contexts with their names and accents, the Connections, the spend cap and what each
+ * Context spent each month, and the keys of the writes made to it. The upgrade ladder of section
+ * 11 replaces this with numbered steps before the first release.
  */
 export function createDeploymentTables(sql: SqlStorage): void {
   sql.exec(`
@@ -25,6 +25,21 @@ export function createDeploymentTables(sql: SqlStorage): void {
       context_id TEXT NOT NULL REFERENCES contexts (id),
       reading_only INTEGER NOT NULL,
       ended INTEGER NOT NULL
+    );
+
+    -- The monthly spend cap in US dollars (section 5.7): one row, once the person has set it.
+    CREATE TABLE IF NOT EXISTS spend_cap (
+      one INTEGER PRIMARY KEY CHECK (one = 1),
+      dollars REAL NOT NULL
+    );
+
+    -- What each Context spent in each calendar month (UTC), in US dollars, as it last reported.
+    -- Not tied to the list of Contexts, so a deleted Context's spend can stay with no name.
+    CREATE TABLE IF NOT EXISTS spend (
+      month TEXT NOT NULL,
+      context_id TEXT NOT NULL,
+      dollars REAL NOT NULL,
+      PRIMARY KEY (month, context_id)
     );
 
     -- Each caller's keys for its writes and the first result, remembered 30 days (section 4.5),

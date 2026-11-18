@@ -1,6 +1,6 @@
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { describe, expect, inject, test } from "vitest";
-import { type AgentModel, anthropicModel, PRICES } from "../src/model.ts";
+import { type AgentModel, anthropicModel, PRICES, unpricedModel } from "../src/model.ts";
 import { lastWords, scriptModel, testModel } from "./model-fake.ts";
 
 // The model's one contract suite (section 13). In CI it runs against the scripted model only, so
@@ -79,3 +79,16 @@ if (real) {
     return configured;
   });
 }
+
+describe("the deploy's check of the configured model", () => {
+  test("a model the code ships no price for fails it, naming the model and the ones priced", () => {
+    expect(unpricedModel({ AGENT_MODEL: "claude-haiku-4-5" })).toBe(
+      'The configured model "claude-haiku-4-5" has no price shipped with Praxis, so its Runs could not be counted against the spend cap. Name one of: claude-sonnet-5-5.',
+    );
+  });
+
+  test("the default, or a model priced, passes it", () => {
+    expect(unpricedModel({})).toBeNull();
+    expect(unpricedModel({ AGENT_MODEL: " claude-sonnet-5-5 " })).toBeNull();
+  });
+});

@@ -15,6 +15,7 @@ export * from "./recurrence.ts";
 export * from "./registries.ts";
 export * from "./results.ts";
 export * from "./settings.ts";
+export * from "./spend.ts";
 export * from "./task.ts";
 export * from "./tools.ts";
 export * from "./trash.ts";

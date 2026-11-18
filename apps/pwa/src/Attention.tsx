@@ -8,6 +8,7 @@ import type {
 } from "@praxis/domain";
 import { createSignal, For, type JSX, onCleanup, onMount, Show } from "solid-js";
 import { useLive } from "./live-context.ts";
+import { CapNotice } from "./Spend.tsx";
 import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
@@ -89,6 +90,8 @@ export function Attention(props: {
 
   return (
     <div class="peer-body attention-body">
+      {/* Standing Notices sit above the sections of the view, and are not counted (section 8.3). */}
+      <CapNotice />
       <Show when={problem()}>
         {(message) => (
           <p class="problem" role="alert">

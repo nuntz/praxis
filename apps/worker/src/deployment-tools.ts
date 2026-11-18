@@ -9,12 +9,14 @@ import {
   type DeploymentToolOutput,
   effectOnConnection,
   effectOnContext,
+  effectOnSpendCap,
   failure,
   refusal,
   success,
   type ToolResult,
   written,
 } from "@praxis/domain";
+import { readCap, readSpend, writeCap } from "./spend-rows.ts";
 
 /** What a Deployment tool is given to run. Like a Context tool, it never reads the real clock. */
 export type DeploymentCall<N extends DeploymentToolName> = {
@@ -179,6 +181,16 @@ export const deploymentHandlers: DeploymentHandlers = {
     sql.exec(`UPDATE connections SET ended = 1 WHERE id = ?`, found.id);
     const ended = { ...found, ended: true };
     return success(written(ended, [effectOnConnection(ended, "changed")]));
+  },
+
+  async get_spend({ sql, arrivedAt }) {
+    return success(readSpend(sql, arrivedAt));
+  },
+
+  async set_spend_cap({ input, sql }) {
+    if (readCap(sql) === input.cap) return success(written({ cap: input.cap }, []));
+    writeCap(sql, input.cap);
+    return success(written({ cap: input.cap }, [effectOnSpendCap(input.cap)]));
   },
 };
 

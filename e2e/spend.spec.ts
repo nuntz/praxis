@@ -1,0 +1,75 @@
+import type { Spend } from "@praxis/domain";
+import { expect, lastShown, makeContext, onPhone, test } from "./fixtures.ts";
+
+// The spend cap (section 5.7, ADR 0017): one cap for the whole Deployment, set in its settings,
+// with the month's spend against it. At the cap the Conversation's composer is replaced by a
+// Notice that links to the cap in settings.
+
+const money = (amount: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+
+test("the person sets the monthly cap in settings, and sees the month's spend against it", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const spend = page.getByRole("region", { name: "Spend" });
+
+  // Always far past anything the other journeys spend, so none of them reaches it.
+  const cap = 1000 + Math.floor(Math.random() * 1000) + 0.25;
+  await spend.getByLabel("Monthly cap, US dollars", { exact: true }).fill(String(cap));
+  // The screen reads the spend again once the cap is set. Another journey may set the shared cap
+  // in between, so the screen is held to what that read answered.
+  let setAnswered = false;
+  const set = page.waitForResponse(/\/set_spend_cap$/).then((answer) => {
+    setAnswered = true;
+    return answer;
+  });
+  const read = page.waitForResponse((answer) => setAnswered && answer.url().endsWith("/get_spend"));
+  await spend.getByRole("button", { name: "Set cap" }).click();
+  expect(await (await set).json()).toMatchObject({ ok: true, value: { record: { cap } } });
+  const shown = ((await (await read).json()) as { value: Spend }).value;
+
+  await expect(spend.getByTestId("spend-against-cap")).toHaveText(
+    `${money(shown.spent)} spent this month of a ${money(shown.cap)} cap.`,
+  );
+});
+
+test("at the cap, the Conversation's composer gives way to a Notice that opens the cap in settings", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const context = await makeContext(page, {
+    name: `Capped ${tag}`,
+    time_zone: "UTC",
+    accent: "rust",
+  });
+  await lastShown(page, context.id);
+  // The shared Deployment is never at the cap, so this screen is told it is: reaching it for real
+  // would stop every other journey's Runs. The seam tests reach it for real.
+  await page.route(/\/get_spend$/, async (route) => {
+    const answer = await route.fetch();
+    const { value } = (await answer.json()) as { value: Spend };
+    await route.fulfill({
+      response: answer,
+      json: { ok: true, value: { ...value, spent: value.cap, notice: "cap_reached" } },
+    });
+  });
+  await page.goto("/");
+  if (onPhone(testInfo)) {
+    await page
+      .getByRole("navigation", { name: "Columns" })
+      .getByRole("button", { name: "Agent", exact: true })
+      .click();
+  }
+  const conversation = page.getByRole("region", { name: "Conversation" });
+
+  await expect(conversation.getByText(/This month's spend has reached its cap/)).toBeVisible();
+  await expect(conversation.getByRole("textbox", { name: /^Message the Agent/ })).toHaveCount(0);
+
+  await conversation.getByRole("button", { name: "Raise the cap in settings" }).click();
+  await expect(page.getByLabel("Monthly cap, US dollars", { exact: true })).toBeFocused();
+  await expect(
+    page.getByRole("region", { name: "Spend" }).getByTestId("spend-notice"),
+  ).toBeVisible();
+});
