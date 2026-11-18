@@ -1,6 +1,6 @@
 /**
- * A comment naming a ticket, such as "nothing is counted yet (#49)", is a placeholder: it stands
- * until that ticket is built, and the ticket's work replaces it. This finds each placeholder in the
+ * A comment naming a ticket, such as "nothing is counted yet (#N)" with N the ticket's number, is
+ * a placeholder: it stands until that ticket is built, and the ticket's work replaces it. This finds each placeholder in the
  * code and fails while one names a closed ticket, so none outlives its ticket. CI runs it with a
  * token for `gh`; run it by hand with `bun run check:tickets`.
  */
