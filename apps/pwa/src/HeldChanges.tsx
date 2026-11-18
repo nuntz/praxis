@@ -1,5 +1,6 @@
 import type { Change, HeldChange } from "@praxis/domain";
 import { createContext, createSignal, For, onCleanup, Show, useContext } from "solid-js";
+import { latestRead } from "./latest-read.ts";
 import type { CurrentLive } from "./live-context.ts";
 import { type CallTool, unreachableMessage } from "./tools.ts";
 
@@ -23,11 +24,8 @@ export type HeldChanges = {
  */
 export function followHeldChanges(callTool: CallTool, live: CurrentLive): HeldChanges {
   const [all, setAll] = createSignal<HeldChange[]>([]);
-  // Each read is numbered: an answer a later read overtook is dropped, so the last read wins.
-  let reads = 0;
-
-  async function read(): Promise<void> {
-    const mine = ++reads;
+  // The last read wins, and a tap made while a read was out reads again.
+  const listed = latestRead(async (current) => {
     try {
       // A Held Change waits for a tap, so there are seldom more than a page of them; every page is
       // read, since all of them are shown and counted.
@@ -35,7 +33,7 @@ export function followHeldChanges(callTool: CallTool, live: CurrentLive): HeldCh
       let cursor: string | null | undefined;
       do {
         const result = await callTool("list_held_changes", cursor ? { cursor } : {});
-        if (mine !== reads || !result.ok) return;
+        if (!current() || !result.ok) return;
         items.push(...result.value.items);
         cursor = result.value.next_cursor;
       } while (cursor);
@@ -43,7 +41,8 @@ export function followHeldChanges(callTool: CallTool, live: CurrentLive): HeldCh
     } catch {
       // Unreachable: the next change or reconnection reads again.
     }
-  }
+  });
+  const read = () => listed.read();
 
   const changed = async (change: Change) => {
     if (change.effects.some((effect) => effect.kind === "held_change")) await read();
@@ -64,10 +63,9 @@ export function followHeldChanges(callTool: CallTool, live: CurrentLive): HeldCh
           if (result.error.code === "not_found") await read();
           return result.error.message;
         }
-        // Gone at once, then read again: a read already out may have answered from before the tap,
-        // and is dropped as this one overtakes it.
+        // Gone at once. A read already out answers from before the tap, so it is sent again.
+        listed.changed();
         setAll((shown) => shown.filter((each) => each.id !== held.id));
-        void read();
         return null;
       } catch (error) {
         return unreachableMessage(error);

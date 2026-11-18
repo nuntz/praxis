@@ -30,6 +30,10 @@
       "plugins": ["./lint/computed-on.grit"]
     },
     {
+      "includes": ["apps/pwa/src/**", "!apps/pwa/src/latest-read.ts"],
+      "plugins": ["./lint/numbered-read.grit"]
+    },
+    {
       "includes": ["packages/domain/src/**"],
       "linter": {
         "rules": {

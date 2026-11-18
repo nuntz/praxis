@@ -1,5 +1,6 @@
 import type { Spend } from "@praxis/domain";
 import { createSignal, Show } from "solid-js";
+import { latestRead } from "./latest-read.ts";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
 
 /**
@@ -12,19 +13,15 @@ const [spend, setSpend] = createSignal<Spend | null>(null);
 
 export { spend };
 
-// Each read is numbered: an answer a later read overtook is dropped, so the last read wins.
-let reads = 0;
-
 /** Read the month's spend afresh. A read that fails leaves what was shown. */
-export async function readSpend(): Promise<void> {
-  const mine = ++reads;
+export const { read: readSpend } = latestRead(async (current) => {
   try {
     const result = await callDeploymentTool("get_spend", {});
-    if (mine === reads && result.ok) setSpend(result.value);
+    if (current() && result.ok) setSpend(result.value);
   } catch (error) {
     unreachableMessage(error);
   }
-}
+});
 
 /** Read the spend now, and again each time the screen comes back into view. Returns the stop. */
 export function followSpend(): () => void {

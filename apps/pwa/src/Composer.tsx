@@ -14,6 +14,7 @@ import {
   type Task,
 } from "@praxis/domain";
 import { createSignal, For, Show } from "solid-js";
+import { latestRead } from "./latest-read.ts";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /** A link picked in the draft, followed through what is typed after it. */
@@ -85,10 +86,7 @@ export function Composer(props: {
   }
 
   // Each look asks afresh. Only the answer to the latest is shown.
-  let asked = 0;
-
-  async function offer(found: LinkQuery) {
-    const mine = ++asked;
+  const { read: offer } = latestRead(async (current, found: LinkQuery) => {
     const typed = found.typed.trim();
     const named = typed === "" ? {} : { named: typed };
     try {
@@ -109,7 +107,7 @@ export function Composer(props: {
           ...tasks.value.items.map(taskChoice),
         ].slice(0, OFFERED);
       }
-      if (mine !== asked) return;
+      if (!current()) return;
       const made: Choice[] =
         typed === ""
           ? []
@@ -123,7 +121,7 @@ export function Composer(props: {
     } catch (error) {
       props.onProblem(unreachableMessage(error));
     }
-  }
+  });
 
   function shutPicker() {
     setQuery(null);

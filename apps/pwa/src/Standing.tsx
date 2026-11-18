@@ -1,5 +1,6 @@
 import { type Entry, STANDING_CEILING, standingSize } from "@praxis/domain";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 import { Words } from "./Words.tsx";
@@ -24,11 +25,8 @@ export function Standing(props: { timeZone: string }) {
   const size = () => (entries() ?? []).reduce((sum, entry) => sum + standingSize(entry.words), 0);
 
   // A read overtaken by a later one is dropped, so the list shows the last the Context said.
-  let reads = 0;
-
-  /** Read every page: the list is the full one, which the ceiling keeps short. */
-  async function read(): Promise<void> {
-    const sent = ++reads;
+  // Every page is read: the list is the full one, which the ceiling keeps short.
+  const { read } = latestRead(async (current) => {
     try {
       const read: Entry[] = [];
       let cursor: string | null | undefined;
@@ -37,7 +35,7 @@ export function Standing(props: { timeZone: string }) {
           standing: true,
           ...(cursor ? { cursor } : {}),
         });
-        if (sent !== reads) return;
+        if (!current()) return;
         if (!result.ok) {
           setProblem(result.error.message);
           return;
@@ -48,10 +46,10 @@ export function Standing(props: { timeZone: string }) {
       setProblem(null);
       setEntries(read);
     } catch (error) {
-      if (sent !== reads) return;
+      if (!current()) return;
       setProblem(unreachableMessage(error));
     }
-  }
+  });
 
   onMount(async () => {
     await live.ready;

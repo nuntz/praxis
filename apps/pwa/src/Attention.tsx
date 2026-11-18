@@ -8,6 +8,7 @@ import type {
 } from "@praxis/domain";
 import { createSignal, For, type JSX, onCleanup, onMount, Show } from "solid-js";
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
+import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { CapNotice } from "./Spend.tsx";
 import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
@@ -30,14 +31,11 @@ export function Attention(props: {
   const heldChanges = useHeldChanges();
   const [view, setView] = createSignal<AttentionView | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
-  // Each read is numbered: an answer a later read overtook is dropped, so the last read wins.
-  let reads = 0;
-
-  async function read(): Promise<void> {
-    const mine = ++reads;
+  // The last read wins: an answer a later read overtook is dropped.
+  const { read } = latestRead(async (current) => {
     try {
       const result = await callTool("view_attention", {});
-      if (mine !== reads) return;
+      if (!current()) return;
       if (!result.ok) {
         setProblem(result.error.message);
         return;
@@ -46,9 +44,9 @@ export function Attention(props: {
       setView(result.value);
       props.onDueCount(result.value.due.length);
     } catch (error) {
-      if (mine === reads) setProblem(unreachableMessage(error));
+      if (current()) setProblem(unreachableMessage(error));
     }
-  }
+  });
 
   /**
    * A change to a Task, a Project, a Person a Task is Delegated to, or the Context, whose time

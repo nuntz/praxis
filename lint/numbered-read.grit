@@ -1,0 +1,6 @@
+language js
+
+`const $mine = $count` as $read where {
+  $count <: JsPreUpdateExpression(),
+  register_diagnostic(span=$read, message="Read through latestRead() in apps/pwa/src/latest-read.ts, never a counter of your own: it drops an answer a later read overtook, and reads again after a change made while a read was out, which a counter bumped by hand forgets.")
+}

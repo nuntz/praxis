@@ -5,6 +5,7 @@ import type {
   DeploymentToolName,
 } from "@praxis/domain";
 import { createEffect, createSignal, For, on, Show } from "solid-js";
+import { latestRead } from "./latest-read.ts";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
 
 /** A Deployment tool that changes one Connection, and returns it as it now is. */
@@ -34,33 +35,32 @@ export function Connections(props: { contexts: ContextListing[] }) {
   // A read answers with the list as the Deployment held it when the read was sent. One overtaken
   // by a later read, or sent before a change made here since, would show the list without that
   // change: it is dropped, and in the second case the list is read again.
-  let reads = 0;
-  let changes = 0;
-
-  async function read() {
-    const sent = ++reads;
-    const before = changes;
+  const listed = latestRead(async (current) => {
     try {
       const result = await callDeploymentTool("list_connections", {});
-      if (sent !== reads) return;
-      if (changes !== before) return void read();
+      if (!current()) return;
       if (!result.ok) return setProblem(result.error.message);
       setConnections(result.value.items);
     } catch (error) {
-      if (sent !== reads) return;
+      if (!current()) return;
       setProblem(unreachableMessage(error));
     }
-  }
+  });
 
-  createEffect(on(() => props.contexts, read));
+  createEffect(
+    on(
+      () => props.contexts,
+      () => listed.read(),
+    ),
+  );
 
   function made(connection: Connection) {
-    changes++;
+    listed.changed();
     setConnections((listed) => [...listed, connection]);
   }
 
   function show(changed: Connection) {
-    changes++;
+    listed.changed();
     setConnections((listed) =>
       changed.ended
         ? listed.filter((connection) => connection.id !== changed.id)

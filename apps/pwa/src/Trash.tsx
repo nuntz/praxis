@@ -1,5 +1,6 @@
 import type { RecordKind, RecordNamed, ToolResult, TrashItem } from "@praxis/domain";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
@@ -32,23 +33,20 @@ export function Trash(props: { timeZone: string }) {
   });
 
   // A read overtaken by a later one is dropped, so the list shows the last the Context said.
-  let reads = 0;
-
-  async function read(): Promise<void> {
-    const sent = ++reads;
+  const { read } = latestRead(async (current) => {
     try {
       const result = await callTool("list_trash", {});
-      if (sent !== reads) return;
+      if (!current()) return;
       if (!result.ok) {
         setProblem(result.error.message);
         return;
       }
       setItems(result.value.items);
     } catch (error) {
-      if (sent !== reads) return;
+      if (!current()) return;
       setProblem(unreachableMessage(error));
     }
-  }
+  });
 
   onMount(async () => {
     await live.ready;
