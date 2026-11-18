@@ -30,6 +30,7 @@ describe("record_entry", () => {
       edited: null,
       follow_up_to: null,
       follow_ups: [],
+      standing: false,
     });
     expect(value(await context.call(hand, "get_entry", { id: record.id }))).toEqual(record);
   });

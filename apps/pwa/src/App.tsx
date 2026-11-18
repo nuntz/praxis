@@ -23,6 +23,7 @@ import { Journal } from "./Journal.tsx";
 import { Live, socketOpener } from "./live.ts";
 import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
 import { focusCapField, followSpend, SpendSettings } from "./Spend.tsx";
+import { Standing } from "./Standing.tsx";
 import { Trash } from "./Trash.tsx";
 import {
   CurrentContextTools,
@@ -295,6 +296,7 @@ export function App() {
                       {(read) => (
                         <>
                           <ContextSettings settings={read()} onChanged={setSettings} />
+                          <Standing timeZone={read().time_zone} />
                           <Trash timeZone={read().time_zone} />
                         </>
                       )}

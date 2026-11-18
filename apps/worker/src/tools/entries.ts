@@ -12,6 +12,7 @@ import {
   type NewLink,
   type NewTask,
   PAGE_SIZE,
+  standingSize,
   success,
   summarizeWords,
   type ToolResult,
@@ -30,6 +31,7 @@ import {
 } from "../link-rows.ts";
 import { newestFirst } from "../newest-first.ts";
 import type { Handlers } from "../registry.ts";
+import { pastTheCeiling } from "../standing-rows.ts";
 import { insertTask, taskEffect, tasksOf } from "../task-rows.ts";
 
 export const NO_SUCH_ENTRY = "No such Entry in this Context.";
@@ -65,6 +67,8 @@ export const entryTools: Pick<
   | "list_entry_versions"
   | "add_link"
   | "remove_link"
+  | "mark_standing"
+  | "unmark_standing"
 > = {
   record_entry({ caller, input, arrivedAt, today, sql }) {
     const links = keepableLinks(sql, input.words, input.links ?? []);
@@ -175,6 +179,27 @@ export const entryTools: Pick<
     return success(written(unlinked, [entryEffect(unlinked, "changed")]));
   },
 
+  mark_standing({ input, today, sql }) {
+    const entry = readEntry(sql, input.id, today);
+    if (!entry) return failure("not_found", NO_SUCH_ENTRY);
+    if (entry.standing) return success(written(entry, []));
+    const refused = pastTheCeiling(sql, entry);
+    if (refused) return refused;
+    // A mark is kept beside the words: they never change, so no Version is made and nothing is held.
+    sql.exec(`INSERT INTO standing_marks (entry) VALUES (?)`, entry.id);
+    const marked = readEntry(sql, entry.id, today) as Entry;
+    return success(written(marked, [entryEffect(marked, "changed")]));
+  },
+
+  unmark_standing({ input, today, sql }) {
+    const entry = readEntry(sql, input.id, today);
+    if (!entry) return failure("not_found", NO_SUCH_ENTRY);
+    if (!entry.standing) return success(written(entry, []));
+    sql.exec(`DELETE FROM standing_marks WHERE entry = ?`, entry.id);
+    const unmarked = readEntry(sql, entry.id, today) as Entry;
+    return success(written(unmarked, [entryEffect(unmarked, "changed")]));
+  },
+
   get_entry({ input, today, sql }) {
     const entry = readEntry(sql, input.id, today);
     return entry ? success(entry) : failure("not_found", NO_SUCH_ENTRY);
@@ -186,17 +211,20 @@ export const entryTools: Pick<
       after = decodeCursor(input.cursor);
       if (!after) return failure("invalid_input", "The cursor is not one this list gave.");
     }
+    // Narrowed to the Standing Entries, it is the list the person sees them in and a Connection
+    // reads them by.
+    const listed = input.standing ? "standing_entries" : "untrashed_entries";
     // Newest first. One more than a page is read to learn whether another page follows.
     const rows = (
       after
         ? sql.exec<EntryRow>(
-            `SELECT * FROM untrashed_entries WHERE (at, seq) < (?, ?) ORDER BY at DESC, seq DESC LIMIT ?`,
+            `SELECT * FROM ${listed} WHERE (at, seq) < (?, ?) ORDER BY at DESC, seq DESC LIMIT ?`,
             after.at,
             after.seq,
             PAGE_SIZE + 1,
           )
         : sql.exec<EntryRow>(
-            `SELECT * FROM untrashed_entries ORDER BY at DESC, seq DESC LIMIT ?`,
+            `SELECT * FROM ${listed} ORDER BY at DESC, seq DESC LIMIT ?`,
             PAGE_SIZE + 1,
           )
     ).toArray();
@@ -232,6 +260,12 @@ function changeWords(
     return failure("held", HELD_FOR_A_CONNECTION);
   }
   if (change.version !== entry.version) return failure("stale", STALE);
+  // A Standing Entry's words are held to the ceiling, or a mark could be made short and then grow.
+  // Only words that grow bring anything to it: shorter ones are never refused.
+  if (wordsChanged && entry.standing && standingSize(change.words) > standingSize(entry.words)) {
+    const refused = pastTheCeiling(sql, { id: entry.id, words: change.words });
+    if (refused) return refused;
+  }
   const by = authorOf(caller);
   if (wordsChanged) {
     sql.exec(
@@ -322,6 +356,7 @@ function readEntries(sql: SqlStorage, rows: EntryRow[], today: Day): Entry[] {
     rows.flatMap((row) => (row.follow_up_to === null ? [] : [row.follow_up_to])),
   );
   const followUps = followUpsOf(sql, ids);
+  const standing = standingOf(sql, ids);
   return rows.map((row) => {
     const edit = edits.get(row.id);
     return {
@@ -336,8 +371,20 @@ function readEntries(sql: SqlStorage, rows: EntryRow[], today: Day): Entry[] {
       edited: edit ? { by: toAuthor(edit), at: instantToIso(edit.at) } : null,
       follow_up_to: (row.follow_up_to !== null && followed.get(row.follow_up_to)) || null,
       follow_ups: followUps.get(row.id) ?? [],
+      standing: standing.has(row.id),
     };
   });
+}
+
+/** Which of these Entries are Standing Entries. */
+function standingOf(sql: SqlStorage, ids: string[]): Set<string> {
+  const rows = sql
+    .exec<{ entry: string }>(
+      `SELECT entry FROM standing_marks WHERE entry IN (SELECT value FROM json_each(?))`,
+      JSON.stringify(ids),
+    )
+    .toArray();
+  return new Set(rows.map((row) => row.entry));
 }
 
 /** The latest Version of each of these Entries that has one: the last change to its words. */

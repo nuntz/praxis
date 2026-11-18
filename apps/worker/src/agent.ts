@@ -42,6 +42,7 @@ import {
   runsNotEnded,
   startRun,
 } from "./run-rows.ts";
+import type { StandingEntry } from "./standing-rows.ts";
 
 /**
  * The Agent of one Context (section 5): Pi Durable, running inside the Context's object over its
@@ -87,7 +88,13 @@ export type AgentHost = {
  * What the Agent is told at the start of every Run, beside the person's Message (section 5.2). The
  * Worker hands it nothing: the Context's object asks for the other Contexts' names itself.
  */
-export type Bearings = { today: string; context: string; otherContexts: string[] };
+export type Bearings = {
+  today: string;
+  context: string;
+  otherContexts: string[];
+  /** The Context's Standing Entries, oldest first, each with its day (section 5.5). */
+  standing: StandingEntry[];
+};
 
 /**
  * Who the Agent is and how it works, the same every Run, so the model's prompt cache holds. What
@@ -99,7 +106,9 @@ const PREAMBLE = `You are the Agent of Praxis, a journal-centric task manager fo
 - When you record the person's words as an Entry, keep them verbatim, trimmed of filler, never paraphrased, with no Markdown added. Compose prose only when asked.
 - You know the other Contexts' names and nothing else of them. Asked about one, say the person can switch to it by hand.
 - You cannot open links, search the web or run code. Say so when asked.
-- Dates you give to tools are days (YYYY-MM-DD) in the Context's time zone; resolve "next Friday" yourself from today's date.`;
+- Dates you give to tools are days (YYYY-MM-DD) in the Context's time zone; resolve "next Friday" yourself from today's date.
+- You are given the Context's Standing Entries with each Message: keep honouring them, and when two disagree, the newer wins. They and the Journal are your only memory: what is said only in the Conversation may be lost.
+- Mark an Entry standing only when the person asks you to keep honouring something, recording it first in their words if it is not yet an Entry. Never mark or unmark one unasked.`;
 
 /** The Agent's tools: the Context tools in its column of the offering table, and nothing else. */
 function agentTools(host: AgentHost) {
@@ -149,11 +158,23 @@ function presented(words: string, bearings: Bearings): string {
     bearings.otherContexts.length === 0
       ? "There are no other Contexts."
       : `The other Contexts are: ${bearings.otherContexts.map((name) => JSON.stringify(name)).join(", ")}.`;
+  // The Standing Entries are bearings too, so the person's words come last and alone.
   return `<bearings>
 Today is ${bearings.today}. This Context is ${JSON.stringify(bearings.context)}. ${others}
+
+${standingPresented(bearings.standing)}
 </bearings>
 
 ${words}`;
+}
+
+/** The Standing Entries as the model is shown them: each its own block, with its id and day. */
+function standingPresented(standing: StandingEntry[]): string {
+  if (standing.length === 0) return "There are no Standing Entries in this Context.";
+  const entries = standing.map(
+    ({ id, day, words }) => `<standing_entry id="${id}" day="${day}">\n${words}\n</standing_entry>`,
+  );
+  return `The Standing Entries of this Context, oldest first:\n\n${entries.join("\n\n")}`;
 }
 
 const context = BACKGROUND_CONTEXT;

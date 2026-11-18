@@ -471,8 +471,9 @@ ADR 0016. Glossary: Standing Entry.
 - A **Standing Entry** is an ordinary Entry with a mark. Versions, the Trash and the Export apply unchanged.
   - The person marks or unmarks any Entry by hand. The Agent records and marks one when asked, in the person's words, and never unasked.
   - A Connection can read Standing Entries but cannot mark or unmark one, and its outside agent is not handed them.
-  - A Context's Standing Entries have a ceiling on their total size, not their number: 10,000 characters, in code. A mark that would pass it is refused with the reason.
-  - When two disagree the newer wins. A Follow-up to one is not standing unless marked.
+  - A Context's Standing Entries have a ceiling on their total size, not their number: 10,000 characters as seen, in code. A mark that would pass it is refused with the reason, the other Standing Entries listed as in the way. So is a change that lengthens a Standing Entry's words, since it would pass it as surely. One in the Trash keeps its mark and its room, so restoring it is never refused and nothing is dropped from it, and removing it for good frees the room. It is not given to the Agent while there.
+  - The mark is kept beside the words, like a link: marking or unmarking changes no words, makes no Version and is never held. It is a change to the Entry, with an Effect.
+  - When two disagree the newer wins: the Agent is given them oldest first, each with the day it was made, and read as they stand when the person's Message is sent. A Follow-up to one is not standing unless marked.
   - It stays in its Context. One that should apply in two is written twice.
 
 ### 5.6 The model

@@ -45,6 +45,7 @@ import {
   readSettings,
   renameContext,
 } from "./settings.ts";
+import { standingEntries } from "./standing-rows.ts";
 import { createTables } from "./tables.ts";
 import { attentionTools } from "./tools/attention.ts";
 import { changeTools } from "./tools/changes.ts";
@@ -233,12 +234,19 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
     }
 
     /**
-     * What the Agent is told at the start of a Run: today, this Context's name, and the other
-     * Contexts' names, which this object asks the Deployment object for (section 5.2).
+     * What the Agent is told at the start of a Run: the Context's Standing Entries with their
+     * dates, today, this Context's name, and the other Contexts' names, which this object asks the
+     * Deployment object for (section 5.2). They are read as they stand when the Message is sent.
      */
     private bearings(at: number, otherContexts: string[]): Bearings {
-      const settings = readSettings(this.ctx.storage.sql, at);
-      return { today: settings.today, context: settings.name, otherContexts };
+      const sql = this.ctx.storage.sql;
+      const settings = readSettings(sql, at);
+      return {
+        today: settings.today,
+        context: settings.name,
+        otherContexts,
+        standing: standingEntries(sql, settings.time_zone),
+      };
     }
 
     /** The Deployment object this Context was made by, which it asks things of (section 9.2). */

@@ -33,6 +33,12 @@ export function createTables(sql: SqlStorage): void {
       UNIQUE (entry, version)
     );
 
+    -- The Standing marks (section 5.5), kept beside the Entries they mark and part of each: the
+    -- Agent is given every Entry marked here and not in the Trash at the start of every Run.
+    CREATE TABLE IF NOT EXISTS standing_marks (
+      entry TEXT PRIMARY KEY REFERENCES entries (id)
+    );
+
     -- A Project contains Tasks. Its state is not a column: it is derived from what was declared.
     CREATE TABLE IF NOT EXISTS projects (
       seq INTEGER PRIMARY KEY,
@@ -152,6 +158,9 @@ export function createTables(sql: SqlStorage): void {
     CREATE VIEW IF NOT EXISTS untrashed_entries AS
       SELECT * FROM entries
       WHERE id NOT IN (SELECT record_id FROM trashed WHERE kind = 'entry');
+    -- The Standing Entries not in the Trash: the ones the Agent is given and every read lists.
+    CREATE VIEW IF NOT EXISTS standing_entries AS
+      SELECT * FROM untrashed_entries WHERE id IN (SELECT entry FROM standing_marks);
     CREATE VIEW IF NOT EXISTS untrashed_tasks AS
       SELECT * FROM tasks
       WHERE id NOT IN (SELECT record_id FROM trashed WHERE kind = 'task');

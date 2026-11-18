@@ -497,6 +497,7 @@ export function removeForGood(
   for (const [table, column] of [
     ["entry_links", "entry"],
     ["entry_versions", "entry"],
+    ["standing_marks", "entry"],
     ["task_events", "task"],
     ["project_events", "project"],
     ["tasks", "id"],

@@ -23,6 +23,9 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
                    "yes", "yes", "yes", "yes",      "yes" ],
   add_link: [      "yes", "yes", "no",  "yes",      "no"  ],
   remove_link: [   "yes", "yes", "no",  "yes",      "no"  ],
+  mark_standing: [ "yes", "yes", "no",  "no",       "no"  ],
+  unmark_standing: [
+                   "yes", "yes", "no",  "no",       "no"  ],
   add_task: [      "yes", "yes", "no",  "yes",      "no"  ],
   finish_task: [   "yes", "yes", "no",  "yes",      "no"  ],
   drop_task: [     "yes", "yes", "no",  "yes",      "no"  ],
@@ -108,6 +111,8 @@ export const runsWith: Record<string, () => unknown> = {
   list_entry_versions: () => ({ id: "no-such-entry" }),
   add_link: () => ({ entry_id: "no-such-entry", to: { kind: "new_person", name: marked("Ali") } }),
   remove_link: () => ({ entry_id: "no-such-entry", to: { kind: "person", id: "no-such-person" } }),
+  mark_standing: () => ({ id: "no-such-entry" }),
+  unmark_standing: () => ({ id: "no-such-entry" }),
   add_task: () => ({ entry_id: "no-such-entry", title: marked("Offered") }),
   finish_task: () => ({ id: "no-such-task" }),
   drop_task: () => ({ id: "no-such-task" }),

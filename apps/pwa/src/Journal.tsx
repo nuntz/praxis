@@ -265,6 +265,25 @@ function EntryItem(props: {
   const [editing, setEditing] = createSignal(false);
   const [showingVersions, setShowingVersions] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
+  const [marking, setMarking] = createSignal(false);
+
+  /**
+   * Mark the Entry standing, so the Agent keeps honouring it, or unmark it. A mark past the
+   * ceiling is refused, and the reason shown.
+   */
+  async function toggleStanding() {
+    setMarking(true);
+    try {
+      const tool = props.entry.standing ? "unmark_standing" : "mark_standing";
+      const result = await callTool(tool, { id: props.entry.id });
+      if (!result.ok) return props.onProblem(result.error.message);
+      props.onEntry(result.value.record);
+    } catch (error) {
+      props.onProblem(unreachableMessage(error));
+    } finally {
+      setMarking(false);
+    }
+  }
 
   // No asking first: what is deleted is put back from the Trash.
   async function deleteEntry() {
@@ -304,6 +323,16 @@ function EntryItem(props: {
         </Show>
         <button type="button" class="quiet entry-mark" onClick={() => props.onFollowUp()}>
           Follow up
+        </button>
+        <button
+          type="button"
+          class="quiet entry-mark"
+          aria-pressed={props.entry.standing}
+          title="A Standing Entry is given to the Agent at the start of every Run"
+          disabled={marking()}
+          onClick={() => void toggleStanding()}
+        >
+          Standing
         </button>
         <button
           type="button"

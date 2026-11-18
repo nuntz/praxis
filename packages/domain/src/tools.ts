@@ -3,7 +3,7 @@ import type { Attention } from "./attention.ts";
 import type { CallerKind } from "./callers.ts";
 import { day, daysBefore, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
-import type { Entry, Page, Version } from "./entry.ts";
+import { type Entry, type Page, STANDING_CEILING, type Version } from "./entry.ts";
 import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
 import { newRecurrence } from "./recurrence.ts";
@@ -175,8 +175,12 @@ export const tools = {
   },
   list_entries: {
     kind: "read",
-    description: "List the Journal's Entries, newest first, 50 to a page.",
-    input: z.strictObject({ cursor: z.string().min(1).optional() }),
+    description:
+      "List the Journal's Entries, newest first, 50 to a page. Give `standing: true` to list only the Standing Entries: those the person marked for the Agent to keep honouring.",
+    input: z.strictObject({
+      cursor: z.string().min(1).optional(),
+      standing: z.literal(true).optional(),
+    }),
     offered: toEveryCaller,
   },
   edit_entry: {
@@ -222,6 +226,21 @@ export const tools = {
       "Remove the links from an Entry to a Task, Project or Person: every one, or given an anchor only the one at that span. The words never change, so this is never held, and the record itself stays.",
     input: writeInput({ entry_id: id, to: linkTarget, anchor: anchor.optional() }),
     offered: toEveryWriter,
+  },
+  mark_standing: {
+    kind: "write",
+    destructive: false,
+    description: `Mark an Entry as a Standing Entry, which the Agent is given at the start of every Run in this Context and keeps honouring; when two disagree, the newer wins. The Agent marks one only when the person asks, recording it first in the person's words, and never unasked. The words never change, so this is never held. A Context's Standing Entries hold ${STANDING_CEILING.toLocaleString("en")} characters in all at most: a mark that would pass that is refused, with the Standing Entries in the way. Marking a Standing Entry changes nothing, and a Follow-up to one is not standing unless marked itself.`,
+    input: writeInput({ id }),
+    offered: { ...toEveryWriter, connection: "no" },
+  },
+  unmark_standing: {
+    kind: "write",
+    destructive: true,
+    description:
+      "Unmark a Standing Entry: it stays in the Journal as an ordinary Entry, and the Agent is no longer given it. The Agent unmarks one only when the person asks. Unmarking an Entry that is not standing changes nothing.",
+    input: writeInput({ id }),
+    offered: { ...toEveryWriter, connection: "no" },
   },
   add_task: {
     kind: "write",
@@ -573,6 +592,8 @@ export type ToolOutput = {
   list_entry_versions: Page<Version>;
   add_link: Written<Entry>;
   remove_link: Written<Entry>;
+  mark_standing: Written<Entry>;
+  unmark_standing: Written<Entry>;
   add_task: Written<Task>;
   finish_task: Written<Task>;
   drop_task: Written<Task>;

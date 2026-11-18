@@ -14,7 +14,7 @@ The Agent's only lasting memory is the Journal. There is no memory store the Age
 
 - At the start of a Run the Agent is given the Context's Standing Entries with their dates, today's date and the Context's name, and nothing else from the Journal. Everything else it fetches through the tools any caller uses. This holds for a Brief and a Review too.
 - The person marks or unmarks any Entry by hand. The Agent records and marks one when asked, in the person's words, and never unasked. A Connection can read Standing Entries but cannot mark or unmark one, and its outside agent is not handed them.
-- A Context's Standing Entries have a ceiling on their total size, not their number. A mark that would pass it is refused with the reason, to the person and the Agent alike; nothing is dropped silently.
+- A Context's Standing Entries have a ceiling on their total size, not their number. A mark that would pass it is refused with the reason, to the person and the Agent alike; nothing is dropped silently. A change that lengthens a Standing Entry's words is held to it too, or the ceiling could be passed by marking an Entry short and lengthening it. One in the Trash keeps its room, so putting it back is never refused (ADR 0014).
 - When two disagree the newer wins. A Follow-up to a Standing Entry is not standing unless marked. The Agent changing the words of one the person wrote is a Held Change.
 - A Standing Entry stays in its Context. One that should apply in two Contexts is written twice.
 - Praxis supplies the compaction summary. It carries only what is in flight: what the person was last working on, questions left unanswered and any Held Change still waiting. It names records rather than restating them.

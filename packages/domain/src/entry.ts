@@ -27,6 +27,8 @@ export type Entry = {
   follow_up_to: EntryNamed | null;
   /** The later Entries that are Follow-ups to it, in the order they were made. */
   follow_ups: EntryNamed[];
+  /** Whether it is a Standing Entry, which the Agent is given at the start of every Run. */
+  standing: boolean;
 };
 
 /** A change to an Entry's words: who made it, and when it arrived, as an ISO 8601 instant. */
@@ -58,6 +60,19 @@ export function instantToIso(ms: number): string {
 const SUMMARY_LENGTH = 80;
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/**
+ * The most a Context's Standing Entries hold in all, in characters as seen (section 5.5): a
+ * ceiling on their size, not their number, since the Agent is given them on every Run.
+ */
+export const STANDING_CEILING = 10_000;
+
+/** How much of the ceiling an Entry's words take: their characters as seen. */
+export function standingSize(words: string): number {
+  let size = 0;
+  for (const _ of graphemes.segment(words)) size++;
+  return size;
+}
 
 /** An Entry's one-line summary: its first line with words, cut at 80 characters as seen. */
 export function summarizeWords(words: string): string {

@@ -315,7 +315,8 @@ button.quiet {
 }
 
 /* An item in the Trash: what was deleted, what went with it, when it goes, and what to do with it. */
-.trash-items {
+.trash-items,
+.standing-items {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -325,7 +326,8 @@ button.quiet {
   list-style: none;
 }
 
-.trash-item {
+.trash-item,
+.standing-item {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -336,12 +338,14 @@ button.quiet {
   overflow-wrap: anywhere;
 }
 
-.trash-kind {
+.trash-kind,
+.standing-day {
   color: var(--muted);
   font: var(--type-label);
 }
 
-.trash-actions {
+.trash-actions,
+.standing-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -998,6 +1002,13 @@ button.quiet.entry-mark {
   color: var(--muted);
   font: var(--type-meta);
   font-weight: 600;
+}
+
+/* A Standing Entry's mark is pressed, in ink, where the others stay muted. */
+button.quiet.entry-mark[aria-pressed="true"] {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .entry-follows,
