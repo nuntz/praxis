@@ -491,6 +491,7 @@ describe("an Entry's links when its words change", () => {
     ["typing before it moves it along", "I met @Ali today", { start: 6, end: 10 }],
     ["typing after it keeps it", "Met @Ali today, again", { start: 4, end: 8 }],
     ["deleting before it moves it back", "@Ali today", { start: 0, end: 4 }],
+    ["changing text on both sides of it moves it", "I met @Ali yesterday", { start: 6, end: 10 }],
   ])("an anchor %s, and the Entry is the one Effect", async (_, words, anchor) => {
     const context = newContext();
     const { entry, person } = await linked(context);
@@ -514,6 +515,7 @@ describe("an Entry's links when its words change", () => {
     ["typing inside its span", "Met @Alxi today"],
     ["deleting part of its span", "Met @Al today"],
     ["replacing all the words", "Something else"],
+    ["on both sides of its span and inside it", "I met @Alex yesterday"],
   ])("a change %s keeps the link without its anchor", async (_, words) => {
     const context = newContext();
     const { entry, person, project } = await linked(context);
@@ -540,7 +542,7 @@ describe("an Entry's links when its words change", () => {
   test("a restore moves anchors as an edit does, and a Version keeps no links of its own", async () => {
     const context = newContext();
     const { entry } = await linked(context);
-    value(await edit(context, entry.id, "Yesterday I met @Ali today"));
+    value(await edit(context, entry.id, "I met @Ali yesterday"));
 
     const { record } = value(
       await context.call(hand, "restore_entry_version", { id: entry.id, restore: 0, version: 1 }),
@@ -548,5 +550,74 @@ describe("an Entry's links when its words change", () => {
 
     expect(record.words).toBe("Met @Ali today");
     expect(record.links.map((link) => link.anchor)).toEqual([{ start: 4, end: 8 }, null]);
+  });
+
+  test("two equal spans each keep their own anchor through a change around them", async () => {
+    const context = newContext();
+    const { person } = await someRecords(context);
+    const mention = { kind: "person" as const, id: person.id };
+    const entry = value(
+      await context.call(hand, "record_entry", {
+        words: "Met @Ali, then @Ali today",
+        links: [
+          { to: mention, anchor: { start: 4, end: 8 } },
+          { to: mention, anchor: { start: 15, end: 19 } },
+        ],
+      }),
+    ).record;
+
+    const words = "I met @Ali, and then @Ali yesterday";
+    const { record } = value(await edit(context, entry.id, words));
+
+    expect(record.links.map((link) => link.anchor)).toEqual([
+      { start: 6, end: 10 },
+      { start: 21, end: 25 },
+    ]);
+    const back = value(
+      await context.call(hand, "restore_entry_version", { id: entry.id, restore: 0, version: 1 }),
+    ).record;
+    expect(back.links.map((link) => link.anchor)).toEqual([
+      { start: 4, end: 8 },
+      { start: 15, end: 19 },
+    ]);
+  });
+
+  const long = "and so on ".repeat(300);
+
+  test.each([
+    [
+      "a Mention put just before it",
+      "Met @Ali today",
+      { start: 4, end: 8 },
+      "Met @Bob and @Ali today",
+      { start: 13, end: 17 },
+    ],
+    [
+      "a change on both sides of a span inside a word",
+      "Met Alibaba today",
+      { start: 4, end: 7 },
+      "I met Alibabab yesterday",
+      { start: 6, end: 9 },
+    ],
+    [
+      "a change at both ends of long words",
+      `Met @Ali today, ${long}fin`,
+      { start: 4, end: 8 },
+      `I met @Ali today, ${long}the end`,
+      { start: 6, end: 10 },
+    ],
+  ])("an anchor keeps its text through %s", async (_, words, anchor, edited, moved) => {
+    const context = newContext();
+    const { person } = await someRecords(context);
+    const entry = value(
+      await context.call(hand, "record_entry", {
+        words,
+        links: [{ to: { kind: "person", id: person.id }, anchor }],
+      }),
+    ).record;
+
+    const { record } = value(await edit(context, entry.id, edited));
+
+    expect(record.links.map((link) => link.anchor)).toEqual([moved]);
   });
 });

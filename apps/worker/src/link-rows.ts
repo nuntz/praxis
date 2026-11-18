@@ -4,7 +4,7 @@ import {
   type Effect,
   type Entry,
   failure,
-  followAnchor,
+  followEdit,
   type Link,
   type LinkTarget,
   liesWithin,
@@ -183,9 +183,9 @@ function madeEffect(target: LinkTarget, name: string): Effect {
 }
 
 /**
- * Move each anchored link of an Entry with a change to its words from `before` to `after`: along
- * with what the change put before it, and through what it put after. A link whose span the change
- * touches stays on the Entry without its anchor (section 3.2); only a draft's pick is dropped.
+ * Move each anchored link of an Entry with a change to its words from `before` to `after`, to
+ * where the text it spans now is. A link whose span the change inserted into or deleted from
+ * stays on the Entry without its anchor (section 3.2); only a draft's pick is dropped.
  */
 export function followAnchors(sql: SqlStorage, entry: string, before: string, after: string) {
   const rows = sql
@@ -195,13 +195,22 @@ export function followAnchors(sql: SqlStorage, entry: string, before: string, af
       entry,
     )
     .toArray();
-  for (const row of rows) {
-    const kept = anchorIn(before, {
+  const held = rows.flatMap((row) => {
+    const anchor = anchorIn(before, {
       start: row.anchor_start,
       end: row.anchor_end,
       text: row.anchor_text,
     });
-    const moved = kept && followAnchor(before, after, kept);
+    return anchor ? [{ seq: row.seq, anchor }] : [];
+  });
+  const followed = followEdit(
+    before,
+    after,
+    held.map(({ anchor }) => anchor),
+  );
+  const movedTo = new Map(held.map(({ seq }, i) => [seq, followed[i]]));
+  for (const row of rows) {
+    const moved = movedTo.get(row.seq);
     if (!moved) {
       sql.exec(
         `UPDATE entry_links SET anchor_start = NULL, anchor_end = NULL, anchor_text = NULL

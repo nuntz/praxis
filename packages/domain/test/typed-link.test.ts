@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { followAnchor, linkQueryAt, pickLink } from "../src/index.ts";
+import { followEdit, linkQueryAt, pickLink } from "../src/index.ts";
 
 // What the person types to link something is one of the few places with direct tests
 // (section 13): the words around a picker are too varied for scenarios at the tool seam.
@@ -89,9 +89,11 @@ describe("a pick followed through what is typed after it", () => {
     ["typing straight after it", "Met @Alis today", anchor],
     ["typing before it", "I met @Ali today", { start: 6, end: 10 }],
     ["typing straight before it", "Met x@Ali today", { start: 5, end: 9 }],
+    ["typing a mark straight before it", "Met @@Ali today", { start: 5, end: 9 }],
     ["deleting before it", "@Ali today", { start: 0, end: 4 }],
+    ["changing text on both sides of it", "I met @Ali yesterday", { start: 6, end: 10 }],
   ])("keeps its span on %s", (_, after, followed) => {
-    expect(followAnchor(before, after, anchor)).toEqual(followed);
+    expect(followEdit(before, after, [anchor])[0]).toEqual(followed);
   });
 
   test.each([
@@ -100,6 +102,6 @@ describe("a pick followed through what is typed after it", () => {
     ["deleting it", "Met  today"],
     ["replacing all the words", "Something else"],
   ])("is lost on %s", (_, after) => {
-    expect(followAnchor(before, after, anchor)).toBeNull();
+    expect(followEdit(before, after, [anchor])[0]).toBeNull();
   });
 });

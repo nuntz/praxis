@@ -47,7 +47,7 @@ export function compareWords(version: string, current: string): Compared[] {
  * Each word, each run of space and each other mark, in order, so that joined they are the text
  * again. A comma typed after a word leaves the word as it was.
  */
-function tokens(text: string): string[] {
+export function tokens(text: string): string[] {
   return text.match(/\s+|[\p{L}\p{M}\p{N}_]+|[^\s\p{L}\p{M}\p{N}_]/gu) ?? [];
 }
 

@@ -100,33 +100,6 @@ export function pickLink(words: string, query: LinkQuery, caret: number, name: s
 }
 
 /**
- * A picked link's anchor once the words have changed from `before` to `after` by one edit, as a
- * text field changes with each thing typed. It moves with what is typed before it and stays
- * through what is typed after it. An edit that touches its span loses it: in a draft, typing into
- * a picked name unpicks it.
- */
-export function followAnchor(before: string, after: string, anchor: Anchor): Anchor | null {
-  let prefix = 0;
-  while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) {
-    prefix++;
-  }
-  let suffix = 0;
-  while (
-    suffix < before.length - prefix &&
-    suffix < after.length - prefix &&
-    before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
-  ) {
-    suffix++;
-  }
-  if (anchor.end <= prefix) return anchor;
-  if (anchor.start >= before.length - suffix) {
-    const moved = after.length - before.length;
-    return { start: anchor.start + moved, end: anchor.end + moved };
-  }
-  return null;
-}
-
-/**
  * Whether a name holds what was typed, whatever its case and accents: how a list is narrowed for
  * a picker. It is never how a link is made, since two records can share a name.
  */

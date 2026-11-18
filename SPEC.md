@@ -294,7 +294,7 @@ ADR 0005. Glossary: Held Change.
 
 - `record_entry` takes the words, a list of Tasks to make with it, a list of links, and optionally the Entry it is a Follow-up to.
 - `edit_entry` takes the new words, the Version they were made against, and a list of Tasks to make with them: the Inline Tasks the edit added. `restore_entry_version` makes none.
-- A change to an Entry's words moves each anchor with what is typed before it and keeps it through what is typed after. A change that touches an anchor's span leaves the link on the Entry without its anchor.
+- A change to an Entry's words moves each anchor to where the text it spans now is, so a change on both sides of a span keeps it. A change that inserts into or deletes from an anchor's span leaves the link on the Entry without its anchor.
 - `add_task` attaches a Task to an Entry that exists. There is no bare `create_task`.
 - A link in `record_entry` or `add_link` may name a new Person or Project to make in the same call.
 - A link that names a record now in the Trash is recorded dormant. An Entry's words are never refused for a link.

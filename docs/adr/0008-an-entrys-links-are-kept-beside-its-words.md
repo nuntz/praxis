@@ -11,5 +11,5 @@ A Reference or a Mention is a record kept beside an Entry's words, optionally an
 
 - Adding or removing a Reference or Mention is never a Held Change and makes no new version of the Entry.
 - The editor turns what the person types to link something into the list of links, using a parser in the domain package. The same holds for an Inline Task.
-- An anchor to a span can go stale when the words are edited. An edit moves each anchor along with what it changes before the span, and a link whose span the edit touches stays on the Entry without an anchor.
+- An anchor to a span can go stale when the words are edited. An edit moves each anchor to where the text it spans now is, and a link whose span the edit inserts into or deletes from stays on the Entry without an anchor.
 - An export of an Entry is its plain words plus its links as data, so the words read the same anywhere.

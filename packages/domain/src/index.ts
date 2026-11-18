@@ -5,6 +5,7 @@ export * from "./day.ts";
 export * from "./deployment.ts";
 export * from "./effects.ts";
 export * from "./entry.ts";
+export * from "./follow-edit.ts";
 export * from "./link.ts";
 export * from "./live.ts";
 export * from "./person.ts";

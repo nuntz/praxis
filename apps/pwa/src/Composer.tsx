@@ -3,7 +3,7 @@ import {
   type End,
   type Entry,
   type EntryNamed,
-  followAnchor,
+  followEdit,
   inlineTasks,
   type LinkQuery,
   linkQueryAt,
@@ -57,15 +57,20 @@ export function Composer(props: {
   const canRecord = () => !sending() && words().trim() !== "";
   const open = () => query() !== null && choices().length > 0;
 
-  /** The words changed by one edit: each pick follows it, and one the edit touched is lost. */
+  /** The words changed by one edit: each pick follows it, and one the edit typed into is lost. */
   function changeWords(after: string) {
     const before = words();
-    setPicks((kept) =>
-      kept.flatMap((pick) => {
-        const anchor = followAnchor(before, after, pick.anchor);
+    setPicks((kept) => {
+      const followed = followEdit(
+        before,
+        after,
+        kept.map((pick) => pick.anchor),
+      );
+      return kept.flatMap((pick, i) => {
+        const anchor = followed[i];
         return anchor ? [{ ...pick, anchor }] : [];
-      }),
-    );
+      });
+    });
     setWords(after);
   }
 
