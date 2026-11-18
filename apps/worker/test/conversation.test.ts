@@ -2,7 +2,7 @@ import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi
 import type { LiveMessage, MessagesPage, PersonMessage } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
-import { answering, calling, noModel, scriptModel, textOf } from "./model-fake.ts";
+import { answering, calling, lastWords, noModel, scriptModel, textOf } from "./model-fake.ts";
 import { hand, newContext, newDeployment, value } from "./seam.ts";
 
 describe("send_message starts a Run", () => {
@@ -113,6 +113,27 @@ describe("send_message: what the Agent is told at the start of a Run", () => {
     expect(seen[0]).toContain('"Work"');
     expect(seen[0]).toContain('"Home"');
     expect(seen[0]).not.toContain("Old job");
+  });
+});
+
+describe("send_message: the person's words as a scripted model reads them", () => {
+  test("come last and alone, whatever the bearings hold", async () => {
+    const read: string[] = [];
+    scriptModel((context) => {
+      read.push(lastWords(context));
+      return fauxAssistantMessage("Noted.");
+    });
+    const context = newContext();
+    const standing = value(
+      await context.call(hand, "record_entry", { words: marked("Keep Fridays free\n\nAlways") }),
+    ).record;
+    value(await context.call(hand, "mark_standing", { id: standing.id }));
+    const words = marked("Record: what is due?\n\nAnd tomorrow");
+
+    await context.callAny(hand, "send_message", { words });
+    await context.runsEnded();
+
+    expect(read).toEqual([words]);
   });
 });
 

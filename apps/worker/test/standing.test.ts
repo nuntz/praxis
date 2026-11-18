@@ -1,6 +1,7 @@
 import { fauxAssistantMessage } from "@earendil-works/pi-ai";
 import { summarizeWords } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
+import { seeded } from "../../../packages/domain/test/seeded.ts";
 import { marked } from "./markers.ts";
 import { scriptModel, textOf } from "./model-fake.ts";
 import { agent, connection, DAY, hand, newContext, readOnlyConnection, value } from "./seam.ts";
@@ -376,17 +377,6 @@ describe("list_entries narrowed to Standing Entries", () => {
     expect(second.next_cursor).toBeNull();
   });
 });
-
-/** A seeded source of numbers in [0, 1) (mulberry32), so every run draws the same steps. */
-function seeded(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
-  };
-}
 
 describe("mark_standing and unmark_standing undone", () => {
   test("over orderings drawn from a seeded source, undoing every step reads back what was there", async () => {

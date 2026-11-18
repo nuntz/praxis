@@ -14,6 +14,7 @@ import {
 } from "@praxis/domain";
 import { expect } from "vitest";
 import { RUNTIME_TABLES } from "../src/agent.ts";
+import { REFERENCES_CLEARED } from "../src/trash-rows.ts";
 
 // The oracle (ADR 0015), the one place tests read tables. It snapshots the Context's domain
 // tables before and after each call, and fails unless the difference is exactly the Effects the
@@ -51,6 +52,9 @@ const trashTables = ["trash_items", "trashed", "dormant_links"];
 
 /** What a record in the Trash is in a snapshot, whatever its rows hold. */
 const IN_THE_TRASH = "in the Trash";
+
+/** The tables holding a record's own row, which a removal for good takes. */
+const RECORD_TABLES = ["entries", "tasks", "projects", "persons"];
 
 /** The Context object's other tables, which hold no record. */
 const otherTables = [
@@ -356,6 +360,19 @@ function snapshot(stub: Stub): Promise<{ records: Records; lastChange: number }>
     expect(
       unknown,
       "Every table is known to the oracle: add it to domainTables in apps/worker/test/oracle.ts if its rows are records, else to otherTables",
+    ).toEqual([]);
+    // A record removed for good leaves no reference to it behind, which the foreign keys refuse.
+    const uncleared = tables.flatMap((table) =>
+      sql
+        .exec<{ table: string; from: string }>(`SELECT * FROM pragma_foreign_key_list(?)`, table)
+        .toArray()
+        .filter((key) => RECORD_TABLES.includes(key.table))
+        .map((key) => `${table}.${key.from}`)
+        .filter((column) => !(column in REFERENCES_CLEARED)),
+    );
+    expect(
+      uncleared,
+      "Every column referencing a record is cleared when it is removed for good: clear it in removeForGood and list it in REFERENCES_CLEARED in apps/worker/src/trash-rows.ts",
     ).toEqual([]);
 
     const rows = new Map<string, Record<string, unknown[]>>();

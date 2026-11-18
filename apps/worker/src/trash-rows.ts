@@ -451,6 +451,24 @@ export function everyItem(sql: SqlStorage): string[] {
 }
 
 /**
+ * Each column that references a record, and how `removeForGood` clears it, since foreign keys are
+ * enforced and a reference left behind fails the removal. Kept by hand: the oracle fails on a
+ * column referencing a record that is not here, so a new one is cleared below before it is listed.
+ */
+export const REFERENCES_CLEARED = {
+  "entries.follow_up_to": "set to null: a Follow-up of a removed Entry becomes an ordinary Entry",
+  "entry_versions.entry": "removed with the Entry",
+  "standing_marks.entry": "removed with the Entry",
+  "entry_links.entry": "removed with the Entry",
+  "tasks.origin_entry": "an Entry's Tasks are removed with it, deleted on their own or not",
+  "tasks.project": "set to null: a Task that left a removed Project has none",
+  "task_events.task": "removed with the Task",
+  "task_events.person": "a delegation to a removed Person is removed",
+  "project_events.project": "removed with the Project",
+  "dormant_links.task": "removed with the Task",
+} as const;
+
+/**
  * Remove these items from the Trash for good (section 3.8), and with them the item of any Task
  * deleted on its own whose Origin Entry is among them, since no Task is left without one. It
  * takes each record, everything deleted with it, all its Versions and every dormant link to it,

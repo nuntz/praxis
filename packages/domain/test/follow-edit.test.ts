@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type Anchor, followEdit } from "../src/index.ts";
+import { seeded } from "./seeded.ts";
 
 // Following an anchor through a change to the words is one of the few places with direct tests
 // (section 13): any edit to any words can move an anchor, too many for scenarios at the tool seam.
@@ -7,17 +8,6 @@ import { type Anchor, followEdit } from "../src/index.ts";
 // every run and names the words that broke it.
 
 const RUNS = 2_000;
-
-/** A seeded source of numbers in [0, 1) (mulberry32), so every run draws the same edits. */
-function seeded(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
-  };
-}
 
 type Draw = ReturnType<typeof seeded>;
 

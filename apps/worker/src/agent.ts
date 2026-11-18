@@ -152,7 +152,10 @@ function modelSchema(name: ToolName): Record<string, unknown> {
   return { ...schema, properties, required };
 }
 
-/** The Message as the model is shown it: the Run's bearings, then the person's words. */
+/**
+ * The Message as the model is shown it: the Run's bearings, then the person's words, last and
+ * alone. `personsWords` reads them back, so the format has one owner.
+ */
 function presented(words: string, bearings: Bearings): string {
   const others =
     bearings.otherContexts.length === 0
@@ -163,9 +166,20 @@ function presented(words: string, bearings: Bearings): string {
 Today is ${bearings.today}. This Context is ${JSON.stringify(bearings.context)}. ${others}
 
 ${standingPresented(bearings.standing)}
-</bearings>
+${BEARINGS_END}${words}`;
+}
 
-${words}`;
+/** Where the bearings end and the person's words begin, in a Message as the model is shown it. */
+const BEARINGS_END = "</bearings>\n\n";
+
+/**
+ * The person's words in a Message as `presented` showed it to the model, without the bearings:
+ * for a scripted model to act on what the person asked (section 13).
+ */
+export function personsWords(message: string): string {
+  if (!message.startsWith("<bearings>")) return message;
+  const end = message.indexOf(`\n${BEARINGS_END}`);
+  return end === -1 ? message : message.slice(end + 1 + BEARINGS_END.length);
 }
 
 /** The Standing Entries as the model is shown them: each its own block, with its id and day. */

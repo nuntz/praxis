@@ -8,6 +8,7 @@ import {
 } from "@earendil-works/pi-ai";
 import type { JsonObject } from "@earendil-works/pi-durable";
 import type { NoAgent } from "@praxis/domain";
+import { personsWords } from "../src/agent.ts";
 import { type AgentModel, DEFAULT_MODEL, PRICES } from "../src/model.ts";
 
 // The model is one of the four faked things (section 13). The fake is pi-ai's faux provider
@@ -72,7 +73,7 @@ export function textOf(message: ModelMessage | undefined): string {
 /** The person's words in the newest Message the model was sent, without the Run's bearings. */
 export function lastWords(context: TranscriptContext): string {
   const last = context.messages.findLast((message) => message.role === "user");
-  return textOf(last).replace(/^<bearings>[\s\S]*?<\/bearings>\s*/, "");
+  return personsWords(textOf(last));
 }
 
 /** The tool results the model has been given since the newest Message. */
