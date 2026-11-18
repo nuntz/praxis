@@ -1,29 +1,47 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { deploymentOffering, offering } from "../apps/worker/test/offering.ts";
+import {
+  deploymentOffering,
+  deploymentRunsWith,
+  offering,
+  runsWith,
+} from "../apps/worker/test/offering.ts";
 import { type RegistryName, registries } from "../packages/domain/src/index.ts";
 
 // The guard of ADR 0015, in place of a line-coverage threshold: CI fails when a tool in the
-// registry has no row in the offering table or no seam test naming it. The Deployment tools have
-// a table of their own, held to the same guard. The Conversation tools are rows of the Context
-// tools' table, like any other tool (section 4.12). Every registry the domain package lists is
-// guarded, and one with no table here fails the typecheck.
+// registry has no row in the offering table, no input the offering test runs it with, or no seam
+// test naming it. The Deployment tools have a table of their own, held to the same guard. The
+// Conversation tools are rows of the Context tools' table, like any other tool (section 4.12).
+// Every registry the domain package lists is guarded, and one with no table here fails the
+// typecheck.
 
-/** The offering table each registry's tools are held to, kept by hand. */
+/**
+ * The offering table each registry's tools are held to, kept by hand, and the inputs the offering
+ * test runs each with.
+ */
 const tables = {
-  context: offering,
-  conversation: offering,
-  deployment: deploymentOffering,
-} satisfies Record<RegistryName, Record<string, unknown>>;
+  context: { rows: offering, inputs: { name: "runsWith", of: runsWith } },
+  conversation: { rows: offering, inputs: { name: "runsWith", of: runsWith } },
+  deployment: {
+    rows: deploymentOffering,
+    inputs: { name: "deploymentRunsWith", of: deploymentRunsWith },
+  },
+} satisfies Record<RegistryName, { rows: object; inputs: { name: string; of: object } }>;
 
 /** Each table, with every tool of the registries held to it. */
-const guarded = [...new Set(Object.values(tables))].map((rows) => ({
-  rows: Object.keys(rows),
-  tools: (Object.keys(tables) as RegistryName[])
-    .filter((name) => tables[name] === rows)
-    .flatMap((name) => Object.keys(registries[name])),
-}));
+const guarded = [...new Set(Object.values(tables).map(({ rows }) => rows))].map((rows) => {
+  const names = (Object.keys(tables) as RegistryName[]).filter(
+    (name) => tables[name].rows === rows,
+  );
+  return {
+    rows: Object.keys(rows),
+    tools: names.flatMap((name) => Object.keys(registries[name])),
+    inputs: (({ name, of }) => ({ name, tools: Object.keys(of) }))(
+      tables[names[0] as RegistryName].inputs,
+    ),
+  };
+});
 
 const seamTests = join(import.meta.dir, "../apps/worker/test");
 
@@ -34,12 +52,23 @@ function named(tool: string, testSources: string[]): boolean {
   return testSources.some((source) => new RegExp(`describe\\(\\s*["'\`]${tool}\\b`).test(source));
 }
 
-/** What is unguarded: a tool with no row or no seam test, or a row for no tool. */
-function unguarded(tools: string[], rows: string[], testSources: string[]): string[] {
+/**
+ * What is unguarded: a tool with no row, no input to run it with or no seam test, or a row for no
+ * tool. Inputs are checked only when given.
+ */
+function unguarded(
+  tools: string[],
+  rows: string[],
+  testSources: string[],
+  inputs?: { name: string; tools: string[] },
+): string[] {
   return [
     ...tools
       .filter((tool) => !rows.includes(tool))
       .map((tool) => `${tool} has no row: add one to the offering table in ${table}`),
+    ...tools
+      .filter((tool) => inputs !== undefined && !inputs.tools.includes(tool))
+      .map((tool) => `${tool} has no input it runs with: add one to ${inputs?.name} in ${table}`),
     ...tools
       .filter((tool) => !named(tool, testSources))
       .map(
@@ -59,9 +88,11 @@ function readSeamTests(): string[] {
 }
 
 describe("the registry guard", () => {
-  test("every tool, in every registry, has a row in its offering table and a seam test naming it", () => {
+  test("every tool, in every registry, has a row in its offering table, an input it runs with and a seam test naming it", () => {
     const sources = readSeamTests();
-    expect(guarded.flatMap(({ tools, rows }) => unguarded(tools, rows, sources))).toEqual([]);
+    expect(
+      guarded.flatMap(({ tools, rows, inputs }) => unguarded(tools, rows, sources, inputs)),
+    ).toEqual([]);
   });
 
   test("fails a tool with no row, a tool with no seam test, and a row for no tool", () => {
@@ -74,6 +105,19 @@ describe("the registry guard", () => {
       expect.stringMatching(/^edit_entry has no row: /),
       expect.stringMatching(/^edit_entry has no seam test: .*describe\("edit_entry", …\)/),
       expect.stringMatching(/^gone is a row for no tool: remove it/),
+    ]);
+  });
+
+  test("fails a tool with no input the offering test runs it with", () => {
+    const sources = ['describe("get_entry", () => {});', 'describe("list_entries", () => {});'];
+
+    expect(
+      unguarded(["get_entry", "list_entries"], ["get_entry", "list_entries"], sources, {
+        name: "runsWith",
+        tools: ["get_entry"],
+      }),
+    ).toEqual([
+      expect.stringMatching(/^list_entries has no input it runs with: add one to runsWith in /),
     ]);
   });
 

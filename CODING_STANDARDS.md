@@ -22,6 +22,7 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 ## Browser journeys
 
 - A journey that acts outside the page on what a tap changed waits for that tool's answer (`page.waitForResponse`), or for something on the screen only the answer brings. A control the browser changes at the tap, such as a checkbox, proves nothing about the server.
+- A journey holds whatever the other journeys leave in the shared Deployment. It reaches a control by its role and name, or by a keyboard path that passes through no column other journeys fill, and matches text a count can grow with a pattern that allows it. A journey that needs an exact count or order makes a Context of its own, as `e2e/attention.spec.ts` does.
 - A journey reads a value off the page (a box, a count, an order) once the screen has settled on what it measures: after something on the screen only the last read brings, as the Journal's composer comes with the time zone. A value it cannot read fails the journey as missing, never as a stand-in such as 0.
 
 ## Reads and changes

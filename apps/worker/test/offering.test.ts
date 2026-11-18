@@ -1,53 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { marked } from "./markers.ts";
-import { deploymentOffering, offering } from "./offering.ts";
+import { deploymentOffering, deploymentRunsWith, offering, runsWith } from "./offering.ts";
 import { everyCaller, hand, newContext, newDeployment, value } from "./seam.ts";
-
-/** An input each tool runs with, so an offered call is seen to run. Every row needs one. */
-const runsWith: Record<string, () => unknown> = {
-  record_entry: () => ({ words: marked("Offered") }),
-  get_entry: () => ({ id: "no-such-entry" }),
-  list_entries: () => ({}),
-  edit_entry: () => ({ id: "no-such-entry", words: marked("Offered"), version: 0 }),
-  restore_entry_version: () => ({ id: "no-such-entry", restore: 0, version: 1 }),
-  list_entry_versions: () => ({ id: "no-such-entry" }),
-  add_link: () => ({ entry_id: "no-such-entry", to: { kind: "new_person", name: marked("Ali") } }),
-  remove_link: () => ({ entry_id: "no-such-entry", to: { kind: "person", id: "no-such-person" } }),
-  add_task: () => ({ entry_id: "no-such-entry", title: marked("Offered") }),
-  finish_task: () => ({ id: "no-such-task" }),
-  drop_task: () => ({ id: "no-such-task" }),
-  reopen_task: () => ({ id: "no-such-task" }),
-  rename_task: () => ({ id: "no-such-task", title: marked("Offered") }),
-  set_task_dates: () => ({ id: "no-such-task", due_date: "2026-12-01" }),
-  set_recurrence: () => ({ id: "no-such-task", recurrence: { kind: "days", every: 1 } }),
-  remove_recurrence: () => ({ id: "no-such-task" }),
-  delegate_task: () => ({ id: "no-such-task", person_id: "no-such-person" }),
-  take_back_task: () => ({ id: "no-such-task" }),
-  wait_on: () => ({ id: "no-such-task", on: { kind: "task", id: "no-such-task" } }),
-  stop_waiting: () => ({ id: "no-such-task", on: { kind: "project", id: "no-such-project" } }),
-  get_task: () => ({ id: "no-such-task" }),
-  list_tasks: () => ({}),
-  move_task: () => ({ id: "no-such-task", project_id: null }),
-  make_project_from_task: () => ({ id: "no-such-task" }),
-  create_project: () => ({ name: marked("Offered") }),
-  rename_project: () => ({ id: "no-such-project", name: marked("Offered") }),
-  set_project_due_date: () => ({ id: "no-such-project", due_date: null }),
-  finish_project: () => ({ id: "no-such-project" }),
-  drop_project: () => ({ id: "no-such-project" }),
-  reopen_project: () => ({ id: "no-such-project" }),
-  get_project: () => ({ id: "no-such-project" }),
-  list_projects: () => ({}),
-  create_person: () => ({ name: marked("Offered") }),
-  rename_person: () => ({ id: "no-such-person", name: marked("Offered") }),
-  get_person: () => ({ id: "no-such-person" }),
-  list_persons: () => ({}),
-  get_settings: () => ({}),
-  set_time_zone: () => ({ time_zone: "Europe/Paris" }),
-  view_attention: () => ({}),
-  list_changes: () => ({}),
-  send_message: () => ({ words: marked("Offered") }),
-  list_messages: () => ({}),
-};
 
 // The generic test of ADR 0015: every tool, as every caller, against the table kept by hand.
 // The oracle holds a call that is not offered to changing nothing.
@@ -61,7 +14,7 @@ describe("the offering table", () => {
         const input = runsWith[tool];
         expect(
           input,
-          `${tool} needs an input it runs with: add one to runsWith in apps/worker/test/offering.test.ts`,
+          `${tool} needs an input it runs with: add one to runsWith in apps/worker/test/offering.ts`,
         ).toBeDefined();
 
         const result = await newContext().callAny(caller, tool, input?.());
@@ -73,21 +26,6 @@ describe("the offering table", () => {
     });
   }
 });
-
-/** An input each Deployment tool runs with, given a Context made first. Every row needs one. */
-const deploymentRunsWith: Record<string, (id: string) => unknown> = {
-  list_contexts: () => ({}),
-  create_context: () => ({ name: "Side", time_zone: "Europe/Paris", accent: "teal" }),
-  rename_context: (id) => ({ id, name: "Side" }),
-  set_context_accent: (id) => ({ id, accent: "teal" }),
-  retire_context: (id) => ({ id }),
-  bring_back_context: (id) => ({ id }),
-  list_connections: () => ({}),
-  create_connection: (id) => ({ name: "Claude Code", context_id: id, reading_only: false }),
-  rename_connection: () => ({ id: "no-such-connection", name: "Laptop" }),
-  set_connection_reading_only: () => ({ id: "no-such-connection", reading_only: true }),
-  end_connection: () => ({ id: "no-such-connection" }),
-};
 
 // The same, for the Deployment tools against their own table. The oracle sees only a Context's
 // tables, so a call not offered is seen to change nothing by the list of Contexts after it.
@@ -101,7 +39,7 @@ describe("the Deployment tools' offering table", () => {
         const input = deploymentRunsWith[tool];
         expect(
           input,
-          `${tool} needs an input it runs with: add one to deploymentRunsWith in apps/worker/test/offering.test.ts`,
+          `${tool} needs an input it runs with: add one to deploymentRunsWith in apps/worker/test/offering.ts`,
         ).toBeDefined();
         const deployment = newDeployment();
         const made = value(
