@@ -14,7 +14,7 @@ import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /**
- * What the Attention column holds: the standing Notices, the Held Changes waiting for the
+ * What the Attention column holds: the standing Notices, the Held Changes left for the
  * person's tap, then the sections of `view_attention`, in their order (section 8.3). It has no
  * composer. A Task is finished from it, and a Project opened to show its Tasks.
  * Its sections are derived on the server from the whole Context, so any change to a Task, a
@@ -102,7 +102,7 @@ export function Attention(props: {
           </p>
         )}
       </Show>
-      <Section id="held-changes" title="Held Changes" items={heldChanges.waiting()}>
+      <Section id="held-changes" title="Held Changes" items={heldChanges.all()}>
         {(held) => (
           <li>
             <HeldChangeItem held={held} anchor={heldAnchor(held.id)} />
@@ -143,7 +143,7 @@ export function Attention(props: {
             </Section>
             <Show
               when={
-                heldChanges.waiting().length === 0 &&
+                heldChanges.all().length === 0 &&
                 Object.values(shown()).every((items) => items.length === 0)
               }
             >

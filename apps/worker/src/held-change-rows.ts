@@ -57,13 +57,13 @@ export function leaveHeldChange(
   return { record: left, effects: [heldEffect(left, "made", "call")], changed: true, held: true };
 }
 
-/** A Held Change waiting, by its id, as a read gives it, or null when none is. */
+/** A Held Change still there to tap, by its id, as a read gives it, or null when none is. */
 export function readHeldChange(sql: SqlStorage, id: string): HeldChange | null {
   const row = heldRow(sql, id);
   return row ? (heldChangesFrom(sql, [row])[0] ?? null) : null;
 }
 
-/** A Held Change waiting as its table holds it, by its id, or null when none is. */
+/** A Held Change still there to tap as its table holds it, by its id, or null when none is. */
 export function heldRow(sql: SqlStorage, id: string): HeldRow | null {
   return sql.exec<HeldRow>(`SELECT * FROM held_changes WHERE id = ?`, id).toArray()[0] ?? null;
 }

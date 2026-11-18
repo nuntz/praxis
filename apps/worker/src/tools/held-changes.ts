@@ -12,8 +12,8 @@ import type { Handlers } from "../registry.ts";
 import { pastTheCeilingWith, putWords, readEntry } from "./entries.ts";
 import { sendEntryToTrash } from "./trash.ts";
 
-const NOT_WAITING =
-  "No such Held Change is waiting: it was made, cancelled, or lapsed when its Entry changed.";
+const NO_SUCH_HELD_CHANGE =
+  "No such Held Change: it was made, cancelled, or lapsed when its Entry changed.";
 
 export const heldChangeTools: Pick<
   Handlers,
@@ -24,7 +24,7 @@ export const heldChangeTools: Pick<
     const held = row && heldChangesFrom(sql, [row])[0];
     // It lapses the moment its Entry changes, so the Entry is as the Held Change shows it.
     const entry = row && readEntry(sql, row.entry, today);
-    if (!row || !held || !entry) return failure("not_found", NOT_WAITING);
+    if (!row || !held || !entry) return failure("not_found", NO_SUCH_HELD_CHANGE);
     // The tap makes the change the Agent asked for, so its words are the Agent's.
     const made =
       row.tool === "delete_entry"
@@ -37,7 +37,7 @@ export const heldChangeTools: Pick<
 
   cancel_held_change({ input, sql }) {
     const held = readHeldChange(sql, input.id);
-    if (!held) return failure("not_found", NOT_WAITING);
+    if (!held) return failure("not_found", NO_SUCH_HELD_CHANGE);
     return success(written(held, [endHeldChange(sql, held, "call")]));
   },
 

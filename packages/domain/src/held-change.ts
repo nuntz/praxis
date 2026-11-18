@@ -8,7 +8,7 @@ export type HeldTool = "edit_entry" | "restore_entry_version" | "delete_entry";
 
 /**
  * A Held Change (section 4.7): a call from the Agent that would change or delete the words of an
- * Entry whose Author is the person, waiting for the person's tap. It is not a record. It shows the
+ * Entry whose Author is the person, left for the person's tap. It is not a record. It shows the
  * Entry before and after, and for a delete the Tasks that would go with it, so the tap covers
  * them. It lapses the moment the Entry changes underneath it, so a tap never makes a change other
  * than the one shown.

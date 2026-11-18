@@ -60,7 +60,7 @@ test("the Agent's change to the person's words waits for their tap, which makes 
   const { journal } = await openJournal(page, testInfo);
   const shown = journal.getByTestId("entry").filter({ hasText: before });
   await expect(shown.getByTestId("words")).toHaveText(before);
-  await shown.getByRole("link", { name: "Held Change waiting", exact: true }).click();
+  await shown.getByRole("link", { name: "Held Change for your tap", exact: true }).click();
   const held = page
     .getByRole("region", { name: "Attention", exact: true })
     .getByRole("region", { name: "Held Changes", exact: true })
@@ -81,7 +81,7 @@ test("the Agent's change to the person's words waits for their tap, which makes 
   await expect(
     changed.getByRole("button", { name: "Edited by the Agent", exact: true }),
   ).toBeVisible();
-  await expect(changed.getByRole("link", { name: "Held Change waiting" })).toHaveCount(0);
+  await expect(changed.getByRole("link", { name: "Held Change for your tap" })).toHaveCount(0);
   await showColumn(page, testInfo, "Agent");
   await expect(left).toHaveCount(0);
 });

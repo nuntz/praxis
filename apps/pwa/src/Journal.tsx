@@ -272,8 +272,8 @@ function EntryItem(props: {
 }) {
   const callTool = useCallTool();
   const heldChanges = useHeldChanges();
-  // The newest Held Change waiting on it, which its marker leads to in Attention.
-  const held = () => heldChanges.waiting().find((each) => each.entry.id === props.entry.id);
+  // The newest Held Change left on it, which its marker leads to in Attention.
+  const held = () => heldChanges.all().find((each) => each.entry.id === props.entry.id);
   const [editing, setEditing] = createSignal(false);
   const [showingVersions, setShowingVersions] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
@@ -329,16 +329,16 @@ function EntryItem(props: {
           )}
         </Show>
         <Show when={held()}>
-          {(waiting) => (
+          {(left) => (
             <a
               class="entry-mark held-mark"
-              href={`#${heldAnchor(waiting().id)}`}
+              href={`#${heldAnchor(left().id)}`}
               onClick={(event) => {
                 event.preventDefault();
-                props.onShowHeldChange(heldAnchor(waiting().id));
+                props.onShowHeldChange(heldAnchor(left().id));
               }}
             >
-              Held Change waiting
+              Held Change for your tap
             </a>
           )}
         </Show>

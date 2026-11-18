@@ -556,7 +556,7 @@ export const tools = {
     kind: "write",
     destructive: true,
     description:
-      "Make a Held Change, by the person's tap: the change the Agent asked for is made as it was shown, its words the Agent's, and the Held Change is gone. One no longer waiting, made, cancelled or lapsed, is not found.",
+      "Make a Held Change, by the person's tap: the change the Agent asked for is made as it was shown, its words the Agent's, and the Held Change is gone. One already made, cancelled or lapsed is not found.",
     input: writeInput({ id }),
     offered: toHandOnly,
   },
@@ -564,14 +564,14 @@ export const tools = {
     kind: "write",
     destructive: true,
     description:
-      "Cancel a Held Change waiting for the person's tap: the Entry stays as it is. The Agent cancels one when the person tells it to. One no longer waiting, made, cancelled or lapsed, is not found.",
+      "Cancel a Held Change left for the person's tap: the Entry stays as it is. The Agent cancels one when the person tells it to. One already made, cancelled or lapsed is not found.",
     input: writeInput({ id }),
     offered: { ...toHandOnly, agent: "yes" },
   },
   list_held_changes: {
     kind: "read",
     description:
-      "List the Held Changes waiting for the person's tap, newest first, 50 to a page: each a change to or delete of an Entry the person wrote that the Agent asked for, with the Entry's words before and after and, for a delete, the Tasks that would go with it. One lapses the moment its Entry changes underneath it.",
+      "List the Held Changes left for the person's tap, newest first, 50 to a page: each a change to or delete of an Entry the person wrote that the Agent asked for, with the Entry's words before and after and, for a delete, the Tasks that would go with it. One lapses the moment its Entry changes underneath it.",
     input: z.strictObject({ cursor }),
     offered: { ...toEveryCaller, connection: "no", read_only_connection: "no" },
   },

@@ -13,9 +13,17 @@ export function marker(): string {
   return made;
 }
 
-/** Words carrying a marker. */
+/**
+ * Words carrying a marker. Each call adds a new one, so words used twice, as written and as read
+ * back, are made once and kept in a variable.
+ */
 export function marked(words: string): string {
   return `${words} ${marker()}`;
+}
+
+/** The markers in some text, such as a record's words. */
+export function markersIn(text: string): string[] {
+  return text.match(/MARKER-[0-9a-f-]{36}/g) ?? [];
 }
 
 /** Everything logged since the last test began, one string per console call. */

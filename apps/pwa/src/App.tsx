@@ -306,7 +306,7 @@ export function App() {
         {(id) => {
           const live = openLive(id);
           const heldChanges = followHeldChanges(contextTools(id), live);
-          createEffect(() => setHeldCount(heldChanges.waiting().length));
+          createEffect(() => setHeldCount(heldChanges.all().length));
           return (
             <CurrentContextTools.Provider value={contextTools(id)}>
               <CurrentContextLive.Provider value={live}>

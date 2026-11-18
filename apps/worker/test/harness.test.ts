@@ -61,6 +61,27 @@ describe("the oracle", () => {
     expect(judge(aGoodWrite())).toEqual([]);
   });
 
+  test("fails a removal for good that leaves the record's words in the change log", () => {
+    const words = marked("Removed for good");
+    const removal = (log: string[]): Seen => {
+      const gone: Effect = { ...made, what: "deleted", summary: "" };
+      return {
+        request: { caller: hand, tool: "remove_for_good", input: {}, arrivedAt: Date.parse(at) },
+        result: { ok: true, value: { record: { items: 1 }, effects: [gone], changed: true } },
+        before: records({ e1: "in the Trash" }),
+        after: records(),
+        logged: [{ at, caller: hand, tool: "remove_for_good", effects: [gone] }],
+        firstWithKey: null,
+        words: { before: new Map([["entry:e1", words]]), after: new Map(), log },
+      };
+    };
+
+    expect(judge(removal(["", "Other words"]))).toEqual([]);
+    expect(judge(removal(["", `Left behind: ${words}`]))).toEqual([
+      expect.stringContaining("words of a record removed for good"),
+    ]);
+  });
+
   test("passes a held call that left its Held Change and changed nothing else", () => {
     expect(judge(aHeldCall([]))).toEqual([]);
   });

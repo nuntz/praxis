@@ -16,6 +16,7 @@ import {
 import { expect } from "vitest";
 import { RUNTIME_TABLES } from "../src/agent.ts";
 import { REFERENCES_CLEARED } from "../src/trash-rows.ts";
+import { markersIn } from "./markers.ts";
 
 // The oracle (ADR 0015), the one place tests read tables. It snapshots the Context's domain
 // tables before and after each call, and fails unless the difference is exactly the Effects the
@@ -82,6 +83,11 @@ export type Seen = {
   logged: Change[];
   /** The first result of an earlier call with the same key by the same caller, if remembered. */
   firstWithKey: ToolResult<unknown> | null;
+  /**
+   * The words of each record, in the Trash or not, by `kind:id`, before and after the call, and
+   * the change log's summaries after it: a record removed for good leaves none of its words there.
+   */
+  words?: { before: Map<string, string>; after: Map<string, string>; log: string[] };
 };
 
 /** Call a tool through the oracle, failing the test on anything it finds. */
@@ -99,6 +105,7 @@ export async function throughOracle(stub: Stub, request: Request): Promise<ToolR
     after: after.records,
     logged,
     firstWithKey,
+    words: { before: before.words, after: after.words, log: after.summaries },
   });
   expect(problems, `The oracle, on ${request.tool} as ${request.caller.kind}`).toEqual([]);
   return result;
@@ -113,6 +120,7 @@ export function judge(seen: Seen): string[] {
   if (firstWithKey !== null && !same(result, firstWithKey)) {
     problems.push("A repeated key did not return the first result.");
   }
+  problems.push(...wordsLeftBehind(seen));
   if (isConversationToolName(request.tool)) return judgeConversation(changed, logged);
   const write = isWrite(request.tool);
   if (!write || !result.ok || firstWithKey !== null) {
@@ -159,6 +167,24 @@ export function judge(seen: Seen): string[] {
     );
   }
   return problems;
+}
+
+/**
+ * Words of a record removed for good that the change log still holds (section 3.8): nothing of it
+ * is left, and the log keeps only what kind of record changed and by whom. Seen by the markers in
+ * its words, so an Effect quoting them under another id, as of a Held Change, is caught too.
+ */
+function wordsLeftBehind({ words }: Seen): string[] {
+  if (!words) return [];
+  const removed = [...words.before].filter(([record]) => !words.after.has(record));
+  return removed
+    .filter(([, text]) =>
+      markersIn(text).some((marker) => words.log.some((summary) => summary.includes(marker))),
+    )
+    .map(
+      ([record]) =>
+        `The change log keeps words of a record removed for good: ${record}. Blank every summary quoting them.`,
+    );
 }
 
 /**
@@ -351,7 +377,19 @@ function differences(before: Records, after: Records): Pick<Effect, "kind" | "id
   return found;
 }
 
-function snapshot(stub: Stub): Promise<{ records: Records; lastChange: number }> {
+/** Each record's words, title or name, read from its own table, by `kind:id`. */
+const SAID = `
+  SELECT 'entry:' || id AS record, words AS text FROM entries
+  UNION ALL SELECT 'task:' || id, title FROM tasks
+  UNION ALL SELECT 'project:' || id, name FROM projects
+  UNION ALL SELECT 'person:' || id, name FROM persons`;
+
+function snapshot(stub: Stub): Promise<{
+  records: Records;
+  lastChange: number;
+  words: Map<string, string>;
+  summaries: string[];
+}> {
   return runInDurableObject(stub, (_, state) => {
     const sql = state.storage.sql;
     const tables = sql
@@ -406,7 +444,17 @@ function snapshot(stub: Stub): Promise<{ records: Records; lastChange: number }>
     const { seq } = sql
       .exec<{ seq: number | null }>(`SELECT max(seq) AS seq FROM change_calls`)
       .one();
-    return { records, lastChange: seq ?? 0 };
+    const words = new Map(
+      sql
+        .exec<{ record: string; text: string }>(SAID)
+        .toArray()
+        .map((row) => [row.record, row.text]),
+    );
+    const summaries = sql
+      .exec<{ summary: string }>(`SELECT summary FROM changes`)
+      .toArray()
+      .map((row) => row.summary);
+    return { records, lastChange: seq ?? 0, words, summaries };
   });
 }
 

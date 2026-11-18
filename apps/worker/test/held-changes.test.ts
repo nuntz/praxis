@@ -16,8 +16,8 @@ async function recorded(context: Context, words: string, caller = hand, tasks: s
   ).record;
 }
 
-/** The Held Changes waiting, as the person's hand lists them. */
-async function waiting(context: Context) {
+/** The Held Changes left for the tap, as the person's hand lists them. */
+async function heldChanges(context: Context) {
   return value(await context.call(hand, "list_held_changes", {})).items;
 }
 
@@ -63,7 +63,7 @@ describe("edit_entry by the Agent on the person's words", () => {
       held: true,
     });
     expect(value(await context.call(hand, "get_entry", { id: entry.id }))).toEqual(entry);
-    expect(await waiting(context)).toEqual([held]);
+    expect(await heldChanges(context)).toEqual([held]);
   });
 });
 
@@ -82,7 +82,7 @@ describe("edit_entry by the Agent, checked before it leaves a Held Change", () =
     });
 
     expect(result).toMatchObject({ ok: false, error: { code: "stale" } });
-    expect(await waiting(context)).toEqual([]);
+    expect(await heldChanges(context)).toEqual([]);
   });
 
   test("the words it already has change nothing and leave none", async () => {
@@ -94,7 +94,7 @@ describe("edit_entry by the Agent, checked before it leaves a Held Change", () =
     );
 
     expect(result).toEqual({ record: entry, effects: [], changed: false });
-    expect(await waiting(context)).toEqual([]);
+    expect(await heldChanges(context)).toEqual([]);
   });
 
   test("a Connection is still refused, and leaves none", async () => {
@@ -113,7 +113,7 @@ describe("edit_entry by the Agent, checked before it leaves a Held Change", () =
         error: { code: tool === "restore_entry_version" ? "not_found" : "held" },
       });
     }
-    expect(await waiting(context)).toEqual([]);
+    expect(await heldChanges(context)).toEqual([]);
   });
 });
 
@@ -158,7 +158,7 @@ describe("make_held_change", () => {
     expect(value(await context.call(hand, "list_entry_versions", { id: entry.id })).items).toEqual([
       { version: 0, words: before, changed: { by: { kind: "agent" }, at: now.edited?.at } },
     ]);
-    expect(await waiting(context)).toEqual([]);
+    expect(await heldChanges(context)).toEqual([]);
   });
 
   test("makes a restore as shown", async () => {
@@ -214,7 +214,7 @@ describe("make_held_change", () => {
     });
   });
 
-  test("a Held Change no longer waiting is not found, and nothing changes", async () => {
+  test("a Held Change already cancelled is not found, and nothing changes", async () => {
     const context = newContext();
     const entry = await recorded(context, marked("Mine"));
     const held = left(await context.call(agent, "delete_entry", { id: entry.id })).record;
@@ -226,7 +226,7 @@ describe("make_held_change", () => {
     expect(value(await context.call(hand, "get_entry", { id: entry.id }))).toEqual(entry);
   });
 
-  test("a Standing Entry's words that would now pass the ceiling are refused, and it stays waiting", async () => {
+  test("a Standing Entry's words that would now pass the ceiling are refused, and it stays to tap", async () => {
     const context = newContext();
     const entry = await recorded(context, "a".repeat(4_000));
     value(await context.call(hand, "mark_standing", { id: entry.id }));
@@ -246,7 +246,7 @@ describe("make_held_change", () => {
       ok: false,
       error: { code: "refused", in_the_way: [{ kind: "entry", id: other.id }] },
     });
-    expect((await waiting(context)).map(({ id }) => id)).toEqual([held.id]);
+    expect((await heldChanges(context)).map(({ id }) => id)).toEqual([held.id]);
   });
 });
 
@@ -273,7 +273,7 @@ describe("cancel_held_change", () => {
         ],
         changed: true,
       });
-      expect(await waiting(context)).toEqual([]);
+      expect(await heldChanges(context)).toEqual([]);
     }
     expect(value(await context.call(hand, "get_entry", { id: entry.id }))).toEqual(entry);
   });
@@ -314,7 +314,7 @@ describe("a Held Change lapses", () => {
     );
 
     expect(result.effects).toContainEqual(lapsedBy(held));
-    expect(await waiting(context)).toEqual([]);
+    expect(await heldChanges(context)).toEqual([]);
     expect(await context.call(hand, "make_held_change", { id: held.id })).toMatchObject({
       ok: false,
       error: { code: "not_found" },
@@ -329,7 +329,20 @@ describe("a Held Change lapses", () => {
     value(await context.call(hand, "restore", { id: entry.id }));
 
     expect(deleted.effects).toContainEqual(lapsedBy(held));
-    expect(await waiting(context)).toEqual([]);
+    expect(await heldChanges(context)).toEqual([]);
+  });
+
+  test("leaving no words of its Entry in the change log once the Entry is removed for good", async () => {
+    const context = newContext();
+    const { entry, held } = await heldEdit(context);
+    value(await context.call(agent, "cancel_held_change", { id: held.id }));
+    const again = left(await context.call(agent, "delete_entry", { id: entry.id })).record;
+    atOnce(await context.call(hand, "delete_entry", { id: entry.id }));
+
+    // The oracle fails a removal that leaves any of the Entry's words in the change log.
+    value(await context.call(hand, "remove_for_good", { id: entry.id }));
+
+    expect(again.summary).toBe("Delete your Entry");
   });
 
   test("when another Held Change on the Entry is made", async () => {
@@ -340,7 +353,7 @@ describe("a Held Change lapses", () => {
     const result = value(await context.call(hand, "make_held_change", { id: held.id }));
 
     expect(result.effects).toContainEqual(lapsedBy(other));
-    expect(await waiting(context)).toEqual([]);
+    expect(await heldChanges(context)).toEqual([]);
   });
 
   test("a delete's, when the Tasks that would go with the Entry change; an edit's does not", async () => {
@@ -356,7 +369,7 @@ describe("a Held Change lapses", () => {
       expect.objectContaining({ kind: "task", what: "made" }),
       lapsedBy(deleting),
     ]);
-    expect((await waiting(context)).map(({ id }) => id)).toEqual([held.id]);
+    expect((await heldChanges(context)).map(({ id }) => id)).toEqual([held.id]);
   });
 
   test("a delete's, when finishing a recurring Task makes its next Occurrence on the Entry", async () => {
@@ -375,7 +388,7 @@ describe("a Held Change lapses", () => {
     const finished = atOnce(await context.call(hand, "finish_task", { id: task?.id }));
 
     expect(finished.effects).toContainEqual(lapsedBy(deleting));
-    expect(await waiting(context)).toEqual([]);
+    expect(await heldChanges(context)).toEqual([]);
   });
 
   test("not for a change beside the words: a link, a mark, or a Task's own change", async () => {
@@ -392,7 +405,7 @@ describe("a Held Change lapses", () => {
     value(await context.call(hand, "mark_standing", { id: entry.id }));
     value(await context.call(hand, "finish_task", { id: entry.tasks[0]?.id }));
 
-    expect((await waiting(context)).map(({ id }) => id).toSorted()).toEqual(
+    expect((await heldChanges(context)).map(({ id }) => id).toSorted()).toEqual(
       [held.id, deleting.id].toSorted(),
     );
   });
@@ -476,7 +489,7 @@ describe("send_message: the Agent's held call", () => {
     await context.callAny(hand, "send_message", { words: marked("Fix the typo in that Entry") });
     await context.runsEnded();
 
-    const [held] = await waiting(context);
+    const [held] = await heldChanges(context);
     expect(held).toMatchObject({ tool: "edit_entry", entry: { id: entry.id }, after: words });
     expect(value(await context.call(hand, "get_entry", { id: entry.id }))).toEqual(entry);
     const [answer] = (value(await context.callAny(hand, "list_messages", {})) as MessagesPage)

@@ -4,14 +4,14 @@ import type { CurrentLive } from "./live-context.ts";
 import { type CallTool, unreachableMessage } from "./tools.ts";
 
 /**
- * The Held Changes waiting in the current Context (section 4.7), read once for the whole screen:
+ * The Held Changes left for the person's tap in the current Context (section 4.7), read once for the whole screen:
  * Attention lists them first and counts them, the Journal marks their Entries, and the
  * Conversation shows each where the Agent left it.
  */
 export type HeldChanges = {
-  /** Every Held Change waiting, newest first. */
-  waiting: () => HeldChange[];
-  /** The Held Change waiting with this id, if it still is. */
+  /** Every Held Change left for the tap, newest first. */
+  all: () => HeldChange[];
+  /** The Held Change with this id, while it is still there to tap. */
   find: (id: string) => HeldChange | undefined;
   /** Make it, by the person's tap, or cancel it. Gives the problem to show, or null. */
   decide: (held: HeldChange, how: "make" | "cancel") => Promise<string | null>;
@@ -22,7 +22,7 @@ export type HeldChanges = {
  * change to one, which the change that lapses one carries too, or when the screen reads afresh.
  */
 export function followHeldChanges(callTool: CallTool, live: CurrentLive): HeldChanges {
-  const [waiting, setWaiting] = createSignal<HeldChange[]>([]);
+  const [all, setAll] = createSignal<HeldChange[]>([]);
   // Each read is numbered: an answer a later read overtook is dropped, so the last read wins.
   let reads = 0;
 
@@ -39,7 +39,7 @@ export function followHeldChanges(callTool: CallTool, live: CurrentLive): HeldCh
         items.push(...result.value.items);
         cursor = result.value.next_cursor;
       } while (cursor);
-      setWaiting(items);
+      setAll(items);
     } catch {
       // Unreachable: the next change or reconnection reads again.
     }
@@ -52,8 +52,8 @@ export function followHeldChanges(callTool: CallTool, live: CurrentLive): HeldCh
   void live.ready.then(read);
 
   return {
-    waiting,
-    find: (id) => waiting().find((held) => held.id === id),
+    all,
+    find: (id) => all().find((held) => held.id === id),
     async decide(held, how) {
       try {
         const result = await callTool(how === "make" ? "make_held_change" : "cancel_held_change", {
@@ -66,7 +66,7 @@ export function followHeldChanges(callTool: CallTool, live: CurrentLive): HeldCh
         }
         // Gone at once, then read again: a read already out may have answered from before the tap,
         // and is dropped as this one overtakes it.
-        setWaiting((shown) => shown.filter((each) => each.id !== held.id));
+        setAll((shown) => shown.filter((each) => each.id !== held.id));
         void read();
         return null;
       } catch (error) {

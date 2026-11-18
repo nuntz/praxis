@@ -185,7 +185,7 @@ function AgentMessageItem(props: {
   const heldChanges = useHeldChanges();
   // A Held Change the Run left waits here, where the Agent left it, until it is made, cancelled or
   // lapses (section 8.5).
-  const leftWaiting = () =>
+  const leftForTap = () =>
     run()
       .calls.flatMap((call) => call.effects)
       .filter((effect) => effect.kind === "held_change" && effect.what === "made")
@@ -196,7 +196,7 @@ function AgentMessageItem(props: {
       <Show when={props.message.words}>
         <Words words={props.message.words} />
       </Show>
-      <For each={leftWaiting()}>{(held) => <HeldChangeItem held={held} />}</For>
+      <For each={leftForTap()}>{(held) => <HeldChangeItem held={held} />}</For>
       {/* Opened, it shows the Run's calls, and once it has ended, what it cost. */}
       <Show when={run().calls.length > 0 || run().cost !== null}>
         <details class="run-calls">
