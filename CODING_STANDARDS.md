@@ -28,6 +28,7 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 ## Reads and changes
 
 - What a list shows comes from its read and from the changes it learns of meanwhile, its own writes or the live channel's, in either order. A change that lands while the read is out outlives the read's answer: the list places a record from either by its id, so the record shows once, or it drops an answer a later read or change overtook and reads again. A column reads once `live.ready` settles, so a change made meanwhile is read or brought.
+- An operation with an inverse, such as delete and restore, has a seam test that runs it over orderings drawn from a seeded source and checks that undoing every step reads back what was there, as following an anchor through an edit is tested over edits drawn from one.
 
 ## Decisions
 

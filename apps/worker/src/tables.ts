@@ -1,6 +1,7 @@
 /**
  * The Context object's own tables. The upgrade ladder of section 11 replaces this with
- * numbered steps before the first release.
+ * numbered steps before the first release. Foreign keys are enforced: a delete first clears every
+ * row that references the one it removes.
  */
 export function createTables(sql: SqlStorage): void {
   sql.exec(`
