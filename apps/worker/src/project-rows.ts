@@ -51,6 +51,20 @@ export function readProject(sql: SqlStorage, id: string, today: Day): Project | 
   return projectsWithTasks(sql, rows, today)[0] ?? null;
 }
 
+/** The open Projects in this Context, in the order they were made, read as on `today`. */
+export function openProjects(sql: SqlStorage, today: Day): Project[] {
+  // Open is derived: a Project is open unless the last thing declared of it was an end.
+  const rows = sql
+    .exec<ProjectRow>(
+      `SELECT p.* FROM projects p
+       WHERE coalesce((SELECT what FROM project_events e WHERE e.project = p.id
+                       ORDER BY e.seq DESC LIMIT 1), 'reopened') = 'reopened'
+       ORDER BY p.seq`,
+    )
+    .toArray();
+  return projectsWithTasks(sql, rows, today);
+}
+
 /** The Projects with their state and their Tasks, read as on `today`. */
 export function projectsWithTasks(sql: SqlStorage, rows: ProjectRow[], today: Day): Project[] {
   const ids = rows.map((row) => row.id);

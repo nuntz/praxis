@@ -745,6 +745,50 @@ button.quiet {
   font: inherit;
 }
 
+/* Attention: its sections in their fixed order, each a list of Tasks or Projects. */
+
+.attention-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.attention-section-title {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+.attention-project {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  padding: 10px var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+}
+
+button.quiet.attention-project-toggle {
+  gap: var(--space-3);
+  text-decoration: none;
+}
+
+.attention-project > .task-list {
+  flex-basis: 100%;
+}
+
+.attention-project .task {
+  background: var(--surface);
+}
+
+.task-mark.flag {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 /* A composer marks where the person is about to write: the Context's tint, edged in its accent. */
 
 .composer-area {

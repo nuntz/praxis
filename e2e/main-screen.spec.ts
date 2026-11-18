@@ -89,7 +89,8 @@ test("on a phone, the screen opens on Attention and three tabs move between the 
   await page.goto("/");
 
   const tabs = page.getByRole("navigation", { name: "Columns" });
-  await expect(tabs.getByRole("button")).toHaveText(["Attention", "Journal", "Agent"]);
+  // The Attention tab carries its count, whatever the other journeys left Due.
+  await expect(tabs.getByRole("button")).toHaveText([/^Attention/, "Journal", "Agent"]);
   await expect(column(page, "Attention")).toBeVisible();
   await expect(column(page, "Journal")).toBeHidden();
   await expect(column(page, "Conversation")).toBeHidden();
@@ -119,12 +120,13 @@ test("the person records an Entry by keyboard alone, in a composer that names it
   const switcher = page.getByRole("banner").getByRole("button", { name: `Context: ${name}` });
   await expect(switcher).toBeVisible();
   if (onPhone(testInfo)) {
-    // The tabs come after the columns, as they are drawn below them.
+    // The tabs come after the columns, as they are drawn below them, so they are reached going
+    // back from the page's end: going forward passes whatever Attention holds first.
     const tab = page.getByRole("navigation", { name: "Columns" }).getByRole("button", {
       name: "Journal",
     });
-    for (let presses = 0; presses < 10; presses++) {
-      await page.keyboard.press("Tab");
+    for (let presses = 0; presses < 4; presses++) {
+      await page.keyboard.press("Shift+Tab");
       if (await tab.evaluate((button) => button === document.activeElement)) break;
     }
     await page.keyboard.press("Enter");

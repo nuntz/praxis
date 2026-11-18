@@ -43,6 +43,7 @@ import {
   renameContext,
 } from "./settings.ts";
 import { createTables } from "./tables.ts";
+import { attentionTools } from "./tools/attention.ts";
 import { changeTools } from "./tools/changes.ts";
 import { entryTools } from "./tools/entries.ts";
 import { personTools } from "./tools/persons.ts";
@@ -66,6 +67,7 @@ const handlers: Handlers = {
   ...personTools,
   ...settingsTools,
   ...changeTools,
+  ...attentionTools,
 };
 
 /** How long the alarm sleeps between wakes while it has something to do. */

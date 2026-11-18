@@ -53,6 +53,7 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   list_persons: [  "yes", "yes", "yes", "yes",      "yes" ],
   get_settings: [  "yes", "yes", "yes", "yes",      "yes" ],
   set_time_zone: [ "yes", "no",  "no",  "no",       "no"  ],
+  view_attention: ["yes", "yes", "yes", "yes",      "yes" ],
   list_changes: [  "yes", "yes", "yes", "yes",      "yes" ],
   // The Conversation tools (section 4.12): the person's hand only.
   send_message: [  "yes", "no",  "no",  "no",       "no"  ],

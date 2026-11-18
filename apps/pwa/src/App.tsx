@@ -10,6 +10,7 @@ import {
   onMount,
   Show,
 } from "solid-js";
+import { Attention } from "./Attention.tsx";
 import { Connections } from "./Connections.tsx";
 import { ContextSettings, deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
@@ -84,8 +85,9 @@ export function App() {
   const timeZone = createMemo(
     () => settings()?.time_zone ?? (unread() ? deviceTimeZone() : undefined),
   );
-  // What the count is made of comes with Attention itself (#49): nothing is counted yet.
-  const count = () => 0;
+  // The count is the Due section's (section 8.3): the Unsent writes the server refused and the
+  // Held Changes join it when the screen has them.
+  const [count, setCount] = createSignal(0);
   let attentionButton!: HTMLButtonElement;
 
   /** Opened from the top bar in between, Attention is put away with Escape, from it or its button. */
@@ -160,6 +162,7 @@ export function App() {
   createEffect(
     on(currentId, () => {
       setSettings(null);
+      setCount(0);
       setUnread(false);
       setProblem(null);
     }),
@@ -295,7 +298,11 @@ export function App() {
                     title="Attention"
                     aside={<AttentionCount count={count()} />}
                     onKeyDown={putAttentionAway}
-                  />
+                  >
+                    <Show when={timeZone()} keyed>
+                      {(zone) => <Attention timeZone={zone} onDueCount={setCount} />}
+                    </Show>
+                  </Peer>
                   {/* Today and the Entries' times follow the time zone, so a new one reads afresh,
                       inside a column that stays: the region is the same one before the zone is read
                       and after. */}

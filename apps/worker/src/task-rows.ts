@@ -8,6 +8,7 @@ import {
   type Task,
   type TaskDates,
   type TaskEvent,
+  type TaskWithEvents,
   taskState,
   type WaitedOn,
   type WaitTarget,
@@ -116,7 +117,7 @@ export function readTask(sql: SqlStorage, id: string, today: Day): Task | null {
   const row = sql.exec<TaskRow>(`SELECT * FROM tasks WHERE id = ?`, id).toArray()[0];
   if (!row) return null;
   const events = sql.exec<EventRow>(`${EVENTS} WHERE e.task = ? ORDER BY e.seq`, id).toArray();
-  return toTask(row, events, today);
+  return toTask(row, events.map(toEvent), today);
 }
 
 /** The Tasks of each of these Entries, in the order they were made, by Entry id. */
@@ -148,6 +149,28 @@ function tasksBy(
 
 /** These Tasks, in the order given, each with its state read as on `today`. */
 export function tasksFrom(sql: SqlStorage, rows: TaskRow[], today: Day): Task[] {
+  return withEvents(sql, rows, today).map(({ task }) => task);
+}
+
+/**
+ * The open Tasks in this Context, in the order they were made, each with its state read as on
+ * `today` and what has happened to it, oldest first.
+ */
+export function openTasks(sql: SqlStorage, today: Day): TaskWithEvents[] {
+  // Open is derived: a Task is open unless the last end it reached was not reopened since.
+  const rows = sql
+    .exec<TaskRow>(
+      `SELECT t.* FROM tasks t
+       WHERE coalesce((SELECT what FROM task_events e
+                       WHERE e.task = t.id AND e.what IN ('finished', 'dropped', 'reopened')
+                       ORDER BY e.seq DESC LIMIT 1), 'reopened') = 'reopened'
+       ORDER BY t.seq`,
+    )
+    .toArray();
+  return withEvents(sql, rows, today);
+}
+
+function withEvents(sql: SqlStorage, rows: TaskRow[], today: Day): TaskWithEvents[] {
   const events = Map.groupBy(
     sql
       .exec<EventRow>(
@@ -157,7 +180,10 @@ export function tasksFrom(sql: SqlStorage, rows: TaskRow[], today: Day): Task[] 
       .toArray(),
     (event) => event.task,
   );
-  return rows.map((row) => toTask(row, events.get(row.id) ?? [], today));
+  return rows.map((row) => {
+    const happened = (events.get(row.id) ?? []).map(toEvent);
+    return { task: toTask(row, happened, today), events: happened };
+  });
 }
 
 /** The Effect of a change to a Task, by the call or a rule, with its one-line summary. */
@@ -165,9 +191,8 @@ export function taskEffect(task: Task, what: Effect["what"], by: Effect["by"] = 
   return { kind: "task", id: task.id, what, summary: summarizeWords(task.title), by };
 }
 
-function toTask(row: TaskRow, rows: EventRow[], today: Day): Task {
+function toTask(row: TaskRow, events: TaskEvent[], today: Day): Task {
   const dates = { due_date: row.due_date, defer_date: row.defer_date };
-  const events = rows.map(toEvent);
   return {
     id: row.id,
     title: row.title,

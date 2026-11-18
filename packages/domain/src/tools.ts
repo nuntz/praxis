@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Attention } from "./attention.ts";
 import type { CallerKind } from "./callers.ts";
 import { day, daysBefore, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
@@ -454,6 +455,13 @@ export const tools = {
     input: writeInput({ time_zone: timeZone }),
     offered: toHandOnly,
   },
+  view_attention: {
+    kind: "read",
+    description:
+      "What in this Context is open for the person to act on, derived by rule and the same for every caller, in five sections in this order. `due`: every open Task that is Overdue or due today, whatever else holds for it, and every open Project that is, oldest Due Date first. `newly_actionable`: actionable Tasks whose wait ended, that were taken back or whose Defer Date came in the last seven days, newest first, each with why and when it came up. `delegated`: every other Delegated Task that is neither Waiting nor Deferred, oldest delegation first. `projects`: every open Project by name, with its count of actionable Tasks, flagged with `no_open_task` when it needs a next Task or finishing. `loose`: every other actionable Task in no Project, oldest first. A Task appears once, in the first section it fits; a Project in `due` is still in `projects`. A Waiting or Deferred Task that is not due is not shown: reach it through its Project, its Entry or search.",
+    input: z.strictObject({}),
+    offered: toEveryCaller,
+  },
   list_changes: {
     kind: "read",
     description:
@@ -531,6 +539,7 @@ export type ToolOutput = {
   list_persons: Page<Person>;
   get_settings: Settings;
   set_time_zone: Written<Settings>;
+  view_attention: Attention;
   list_changes: ChangesPage;
 };
 

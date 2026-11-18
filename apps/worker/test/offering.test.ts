@@ -43,6 +43,7 @@ const runsWith: Record<string, () => unknown> = {
   list_persons: () => ({}),
   get_settings: () => ({}),
   set_time_zone: () => ({ time_zone: "Europe/Paris" }),
+  view_attention: () => ({}),
   list_changes: () => ({}),
   send_message: () => ({ words: marked("Offered") }),
   list_messages: () => ({}),

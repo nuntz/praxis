@@ -596,12 +596,13 @@ The column is composed by the screen from four sources, in this order:
 |---|---|---|
 | **Due** | Every open Task that is Overdue or due today, whatever else holds for it, and every open Project that is. | Oldest Due Date first |
 | **Newly actionable** | Actionable Tasks whose wait ended, whose Defer Date came or that were taken back in the last seven days. | Newest first |
-| **Delegated** | Every other Delegated Task, with the Person and the day it was Delegated. | Oldest delegation first |
+| **Delegated** | Every other Delegated Task that is neither Waiting nor Deferred, with the Person and the day it was Delegated. | Oldest delegation first |
 | **Projects** | Every open Project, with its count of actionable Tasks, flagged when it has no open Task. Opening one shows its Tasks. | By name |
 | **Loose** | Every other actionable Task with no Project. | Oldest first |
 
 - A Task appears once, in the first section it fits. The rule covers Tasks only: a Project in Due appears as itself and is still in Projects, and its Tasks are placed by their own dates.
 - A Waiting or Deferred Task that is not due is not shown. It is reached through its Project, its Entry or search, and arrives in Newly actionable when it comes up.
+- A Task comes up when the last thing keeping it from being actionable ends: a wait released or stopped, a delegation taken back, or its Defer Date coming at the start of that day. Only what ended since it was last reopened counts, and a Defer Date counts only for a Task made before it came, since one made on or after it was never Deferred. It is listed for the day it came up and the six after, with why and when.
 - Seven days is in code and is not a setting. It decides only how long a released Task is listed apart.
 - There is no "due soon" in Attention. The weeks ahead are another view, `view_ahead`, opened from the Due section. It is not a fourth peer.
 - Nothing in Attention says what has gone quiet. That is the Agent's judgment, said in a Brief or a Review (section 5.4).
