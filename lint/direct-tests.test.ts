@@ -29,6 +29,7 @@ const directTests: Record<string, { namedAt: NamedAt[]; files: Record<string, st
       "tools.test.ts": "the shapes an Entry's words can take on the way in",
       "inline-task.test.ts": "parsing an Inline Task",
       "typed-link.test.ts": "what the person types to link something",
+      "follow-edit.test.ts": "following an anchor through a change to the words",
       "compare-words.test.ts": "comparing a Version against the current words",
     },
   },

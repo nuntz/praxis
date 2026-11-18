@@ -14,7 +14,7 @@ A behaviour of Praxis is tested where it is specified: at the tool seam. A test 
 ## Consequences
 
 - The workerd test setup can stand up several Context objects and the Deployment object in one test, since moving a record and "nothing crosses a Context" need more than one.
-- The pure domain package keeps direct tests only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, the shapes an Entry's words can take on the way in, parsing an Inline Task and what the person types to link something, comparing a Version against the current words, and what the Markdown renderer lets through.
+- The pure domain package keeps direct tests only where the input space is too large for scenarios: a Task's derived state and its reason, Recurrence dates, the shapes an Entry's words can take on the way in, parsing an Inline Task and what the person types to link something, following an anchor through a change to the words, comparing a Version against the current words, and what the Markdown renderer lets through.
 - No domain or tool code reads the real clock. A test sets the time and the Context's time zone, and fires alarms itself.
 - The oracle also holds a refused, stale or repeated-key call to changing nothing, a held call to changing nothing but the Held Change it leaves, and a call that reports no Effects to changing nothing.
 - The offering table has one row per tool and one column per caller, saying offered, held or refused. It is the same table the spec carries. A second, generic test calls every tool as every caller and asserts that one not offered returns "not offered" and changes nothing.
