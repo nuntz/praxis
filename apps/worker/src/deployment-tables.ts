@@ -1,8 +1,13 @@
 /**
  * The Deployment object's own tables. It holds nothing from any Journal (ADR 0006): for now the
  * list of Contexts with their names and accents, the Connections, the spend cap and what each
- * Context spent each month, whether the model's provider refuses the key, and the keys of the writes made to it. The upgrade ladder of section
- * 11 replaces this with numbered steps before the first release.
+ * Context spent each month, whether the model's provider refuses the key, and the keys of the
+ * writes made to it. The upgrade ladder of section 11 replaces this with numbered steps before
+ * the first release.
+ *
+ * A Deployment is live: a column added to a table here reaches no Deployment object already
+ * made, since its table exists. Add it where it is missing, as ADDED_COLUMNS in tables.ts does,
+ * until the upgrade ladder (#76) replaces this.
  */
 export function createDeploymentTables(sql: SqlStorage): void {
   sql.exec(`

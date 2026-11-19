@@ -2,8 +2,17 @@
  * The Context object's own tables. The upgrade ladder of section 11 replaces this with
  * numbered steps before the first release. Foreign keys are enforced: a delete first clears every
  * row that references the one it removes.
+ *
+ * A Deployment is live: a column added to a table here reaches no object already made, since its
+ * table exists. Add it to ADDED_COLUMNS too, until the upgrade ladder (#76) replaces this.
  */
 export function createTables(sql: SqlStorage): void {
+  createTablesAsMade(sql);
+  addMissingColumns(sql);
+}
+
+/** Every table as a new object makes it. */
+function createTablesAsMade(sql: SqlStorage): void {
   sql.exec(`
     CREATE TABLE IF NOT EXISTS entries (
       seq INTEGER PRIMARY KEY,
@@ -275,4 +284,23 @@ export function createTables(sql: SqlStorage): void {
       PRIMARY KEY (run, change)
     );
   `);
+}
+
+/**
+ * Columns added to a table after a live Deployment's objects were made with it: each is added
+ * where it is missing, as the object wakes. The upgrade ladder (#76) replaces this.
+ */
+const ADDED_COLUMNS: { table: string; column: string; type: string }[] = [
+  { table: "runs", column: "failure", type: "TEXT" },
+  { table: "runs", column: "from_record", type: "INTEGER" },
+];
+
+/** Add each column a table made before it was added still lacks. */
+function addMissingColumns(sql: SqlStorage): void {
+  for (const { table, column, type } of ADDED_COLUMNS) {
+    const has = sql
+      .exec(`SELECT 1 FROM pragma_table_info(?) WHERE name = ?`, table, column)
+      .toArray().length;
+    if (has === 0) sql.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
 }
