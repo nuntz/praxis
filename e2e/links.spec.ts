@@ -1,5 +1,4 @@
-import type { Route } from "@playwright/test";
-import { expect, openJournal, test } from "./fixtures.ts";
+import { expect, holdAnswers, openJournal, test } from "./fixtures.ts";
 
 test("the person Mentions a Person and References a Project by picking them as they type", async ({
   page,
@@ -37,19 +36,11 @@ test("the person Mentions a Person and References a Project by picking them as t
   await composer.press("Enter");
   // Escape shuts the picker even before it has anything to show: each answer is held until after
   // it, so the answer lands late, as it does under load.
-  const held: Route[] = [];
-  await page.route(/\/tools\/list_persons$/, (route) => {
-    held.push(route);
-  });
+  const answers = await holdAnswers(page, "list_persons");
   await composer.pressSequentially(`and @ali-${tag}`);
-  // The read of the whole name, the last one sent, is held too.
-  await expect
-    .poll(() => held.some((route) => route.request().postDataJSON().named === `ali-${tag}`))
-    .toBe(true);
+  await answers.sent({ named: `ali-${tag}` });
   await composer.press("Escape");
-  for (const route of held) await route.fulfill({ response: await route.fetch() });
-  await page.unroute(/\/tools\/list_persons$/);
-  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await answers.stop();
   await expect(persons).toBeHidden();
   await composer.press("ControlOrMeta+Enter");
 
@@ -88,28 +79,18 @@ test("an answer for a Mention left before it landed is not offered for the next"
   const persons = journal.getByRole("listbox", { name: "Persons" });
 
   // Each answer is held, so the person leaves the words before the first lands.
-  const held: Route[] = [];
-  await page.route(/\/tools\/list_persons$/, (route) => {
-    held.push(route);
-  });
-  const reads = (named: string) =>
-    expect
-      .poll(() => held.some((route) => route.request().postDataJSON().named === named))
-      .toBe(true);
+  const answers = await holdAnswers(page, "list_persons");
   await composer.pressSequentially(`@ali-${tag}`);
-  await reads(`ali-${tag}`);
+  await answers.sent({ named: `ali-${tag}` });
   await composer.blur();
-  for (const route of held.splice(0)) await route.fulfill({ response: await route.fetch() });
-  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await answers.release();
 
   // Back in, a second Mention: while its own answer is out, the first's is not shown for it.
   await composer.focus();
   await composer.press("End");
   await composer.pressSequentially(` @bo-${tag}`);
-  await reads(`bo-${tag}`);
-  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await answers.sent({ named: `bo-${tag}` });
   await expect(persons.getByRole("option", { name: `New Person “ali-${tag}”` })).toHaveCount(0);
-  for (const route of held.splice(0)) await route.fulfill({ response: await route.fetch() });
-  await page.unroute(/\/tools\/list_persons$/);
+  await answers.stop();
   await expect(persons.getByRole("option", { name: `New Person “bo-${tag}”` })).toBeVisible();
 });

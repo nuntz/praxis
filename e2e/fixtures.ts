@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { test as base, expect, type Page, type TestInfo } from "@playwright/test";
+import { test as base, expect, type Page, type Route, type TestInfo } from "@playwright/test";
 import type { Accent, ContextListing } from "@praxis/domain";
 
 /** WCAG 2.2 AA, and the levels under it (section 8.11). */
@@ -95,4 +95,45 @@ export async function lastShown(page: Page, id: string) {
     localStorage.setItem("praxis.context", shown);
     sessionStorage.setItem("praxis.e2e.shown", "yes");
   }, id);
+}
+
+/**
+ * Hold every answer the screen gets from a tool, so a journey can act while its read is still out,
+ * as load makes it: a step that races the answer then loses on every run (docs/flaky-journeys.md).
+ * Each held call is answered by the real server once released, in the order it was sent.
+ */
+export async function holdAnswers(page: Page, tool: string) {
+  const address = new RegExp(`/tools/${tool}$`);
+  const held: Route[] = [];
+  await page.route(address, (route) => {
+    held.push(route);
+  });
+  const release = async () => {
+    for (const route of held.splice(0)) await route.fulfill({ response: await route.fetch() });
+    // The screen shows what the answers bring before the journey looks.
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+  };
+  return {
+    /**
+     * Wait until a call with this input is held, such as the read of the whole name typed: one
+     * per character, and the screen may send more than the characters, so they are not counted.
+     */
+    async sent(input: Record<string, unknown>) {
+      const matches = (route: Route) => {
+        const sent = route.request().postDataJSON() as Record<string, unknown>;
+        return Object.entries(input).every(([key, value]) => sent[key] === value);
+      };
+      await expect.poll(() => held.some(matches)).toBe(true);
+    },
+    /** Let every answer held so far through. Later calls are held still. */
+    release,
+    /**
+     * Let every answer through and hold no more. Released before unrouting: unrouting hands on a
+     * held call, and fulfilling it after throws that it is handled already.
+     */
+    async stop() {
+      await release();
+      await page.unroute(address);
+    },
+  };
 }
