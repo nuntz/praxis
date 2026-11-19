@@ -7,4 +7,30 @@ import { testModel } from "./model-fake.ts";
 
 export { DeploymentObject, default } from "../src/index.ts";
 
-export const ContextObject = contextObject(testModel);
+/**
+ * How far before the real now an alarm may be set: the runtime arms one a few milliseconds back
+ * for work already due, as a scripted retry is. A test's time is days or years from the real one.
+ */
+const ALARM_SLACK = 60 * 1000;
+
+/**
+ * The platform fires an alarm by the real clock, and one set in the past fires at once. A Context's
+ * object keeps its own clock, which a test sets, and arms the platform's alarm by the real clock
+ * it stands from. One armed at a test's time unconverted would wake the object at the real time
+ * while the test runs, starting a Brief or pruning by a date the test never set: that fails here.
+ */
+export class ContextObject extends contextObject(testModel) {
+  constructor(ctx: DurableObjectState, env: Env) {
+    const setAlarm = ctx.storage.setAlarm.bind(ctx.storage);
+    ctx.storage.setAlarm = (time, options) => {
+      const at = typeof time === "number" ? time : time.getTime();
+      if (at < Date.now() - ALARM_SLACK) {
+        throw new Error(
+          `A Context's alarm was set at ${new Date(at).toISOString()}, before the real now: an instant of the object's clock was given to the platform unconverted.`,
+        );
+      }
+      return setAlarm(time, options);
+    };
+    super(ctx, env);
+  }
+}

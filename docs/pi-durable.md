@@ -20,6 +20,8 @@ Pinned at `@earendil-works/pi-durable`, `pi-ai` and `chord` **1.5.2**, which mov
 
 ## Gotchas
 
+- **`agent()` in the Context's object opens the Agent and fixes its model** for as long as the object lives, so a test's script must come first (`scriptModel` in `test/model-fake.ts`). Code that only needs to know whether there is an Agent, such as `keepAlarm`, asks `hasAgent()`, which opens nothing: calling `agent()` from `make` once broke every test that scripts after making its Context.
+
 - **A Run's identity is `live.run.inputs[0]`**, the submission it answers. `live.run.taskId` is the generation task, which is handed on every model round, so it changes mid-Run.
 - **The runtime calls its transcript records entries.** They are never Entries: Praxis code names them records, kinds or Messages (see Domain words in `CODING_STANDARDS.md`).
 - **A scripted model's request carries the tools in its system messages**, not in `context.tools`: `normalizeContext()` moves them there, as `toolsAdded`, beside the prompt's sections under `sections`. `offeredIn()` in `test/model-fake.ts` reads both. A fake that branches on what it is offered reads the person's words instead (`lastWords`).
