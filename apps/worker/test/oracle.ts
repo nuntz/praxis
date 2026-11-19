@@ -351,25 +351,62 @@ function listedContexts(deployment: DeploymentStub): Promise<string[]> {
 }
 
 /**
- * The Deployment object's Connections and Devices, each as a record is, by `connection:id` and
- * `device:id`, a Device without when it was last seen, and its spend cap by `spend_cap:spend_cap`,
- * which there always is: before the person sets one, the default.
+ * The Deployment object's tables whose rows an Effect names, each read as records are, by
+ * `kind:id`. A Device is read without when it was last seen, a sighting and not a change, and the
+ * spend cap is always there: before the person sets one, the default.
+ */
+const keptDeploymentTables: Record<string, (sql: SqlStorage) => [string, string][]> = {
+  connections: (sql) =>
+    [...sql.exec<{ id: string }>(`SELECT * FROM connections ORDER BY seq`)].map((row) => [
+      `connection:${row.id}`,
+      canonical(row),
+    ]),
+  devices: (sql) =>
+    [...sql.exec<{ id: string; seen?: number }>(`SELECT * FROM devices ORDER BY seq`)].map(
+      ({ seen: _, ...row }) => [`device:${row.id}`, canonical(row)],
+    ),
+  spend_cap: (sql) => {
+    const set = sql.exec<{ dollars: number }>(`SELECT dollars FROM spend_cap`).toArray()[0];
+    return [
+      [`spend_cap:${SPEND_CAP_ID}`, canonical({ dollars: set?.dollars ?? DEFAULT_SPEND_CAP })],
+    ];
+  },
+};
+
+/**
+ * The Deployment object's other tables, whose rows no Effect names: the list of Contexts, held to
+ * what changed in each Context instead; what each Context spent and whether the key is refused,
+ * which Runs report; and the keys of the writes made to it.
+ */
+const otherDeploymentTables = ["contexts", "spend", "key_refused", "write_keys"];
+
+/**
+ * What the Deployment object keeps that Effects name, as records are, failing the test when it
+ * holds a table the oracle does not know, so a new one is never left unchecked.
  */
 function keptByDeployment(deployment: DeploymentStub): Promise<Records> {
   return runInDurableObject(deployment, (_, state) => {
     const sql = state.storage.sql;
-    const rows = sql.exec<{ id: string }>(`SELECT * FROM connections ORDER BY seq`);
-    const devices = sql.exec<{ id: string; seen?: number }>(`SELECT * FROM devices ORDER BY seq`);
-    const set = sql.exec<{ dollars: number }>(`SELECT dollars FROM spend_cap`).toArray()[0];
-    return new Map([
-      ...[...rows].map((row): [string, string] => [`connection:${row.id}`, canonical(row)]),
-      ...[...devices].map(({ seen: _, ...row }): [string, string] => [
-        `device:${row.id}`,
-        canonical(row),
-      ]),
-      [`spend_cap:${SPEND_CAP_ID}`, canonical({ dollars: set?.dollars ?? DEFAULT_SPEND_CAP })],
-    ]);
+    const unknown = tablesIn(sql).filter(
+      (name) => !(name in keptDeploymentTables || otherDeploymentTables.includes(name)),
+    );
+    expect(
+      unknown,
+      "Every table of the Deployment object is known to the oracle: add it to keptDeploymentTables in apps/worker/test/oracle.ts if an Effect names its rows, else to otherDeploymentTables",
+    ).toEqual([]);
+    return new Map(Object.values(keptDeploymentTables).flatMap((read) => read(sql)));
   });
+}
+
+/** An object's own tables, leaving out SQLite's and the platform's. */
+function tablesIn(sql: SqlStorage): string[] {
+  return sql
+    .exec<{ name: string }>(
+      `SELECT name FROM sqlite_master
+       WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'`,
+    )
+    .toArray()
+    .map((row) => row.name);
 }
 
 /** Each record made, changed or deleted between two snapshots. */
@@ -408,13 +445,7 @@ function snapshot(stub: Stub): Promise<{
 }> {
   return runInDurableObject(stub, (_, state) => {
     const sql = state.storage.sql;
-    const tables = sql
-      .exec<{ name: string }>(
-        `SELECT name FROM sqlite_master
-         WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'`,
-      )
-      .toArray()
-      .map((row) => row.name);
+    const tables = tablesIn(sql);
     const unknown = tables.filter(
       (name) =>
         !(
