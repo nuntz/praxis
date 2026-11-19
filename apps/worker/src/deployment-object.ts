@@ -13,6 +13,7 @@ import {
   type ToolResult,
 } from "@praxis/domain";
 import { startTimer } from "./arrival.ts";
+import { type BackupOutcome, backUp, backupHandlers } from "./backups.ts";
 import { createDeploymentTables } from "./deployment-tables.ts";
 import {
   callableConnection,
@@ -31,7 +32,11 @@ import type { ToolRequest } from "./registry.ts";
 import { readSpend, type SpendReport, takeSpendReport } from "./spend-rows.ts";
 
 /** Every Deployment tool's handler. */
-const handlers: DeploymentHandlers = { ...deploymentHandlers, ...deviceHandlers };
+const handlers: DeploymentHandlers = {
+  ...deploymentHandlers,
+  ...deviceHandlers,
+  ...backupHandlers,
+};
 
 /**
  * The Deployment object, given how it sends a Notification: by Web Push with the Deployment's
@@ -134,6 +139,15 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      */
     async notifyDevices(context: string, kind: ClockKind, at: number): Promise<void> {
       await notifyDevices(this.ctx.storage.sql, this.#push, { context, kind, at });
+    }
+
+    /**
+     * The daily Backup, which the Worker's daily trigger asks for at the time it fired (section
+     * 10.1). It wakes every Context's object, retired ones too, for its file. A failure is
+     * answered, not thrown: the standing Notice tells the person after three days of them.
+     */
+    async backUp(at: number): Promise<BackupOutcome> {
+      return backUp(this.ctx.storage.sql, this.env, at);
     }
 
     private async run<N extends DeploymentToolName>(

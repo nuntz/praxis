@@ -17,7 +17,9 @@ describe("the oracle, on the Deployment object's tables", () => {
     const request = { caller: hand, tool: "list_contexts", input: {}, arrivedAt: Date.parse(at) };
     await throughDeploymentOracle(deployment, contextOf, request);
     await runInDurableObject(deployment, (_, state) => {
-      state.storage.sql.exec(`CREATE TABLE backups (id TEXT PRIMARY KEY, at INTEGER NOT NULL)`);
+      state.storage.sql.exec(
+        `CREATE TABLE no_code_makes (id TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
+      );
     });
 
     await expect(throughDeploymentOracle(deployment, contextOf, request)).rejects.toThrow(

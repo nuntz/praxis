@@ -82,6 +82,15 @@ export function praxis(accessOf: (env: Env) => Access) {
         await callContext(env, deployment, contextId, { caller: HAND, tool, input, arrivedAt }),
       );
     },
+
+    /**
+     * The daily trigger (wrangler.jsonc): the day's Backup, at the time it was due to fire, so a
+     * late start keeps the day it was for (section 10.1). Nothing waits on it, and the Deployment
+     * object answers a failure, which its standing Notice tells the person of.
+     */
+    async scheduled(controller: ScheduledController, env: Env, context: ExecutionContext) {
+      context.waitUntil(deploymentOf(env).backUp(controller.scheduledTime));
+    },
   } satisfies ExportedHandler<Env>;
 }
 

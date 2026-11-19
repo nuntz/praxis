@@ -3,7 +3,7 @@ import type { Caller, CallerKind } from "./callers.ts";
 import { timeZone } from "./day.ts";
 import { type Device, pushSubscription } from "./device.ts";
 import type { Written } from "./effects.ts";
-import type { Export } from "./export.ts";
+import type { Export, LastBackup } from "./export.ts";
 import type { Spend, SpendCap } from "./spend.ts";
 import { type Parsed, parseInput, writeInput } from "./tools.ts";
 
@@ -199,6 +199,12 @@ export const deploymentTools = {
       "Make an Export: the whole Deployment as files in Praxis's own JSON format, stamped with its format version, one for the Deployment and one per Context, retired ones too. It holds each Context's Journal with its Versions, the Trash with each item's clock and the Run records; never a Conversation, the change log, the record of a Connection's calls, a Device or a provider key. There is no Export of one Context.",
     input: z.strictObject({}),
   },
+  get_last_backup: {
+    kind: "read",
+    description:
+      "Read when the last daily Backup was made, or null while none has been. A Backup is the Export's file, made by the system once a day and kept 30 days.",
+    input: z.strictObject({}),
+  },
 } as const;
 
 export type DeploymentToolName = keyof typeof deploymentTools;
@@ -240,6 +246,7 @@ export type DeploymentToolOutput = {
   get_spend: Spend;
   set_spend_cap: Written<SpendCap>;
   make_export: Export;
+  get_last_backup: LastBackup;
 };
 
 export function parseDeploymentToolInput<N extends DeploymentToolName>(

@@ -1,22 +1,6 @@
-import type { Export } from "@praxis/domain";
+import { exportZip, exportZipName } from "@praxis/domain";
 import { createSignal, Show } from "solid-js";
 import { callDeploymentTool, unreachableMessage } from "./tools.ts";
-import { zip } from "./zip.ts";
-
-/** The name an Export's zip downloads under: the day it was made, as the Deployment counts days (UTC). */
-function zipName(made: Export): string {
-  return `praxis-export-${made.made_at.slice(0, 10)}.zip`;
-}
-
-/** The zip of an Export: each of its files as indented JSON, at its path. */
-function zipOf(made: Export): Blob {
-  const encoder = new TextEncoder();
-  const files = made.files.map(({ path, content }) => ({
-    path,
-    bytes: encoder.encode(`${JSON.stringify(content, null, 2)}\n`),
-  }));
-  return new Blob([zip(files, new Date(made.made_at))], { type: "application/zip" });
-}
 
 /** Hand the person a file to keep, as the browser saves a download. */
 function download(blob: Blob, name: string): void {
@@ -47,7 +31,10 @@ export function ExportSettings() {
         return;
       }
       setProblem(null);
-      download(zipOf(result.value), zipName(result.value));
+      download(
+        new Blob([exportZip(result.value)], { type: "application/zip" }),
+        exportZipName(result.value),
+      );
     } catch (error) {
       setProblem(unreachableMessage(error));
     } finally {

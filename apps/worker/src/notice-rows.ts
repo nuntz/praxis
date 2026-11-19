@@ -1,4 +1,5 @@
 import { instantToIso, type StandingNotice } from "@praxis/domain";
+import { backupNotice } from "./backup-rows.ts";
 import { readSpend } from "./spend-rows.ts";
 
 /**
@@ -22,8 +23,9 @@ export function takeKeyReport(sql: SqlStorage, report: KeyReport): void {
 }
 
 /**
- * The Deployment's standing Notices as at `at` (section 8.3): the key refused, and the month's
- * spend nearing or reaching the cap. Each stays until its cause is gone.
+ * The Deployment's standing Notices as at `at` (section 8.3): the key refused, the month's spend
+ * nearing or reaching the cap, and no Backup made for three days. Each stays until its cause is
+ * gone.
  */
 export function standingNotices(sql: SqlStorage, at: number): StandingNotice[] {
   const notices: StandingNotice[] = [];
@@ -31,5 +33,7 @@ export function standingNotices(sql: SqlStorage, at: number): StandingNotice[] {
   if (refused) notices.push({ kind: "key_refused", since: instantToIso(refused.since) });
   const spend = readSpend(sql, at);
   if (spend.notice) notices.push({ kind: spend.notice, spent: spend.spent, cap: spend.cap });
+  const backup = backupNotice(sql, at);
+  if (backup) notices.push(backup);
   return notices;
 }

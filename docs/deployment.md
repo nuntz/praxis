@@ -19,7 +19,7 @@ It walks you through each step in the browser and keeps what you enter in `~/.co
 
 1. Signs you in to Pulumi Cloud.
 2. Takes the Cloudflare account, zone, hostname and Zero Trust team domain.
-3. Has you make a Cloudflare API token for Pulumi and Wrangler, with these permissions on your account and zone: Account · Workers Scripts · Edit; Account · Access: Apps and Policies · Edit; Account · Access: Organizations, Identity Providers, and Groups · Edit; Zone · Workers Routes · Edit; Zone · DNS · Edit.
+3. Has you make a Cloudflare API token for Pulumi and Wrangler, with these permissions on your account and zone: Account · Workers Scripts · Edit; Account · Access: Apps and Policies · Edit; Account · Access: Organizations, Identity Providers, and Groups · Edit; Account · Workers R2 Storage · Edit; Zone · Workers Routes · Edit; Zone · DNS · Edit. A Deployment set up before the daily Backup needs Workers R2 Storage added to its token, or `pulumi up` cannot make the bucket.
 4. Has you make a Google OAuth client for Access's Google sign-in.
 5. Takes who may sign in: your Google address, or a Workspace domain.
 6. Takes the Agent's key and model, both optional, checks the model is one Praxis ships a price for, and says to set a spend limit with Anthropic. It makes the Web Push signing key pair, once (`apps/worker/scripts/push-keys.ts`), and keeps it on every run after: each browser's subscription to Notifications is bound to its public key.
@@ -36,8 +36,8 @@ The `deploy` job in `.github/workflows/ci.yml` runs after the checks pass, on a 
 
 1. Signs in to Pulumi Cloud through OIDC and masks every configuration value, since the logs are public.
 2. Checks the model is one Praxis ships a price for, so a deploy with any other fails before anything changes.
-3. `pulumi up` (`infra/index.ts`): Google as an identity provider, an Access policy for you, and one Access application for the hostname, with managed OAuth on. That lets in MCP clients that register themselves and come back to Claude (`https://claude.ai/api/mcp/auth_callback`, and `https://claude.com/...` beside it), to ChatGPT (`https://chatgpt.com/connector_platform_oauth_redirect` and `https://chatgpt.com/connector/oauth/*`), or to localhost and loopback, as Claude Code does.
-4. `wrangler deploy` makes the Worker and its Durable Object classes, with `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `JURISDICTION`, `AGENT_MODEL`, `PUSH_PUBLIC_KEY` and `PUSH_SUBJECT` (the Deployment's own address, which push services are told sends its Notifications) as vars, set afresh each time, and `AGENT_API_KEY` and `PUSH_PRIVATE_KEY` as secrets. A key taken out of the configuration is deleted from the Worker, which then has no Agent, or sends no Notification.
+3. `pulumi up` (`infra/index.ts`): Google as an identity provider, an Access policy for you, and one Access application for the hostname, with managed OAuth on. That lets in MCP clients that register themselves and come back to Claude (`https://claude.ai/api/mcp/auth_callback`, and `https://claude.com/...` beside it), to ChatGPT (`https://chatgpt.com/connector_platform_oauth_redirect` and `https://chatgpt.com/connector/oauth/*`), or to localhost and loopback, as Claude Code does. It also makes the R2 bucket `praxis-backups`, in the Deployment's jurisdiction, where the daily Backup is kept (below).
+4. `wrangler deploy` makes the Worker and its Durable Object classes, with `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `JURISDICTION`, `AGENT_MODEL`, `PUSH_PUBLIC_KEY` and `PUSH_SUBJECT` (the Deployment's own address, which push services are told sends its Notifications) as vars, set afresh each time, and `AGENT_API_KEY` and `PUSH_PRIVATE_KEY` as secrets. A key taken out of the configuration is deleted from the Worker, which then has no Agent, or sends no Notification. It deploys `wrangler.deploy.json`, which `scripts/deploy-config.ts` writes from `wrangler.jsonc` with the bucket bound in the Deployment's jurisdiction, since a binding names its bucket's.
 5. On a first deploy, a second `pulumi up` binds the hostname to the Worker, which makes its DNS record.
 
 Never run `wrangler deploy` by hand against a Deployment. Without the vars the deploy gives, the Worker would lose its Access application and its jurisdiction, and name its objects where none of them are.
@@ -46,7 +46,13 @@ Never run `wrangler deploy` by hand against a Deployment. Without the vars the d
 
 Cloudflare can keep every Durable Object, and so all of a Deployment's data, inside one jurisdiction: `eu`, `us` or `fedramp`. Without one, it places them where it likes. It is chosen once. A Worker naming its objects in another jurisdiction would find none of them, so `pulumi up` reads the jurisdiction the deployed Worker runs with and fails before changing anything when the configuration names another. The way to move is an Export restored into a new Deployment.
 
+The bucket of Backups is made in the same jurisdiction, and R2's default without one.
+
 workerd does not implement jurisdictions, so no test runs with one. Every object is made or named in `apps/worker/src/routing.ts` (`lint/outside-jurisdiction.grit` holds the rest of the Worker to it), and a Deployment that chose one is where it is seen working.
+
+## Backups
+
+Once a day, at 03:00 UTC, the Worker's trigger makes a Backup: the same zip as an Export, `praxis-export-YYYY-MM-DD.zip`, in the `praxis-backups` bucket on your own account. The Worker deletes each one 30 days after it was made, on a day whose Backup failed too. Settings shows when the last one was made, and after three days with none made a standing Notice says so in Attention and in settings. A Backup is downloaded from the bucket in the Cloudflare dashboard (R2 → `praxis-backups`), and is restored as an Export is: whole, into a new Deployment, during setup.
 
 ## CI's sign-in to Pulumi Cloud
 

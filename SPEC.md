@@ -390,7 +390,7 @@ Offered to the hand only, never to the Agent or a Connection.
 | Connections | `list_connections`, `create_connection`, `rename_connection`, `set_connection_reading_only`, `end_connection` |
 | Devices | `list_devices`, `rename_device`, `set_device_notifications`, `set_device_offline_copy`, `remove_device` |
 | Spend | `get_spend`, `set_spend_cap` |
-| Export | `make_export`, `restore_export` (setup only) |
+| Export | `make_export`, `restore_export` (setup only), `get_last_backup` |
 | Runs | `save_run_transcript` |
 
 Never offered to the Agent or a Connection in any form: removing anything for good, defining, renaming or retiring a Context, moving a record between Contexts, anything that mints or shows a credential, and a Device's own settings.
@@ -760,7 +760,7 @@ ADR 0006, 0010, 0017, 0023, 0024.
 
 - All of a Deployment's data is in Durable Object SQLite. There is no D1.
 - **Each Context is its own object**, holding its Journal, Tasks, Projects, Persons, Trash, change log, Run records, words index and Conversation. The domain is in Praxis's own tables. The runtime's tables hold only the Conversation and can be dropped without losing anything true.
-- **One Deployment object** holds the list of Contexts with their names and accent colours, the Connections, the Devices with their push subscriptions and switches, the spend cap, the month's running spend total, the monthly spend totals of deleted Contexts, and which Context has a Call. It holds nothing from any Journal.
+- **One Deployment object** holds the list of Contexts with their names and accent colours, the Connections, the Devices with their push subscriptions and switches, the spend cap, the month's running spend total, the monthly spend totals of deleted Contexts, when the last Backup was made, and which Context has a Call. It holds nothing from any Journal.
 - The Worker asks the Deployment object which Context a request is for, then talks to that Context's object. A Context's object reaches the Deployment object only through a closed set of calls:
   - the other Contexts' names;
   - whether a Run or a Call may start, which is the cap;
@@ -830,7 +830,11 @@ ADR 0018.
 
 ### 10.3 Backups on the screen
 
-Settings shows when the last Backup was made. When none has succeeded for three days a standing Notice appears in Attention and in settings. It is not a Notification.
+Settings shows when the last Backup was made, from `get_last_backup`. When none has succeeded for three days a standing Notice appears in Attention and in settings. It is not a Notification.
+
+- The three days count from the last Backup made or, before any, from the first Context made. A day the daily trigger did not fire counts as one that failed.
+- Each day's Backup, made or failed, deletes those made 30 days or more before it, so a record removed for good outlives its 30 days in no Backup.
+- The daily trigger fires at 03:00 UTC, and a Backup is named after the day it was due, `praxis-export-YYYY-MM-DD.zip`, the name an Export downloads under.
 
 ### 10.4 Deleting a Context
 
@@ -917,7 +921,7 @@ ADR 0015, 0019, 0020, 0021.
 
 **The browser.** A Playwright suite gates CI from the start, against the built PWA served by the real Worker, at desktop and phone width. Journeys: record an Entry with an Inline Task; finish a Task from Attention; ask the Agent for a change and see the screen patch; tap a Held Change; restore from the Trash; make a Connection; and the five offline journeys of ADR 0015. Each journey also runs an automated accessibility check, in light and in dark.
 
-**Fakes.** Four things are faked: the model, the voice provider (on the Device, with scripted text and no sound), the Web Push sender and the Access key set. Each adapter has one contract suite, run in CI against the fake and by hand against the real service.
+**Fakes.** Four things are faked: the model, the voice provider (on the Device, with scripted text and no sound), the Web Push sender and the Access key set. Each adapter has one contract suite, run in CI against the fake and by hand against the real service. The bucket of Backups is not faked: it is workerd's own R2, outside the objects like a Device's push service, so a test reads what is kept there, and can make it refuse to keep anything, to see what a failed Backup leaves.
 
 **Upgrades.** Each release commits one fixture: a Context object and a Deployment object filled by a fixed scenario run through the tools, saved as a dump beside the Export it produced. The upgrade test wakes every fixture under the current code and checks the tables' shape, the Export brought forward, a few reads, and a step made to fail. A guard fails CI when a released step's text changes.
 

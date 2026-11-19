@@ -9,6 +9,7 @@ import type { RunFailure } from "./notice.ts";
 import type { Recurrence, Weekday } from "./recurrence.ts";
 import type { ClockTime } from "./settings.ts";
 import type { End, WaitTarget } from "./task.ts";
+import { utf8, zip } from "./zip.ts";
 
 /**
  * The Export (section 10.1, ADR 0018): the whole Deployment in a JSON format of Praxis's own, one
@@ -45,6 +46,29 @@ export type Export = {
 };
 
 export type ExportFile = { path: string; content: DeploymentFile | ContextFile };
+
+/**
+ * The file an Export is, and a Backup too: a zip of its files, each as indented JSON at its path,
+ * stamped with the time it was made.
+ */
+export function exportZip(made: Export): Uint8Array<ArrayBuffer> {
+  const files = made.files.map(({ path, content }) => ({
+    path,
+    bytes: utf8(`${JSON.stringify(content, null, 2)}\n`),
+  }));
+  return zip(files, new Date(made.made_at));
+}
+
+/**
+ * When the last daily Backup was made (section 10.3), as an ISO 8601 instant, or null while none
+ * has been. Settings shows it.
+ */
+export type LastBackup = { made_at: string | null };
+
+/** The name an Export's zip goes by: the day it was made, as the Deployment counts days (UTC). */
+export function exportZipName(made: Export): string {
+  return `praxis-export-${made.made_at.slice(0, 10)}.zip`;
+}
 
 /** The stamp on every file, and the instant the Export was asked for. */
 type Stamped = {

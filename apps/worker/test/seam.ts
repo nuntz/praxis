@@ -64,6 +64,10 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
     },
     /** For calling a Deployment tool the registry may not have, by any name. */
     callAny,
+    /** Make the daily Backup at the time the test has set, as the Worker's daily trigger asks. */
+    backUp() {
+      return stub.backUp(time.now);
+    },
     /** The Context with this id, reached through the Deployment object as the Worker does. */
     context(id: string) {
       return contextHandle(time, () => reachContext(env, stub, id));

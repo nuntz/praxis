@@ -1,6 +1,7 @@
 // The Pulumi program of a Praxis Deployment on the person's own Cloudflare account (section 12):
 // the Access application every caller signs in through, with managed OAuth for MCP clients
-// (ADR 0009), the Worker's configuration and its hostname. Every value comes from the Deployment's
+// (ADR 0009), the R2 bucket the daily Backups are kept in, the Worker's configuration and its
+// hostname. Every value comes from the Deployment's
 // Pulumi ESC environment, never from this repo; Pulumi.example.yaml names them. The Worker's code
 // and its Durable Object classes deploy with `wrangler deploy` after this, given the vars and
 // secrets it exports (.github/workflows/ci.yml).
@@ -8,8 +9,9 @@ import * as cloudflare from "@pulumi/cloudflare";
 import * as pulumi from "@pulumi/pulumi";
 import { deployedJurisdiction, jurisdictionRefusal } from "./jurisdiction.ts";
 
-// A copy, as Node cannot read wrangler.jsonc's comments: copies.test.ts keeps it in step.
+// Copies, as Node cannot read wrangler.jsonc's comments: copies.test.ts keeps them in step.
 const WORKER_NAME = "praxis";
+const BACKUP_BUCKET = "praxis-backups";
 
 /**
  * Where the hosted clients the spec promises send the person back after sign-in (section 7.1):
@@ -95,6 +97,16 @@ const application = new cloudflare.ZeroTrustAccessApplication("praxis", {
       allowAnyOnLoopback: true,
     },
   },
+});
+
+// Where the daily Backups are kept (section 10.1), in the Deployment's jurisdiction like its
+// objects; R2's own default without one. The Worker deletes each after 30 days itself, since the
+// last one holding a Context stuck on an upgrade is kept longer (section 10.5), which no lifecycle
+// rule can say. `wrangler deploy` binds it, so it is made first.
+new cloudflare.R2Bucket("backups", {
+  accountId,
+  name: BACKUP_BUCKET,
+  jurisdiction: jurisdiction || "default",
 });
 
 // The custom domain needs the Worker, which `wrangler deploy` makes, so a first deploy binds the

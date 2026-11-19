@@ -1,6 +1,6 @@
 /**
  * A zip of files stored as they are, uncompressed, which every system opens without Praxis: what
- * the person downloads an Export as (section 10.1). Names are UTF-8.
+ * the person downloads an Export as, and what a Backup is kept as (section 10.1). Names are UTF-8.
  */
 
 const LOCAL_FILE = 0x04034b50;
@@ -16,14 +16,13 @@ export type ZipFile = { path: string; bytes: Uint8Array };
 
 /** The zip holding these files in this order, each stamped with the time `at`. */
 export function zip(files: ZipFile[], at: Date): Uint8Array<ArrayBuffer> {
-  const encoder = new TextEncoder();
   const { time, date } = dosTime(at);
   const locals: Uint8Array[] = [];
   const centrals: Uint8Array[] = [];
   let offset = 0;
 
   for (const file of files) {
-    const name = encoder.encode(file.path);
+    const name = utf8(file.path);
     const crc = crc32(file.bytes);
     const size = file.bytes.length;
 
@@ -101,4 +100,34 @@ function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff;
   for (const byte of bytes) crc = (table[(crc ^ byte) & 0xff] as number) ^ (crc >>> 8);
   return (crc ^ 0xffffffff) >>> 0;
+}
+
+/**
+ * A string's UTF-8 bytes, as TextEncoder gives them, which this package cannot reach (it is
+ * ECMAScript alone). A lone surrogate becomes U+FFFD, as there.
+ */
+export function utf8(text: string): Uint8Array<ArrayBuffer> {
+  // A UTF-16 unit takes at most three bytes, and a surrogate pair, two units, takes four.
+  const bytes = new Uint8Array(text.length * 3);
+  let at = 0;
+  for (const char of text) {
+    let code = char.codePointAt(0) as number;
+    if (code >= 0xd800 && code <= 0xdfff) code = 0xfffd;
+    if (code < 0x80) {
+      bytes[at++] = code;
+    } else if (code < 0x800) {
+      bytes[at++] = 0xc0 | (code >> 6);
+      bytes[at++] = 0x80 | (code & 0x3f);
+    } else if (code < 0x10000) {
+      bytes[at++] = 0xe0 | (code >> 12);
+      bytes[at++] = 0x80 | ((code >> 6) & 0x3f);
+      bytes[at++] = 0x80 | (code & 0x3f);
+    } else {
+      bytes[at++] = 0xf0 | (code >> 18);
+      bytes[at++] = 0x80 | ((code >> 12) & 0x3f);
+      bytes[at++] = 0x80 | ((code >> 6) & 0x3f);
+      bytes[at++] = 0x80 | (code & 0x3f);
+    }
+  }
+  return bytes.slice(0, at);
 }

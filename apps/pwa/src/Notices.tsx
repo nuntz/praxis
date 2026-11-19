@@ -82,5 +82,9 @@ function noticeWords(notice: StandingNotice): string {
       return capWords({ notice: notice.kind, spent: notice.spent, cap: notice.cap });
     case "clock_failed":
       return `The ${notice.clock === "brief" ? "Brief" : "Review"} could not run since ${sinceFormat.format(new Date(notice.since))}: ${notice.failure === "key_refused" ? "the model's provider refused this Deployment's key" : "the model could not be reached"}. It is tried again a little later each time, until it runs or the next one is due.`;
+    case "no_backup":
+      return notice.last_made === null
+        ? "No Backup has been made yet, though Praxis has tried for three days. It tries again each day."
+        : `No Backup has been made since ${sinceFormat.format(new Date(notice.last_made))}. Praxis tries again each day, and keeps the last one made until another is.`;
   }
 }

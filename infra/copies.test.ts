@@ -22,6 +22,13 @@ test("the Worker infra binds the hostname to is the one wrangler.jsonc deploys",
   expect(/^const WORKER_NAME = "([^"]*)";$/m.exec(program)?.[1]).toBe(wrangler.name);
 });
 
+test("the bucket infra makes for the Backups is the one wrangler.jsonc binds", () => {
+  const made = /^const BACKUP_BUCKET = "([^"]*)";$/m.exec(program)?.[1];
+  expect(wrangler.r2_buckets.map((bucket: { bucket_name: string }) => bucket.bucket_name)).toEqual([
+    made,
+  ]);
+});
+
 test("every var infra gives the Worker is one wrangler.jsonc declares, so its type is Env's", () => {
   const given = /workerVars = [\s\S]*?\(\{([\s\S]*?)\}\)/.exec(program)?.[1] ?? "";
   const names = [...given.matchAll(/^\s*([A-Z_]+):/gm)].map((match) => match[1]);

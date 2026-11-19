@@ -1,7 +1,7 @@
 /**
  * The Deployment object's own tables. It holds nothing from any Journal (ADR 0006): for now the
  * list of Contexts with their names and accents, the Connections, the Devices, the spend cap and what each
- * Context spent each month, whether the model's provider refuses the key, and the keys of the
+ * Context spent each month, when the last Backup was made, whether the model's provider refuses the key, and the keys of the
  * writes made to it. The upgrade ladder of section 11 replaces this with numbered steps before
  * the first release.
  *
@@ -65,6 +65,16 @@ export function createDeploymentTables(sql: SqlStorage): void {
     CREATE TABLE IF NOT EXISTS key_refused (
       one INTEGER PRIMARY KEY CHECK (one = 1),
       since INTEGER NOT NULL
+    );
+
+    -- The daily Backup (section 10.3): one row, from the first Context made or the first Backup
+    -- tried. When the three days without a Backup began to be counted, and when the last one was
+    -- made, null while none has been, which settings shows. A standing Notice when none has been
+    -- made for three days since the later of the two.
+    CREATE TABLE IF NOT EXISTS backups (
+      one INTEGER PRIMARY KEY CHECK (one = 1),
+      counted_from INTEGER NOT NULL,
+      last_made INTEGER
     );
 
     -- Each caller's keys for its writes and the first result, remembered 30 days (section 4.5),

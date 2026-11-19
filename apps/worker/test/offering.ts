@@ -115,6 +115,7 @@ export const deploymentOffering: Record<string, [Offer, Offer, Offer, Offer, Off
   get_spend: [          "yes", "no",  "no",  "no",       "no"  ],
   set_spend_cap: [      "yes", "no",  "no",  "no",       "no"  ],
   make_export: [        "yes", "no",  "no",  "no",       "no"  ],
+  get_last_backup: [    "yes", "no",  "no",  "no",       "no"  ],
 };
 
 /**
@@ -205,4 +206,5 @@ export const deploymentRunsWith: Record<string, (id: string) => unknown> = {
   get_spend: () => ({}),
   set_spend_cap: () => ({ cap: 25 }),
   make_export: () => ({}),
+  get_last_backup: () => ({}),
 };

@@ -257,6 +257,7 @@ step "Create Token → Create Custom Token → name it 'praxis-ci'. Add these pe
 note "  Account · Workers Scripts · Edit"
 note "  Account · Access: Apps and Policies · Edit"
 note "  Account · Access: Organizations, Identity Providers, and Groups · Edit"
+note "  Account · Workers R2 Storage · Edit"
 note "  Zone · Workers Routes · Edit"
 note "  Zone · DNS · Edit"
 step "Account Resources: your account. Zone Resources: Specific zone → $CF_ZONE."
@@ -339,8 +340,9 @@ if grep -qE '^JURISDICTION=' "$ENV_FILE" 2>/dev/null; then
   note "a new Deployment, and a deploy that would change it fails."
 else
   say "Cloudflare can keep every object of the Deployment, and so all of its data, inside one"
-  say "jurisdiction: eu (the European Union), us, or fedramp. Without one, it keeps them wherever it"
-  say "places them. This is chosen once: changing it later takes an Export restored into a new Deployment."
+  say "jurisdiction: eu (the European Union), us, or fedramp, and its daily Backups with them. Without"
+  say "one, it keeps them wherever it places them. This is chosen once: changing it later takes an"
+  say "Export restored into a new Deployment."
   while :; do
     ask JURISDICTION "Jurisdiction (eu, us or fedramp; blank for none):" || true
     case "${JURISDICTION:-}" in ""|eu|us|fedramp) break ;; esac

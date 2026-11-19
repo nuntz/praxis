@@ -35,8 +35,8 @@
 #        praxis:pushPublicKey: BExamplePublicKey
 #        praxis:pushPrivateKey:
 #          fn::secret: '{"kty":"EC","crv":"P-256","x":"…","y":"…","d":"…"}'
-#        # Optional, and chosen once: where every object is kept, "eu", "us" or "fedramp". Without
-#        # it, wherever Cloudflare places them. A deploy that would change it fails: moving takes an
+#        # Optional, and chosen once: where every object is kept, and the daily Backups with them,
+#        # "eu", "us" or "fedramp". Without it, wherever Cloudflare places them. A deploy that would change it fails: moving takes an
 #        # Export restored into a new Deployment.
 #        # praxis:jurisdiction: eu
 #

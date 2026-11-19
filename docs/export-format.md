@@ -4,7 +4,7 @@ An Export is the whole Deployment as a zip of JSON files in a format of Praxis's
 
 ## The zip
 
-The person makes one from the Deployment's settings, and it downloads as `praxis-export-YYYY-MM-DD.zip`, named after the day it was made (UTC). The zip stores the files uncompressed, with UTF-8 names:
+The person makes one from the Deployment's settings, and it downloads as `praxis-export-YYYY-MM-DD.zip`, named after the day it was made (UTC). A Backup is the same zip under the same name, kept in the Deployment's R2 bucket, its `made_at` the time the daily trigger fired. The zip stores the files uncompressed, with UTF-8 names:
 
 | Path | What |
 |---|---|

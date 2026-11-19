@@ -376,9 +376,9 @@ const keptDeploymentTables: Record<string, (sql: SqlStorage) => [string, string]
 /**
  * The Deployment object's other tables, whose rows no Effect names: the list of Contexts, held to
  * what changed in each Context instead; what each Context spent and whether the key is refused,
- * which Runs report; and the keys of the writes made to it.
+ * which Runs report; when the daily Backup was tried and made; and the keys of the writes made to it.
  */
-const otherDeploymentTables = ["contexts", "spend", "key_refused", "write_keys"];
+const otherDeploymentTables = ["contexts", "spend", "key_refused", "backups", "write_keys"];
 
 /**
  * What the Deployment object keeps that Effects name, as records are, failing the test when it

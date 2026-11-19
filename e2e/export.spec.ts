@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
-import { callContextTool, expect, makeContext, test } from "./fixtures.ts";
+import { callContextTool, callDeploymentTool, expect, makeContext, test } from "./fixtures.ts";
 
 // An Export (section 10.1, ADR 0018): the person makes one in the Deployment's settings and keeps
-// a zip of Praxis's own JSON files, one for the Deployment and one per Context.
+// a zip of Praxis's own JSON files, one for the Deployment and one per Context. A Backup is the
+// same file, made by the system each day, and the settings say when the last one was.
 
 /** The paths an archive holds, from its central directory, and each stored file's text. */
 function readArchive(bytes: Buffer): Map<string, string> {
@@ -46,4 +47,20 @@ test("the person makes an Export in settings and keeps a zip of the whole Deploy
   );
   const context = JSON.parse(files.get(`contexts/${work.id}.json`) ?? "null");
   expect(context.entries).toEqual([expect.objectContaining({ words })]);
+});
+
+test("the Deployment's settings say when the last Backup was made", async ({ page }) => {
+  // wrangler dev fires the daily trigger when asked (--test-scheduled, playwright.config.ts).
+  expect((await page.request.get("/__scheduled?cron=0+3+*+*+*")).ok()).toBe(true);
+  // Nothing waits on the trigger, so the journey waits for the Backup before settings read it.
+  await expect
+    .poll(async () => (await callDeploymentTool(page, "get_last_backup", {})).made_at)
+    .not.toBeNull();
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+
+  await expect(page.getByRole("region", { name: "Backups" }).getByTestId("last-backup")).toHaveText(
+    /^The last Backup was made .+\.$/,
+  );
 });

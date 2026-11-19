@@ -1,3 +1,8 @@
+import {
+  createExecutionContext,
+  createScheduledController,
+  waitOnExecutionContext,
+} from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
 
 // The one test that reaches the objects the way the screen does, over HTTP, so it is the one test
@@ -288,5 +293,24 @@ describe("the live channel's address", () => {
     for (const headers of [{ upgrade: "h2c" }, {}]) {
       expect((await openLive(work, headers)).status).toBe(426);
     }
+  });
+});
+
+describe("the daily trigger", () => {
+  test("makes the day's Backup through the Deployment object, at the time it fired", async () => {
+    await makeContext("Work");
+    const fired = createScheduledController({
+      scheduledTime: Date.parse("2026-11-16T03:00:00.000Z"),
+      cron: "0 3 * * *",
+    });
+    const context = createExecutionContext();
+
+    await worker.scheduled?.(fired, env, context);
+    await waitOnExecutionContext(context);
+
+    expect(await callTool("/api/deployment/tools/get_last_backup", {})).toEqual({
+      ok: true,
+      value: { made_at: "2026-11-16T03:00:00.000Z" },
+    });
   });
 });

@@ -25,8 +25,11 @@ export type RunNotice = { run: string; failure: RunFailure };
  * - `clock_failed`: a Brief or a Review that was due could not run since this instant, and why. It
  *   is tried again with a growing gap until it runs or the next one is due (section 5.6), and the
  *   Notice stays until one of its kind runs.
+ * - `no_backup`: no daily Backup has been made for three days (section 10.3), and when the last
+ *   one was, or null when none has been. It stays until one is made. It is not a Notification.
  */
 export type StandingNotice =
   | { kind: "key_refused"; since: string }
   | { kind: "nearing_cap" | "cap_reached"; spent: number; cap: number }
-  | { kind: "clock_failed"; clock: ClockKind; failure: RunFailure; since: string };
+  | { kind: "clock_failed"; clock: ClockKind; failure: RunFailure; since: string }
+  | { kind: "no_backup"; last_made: string | null };

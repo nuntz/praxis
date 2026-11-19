@@ -135,7 +135,8 @@ jobs:
       # The Worker's code and its Durable Object classes, with the vars and secrets Pulumi gives.
       # Every var is set afresh; secrets are only added, so a key the configuration no longer has
       # is deleted: without the Agent's there is no Agent (ADR 0017), and without the push key no
-      # Notification.
+      # Notification. The Backups' bucket is bound in the Deployment's jurisdiction, which only a
+      # copy of wrangler.jsonc can say (scripts/deploy-config.ts).
       - name: wrangler deploy
         working-directory: apps/worker
         run: |
@@ -151,7 +152,9 @@ jobs:
           while IFS= read -r pair; do vars+=(--var "$pair"); done < <(
             jq -r 'to_entries[] | select(.value != "") | "\(.key):\(.value)"' <<< "$given"
           )
-          CLOUDFLARE_ACCOUNT_ID="$account" bunx wrangler deploy --secrets-file "$secrets" "${vars[@]}"
+          bun ../../scripts/deploy-config.ts "$(jq -r '.JURISDICTION' <<< "$given")"
+          CLOUDFLARE_ACCOUNT_ID="$account" bunx wrangler deploy --config wrangler.deploy.json \
+            --secrets-file "$secrets" "${vars[@]}"
           for name in AGENT_API_KEY PUSH_PRIVATE_KEY; do
             jq -e --arg name "$name" 'has($name)' "$secrets" > /dev/null && continue
             status="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \

@@ -10,6 +10,7 @@ import {
   type DeploymentToolName,
   type DeploymentToolOutput,
   EXPORT_FORMAT_VERSION,
+  type Export,
   type ExportedConnection,
   type ExportFile,
   effectOnConnection,
@@ -23,6 +24,8 @@ import {
   type ToolResult,
   written,
 } from "@praxis/domain";
+import { countBackupsFrom } from "./backup-rows.ts";
+import type { BackupToolName } from "./backups.ts";
 import type { DeviceToolName } from "./devices.ts";
 import type { PushSender } from "./push.ts";
 import { newContextObject } from "./routing.ts";
@@ -57,8 +60,8 @@ type ConnectionRow = {
   ended: number;
 };
 
-/** The Deployment tools but the Device tools, which are in devices.ts. */
-export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName> = {
+/** The Deployment tools but the Device tools and the Backup's, which are in their own files. */
+export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | BackupToolName> = {
   async list_contexts({ sql }) {
     return success({ items: everyContext(sql) });
   },
@@ -78,6 +81,8 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName> = {
       input.name,
       input.accent,
     );
+    // A Deployment holding a Context has something to back up from now on (section 10.3).
+    countBackupsFrom(sql, arrivedAt);
     const made: ContextListing = { id, name: input.name, accent: input.accent, retired: false };
     return success(written(made, [effectOnContext(made, "made")]));
   },
@@ -205,38 +210,45 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName> = {
   },
 
   async make_export({ sql, env, arrivedAt }) {
-    // Every Context, retired ones too: an Export is always the whole Deployment (section 10.1).
-    const contexts = everyContext(sql).map((listed) => ({
-      ...listed,
-      file: contextFilePath(listed.id),
-    }));
-    const deployment: ExportFile = {
-      path: DEPLOYMENT_FILE,
-      content: {
-        ...exportStamp(arrivedAt),
-        kind: "deployment",
-        contexts,
-        spend_cap: capChosen(sql),
-        deleted_contexts_spend: deletedContextsSpend(sql),
-        connections: sql
-          .exec<ExportedConnection>(`SELECT id, name, context_id FROM connections ORDER BY seq`)
-          .toArray(),
-      },
-    };
-    // Each Context's object writes its own file. This object carries them and reads none (ADR 0006).
-    const files = await Promise.all(
-      contexts.map(async ({ id, file }): Promise<ExportFile> => {
-        const object = env.CONTEXT.get(env.CONTEXT.idFromString(id));
-        return { path: file, content: await object.exportFile(arrivedAt) };
-      }),
-    );
-    return success({
-      format_version: EXPORT_FORMAT_VERSION,
-      made_at: instantToIso(arrivedAt),
-      files: [deployment, ...files],
-    });
+    return success(await exportOf(sql, env, arrivedAt));
   },
 };
+
+/**
+ * The whole Deployment's Export as at `at`: an Export the person makes, or the daily Backup. Every
+ * Context is in it, retired ones too, since it is always the whole Deployment (section 10.1).
+ */
+export async function exportOf(sql: SqlStorage, env: Env, at: number): Promise<Export> {
+  const contexts = everyContext(sql).map((listed) => ({
+    ...listed,
+    file: contextFilePath(listed.id),
+  }));
+  const deployment: ExportFile = {
+    path: DEPLOYMENT_FILE,
+    content: {
+      ...exportStamp(at),
+      kind: "deployment",
+      contexts,
+      spend_cap: capChosen(sql),
+      deleted_contexts_spend: deletedContextsSpend(sql),
+      connections: sql
+        .exec<ExportedConnection>(`SELECT id, name, context_id FROM connections ORDER BY seq`)
+        .toArray(),
+    },
+  };
+  // Each Context's object writes its own file. This object carries them and reads none (ADR 0006).
+  const files = await Promise.all(
+    contexts.map(async ({ id, file }): Promise<ExportFile> => {
+      const object = env.CONTEXT.get(env.CONTEXT.idFromString(id));
+      return { path: file, content: await object.exportFile(at) };
+    }),
+  );
+  return {
+    format_version: EXPORT_FORMAT_VERSION,
+    made_at: instantToIso(at),
+    files: [deployment, ...files],
+  };
+}
 
 /**
  * The Connection with this id, while it may be called: not ended, and its Context not retired.

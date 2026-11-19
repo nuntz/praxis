@@ -4,6 +4,8 @@ dist
 test-results
 playwright-report
 worker-configuration.d.ts
+# The Worker's configuration as a deploy writes it (scripts/deploy-config.ts): never committed.
+wrangler.deploy.json
 
 # Local configuration, such as the Agent's model key for `bun run dev`: never committed.
 .dev.vars*

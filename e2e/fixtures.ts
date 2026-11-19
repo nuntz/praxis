@@ -74,6 +74,11 @@ export async function makeContext(
   return (await post(page, "/api/deployment/tools/create_context", made)).record;
 }
 
+/** Call a Deployment tool as the screen does. */
+export function callDeploymentTool(page: Page, tool: string, input: unknown) {
+  return post(page, `/api/deployment/tools/${tool}`, input);
+}
+
 /** Call one of a Context's tools as the screen does. */
 export function callContextTool(page: Page, id: string, tool: string, input: unknown) {
   return post(page, `/api/contexts/${id}/tools/${tool}`, input);

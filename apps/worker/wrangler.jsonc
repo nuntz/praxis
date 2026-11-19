@@ -29,6 +29,12 @@
     "PUSH_PUBLIC_KEY": "",
     "PUSH_SUBJECT": ""
   },
+  // The daily Backup (section 10.1): once a day the Worker asks the Deployment object for one.
+  "triggers": { "crons": ["0 3 * * *"] },
+  // Where the Backups are kept, on the person's account, which the setup wizard's Pulumi program
+  // makes (infra/index.ts). A Deployment that chose a jurisdiction keeps its bucket there too, and
+  // the deploy adds it to this binding (scripts/deploy-config.ts).
+  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "praxis-backups" }],
   "durable_objects": {
     "bindings": [
       { "name": "CONTEXT", "class_name": "ContextObject" },
