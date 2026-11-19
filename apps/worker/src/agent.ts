@@ -112,7 +112,7 @@ export type Bearings = {
   standing: StandingEntry[];
   /** The Held Changes still waiting, named, and how many more than are named (section 4.7). */
   held: HeldWaiting;
-  /** What others changed since the Agent's last turn (section 4.4). */
+  /** What others changed since the last Message the Agent answered (section 4.4). */
   digest: Digest;
   /** Whether the Run answering the newest Message before this one was cut short (section 5.2). */
   lastRunCutShort: boolean;
@@ -138,7 +138,7 @@ const PREAMBLE = `You are the Agent of Praxis, a journal-centric task manager fo
 - You cannot open links, search the web or run code. Say so when asked.
 - Dates you give to tools are days (YYYY-MM-DD) in the Context's time zone; resolve "next Friday" yourself from today's date.
 - You are given the Context's Standing Entries with each Message: keep honouring them, and when two disagree, the newer wins. They and the Journal are your only memory: what is said only in the Conversation may be lost.
-- With each Message you are also told the Held Changes still waiting for the person's tap and what others changed since your last turn, each named by its id and not by its words: read what you need through the tools.
+- With each Message you are also told the Held Changes still waiting for the person's tap and what others changed since the last Message you answered, each named by its id and not by its words: read what you need through the tools.
 - Mark an Entry standing only when the person asks you to keep honouring something, recording it first in their words if it is not yet an Entry. Never mark or unmark one unasked.`;
 
 /** The Agent's tools: the Context tools in its column of the offering table, and nothing else. */
@@ -205,7 +205,7 @@ ${BEARINGS_END}${words}`;
 }
 
 /**
- * What changed since the Agent's last turn as the model is shown it: each change by its caller and
+ * What changed since the last Message the Agent answered, as the model is shown it: each change by its caller and
  * tool, each of its Effects naming what it changed by kind and id. None of the words: the Agent
  * reads what it needs through the tools, so what it knew shows in its calls.
  */
@@ -216,15 +216,18 @@ function digestPresented(digest: Digest): string {
       ? "Nobody else has changed anything yet."
       : "You have not been told before what others changed. The newest changes they made, oldest first:"
     : items.length === 0
-      ? "Nobody else has changed anything since your last turn."
-      : "What others changed since your last turn, oldest first:";
+      ? "Nobody else has changed anything since the last Message you answered."
+      : "What others changed since the last Message you answered, oldest first:";
   const lines = [heading, ...items.map(changePresented)];
   if (earlier > 0) {
     lines.push(
       `${earlier} earlier ${earlier === 1 ? "change is" : "changes are"} not shown: list_changes from the cursor "${encodeCursor(after)}" gives them.`,
     );
   }
-  if (pruned) lines.push("Some changes since your last turn are older than the change log keeps.");
+  if (pruned)
+    lines.push(
+      "Some changes since the last Message you answered are older than the change log keeps.",
+    );
   return lines.join("\n");
 }
 
@@ -808,7 +811,7 @@ function textOf(message: Pick<AssistantMessage, "content">): string {
 
 /**
  * The Conversation's messages with each Message's bearings taken out, as the compaction summary is
- * written from them: what the bearings name is given afresh each turn, and the summary would only
+ * written from them: what the bearings name is given afresh with each Message, and the summary would only
  * restate it.
  */
 function withoutBearings(messages: readonly ModelMessage[]): ModelMessage[] {

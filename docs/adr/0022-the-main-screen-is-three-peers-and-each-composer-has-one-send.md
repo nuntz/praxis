@@ -1,6 +1,6 @@
 # The main screen is three peers and each composer has one send
 
-The main screen is Attention, the Journal and the Conversation side by side, and none of them hosts the others: three columns on a desktop, three tabs on a phone, which opens on Attention. The Journal has its own composer, which records an Entry with no model turn, and the Conversation has its own, which sends a Message to the Agent. Where the person types decides what happens, and no composer offers both sends. We decided this because the Conversation is primary but is not data (ADR 0001): a screen built around it would make working on the Journal by hand second-class, and a composer with two sends would sooner or later put into the Journal something meant for the Agent, or the other way round.
+The main screen is Attention, the Journal and the Conversation side by side, and none of them hosts the others: three columns on a desktop, three tabs on a phone, which opens on Attention. The Journal has its own composer, which records an Entry with no Run, and the Conversation has its own, which sends a Message to the Agent. Where the person types decides what happens, and no composer offers both sends. We decided this because the Conversation is primary but is not data (ADR 0001): a screen built around it would make working on the Journal by hand second-class, and a composer with two sends would sooner or later put into the Journal something meant for the Agent, or the other way round.
 
 ## Considered Options
 

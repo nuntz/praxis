@@ -277,7 +277,7 @@ function createTablesAsMade(sql: SqlStorage): void {
       -- records before it are the Runs' before it, and their spend counted with them.
       from_record INTEGER,
       -- For a Run answering a new Message, the number of the change the log stood at when the
-      -- Agent was told what changed since its last turn: the next is told from there.
+      -- Agent was told what changed since the last Message it answered: the next is told from there.
       told_through INTEGER
     );
     -- The changes a Run made, as the change log numbers them. One may point at a line pruned since.

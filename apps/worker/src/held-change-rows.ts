@@ -65,7 +65,7 @@ export type HeldWaiting = { items: HeldNamed[]; more: number };
 
 /**
  * The Held Changes still waiting, oldest first, at most `limit` of them, and how many more wait:
- * what the Agent is told each turn (section 4.7), named and never restated.
+ * what the Agent is told with each Message it answers (section 4.7), named and never restated.
  */
 export function heldWaiting(sql: SqlStorage, limit: number): HeldWaiting {
   const rows = sql

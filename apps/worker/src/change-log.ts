@@ -99,7 +99,7 @@ function withEffects(sql: SqlStorage, calls: CallRow[]): Change[] {
 }
 
 /**
- * What the Agent is told changed since its last turn (section 4.4): the newest changes a caller
+ * What the Agent is told changed since the last Message it answered (section 4.4): the newest changes a caller
  * other than the Agent made after `after`, oldest first, how many earlier ones are left out, and
  * through where the log was read, where it stands now. Its own changes are in its Runs' calls.
  * `told` is false when it was never told before, and the digest is then of the newest changes.

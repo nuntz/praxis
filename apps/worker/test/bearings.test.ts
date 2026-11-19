@@ -7,8 +7,8 @@ import { type Offered, offeredIn, scriptModel, textOf } from "./model-fake.ts";
 import { agent, connection, hand, left, newContext, value } from "./seam.ts";
 
 // What the Agent is given with each Message it answers, beside the bearings of every Run (section
-// 5.2, ADR 0016): the Held Changes still waiting and a bounded digest of what changed since its
-// last turn, and nothing else from the Journal.
+// 5.2, ADR 0016): the Held Changes still waiting and a bounded digest of what changed since the
+// last Message it answered, and nothing else from the Journal.
 
 type Context = ReturnType<typeof newContext>;
 
@@ -32,7 +32,7 @@ async function recorded(context: Context, words: string) {
   return value(await context.call(hand, "record_entry", { words })).record;
 }
 
-describe("send_message: the digest of what changed since the Agent's last turn", () => {
+describe("send_message: the digest of what changed since the last Message the Agent answered", () => {
   test("names each change others made since, by caller, tool and record, with none of the words", async () => {
     const seen: string[] = [];
     const agentsWords = marked("The Agent's own note");
@@ -93,7 +93,7 @@ describe("send_message: the digest of what changed since the Agent's last turn",
 });
 
 describe("send_message: the first digest, when the Agent was never told what changed", () => {
-  test("is of the newest changes, and says it is not since a turn of its own", async () => {
+  test("is of the newest changes, and says it is not since a Message it answered", async () => {
     const seen = seeing();
     const context = newContext();
     const entry = await recorded(context, marked("Written before any Message"));
@@ -102,7 +102,7 @@ describe("send_message: the first digest, when the Agent was never told what cha
 
     expect(seen[0]).toContain(entry.id);
     expect(seen[0]).toMatch(/not been told before/);
-    expect(seen[0]).not.toMatch(/since your last turn/);
+    expect(seen[0]).not.toMatch(/since the last Message you answered/);
   });
 });
 

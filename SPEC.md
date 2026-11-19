@@ -58,7 +58,7 @@ An Entry has:
 
 Rules:
 
-- The person writes an Entry directly in the Journal's composer with no model turn.
+- The person writes an Entry directly in the Journal's composer with no Run.
 - An Entry recorded by the Agent from the Conversation holds the person's words verbatim, trimmed of filler and never paraphrased, with no Markdown added. The Agent composes prose only when asked, and such an Entry has the Agent as Author. What was said together becomes one Entry; the Agent splits only on a plain change of subject.
 - Adding or removing a link never changes the words, makes no Version and is never a Held Change.
 - **Inline Task**: a marker the person types in an editor. The editor, using a parser in the domain package, turns it into the list of Tasks passed to `record_entry`, or to `edit_entry` for a marked line an edit adds. The Task it makes is the same as any other, and editing the words later cannot delete it. The same holds for what the person types to link something.
@@ -270,7 +270,7 @@ A result is a success or an error from a closed set of codes:
 - Nor is a Held Change (section 4.7). Leaving one is an Effect on it, made, and making, cancelling or lapsing one an Effect on it, deleted, carrying its id and its summary. These go in the change log, so the screen hears them, but `list_changes` gives a Connection none of them, and no change whose Effects were all on Held Changes. The person's tap still shows to it as the change it made to the Entry, under `make_held_change`.
 - Neither is the spend cap. `set_spend_cap` returns an Effect on it, carrying its fixed id and its new amount as the summary, and it goes in no change log.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
-- `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since its last turn.
+- `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since the last Message it answered.
 - The change log is kept 90 days, pruned by the Context's alarm. A caller whose cursor is older is told to read afresh: `list_changes` gives no changes, says so, and gives the cursor where the log now stands, to ask from once it has.
 - A connected PWA receives the Effects of each change and patches what it shows.
 
@@ -294,9 +294,9 @@ ADR 0005. Glossary: Held Change.
 - It can be cancelled by a tap or by telling the Agent.
 - It lapses the moment the Entry changes underneath it, so a tap never makes a change other than the one shown: when its words change, by any caller or another Held Change made, when it goes to the Trash, and for a delete when the Tasks that would go with it change, as when one is added or a Recurrence makes its next Occurrence on the Entry. A link, a Standing mark, or a change to one of its Tasks that makes no other leaves it waiting. A lapse is an Effect by rule of the change that caused it.
 - Leaving, making, cancelling and lapsing are each an Effect on the Held Change (section 4.4).
-- Each turn the Agent is told which Held Changes are still waiting.
+- With each Message it answers, the Agent is told which Held Changes are still waiting.
 - An Entry the Agent composed becomes the person's once they edit it, and its words are held from then on.
-- There is no undo of a turn and no cap on how many changes a turn makes. Things are put back by ordinary means: the Trash, Versions, reopening.
+- There is no undo of a Run and no cap on how many changes a Run makes. Things are put back by ordinary means: the Trash, Versions, reopening.
 
 ### 4.8 Entries, Tasks and links in the tools
 
@@ -432,7 +432,7 @@ Glossary: Run.
 - A Message from the person starts a Run. So does the clock, for a Brief or a Review. Nothing else does: not a saved Entry, not a Connection's write, not a date passing.
 - Runs in a Context happen one after another.
 - At the start of every Run the Context's object asks the Deployment object for the other Contexts' names and whether a Run may start (section 9.2). This is the same for a Run the person started and one the clock started, and the Worker hands the Agent nothing.
-- At the start of every Run the Agent is given: the Context's Standing Entries with their dates, today's date, the Context's name, and the other Contexts' names. Each turn it is also given the Held Changes still waiting and a bounded digest of what changed since its last turn. Nothing else from the Journal: everything else it fetches through tools, so what it knew shows in the Run's tool calls.
+- At the start of every Run the Agent is given: the Context's Standing Entries with their dates, today's date, the Context's name, and the other Contexts' names. With each Message it answers it is also given the Held Changes still waiting and a bounded digest of what changed since the last Message it answered. Nothing else from the Journal: everything else it fetches through tools, so what it knew shows in the Run's tool calls.
 - A Run is limited to 25 model rounds when the person started it and 10 when the clock did. The numbers are in code. A Run that reaches the limit stops, says so in its last Message, and its record marks it as cut short.
 
 ### 5.3 Acting when asked
@@ -584,7 +584,7 @@ Three peers, none hosting the others: **Attention**, the **Journal** and the **C
 
 ### 8.2 Composers
 
-- The Journal's composer records an Entry with no model turn. The Conversation's composer sends a Message to the Agent. Where the person types decides what happens. No composer offers both sends.
+- The Journal's composer records an Entry with no Run. The Conversation's composer sends a Message to the Agent. Where the person types decides what happens. No composer offers both sends.
 - Attention has no composer.
 - The Journal's composer names its Context. Both composers carry the Context's accent colour (section 8.11).
 
