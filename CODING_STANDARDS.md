@@ -18,6 +18,7 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 - A cache in front of an outside service has a maximum age, and its limit on how often it asks holds after a failed ask as after a good one. Anything trusted from outside, such as a key, stops being trusted when that age passes.
 - A refusal says whether the person can mend it (sign in again, change what they sent) or can only wait. One that only waiting mends is answered as unavailable, never as their doing.
 - A faked adapter takes the Access key set's shape: the interface in `src/`, the fake in `test/<name>-fake.ts`, and one `contract()` suite run against the fake and, given its environment variables through Vitest's `provide`, against the real service. The adapter is passed in, as `praxis(accessOf)` takes it, since the Vitest plugin cannot intercept outbound requests.
+- A fake's own fault, such as running out of script, fails the test as a fault, never as the service's error it stands in for.
 
 ## Browser journeys
 
@@ -28,6 +29,8 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 ## Reads and changes
 
 - What a list shows comes from its read and from the changes it learns of meanwhile, its own writes or the live channel's, in either order. A change that lands while the read is out outlives the read's answer: the list places a record from either by its id, so the record shows once, or it drops an answer a later read or change overtook and reads again, as `latestRead()` in `apps/pwa/src/latest-read.ts` does for every read the screen makes. A column reads once `live.ready` settles, so a change made meanwhile is read or brought.
+- A write's own answer is overtaken the same way: the live channel may already have brought the record, newer. The screen places the answer only where nothing newer is shown, as `placeAnswered` in `apps/pwa/src/Conversation.tsx` does.
+- A handler reads what it needs from the store before its first `await`. A store item is live: after the wait it is whatever the live channel made it.
 - An operation with an inverse, such as delete and restore, has a seam test that runs it over orderings drawn from a seeded source (`seeded()` in `packages/domain/test/seeded.ts`) and checks that undoing every step reads back what was there, as following an anchor through an edit is tested over edits drawn from one.
 
 ## Decisions
