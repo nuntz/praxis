@@ -1,5 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
-import { test as base, expect, type Page, type Route, type TestInfo } from "@playwright/test";
+import {
+  type APIResponse,
+  test as base,
+  expect,
+  type Page,
+  type Route,
+  type TestInfo,
+} from "@playwright/test";
 import type { Accent, ContextListing } from "@praxis/domain";
 
 /** WCAG 2.2 AA, and the levels under it (section 8.11). */
@@ -100,16 +107,21 @@ export async function lastShown(page: Page, id: string) {
 /**
  * Hold every answer the screen gets from a tool, so a journey can act while its read is still out,
  * as load makes it: a step that races the answer then loses on every run (docs/flaky-journeys.md).
- * Each held call is answered by the real server once released, in the order it was sent.
+ * Each held call is asked of the real server at once, and only its answer is held: fetched one
+ * after another once released, the answers to a name typed ran past the test's time under load.
+ * Released, they reach the screen in the order the calls were sent.
  */
 export async function holdAnswers(page: Page, tool: string) {
   const address = new RegExp(`/tools/${tool}$`);
-  const held: Route[] = [];
+  const held: { route: Route; answer: Promise<APIResponse> }[] = [];
   await page.route(address, (route) => {
-    held.push(route);
+    const answer = route.fetch();
+    // A journey that fails first leaves an answer unread, and its page closed under it.
+    answer.catch(() => {});
+    held.push({ route, answer });
   });
   const release = async () => {
-    for (const route of held.splice(0)) await route.fulfill({ response: await route.fetch() });
+    for (const { route, answer } of held.splice(0)) await route.fulfill({ response: await answer });
     // The screen shows what the answers bring before the journey looks.
     await page.evaluate(() => new Promise(requestAnimationFrame));
   };
@@ -119,7 +131,7 @@ export async function holdAnswers(page: Page, tool: string) {
      * per character, and the screen may send more than the characters, so they are not counted.
      */
     async sent(input: Record<string, unknown>) {
-      const matches = (route: Route) => {
+      const matches = ({ route }: { route: Route }) => {
         const sent = route.request().postDataJSON() as Record<string, unknown>;
         return Object.entries(input).every(([key, value]) => sent[key] === value);
       };
