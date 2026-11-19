@@ -23,8 +23,8 @@ describe("createTables on a Context object made before a column was added", () =
     const [fresh, upgraded] = await runInDurableObject(stub, (_, state) => {
       const sql = state.storage.sql;
       const fresh = columnsOf(sql, "runs");
-      // The Run records as #66 left them, before #65 added why a Run failed and where a Run
-      // trying a failed one again starts.
+      // The Run records before they said why a Run failed and where a Run trying a failed one
+      // again starts.
       sql.exec(`DROP TABLE run_changes`);
       sql.exec(`DROP TABLE runs`);
       sql.exec(`CREATE TABLE runs (
