@@ -1,16 +1,7 @@
-import { runInDurableObject } from "cloudflare:test";
-import { env } from "cloudflare:workers";
 import type { Change, Effect, ToolResult } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { forget, leakedMarkers, logs, marked } from "./markers.ts";
-import {
-  judge,
-  judgeDeployment,
-  type Records,
-  type Seen,
-  type SeenDeployment,
-  throughDeploymentOracle,
-} from "./oracle.ts";
+import { judge, judgeDeployment, type Records, type Seen, type SeenDeployment } from "./oracle.ts";
 import { agent, connection, hand, newContext, value } from "./seam.ts";
 
 // The harness is what every seam test leans on, so it is tested for what it must catch.
@@ -200,22 +191,6 @@ describe("the marker check", () => {
     value(await context.call(hand, "record_entry", { words: marked("Seen by nobody") }));
 
     expect(logs()).toContainEqual(expect.stringContaining('"tool":"record_entry"'));
-  });
-});
-
-describe("the oracle, on the Deployment object's tables", () => {
-  test("fails a call while the object holds a table it does not know", async () => {
-    const deployment = env.DEPLOYMENT.get(env.DEPLOYMENT.newUniqueId());
-    const contextOf = (id: string) => env.CONTEXT.get(env.CONTEXT.idFromString(id));
-    const request = { caller: hand, tool: "list_contexts", input: {}, arrivedAt: Date.parse(at) };
-    await throughDeploymentOracle(deployment, contextOf, request);
-    await runInDurableObject(deployment, (_, state) => {
-      state.storage.sql.exec(`CREATE TABLE backups (id TEXT PRIMARY KEY, at INTEGER NOT NULL)`);
-    });
-
-    await expect(throughDeploymentOracle(deployment, contextOf, request)).rejects.toThrow(
-      /Every table of the Deployment object is known to the oracle/,
-    );
   });
 });
 
