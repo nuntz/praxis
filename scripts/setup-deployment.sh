@@ -274,8 +274,19 @@ step "Create client → Application type: Web application → name it 'Praxis Ac
 step "Authorized JavaScript origins: https://$ACCESS_TEAM_DOMAIN"
 step "Authorized redirect URIs: https://$ACCESS_TEAM_DOMAIN/cdn-cgi/access/callback"
 step "Create → copy the Client ID and Client secret."
+# A stray character pasted with either, as a backslash once was before a secret, lets the deploy
+# through and then fails every sign-in at Google with Access's "Failed to fetch user/group
+# information from the identity provider", so each is held to its shape here.
 ask GOOGLE_CLIENT_ID "Client ID:"
+until [[ "$GOOGLE_CLIENT_ID" =~ ^[0-9]+-[A-Za-z0-9_]+\.apps\.googleusercontent\.com$ ]]; do
+  warn "A client ID is digits, a dash, letters and .apps.googleusercontent.com. Paste it again."
+  ask GOOGLE_CLIENT_ID "Client ID:"
+done
 ask_secret GOOGLE_CLIENT_SECRET "Client secret:"
+until [[ "$GOOGLE_CLIENT_SECRET" =~ ^[A-Za-z0-9_-]+$ ]]; do
+  warn "A client secret is only letters, digits, - and _ (GOCSPX-…). Paste it again."
+  ask_secret GOOGLE_CLIENT_SECRET "Client secret:"
+done
 write_env GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID"
 write_env GOOGLE_CLIENT_SECRET "$GOOGLE_CLIENT_SECRET"
 note "An External app in 'Testing' only lets in the test users you list on its Audience page."
