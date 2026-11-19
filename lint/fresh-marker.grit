@@ -1,0 +1,20 @@
+language js
+
+or {
+  `$_ === marked($_)`,
+  `marked($_) === $_`,
+  `$_ !== marked($_)`,
+  `marked($_) !== $_`,
+  `$_.$assertion(marked($_))` where {
+    $assertion <: or {
+      `toBe`,
+      `toEqual`,
+      `toStrictEqual`,
+      `toContain`,
+      `toMatch`,
+      `toMatchObject`
+    }
+  }
+} as $fresh where {
+  register_diagnostic(span=$fresh, message="A marker is new at each call, so this compares against words nothing holds: make the words once, keep them in a variable, and compare against that.")
+}

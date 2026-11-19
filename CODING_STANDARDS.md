@@ -20,6 +20,10 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 - A faked adapter takes the Access key set's shape: the interface in `src/`, the fake in `test/<name>-fake.ts`, and one `contract()` suite run against the fake and, given its environment variables through Vitest's `provide`, against the real service. The adapter is passed in, as `praxis(accessOf)` takes it, since the Vitest plugin cannot intercept outbound requests.
 - A fake's own fault, such as running out of script, fails the test as a fault, never as the service's error it stands in for.
 
+## The Agent's runtime
+
+- A hook into the Agent's runtime answers a failure with a decision it returns, such as `{ decline: true }`, and never throws: a throw is logged and skipped, and the runtime's own default runs in its place, as its own summarizer would for compaction (`docs/pi-durable.md`).
+
 ## Browser journeys
 
 - A journey that acts outside the page on what a tap changed waits for that tool's answer (`page.waitForResponse`), or for something on the screen only the answer brings. A control the browser changes at the tap, such as a checkbox, proves nothing about the server.

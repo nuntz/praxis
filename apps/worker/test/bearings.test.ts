@@ -3,7 +3,7 @@ import { conversationToolNames, offeredTo } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { DIGEST_CHANGES } from "../src/agent.ts";
 import { marked } from "./markers.ts";
-import { scriptModel, textOf } from "./model-fake.ts";
+import { type Offered, offeredIn, scriptModel, textOf } from "./model-fake.ts";
 import { agent, connection, hand, left, newContext, value } from "./seam.ts";
 
 // What the Agent is given with each Message it answers, beside the bearings of every Run (section
@@ -133,17 +133,10 @@ describe("send_message: the Held Changes the Agent is told of", () => {
 });
 
 /** What the scripted model was offered and told before each Message: its tools and its preamble. */
-function offering(): { tools: Set<string>; preamble: string }[] {
-  const seen: { tools: Set<string>; preamble: string }[] = [];
+function offering(): Offered[] {
+  const seen: Offered[] = [];
   scriptModel((context) => {
-    const system = context.messages.filter((message) => message.role === "system") as {
-      toolsAdded?: { name: string }[];
-      sections?: Record<string, string>;
-    }[];
-    seen.push({
-      tools: new Set(system.flatMap((message) => (message.toolsAdded ?? []).map((t) => t.name))),
-      preamble: system.map((message) => Object.values(message.sections ?? {}).join("\n")).join(""),
-    });
+    seen.push(offeredIn(context));
     return fauxAssistantMessage("Noted.");
   });
   return seen;

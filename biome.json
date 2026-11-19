@@ -30,6 +30,10 @@
       "plugins": ["./lint/exact-label.grit"]
     },
     {
+      "includes": ["apps/worker/test/**"],
+      "plugins": ["./lint/fresh-marker.grit"]
+    },
+    {
       "includes": ["apps/pwa/src/**"],
       "plugins": ["./lint/computed-on.grit"]
     },

@@ -104,6 +104,21 @@ export function lastWords(context: TranscriptContext): string {
   return personsWords(textOf(last));
 }
 
+/** What a request offered the model and told it of itself: the tools it may call, and its preamble. */
+export type Offered = { tools: Set<string>; preamble: string };
+
+/**
+ * What a request offered the model: the runtime puts both on its system messages, the tools as
+ * `toolsAdded` and the prompt's sections under `sections`, never in `context.tools`.
+ */
+export function offeredIn(context: TranscriptContext): Offered {
+  const system = context.messages.filter((message) => message.role === "system");
+  return {
+    tools: new Set(system.flatMap((message) => (message.toolsAdded ?? []).map(({ name }) => name))),
+    preamble: system.map((message) => Object.values(message.sections ?? {}).join("\n")).join(""),
+  };
+}
+
 /** The tool results the model has been given since the newest Message. */
 function resultsSinceMessage(context: TranscriptContext): ModelMessage[] {
   const from = context.messages.findLastIndex((message) => message.role === "user");
