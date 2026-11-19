@@ -17,7 +17,7 @@ A Deployment has one file format for leaving and coming back: the Export, an arc
 
 ## Consequences
 
-- The file holds each Context's Journal: Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks. It holds every Entry's Versions, the Trash with each item's clock, and Run records. From the Deployment it holds the Contexts with their names, whether each is retired, their Brief and Review times and Notification switch, the spend cap and the monthly spend totals of deleted Contexts.
+- The file holds each Context's Journal: Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks. It holds every Entry's Versions, the Trash with each item's clock, and Run records, without which changes each made, since those are lines of the change log the file does not hold. From the Deployment it holds the Contexts with their names, whether each is retired, their Brief and Review times and Notification switch, the spend cap and the monthly spend totals of deleted Contexts.
 - It does not hold any Conversation or the runtime's record of one, the change log, the record of a Connection's calls, Devices and their push subscriptions, or the provider key.
 - A Connection is in the file and comes back ended. Its name stays as an Author, and the permission is made again by the person, because a new Deployment has a new address.
 - Making an Export and restoring one are offered to the person's hand only, never to the Agent or a Connection, since the file spans Contexts.

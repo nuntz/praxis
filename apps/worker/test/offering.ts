@@ -103,6 +103,7 @@ export const deploymentOffering: Record<string, [Offer, Offer, Offer, Offer, Off
   end_connection: [     "yes", "no",  "no",  "no",       "no"  ],
   get_spend: [          "yes", "no",  "no",  "no",       "no"  ],
   set_spend_cap: [      "yes", "no",  "no",  "no",       "no"  ],
+  make_export: [        "yes", "no",  "no",  "no",       "no"  ],
 };
 
 /**
@@ -184,4 +185,5 @@ export const deploymentRunsWith: Record<string, (id: string) => unknown> = {
   end_connection: () => ({ id: "no-such-connection" }),
   get_spend: () => ({}),
   set_spend_cap: () => ({ cap: 25 }),
+  make_export: () => ({}),
 };

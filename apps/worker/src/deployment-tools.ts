@@ -4,20 +4,27 @@ import {
   type Connection,
   type ContextListing,
   connectionAddress,
+  contextFilePath,
+  DEPLOYMENT_FILE,
   type DeploymentToolInput,
   type DeploymentToolName,
   type DeploymentToolOutput,
+  EXPORT_FORMAT_VERSION,
+  type ExportedConnection,
+  type ExportFile,
   effectOnConnection,
   effectOnContext,
   effectOnSpendCap,
+  exportStamp,
   failure,
+  instantToIso,
   refusal,
   success,
   type ToolResult,
   written,
 } from "@praxis/domain";
 import { newContextObject } from "./routing.ts";
-import { readCap, readSpend, writeCap } from "./spend-rows.ts";
+import { capChosen, deletedContextsSpend, readCap, readSpend, writeCap } from "./spend-rows.ts";
 
 /** What a Deployment tool is given to run. Like a Context tool, it never reads the real clock. */
 export type DeploymentCall<N extends DeploymentToolName> = {
@@ -48,10 +55,7 @@ type ConnectionRow = {
 
 export const deploymentHandlers: DeploymentHandlers = {
   async list_contexts({ sql }) {
-    const rows = sql
-      .exec<ContextRow>(`SELECT id, name, accent, retired FROM contexts ORDER BY seq`)
-      .toArray();
-    return success({ items: rows.map(toListing) });
+    return success({ items: everyContext(sql) });
   },
 
   async create_context({ input, sql, env, deploymentId }) {
@@ -190,6 +194,39 @@ export const deploymentHandlers: DeploymentHandlers = {
     writeCap(sql, input.cap);
     return success(written({ cap: input.cap }, [effectOnSpendCap(input.cap)]));
   },
+
+  async make_export({ sql, env, arrivedAt }) {
+    // Every Context, retired ones too: an Export is always the whole Deployment (section 10.1).
+    const contexts = everyContext(sql).map((listed) => ({
+      ...listed,
+      file: contextFilePath(listed.id),
+    }));
+    const deployment: ExportFile = {
+      path: DEPLOYMENT_FILE,
+      content: {
+        ...exportStamp(arrivedAt),
+        kind: "deployment",
+        contexts,
+        spend_cap: capChosen(sql),
+        deleted_contexts_spend: deletedContextsSpend(sql),
+        connections: sql
+          .exec<ExportedConnection>(`SELECT id, name, context_id FROM connections ORDER BY seq`)
+          .toArray(),
+      },
+    };
+    // Each Context's object writes its own file. This object carries them and reads none (ADR 0006).
+    const files = await Promise.all(
+      contexts.map(async ({ id, file }): Promise<ExportFile> => {
+        const object = env.CONTEXT.get(env.CONTEXT.idFromString(id));
+        return { path: file, content: await object.exportFile(arrivedAt) };
+      }),
+    );
+    return success({
+      format_version: EXPORT_FORMAT_VERSION,
+      made_at: instantToIso(arrivedAt),
+      files: [deployment, ...files],
+    });
+  },
 };
 
 /**
@@ -276,6 +313,14 @@ export function otherContextNames(sql: SqlStorage, id: string): string[] {
 function setRetired(sql: SqlStorage, found: ContextListing, retired: boolean): ContextListing {
   sql.exec(`UPDATE contexts SET retired = ? WHERE id = ?`, retired ? 1 : 0, found.id);
   return { ...found, retired };
+}
+
+/** Every Context, retired or not, in the order they were made. */
+function everyContext(sql: SqlStorage): ContextListing[] {
+  return sql
+    .exec<ContextRow>(`SELECT id, name, accent, retired FROM contexts ORDER BY seq`)
+    .toArray()
+    .map(toListing);
 }
 
 function listing(sql: SqlStorage, id: string): ContextListing | null {

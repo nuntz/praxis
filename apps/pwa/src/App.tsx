@@ -19,6 +19,7 @@ import { Conversation } from "./Conversation.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
+import { ExportSettings } from "./Export.tsx";
 import { CurrentHeldChanges, followHeldChanges } from "./HeldChanges.tsx";
 import { Journal } from "./Journal.tsx";
 import { Live, socketOpener } from "./live.ts";
@@ -339,6 +340,7 @@ export function App() {
                       />
                       <Connections contexts={contexts() ?? []} />
                       <SpendSettings />
+                      <ExportSettings />
                     </div>
                   </Show>
                   <main class="peers">

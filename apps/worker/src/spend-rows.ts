@@ -1,4 +1,10 @@
-import { DEFAULT_SPEND_CAP, monthOf, type Spend, spendNotice } from "@praxis/domain";
+import {
+  DEFAULT_SPEND_CAP,
+  type MonthSpend,
+  monthOf,
+  type Spend,
+  spendNotice,
+} from "@praxis/domain";
 
 /**
  * The spend the Deployment object keeps (section 5.7): the cap, and what each Context has spent in
@@ -10,8 +16,14 @@ import { DEFAULT_SPEND_CAP, monthOf, type Spend, spendNotice } from "@praxis/dom
  * person and where to change it, and keeps it until the person sets one, since there is always one.
  */
 export function readCap(sql: SqlStorage): number {
-  const row = sql.exec<{ dollars: number }>(`SELECT dollars FROM spend_cap`).toArray()[0];
-  return row?.dollars ?? DEFAULT_SPEND_CAP;
+  return capChosen(sql) ?? DEFAULT_SPEND_CAP;
+}
+
+/** The cap the person set, or null while they have set none. */
+export function capChosen(sql: SqlStorage): number | null {
+  return (
+    sql.exec<{ dollars: number }>(`SELECT dollars FROM spend_cap`).toArray()[0]?.dollars ?? null
+  );
 }
 
 export function writeCap(sql: SqlStorage, dollars: number): void {
@@ -52,4 +64,18 @@ export function readSpend(sql: SqlStorage, at: number): Spend {
       .one().dollars ?? 0;
   const cap = readCap(sql);
   return { month, spent, cap, notice: spendNotice(spent, cap) };
+}
+
+/**
+ * What Contexts no longer listed spent in each calendar month, in all, with no name attached, for
+ * an Export (section 10.1). A listed Context's spend is not here: its Run records hold it.
+ */
+export function deletedContextsSpend(sql: SqlStorage): MonthSpend[] {
+  return sql
+    .exec<MonthSpend>(
+      `SELECT month, sum(dollars) AS dollars FROM spend
+       WHERE context_id NOT IN (SELECT id FROM contexts)
+       GROUP BY month ORDER BY month`,
+    )
+    .toArray();
 }

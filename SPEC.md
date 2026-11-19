@@ -761,7 +761,7 @@ ADR 0006, 0010, 0017, 0023, 0024.
   - what a Run, a Call or embedding cost;
   - notify the Devices that this Context has a Brief or a Review;
   - a Call is starting here, or has ended.
-- The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to rename it, for a Backup, a move, and ending a Call there when another starts elsewhere.
+- The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to rename it, for an Export or a Backup, a move, and ending a Call there when another starts elsewhere. For an Export or a Backup it carries the file the Context's object writes and reads none of it.
 - A Context's object keeps its own name, for its settings and the summary of an Effect on it. The Deployment object is its only writer, writes it before its own list, and runs its writes one at a time, so the two never disagree (ADR 0006).
 - Revoking a Connection or retiring a Context takes effect on the next request.
 - Each Context has its own alarm, which schedules its Brief and Review, expires its Trash, prunes its change log and finishes an interrupted move.
@@ -806,9 +806,9 @@ ADR 0018.
 
 ### 10.1 The file
 
-- An **Export** is an archive in a documented JSON format of Praxis's own, stamped with a format version: one file for the Deployment and one per Context. It is always the whole Deployment. Only the person's hand makes one.
+- An **Export** is an archive in a documented JSON format of Praxis's own (`docs/export-format.md`), stamped with a format version: one file for the Deployment and one per Context. It is always the whole Deployment. Only the person's hand makes one.
 - A **Backup** is the same file, made by the system once a day into R2 and deleted after 30 days. Always on, with no switch.
-- **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; Run records. From the Deployment: the Contexts with their names, accent colours and time zones, whether each is retired, their Brief and Review times and Notification switch; the spend cap; the monthly spend totals of deleted Contexts; Connections.
+- **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; Run records, without which changes each made, since those are lines of the change log; each Context's time zone, in its own file. From the Deployment: the Contexts with their names and accent colours, whether each is retired, their Brief and Review times and Notification switch; the spend cap; the monthly spend totals of deleted Contexts; Connections.
 - **Out**: every Conversation and the runtime's record of it, the change log, the record of a Connection's calls, Devices and push subscriptions, both provider keys.
 - An Entry in the file is its plain words plus its links as data.
 - The words go out as typed, with an image as its address only. There is no Export of the Journal as Markdown files, no per-Context Export and no encryption of Praxis's own.

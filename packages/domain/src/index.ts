@@ -6,6 +6,7 @@ export * from "./day.ts";
 export * from "./deployment.ts";
 export * from "./effects.ts";
 export * from "./entry.ts";
+export * from "./export.ts";
 export * from "./follow-edit.ts";
 export * from "./held-change.ts";
 export * from "./link.ts";

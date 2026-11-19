@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Caller, CallerKind } from "./callers.ts";
 import { timeZone } from "./day.ts";
 import type { Written } from "./effects.ts";
+import type { Export } from "./export.ts";
 import type { Spend, SpendCap } from "./spend.ts";
 import { type Parsed, parseInput, writeInput } from "./tools.ts";
 
@@ -152,6 +153,12 @@ export const deploymentTools = {
       "Set the Deployment's monthly spend cap, in US dollars. It takes effect at once: raising it past what was spent lets Runs start again. Setting the cap it has changes nothing.",
     input: writeInput({ cap }),
   },
+  make_export: {
+    kind: "read",
+    description:
+      "Make an Export: the whole Deployment as files in Praxis's own JSON format, stamped with its format version, one for the Deployment and one per Context, retired ones too. It holds each Context's Journal with its Versions, the Trash with each item's clock and the Run records; never a Conversation, the change log, the record of a Connection's calls, a Device or a provider key. There is no Export of one Context.",
+    input: z.strictObject({}),
+  },
 } as const;
 
 export type DeploymentToolName = keyof typeof deploymentTools;
@@ -186,6 +193,7 @@ export type DeploymentToolOutput = {
   end_connection: Written<Connection>;
   get_spend: Spend;
   set_spend_cap: Written<SpendCap>;
+  make_export: Export;
 };
 
 export function parseDeploymentToolInput<N extends DeploymentToolName>(

@@ -3,6 +3,7 @@ import type { Wake } from "@earendil-works/pi-durable";
 import {
   type Caller,
   type Change,
+  type ContextFile,
   type ContextMade,
   type ConversationToolInput,
   type ConversationToolName,
@@ -32,6 +33,7 @@ import {
   lastChange,
   pruneChanges,
 } from "./change-log.ts";
+import { contextFile } from "./context-file.ts";
 import { forgetOldKeys, holdsKeys, rememberKey, repeatedKey } from "./keys.ts";
 import { logCall } from "./log.ts";
 import type { AgentModel } from "./model.ts";
@@ -154,6 +156,15 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
         });
       });
       await this.afterWrite(before);
+    }
+
+    /**
+     * This Context's file of an Export, as at `at`, which the Deployment object asks for on
+     * `make_export` (section 10.1). Each Context's object writes its own, so the files of one
+     * Export are not one instant (ADR 0018).
+     */
+    async exportFile(at: number): Promise<ContextFile> {
+      return contextFile(this.ctx.storage.sql, at);
     }
 
     /**
