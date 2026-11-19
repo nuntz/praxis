@@ -6,7 +6,8 @@ import type { RecordKind } from "./effects.ts";
 import { instantToIso, type Version } from "./entry.ts";
 import type { Anchor, LinkTarget } from "./link.ts";
 import type { RunFailure } from "./notice.ts";
-import type { Recurrence } from "./recurrence.ts";
+import type { Recurrence, Weekday } from "./recurrence.ts";
+import type { ClockTime } from "./settings.ts";
 import type { End, WaitTarget } from "./task.ts";
 
 /**
@@ -95,8 +96,8 @@ export type ExportedContext = {
   name: string;
   accent: Accent;
   retired: boolean;
-  // A Context's Brief and Review times (#67) and Notification switch (#68) join the file, here or
-  // in its own file beside its time zone, as section 10.1 lists them, once a Context has them.
+  // A Context's Notification switch (#68) joins the file, here or in its own file beside its time
+  // zone, as section 10.1 lists it, once a Context has one.
   /** The path of its file within the Export. */
   file: string;
 };
@@ -108,7 +109,15 @@ export type ExportedContext = {
  */
 export type ContextFile = Stamped & {
   kind: "context";
-  context: { id: string; name: string; time_zone: string };
+  /** Its settings: when its Brief and Review come, in its time zone, each time null while off. */
+  context: {
+    id: string;
+    name: string;
+    time_zone: string;
+    brief_time: ClockTime | null;
+    review_day: Weekday;
+    review_time: ClockTime | null;
+  };
   /** In the order made, as are the lists after it. */
   entries: ExportedEntry[];
   tasks: ExportedTask[];

@@ -5,9 +5,17 @@ import {
   effectOnContext,
   namedZone,
   type Settings,
+  type Weekday,
 } from "@praxis/domain";
 
-type SettingsRow = { id: string; name: string; time_zone: string };
+type SettingsRow = {
+  id: string;
+  name: string;
+  time_zone: string;
+  brief_time: string | null;
+  review_day: Weekday;
+  review_time: string | null;
+};
 
 /**
  * Make the Context with its id, name and time zone, as the Deployment object does on
@@ -48,14 +56,24 @@ export function timeZoneOf(sql: SqlStorage): string {
   return row(sql).time_zone;
 }
 
+/** Set when the Brief comes, or switch it off with null. */
+export function setBriefTime(sql: SqlStorage, time: string | null): void {
+  sql.exec(`UPDATE context_settings SET brief_time = ?`, time);
+}
+
+/** Set the Review's day and time, or switch it off with a null time, keeping its day. */
+export function setReviewTime(sql: SqlStorage, day: Weekday, time: string | null): void {
+  sql.exec(`UPDATE context_settings SET review_day = ?, review_time = ?`, day, time);
+}
+
 export function setTimeZone(sql: SqlStorage, zone: string): void {
   sql.exec(`UPDATE context_settings SET time_zone = ?`, zone);
 }
 
 /** The Context's settings as callers read them, with today as at `at`. */
 export function readSettings(sql: SqlStorage, at: number): Settings {
-  const { name, time_zone } = row(sql);
-  return { name, time_zone, today: dayIn(at, time_zone) };
+  const { name, time_zone, brief_time, review_day, review_time } = row(sql);
+  return { name, time_zone, today: dayIn(at, time_zone), brief_time, review_day, review_time };
 }
 
 /** The Effect of a call on the Context's settings, summarised by the Context's name. */
@@ -64,5 +82,9 @@ export function contextEffect(sql: SqlStorage): Effect {
 }
 
 function row(sql: SqlStorage): SettingsRow {
-  return sql.exec<SettingsRow>(`SELECT id, name, time_zone FROM context_settings`).one();
+  return sql
+    .exec<SettingsRow>(
+      `SELECT id, name, time_zone, brief_time, review_day, review_time FROM context_settings`,
+    )
+    .one();
 }

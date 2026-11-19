@@ -1,5 +1,6 @@
 import type {
   AgentMessage,
+  ClockFold,
   Effect,
   Message,
   MessagesPage,
@@ -7,11 +8,12 @@ import type {
   RunCall,
   RunFailure,
 } from "@praxis/domain";
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { Peer } from "./design/Peer.tsx";
 import { HeldChangeItem, useHeldChanges } from "./HeldChanges.tsx";
 import { recordAnchor } from "./Journal.tsx";
+import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { readNotices } from "./Notices.tsx";
 import { online } from "./online.ts";
@@ -24,6 +26,14 @@ const moneyFormat = new Intl.NumberFormat(undefined, {
   currency: "USD",
   maximumSignificantDigits: 2,
 });
+
+/**
+ * How many Briefs and Reviews the current Context's Conversation shows that are not yet read: the
+ * Agent tab carries it as a badge on a phone (section 8.5).
+ */
+const [unread, setUnread] = createSignal(0);
+
+export { unread as unreadBriefs };
 
 /**
  * The Conversation with the Agent in the current Context (section 8.5): every Message, scrollable
@@ -50,9 +60,16 @@ export function Conversation(props: {
   const [writing, setWriting] = createSignal<string | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
 
-  async function loadPage(cursor?: string) {
+  /**
+   * The newest page, read afresh, the last read's answer winning: a burst of changes to Tasks
+   * while a Brief is shown reads it several times (CODING_STANDARDS.md, Reads and changes).
+   */
+  const newest = latestRead((current) => loadPage(undefined, current));
+
+  async function loadPage(cursor?: string, current: () => boolean = () => true) {
     try {
       const result = await callTool("list_messages", cursor === undefined ? {} : { cursor });
+      if (!current()) return;
       if (!result.ok) return setProblem(result.error.message);
       setAgent(result.value.agent);
       const page = result.value.items.toReversed();
@@ -74,7 +91,10 @@ export function Conversation(props: {
     }
   }
 
-  /** A Message now whole: in its place by its id, or after the others as the newest. */
+  /**
+   * A Message now whole: in its place by its id, or after the others as the newest. A new Brief
+   * or Review replaces one of its kind not yet read (section 5.4).
+   */
   function place(message: Message) {
     if (message.from === "agent") setWriting(null);
     // A Run that ended counts what it spent, which may bring the warning or the cap, and may have
@@ -88,8 +108,47 @@ export function Conversation(props: {
     }
     const at = messages.findIndex((shown) => shown.id === message.id);
     if (at !== -1) return setMessages(at, reconcile(message, { key: "id" }));
-    setMessages((shown) => [...shown, message]);
+    const replacing = message.from === "agent" ? message.clock : null;
+    setMessages((shown) => [
+      ...shown.filter(
+        (placed) =>
+          !(
+            replacing &&
+            placed.from === "agent" &&
+            placed.clock?.kind === replacing.kind &&
+            !placed.clock.read
+          ),
+      ),
+      message,
+    ]);
   }
+
+  /**
+   * Praxis has shown a Brief or a Review in a focused window: say so, so it is read on every
+   * Device. It is shown read here once the server has said so.
+   */
+  async function shown(message: AgentMessage): Promise<void> {
+    try {
+      const result = await callTool("note_shown", { message: message.id });
+      if (!result.ok) return;
+      const at = messages.findIndex((placed) => placed.id === message.id);
+      const placed = messages[at];
+      if (placed?.from === "agent" && placed.clock) {
+        setMessages(at, reconcile({ ...placed, clock: { ...placed.clock, read: true } }));
+      }
+    } catch (error) {
+      // Not shown as a problem: the next time it is in view, it is noted again.
+      unreachableMessage(error);
+    }
+  }
+
+  createEffect(() =>
+    setUnread(
+      messages.filter((message) => message.from === "agent" && message.clock?.read === false)
+        .length,
+    ),
+  );
+  onCleanup(() => setUnread(0));
 
   /**
    * The person's Message as a tool answered with it, sent or tried again. The live channel may
@@ -148,15 +207,23 @@ export function Conversation(props: {
   // Read once the live channel is open, so a Message added meanwhile is either read or brought.
   onMount(async () => {
     await live.ready;
-    await loadPage();
+    await newest.read();
   });
   onCleanup(
     live.listen({
       answer: setWriting,
       message: place,
+      // A Brief or Review says how many of the Tasks it names have been finished since: a change to
+      // a Task may change that, so the newest page is read again while one is shown.
+      changed: async (change) => {
+        const briefShown = messages.some((message) => message.from === "agent" && message.clock);
+        if (briefShown && change.effects.some((effect) => effect.kind === "task")) {
+          await newest.read();
+        }
+      },
       // What was said while the channel was down is not replayed: the newest page is read.
       rejoined: async () => {
-        await loadPage();
+        await newest.read();
       },
     }),
   );
@@ -188,7 +255,13 @@ export function Conversation(props: {
                   />
                 }
               >
-                {(said) => <AgentMessageItem message={said()} onShowRecord={props.onShowRecord} />}
+                {(said) => (
+                  <AgentMessageItem
+                    message={said()}
+                    onShowRecord={props.onShowRecord}
+                    onShown={shown}
+                  />
+                )}
               </Show>
             )}
           </For>
@@ -303,10 +376,65 @@ function PersonMessageItem(props: {
   );
 }
 
+/**
+ * Call `then` once the element is shown in a focused window: on the screen, in a window that has
+ * the focus and is not hidden. A column or tab not shown is not on the screen.
+ */
+function whenShown(element: Element, then: () => void): () => void {
+  let inView = false;
+  let done = false;
+  const check = () => {
+    if (done || !inView || !document.hasFocus() || document.visibilityState !== "visible") return;
+    done = true;
+    then();
+  };
+  const observer = new IntersectionObserver((entries) => {
+    inView = entries.some((entry) => entry.isIntersecting);
+    check();
+  });
+  observer.observe(element);
+  window.addEventListener("focus", check);
+  document.addEventListener("visibilitychange", check);
+  return () => {
+    observer.disconnect();
+    window.removeEventListener("focus", check);
+    document.removeEventListener("visibilitychange", check);
+  };
+}
+
+const takenFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const CLOCK_NAMED: Record<ClockFold["kind"], string> = { brief: "Brief", review: "Review" };
+
+/** What a Brief or a Review says of itself: when it was taken, and what has been finished since. */
+function ClockHeading(props: { clock: ClockFold }) {
+  const finished = () => props.clock.finished_since;
+  return (
+    <p class="clock-taken">
+      <strong>{CLOCK_NAMED[props.clock.kind]}</strong>, taken{" "}
+      <time datetime={props.clock.taken}>{takenFormat.format(new Date(props.clock.taken))}</time>
+      <Show when={finished() > 0}>
+        .{" "}
+        {finished() === 1
+          ? "A Task it names has been finished since."
+          : `${finished()} Tasks it names have been finished since.`}
+      </Show>
+    </p>
+  );
+}
+
 /** A Message from the Agent, shown as an Entry's words are, with its Run's calls folded under it. */
 function AgentMessageItem(props: {
   message: AgentMessage;
   onShowRecord: (anchor: string) => void;
+  /** A Brief or Review not yet read has been shown in a focused window. */
+  onShown: (message: AgentMessage) => void;
 }) {
   const run = () => props.message.run;
   const heldChanges = useHeldChanges();
@@ -317,9 +445,20 @@ function AgentMessageItem(props: {
       .calls.flatMap((call) => call.effects)
       .filter((effect) => effect.kind === "held_change" && effect.what === "made")
       .flatMap((effect) => heldChanges.find(effect.id) ?? []);
+  let item!: HTMLLIElement;
+  onMount(() => {
+    if (props.message.clock?.read !== false) return;
+    onCleanup(whenShown(item, () => props.onShown(props.message)));
+  });
   return (
-    <li class="message from-agent" data-testid="message">
+    <li
+      ref={item}
+      class="message from-agent"
+      classList={{ unread: props.message.clock?.read === false }}
+      data-testid="message"
+    >
       <span class="message-from">Agent</span>
+      <Show when={props.message.clock}>{(clock) => <ClockHeading clock={clock()} />}</Show>
       <Show when={props.message.words}>
         <Words words={props.message.words} />
       </Show>

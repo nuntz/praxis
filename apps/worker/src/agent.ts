@@ -7,6 +7,7 @@ import {
   defineExtension,
   defineTool,
   type EntryRecord,
+  GenerationTask,
   Harness,
   type HookApi,
   hook,
@@ -21,7 +22,10 @@ import {
 import { openDurableObjectSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/cloudflare";
 import {
   type AgentMessage,
+  type Caller,
   type Change,
+  type ClockFold,
+  type ClockKind,
   type Effect,
   inputJsonSchema,
   instantToIso,
@@ -32,11 +36,13 @@ import {
   type PersonMessage,
   type RunCall,
   type RunFailure,
+  type RunStart,
   type ToolName,
   type ToolResult,
   tools,
 } from "@praxis/domain";
 import { type Digest, encodeCursor } from "./change-log.ts";
+import { finishedSince, settleClockRun } from "./clock-rows.ts";
 import { summaryRequest } from "./compaction.ts";
 import { type HeldWaiting, heldWaiting } from "./held-change-rows.ts";
 import { type AgentModel, costOf, runFailure } from "./model.ts";
@@ -48,6 +54,7 @@ import {
   type RunRow,
   type RunSpend,
   runAnswering,
+  runById,
   runsAnswering,
   runsNotEnded,
   startRun,
@@ -71,16 +78,28 @@ export const RUNTIME_TABLES = "pi_";
 const MESSAGE_KIND = "praxis.message";
 type MessageData = { id: string; words: string; spoken: boolean; at: number };
 
+/**
+ * The kind of record the runtime keeps the clock starting a Brief or a Review as. Its data says
+ * which and when; the model is shown the clock's instructions. It is not a Message from the person.
+ */
+const CLOCK_KIND = "praxis.clock";
+type ClockData = { id: string; kind: ClockKind; at: number };
+
 /** What each Agent call left beside its result for the screen: the result's code and its Effects. */
 type CallDetails = { result: RunCall["result"]; effects: Effect[] };
 
 /** What the Agent needs from the Context's object. */
 export type AgentHost = {
   /**
-   * Call a Context tool as the Agent, through the registry, at the time it arrives. A write is
-   * given the key the runtime gave the call. Returns the result and the change it logged, if any.
+   * Call a Context tool as the Agent, or as the clock in a Brief or a Review, through the
+   * registry, at the time it arrives. A write is given the key the runtime gave the call. Returns
+   * the result and the change it logged, if any.
    */
-  call(tool: ToolName, input: unknown): { result: ToolResult<unknown>; change: number | null };
+  call(
+    tool: ToolName,
+    input: unknown,
+    caller: Caller,
+  ): { result: ToolResult<unknown>; change: number | null };
   /** The Context's own SQLite, for the Run records. */
   sql: SqlStorage;
   /** Carry something down every live channel open on the Context. */
@@ -98,6 +117,8 @@ export type AgentHost = {
    * 5.6).
    */
   reportKey(report: KeyReport): Promise<void>;
+  /** A Brief's or Review's Run has ended and its record says how: the clock takes it from there. */
+  clockEnded(run: RunRow): Promise<void>;
 };
 
 /**
@@ -141,7 +162,19 @@ const PREAMBLE = `You are the Agent of Praxis, a journal-centric task manager fo
 - With each Message you are also told the Held Changes still waiting for the person's tap and what others changed since the last Message you answered, each named by its id and not by its words: read what you need through the tools.
 - Mark an Entry standing only when the person asks you to keep honouring something, recording it first in their words if it is not yet an Entry. Never mark or unmark one unasked.`;
 
-/** The Agent's tools: the Context tools in its column of the offering table, and nothing else. */
+const AGENT: Caller = { kind: "agent" };
+const CLOCK: Caller = { kind: "clock" };
+
+/** Whether a Run is the clock's, a Brief or a Review, rather than one answering the person. */
+function byClock(run: RunRow | null): boolean {
+  return run !== null && run.started_by !== "message";
+}
+
+/**
+ * The Agent's tools: the Context tools in its column of the offering table, and nothing else. In
+ * a Brief or a Review it calls them as the clock, which is offered reads only: the registry refuses
+ * the rest, whatever the model was shown.
+ */
 function agentTools(host: AgentHost) {
   return offeredTo("agent").map((name) =>
     defineTool({
@@ -154,13 +187,11 @@ function agentTools(host: AgentHost) {
       execute: async (args, api) => {
         const input =
           tools[name].kind === "write" ? { ...(args as object), key: `run:${api.callId}` } : args;
-        const { result, change } = host.call(name, input);
-        if (change !== null) {
-          // The Run is the one answering the Message the runtime says it is answering now.
-          const live = await api.snapshot(LiveDoc, api.conversationId, context);
-          const run = runAnswering(host.sql, live?.run?.inputs[0]);
-          if (run) addRunChange(host.sql, run.id, change);
-        }
+        // The Run is the one answering the Message the runtime says it is answering now.
+        const live = await api.snapshot(LiveDoc, api.conversationId, context);
+        const run = runAnswering(host.sql, live?.run?.inputs[0]);
+        const { result, change } = host.call(name, input, byClock(run) ? CLOCK : AGENT);
+        if (change !== null && run) addRunChange(host.sql, run.id, change);
         const details: CallDetails = result.ok
           ? { result: "ok", effects: (result.value as { effects?: Effect[] }).effects ?? [] }
           : { result: result.error.code, effects: [] };
@@ -188,13 +219,9 @@ function modelSchema(name: ToolName): Record<string, unknown> {
  * alone. `personsWords` reads them back, so the format has one owner.
  */
 function presented(words: string, bearings: Bearings): string {
-  const others =
-    bearings.otherContexts.length === 0
-      ? "There are no other Contexts."
-      : `The other Contexts are: ${bearings.otherContexts.map((name) => JSON.stringify(name)).join(", ")}.`;
   // The Standing Entries are bearings too, so the person's words come last and alone.
   return `<bearings>
-Today is ${bearings.today}. This Context is ${JSON.stringify(bearings.context)}. ${others}${bearings.lastRunCutShort ? `\n\nYour last Run was cut short at the limit of ${RUN_ROUNDS.message} model rounds, before you had finished: the person may want you to carry on.` : ""}
+${placePresented(bearings)}${bearings.lastRunCutShort ? `\n\nYour last Run was cut short at the limit of ${RUN_ROUNDS.message} model rounds, before you had finished: the person may want you to carry on.` : ""}
 
 ${standingPresented(bearings.standing)}
 
@@ -202,6 +229,63 @@ ${heldPresented(bearings.held)}
 
 ${digestPresented(bearings.digest)}
 ${BEARINGS_END}${words}`;
+}
+
+/** Today, this Context and the others, as every Run is told them. */
+function placePresented({ today, context, otherContexts }: ClockBearings): string {
+  const others =
+    otherContexts.length === 0
+      ? "There are no other Contexts."
+      : `The other Contexts are: ${otherContexts.map((name) => JSON.stringify(name)).join(", ")}.`;
+  return `Today is ${today}. This Context is ${JSON.stringify(context)}. ${others}`;
+}
+
+/**
+ * What a Brief or a Review is given at its start (section 5.2): today, this Context's name and the
+ * others', and its Standing Entries. It answers no Message, so it is told no Held Change or digest.
+ */
+export type ClockBearings = Pick<Bearings, "today" | "context" | "otherContexts" | "standing">;
+
+/** What the Agent answers with in a Brief that has nothing to raise, which leaves no Message. */
+export const NOTHING_TO_RAISE = "NOTHING_TO_RAISE";
+
+/** What a Review that answered with `NOTHING_TO_RAISE` says, in Praxis's words. */
+const NOTHING_STALE = "Nothing has gone stale or been missed this week.";
+
+/**
+ * How a Brief or a Review ends its answer: the ids of the Tasks it raises, which Praxis takes off
+ * before showing it, to say once any have been finished since.
+ */
+const TASKS_NAMED = /\n*<tasks_named>([^<]*)<\/tasks_named>\s*$/;
+
+/** What the clock asks of the Agent in a Brief and in a Review (section 5.4). */
+const CLOCK_ASKS: Record<ClockKind, string> = {
+  brief: `The clock started this Run for this Context's Brief: no Message from the person started it. Read the Journal through your tools, beginning with view_attention, and leave one Message saying what needs attention today: what is due, what became actionable, and what is Delegated or Waiting and has gone quiet, which is your judgment from the Journal. If there is nothing to raise, answer with exactly ${NOTHING_TO_RAISE} and nothing else.`,
+  review: `The clock started this Run for this Context's weekly Review: no Message from the person started it. Read the Journal through your tools and leave one Message listing stale Tasks, Projects with no next Task, and Entries that look like they hold a Task nobody made. If there is nothing to raise, say so in one line.`,
+};
+
+/** The clock's instructions as the model is shown them, after the Run's bearings. */
+function clockPresented(kind: ClockKind, bearings: ClockBearings): string {
+  return `<bearings>
+${placePresented(bearings)}
+
+${standingPresented(bearings.standing)}
+${BEARINGS_END}${CLOCK_ASKS[kind]}
+
+You can only read in this Run: you cannot change anything or leave a Held Change. If you think something should change, say so. You see the Journal only: do not mention a calendar or apologise for lacking one. Be brief. End your Message with the ids of the Tasks it raises, on a line of their own, as <tasks_named>id id</tasks_named>, or <tasks_named></tasks_named> when it raises none.`;
+}
+
+/**
+ * A Brief's or Review's answer as the screen shows it, without the Tasks it names, and those
+ * Tasks' ids.
+ */
+export function clockAnswer(words: string): { shown: string; tasksNamed: string[] } {
+  const found = TASKS_NAMED.exec(words);
+  if (!found) return { shown: words.trim(), tasksNamed: [] };
+  return {
+    shown: words.slice(0, found.index).trim(),
+    tasksNamed: (found[1] ?? "").split(/[\s,]+/).filter((id) => id !== ""),
+  };
 }
 
 /**
@@ -295,6 +379,8 @@ export class ContextAgent {
   };
   /** The Runs being waited on to end, so their records say how. */
   readonly #settling = new Set<Promise<void>>();
+  /** The limit of model rounds the Conversation was last configured with. */
+  #maxTurns: number | undefined;
 
   constructor(host: AgentHost, model: AgentModel) {
     this.#host = host;
@@ -323,6 +409,10 @@ export class ContextAgent {
         hooks: [
           hook(CompactionTask, {
             beforeCompact: (compaction, api, within) => this.#summarize(compaction, api, within),
+          }),
+          // The limit of model rounds and the tools offered are the Run's: the clock's are its own.
+          hook(GenerationTask, {
+            beforeRequest: (request, api, within) => this.#fitRequest(request, api, within),
           }),
         ],
       }),
@@ -370,6 +460,7 @@ export class ContextAgent {
     ) {
       await root.configure(agent, context);
     }
+    this.#maxTurns = agent.maxTurns;
     await harness.observeDoc(
       LiveDoc,
       root.id,
@@ -385,6 +476,77 @@ export class ContextAgent {
     harness.resume();
     for (const run of runsNotEnded(this.#host.sql)) this.#follow(harness, root, run);
     return { harness, root };
+  }
+
+  /**
+   * Fit a request to the Run it is for: a Brief or a Review is limited to the clock's rounds and
+   * offered reads only, and one answering the person to the person's rounds and the Agent's tools.
+   * The limit is the Conversation's, read once the round's tools have run, so it is configured
+   * here, before the round. Never throws: a hook that throws is skipped (docs/pi-durable.md).
+   */
+  async #fitRequest(
+    request: { readonly messages: readonly ModelMessage[] },
+    api: HookApi,
+    within: Context,
+  ): Promise<{ messages: readonly ModelMessage[] } | undefined> {
+    try {
+      const live = await api.snapshot(LiveDoc, api.conversationId, within);
+      const clock = byClock(runAnswering(this.#host.sql, live?.run?.inputs[0]));
+      const limit = clock ? RUN_ROUNDS.clock : RUN_ROUNDS.message;
+      if (limit !== this.#maxTurns) {
+        const { root } = await (this.#opened as Promise<{ root: Conversation }>);
+        await root.configure({ maxTurns: limit }, within);
+        this.#maxTurns = limit;
+      }
+      if (!clock) return undefined;
+      return {
+        messages: request.messages.map((message) =>
+          message.role === "system" && message.toolsAdded !== undefined
+            ? {
+                ...message,
+                toolsAdded: message.toolsAdded.filter(({ name }) =>
+                  CLOCK_TOOLS.has(name as ToolName),
+                ),
+              }
+            : message,
+        ),
+      };
+    } catch {
+      console.error(JSON.stringify({ agent: "request_not_fitted" }));
+      return undefined;
+    }
+  }
+
+  /**
+   * Start a Brief or a Review as at `at`, after any Run going now: the clock's record goes into the
+   * Conversation in place of a Message, and the Run is recorded before it starts.
+   */
+  async startClock(
+    storage: DurableObjectStorage,
+    kind: ClockKind,
+    at: number,
+    bearings: ClockBearings,
+  ): Promise<void> {
+    const { harness, root } = await this.open(storage);
+    const data: ClockData = { id: crypto.randomUUID(), kind, at };
+    await this.#host.arm({ ...harness.wake(), active: true });
+    const submission = await root.submit(
+      {
+        type: "input",
+        content: clockPresented(kind, bearings),
+        entry: { kind: CLOCK_KIND, data },
+        requestId: data.id,
+      },
+      context,
+    );
+    const run = startRun(this.#host.sql, {
+      startedBy: kind,
+      message: data.id,
+      submission: submission.id,
+      at,
+      model: this.#model.id,
+    });
+    this.#follow(harness, root, run);
   }
 
   /** The runtime fired the alarm: run what is due, and what a lost instance left. */
@@ -495,6 +657,7 @@ export class ContextAgent {
         NOTHING_SPENT,
       );
       await this.#reportSpend(run.at);
+      await this.#clockEnded(run);
       return;
     }
     const settled = await submission.wait(context);
@@ -518,6 +681,17 @@ export class ContextAgent {
         records.flatMap((record) => record.model ?? []),
       ),
     );
+    if (run.started_by !== "message") {
+      const kind = run.started_by;
+      const { shown, tasksNamed } = clockAnswer(saidIn(records));
+      // A Brief with nothing to raise leaves no Message, and a Review always leaves one; one cut
+      // short says so whatever it said.
+      const raised =
+        cutShort ||
+        (failure === null && shown !== "" && (kind === "review" || shown !== NOTHING_TO_RAISE));
+      settleClockRun(this.#host.sql, { id: run.id, kind }, { raised, tasksNamed });
+      // A Brief or Review that left a Message notifies the Devices, by the Deployment object (#68).
+    }
     // Counted before the screen learns the Run ended, so the spend it reads then holds it.
     await this.#reportSpend(run.at);
     if (failure === "key_refused") await this.#reportKey({ key: "refused", at: run.at });
@@ -530,6 +704,14 @@ export class ContextAgent {
       (message) => message.from === "person" && message.notice?.run === run.id,
     );
     if (noticed) this.#host.send({ kind: "message", message: noticed });
+    await this.#clockEnded(run);
+  }
+
+  /** Hand a Brief's or Review's Run, now ended, back to the clock, as its record now says. */
+  async #clockEnded(run: RunRow): Promise<void> {
+    if (!byClock(run)) return;
+    const ended = runById(this.#host.sql, run.id);
+    if (ended) await this.#host.clockEnded(ended);
   }
 
   /**
@@ -608,6 +790,8 @@ export class ContextAgent {
   #carryAnswer(live: Readonly<LiveState>): void {
     // A Run is the one answering a Message: its task is handed on from round to round.
     const run = live.run?.inputs[0];
+    // A Brief or a Review arrives whole, once it is known to have something to raise.
+    if (byClock(runAnswering(this.#host.sql, run))) return;
     if (run !== this.#answer.run) this.#answer = { run, said: [], saying: "" };
     const message = live.generation?.message as AssistantMessage | undefined;
     const words = message ? textOf(message) : "";
@@ -617,6 +801,18 @@ export class ContextAgent {
     this.#answer.saying = words;
     if (words === "" || words === saying) return;
     this.#host.send({ kind: "answer", words: [...said, words].join("\n\n") });
+  }
+
+  /**
+   * Carry a Message of the Conversation down the live channel as it now stands, when it is among
+   * the newest: a Brief or a Review just read, so every screen open on the Context shows it read.
+   */
+  async carryMessage(storage: DurableObjectStorage, id: string): Promise<void> {
+    const { root } = await this.open(storage);
+    const message = (await this.page(root, undefined, PAGE_MESSAGES)).items.find(
+      (each) => each.id === id,
+    );
+    if (message) this.#host.send({ kind: "message", message });
   }
 
   /** The Conversation, newest Message first, from the start of a page the cursor names. */
@@ -635,6 +831,8 @@ export class ContextAgent {
     const items: Message[] = [];
     let said: { words: string[]; calls: RunCall[] } = { words: [], calls: [] };
     const answering: { item: number; message: string }[] = [];
+    // Each Brief and Review on the page, which shows only once it has ended with something to raise.
+    const fromClock: { item: number; data: ClockData }[] = [];
     // Each person's Message on the page, which carries a Notice while its newest Run has failed.
     const fromPerson: number[] = [];
     const results = new Map<string, CallDetails>();
@@ -649,6 +847,15 @@ export class ContextAgent {
       );
       for (const entry of page.items) {
         next = (entry.id as number) - 1;
+        if (entry.kind === CLOCK_KIND) {
+          const data = entry.data as ClockData;
+          fromClock.push({ item: items.length, data });
+          items.push(agentMessage(said.words, said.calls.toReversed()));
+          said = { words: [], calls: [] };
+          last = entry.id as number;
+          if (items.length >= size) break scan;
+          continue;
+        }
         if (entry.kind === MESSAGE_KIND) {
           const data = entry.data as MessageData;
           if (said.words.length > 0 || said.calls.length > 0) {
@@ -698,10 +905,10 @@ export class ContextAgent {
     if (said.words.length > 0 && last === null) {
       items.push(agentMessage(said.words, said.calls.toReversed()));
     }
-    const runs = runsAnswering(
-      this.#host.sql,
-      fromPerson.map((item) => items[item]?.id ?? ""),
-    );
+    const runs = runsAnswering(this.#host.sql, [
+      ...fromPerson.map((item) => items[item]?.id ?? ""),
+      ...fromClock.map(({ data }) => data.id),
+    ]);
     for (const item of fromPerson) {
       const shown = items[item] as PersonMessage;
       const run = runs.get(shown.id);
@@ -712,7 +919,9 @@ export class ContextAgent {
       const shown = items[item] as AgentMessage;
       if (run) {
         if (run.ended === "cut_short") {
-          shown.words = [shown.words, CUT_SHORT].filter((words) => words !== "").join("\n\n");
+          shown.words = [shown.words, CUT_SHORT.message]
+            .filter((words) => words !== "")
+            .join("\n\n");
         }
         shown.id = run.id;
         shown.run = {
@@ -723,8 +932,45 @@ export class ContextAgent {
         };
       }
     }
+    const hidden = new Set<number>();
+    for (const { item, data } of fromClock) {
+      const run = runs.get(data.id);
+      const shown = items[item] as AgentMessage;
+      const clock = run ? this.#clockShown(run, data.kind, shown) : null;
+      if (clock === null) hidden.add(item);
+      else shown.clock = clock;
+    }
     const more = last !== null && items.length >= size && last > 1;
-    return { items, next_cursor: more ? String(last) : null, agent: "available" };
+    return {
+      items: items.filter((_, item) => !hidden.has(item)),
+      next_cursor: more ? String(last) : null,
+      agent: "available",
+    };
+  }
+
+  /**
+   * A Brief or Review as the Conversation shows it, named by its Run, or null while it is not
+   * shown: while it is going, when it had nothing to raise or failed, and once a newer one of its
+   * kind replaced it unread.
+   */
+  #clockShown(run: RunRow, kind: ClockKind, shown: AgentMessage): ClockFold | null {
+    if (run.ended === null || run.raised !== 1 || run.replaced === 1) return null;
+    const { shown: said } = clockAnswer(shown.words);
+    // A Review that answers as a Brief with nothing to raise still says so in one line.
+    const words = said === NOTHING_TO_RAISE ? NOTHING_STALE : said;
+    shown.words =
+      run.ended === "cut_short"
+        ? [words, CUT_SHORT[kind]].filter((each) => each !== "").join("\n\n")
+        : words;
+    shown.id = run.id;
+    shown.run = { ...shown.run, id: run.id, ended: run.ended, cost: run.cost };
+    const named = JSON.parse(run.tasks_named ?? "[]") as string[];
+    return {
+      kind,
+      taken: instantToIso(run.at),
+      read: run.read_at !== null,
+      finished_since: finishedSince(this.#host.sql, named, run.at),
+    };
   }
 }
 
@@ -733,7 +979,6 @@ export class ContextAgent {
  * 10 when the clock did. In code, not a setting. The runtime ends a Run that reaches it.
  */
 export const RUN_ROUNDS = { message: 25, clock: 10 } as const;
-// The clock's limit applies once the clock starts Runs, for the Brief and the Review (#67).
 
 /** How the runtime says a Run reached the limit of model rounds, which it calls turns. */
 const ROUNDS_REACHED = "turn_limit";
@@ -742,10 +987,17 @@ const ROUNDS_REACHED = "turn_limit";
  * What a Run cut short at the limit says at the end of its Message, in Praxis's words rather than
  * the model's, since the model was not asked again.
  */
-const CUT_SHORT = `I stopped here: a Run takes at most ${RUN_ROUNDS.message} rounds of the model, and this one reached the limit before I had finished. Tell me to carry on if you want me to.`;
+const CUT_SHORT: Record<RunStart, string> = {
+  message: `I stopped here: a Run takes at most ${RUN_ROUNDS.message} rounds of the model, and this one reached the limit before I had finished. Tell me to carry on if you want me to.`,
+  brief: `I stopped here: a Brief takes at most ${RUN_ROUNDS.clock} rounds of the model, and this one reached the limit before I had finished.`,
+  review: `I stopped here: a Review takes at most ${RUN_ROUNDS.clock} rounds of the model, and this one reached the limit before I had finished.`,
+};
 
 /** The tools the Agent is offered. */
 const AGENT_TOOLS = new Set<ToolName>(offeredTo("agent"));
+
+/** The tools a Brief or a Review is offered: reads only. */
+const CLOCK_TOOLS = new Set<ToolName>(offeredTo("clock"));
 
 /** How many Messages a page of the Conversation holds, about. */
 const PAGE_MESSAGES = 50;
@@ -798,7 +1050,17 @@ function agentMessage(words: string[], calls: RunCall[]): AgentMessage {
     from: "agent",
     words: words.join("\n\n"),
     run: { id, calls, ended: null, cost: null },
+    clock: null,
   };
+}
+
+/** What the Agent said in a Run's records, every round's words in order, as its Message holds them. */
+function saidIn(records: EntryRecord[]): string {
+  return records
+    .flatMap((record) => record.model ?? [])
+    .flatMap((message) => (message.role === "assistant" ? [textOf(message)] : []))
+    .filter((words) => words !== "")
+    .join("\n\n");
 }
 
 /** The text an answer holds, without its tool calls or its thinking. */

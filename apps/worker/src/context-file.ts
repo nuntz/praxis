@@ -27,8 +27,8 @@ import type { RunRow } from "./run-rows.ts";
  */
 export function contextFile(sql: SqlStorage, at: number): ContextFile {
   const settings = sql
-    .exec<{ id: string; name: string; time_zone: string }>(
-      `SELECT id, name, time_zone FROM context_settings`,
+    .exec<ContextFile["context"]>(
+      `SELECT id, name, time_zone, brief_time, review_day, review_time FROM context_settings`,
     )
     .one();
   return {

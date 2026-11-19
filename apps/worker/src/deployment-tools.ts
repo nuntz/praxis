@@ -58,10 +58,14 @@ export const deploymentHandlers: DeploymentHandlers = {
     return success({ items: everyContext(sql) });
   },
 
-  async create_context({ input, sql, env, deploymentId }) {
+  async create_context({ input, arrivedAt, sql, env, deploymentId }) {
     // The Context's object is made first, so the list never names one that is not there yet.
     const object = newContextObject(env);
-    await object.stub.make({ name: input.name, time_zone: input.time_zone }, deploymentId);
+    await object.stub.make(
+      { name: input.name, time_zone: input.time_zone },
+      deploymentId,
+      arrivedAt,
+    );
     const id = object.id.toString();
     sql.exec(
       `INSERT INTO contexts (id, name, accent, retired) VALUES (?, ?, ?, 0)`,

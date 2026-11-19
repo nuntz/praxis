@@ -1,3 +1,5 @@
+import type { ClockKind } from "./clock.ts";
+
 /**
  * Why a Run failed, as the Notice under the person's Message says (section 5.6). Two failures are
  * told apart: the model could not be reached, which shows only on the Run that failed, and the
@@ -20,7 +22,11 @@ export type RunNotice = { run: string; failure: RunFailure };
  * - `key_refused`: the model's provider refused the key since this instant, until a call succeeds.
  * - `nearing_cap`: the month's spend has passed 80% of the cap.
  * - `cap_reached`: the month's spend has reached the cap, and no new Run starts.
+ * - `clock_failed`: a Brief or a Review that was due could not run since this instant, and why. It
+ *   is tried again with a growing gap until it runs or the next one is due (section 5.6), and the
+ *   Notice stays until one of its kind runs.
  */
 export type StandingNotice =
   | { kind: "key_refused"; since: string }
-  | { kind: "nearing_cap" | "cap_reached"; spent: number; cap: number };
+  | { kind: "nearing_cap" | "cap_reached"; spent: number; cap: number }
+  | { kind: "clock_failed"; clock: ClockKind; failure: RunFailure; since: string };

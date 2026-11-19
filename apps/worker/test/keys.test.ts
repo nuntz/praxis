@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
+import { noModel } from "./model-fake.ts";
 import { agent, connection, DAY, hand, newContext, value } from "./seam.ts";
 
 // Every write accepts an optional key (section 4.5). The oracle holds a repeat to changing
@@ -106,12 +107,17 @@ describe("a write's key", () => {
     expect(await entryCount(context)).toBe(2);
   });
 
-  test("a keyed write schedules the alarm, which the platform runs by the real clock", async () => {
+  test("a keyed write schedules the alarm, which the platform runs on the object's clock", async () => {
+    // With no Agent there is no Brief or Review to arm the alarm for: only the key arms it.
+    noModel();
     const context = newContext("2020-01-01T00:00:00.000Z");
     const input = { words: marked("Long ago"), key: "old" };
     expect(await context.runScheduledAlarm()).toBe(false);
 
     const first = value(await context.call(hand, "record_entry", input));
+    // The object's clock runs from the time its last request arrived at.
+    context.advance(31 * DAY);
+    value(await context.call(hand, "list_entries", {}));
     expect(await context.runScheduledAlarm()).toBe(true);
 
     const again = value(await context.call(hand, "record_entry", input));

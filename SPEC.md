@@ -406,7 +406,8 @@ ADR 0001, 0010. Offered to the hand only, never to the Agent, the Clock or a Con
 |---|---|
 | `send_message` | A Message from the person is added to the Context's Conversation and starts a Run. It says whether it was typed or spoken. |
 | `list_messages` | The Conversation's Messages, paged back to the start, with the Notices under them and each Run's folded calls. |
-| `retry_run` | A Run that failed is tried again from the person's Message, as a new Run. Only the newest Message's: one sent since has moved the Conversation on. |
+| `retry_run` | A Run that failed is tried again from the person's Message, as a new Run. Only the newest Message's: one sent since has moved the Conversation on. A Brief or a Review is never tried again this way. |
+| `note_shown` | The screen says it has shown a Brief or a Review in a focused window, which makes it read (section 5.4). The person never calls it by a tap. |
 | `start_call`, `end_call` | A Call is set up in this Context, or ended (section 6). |
 
 - They return no Effects and write nothing to the change log, because the Conversation is not data. What a Run changes is reported by the Context tools it calls, as always.
@@ -461,6 +462,9 @@ ADR 0004. Glossary: Brief, Review.
 - The Review is one Message. What the person does about it is ordinary Conversation.
 - A Brief or Review sees the Journal only. It neither mentions a calendar nor apologises for lacking one.
 - Without the Agent's key no Brief or Review is ever due.
+- A Brief or Review is a Run like any other, after any going, and told what every Run is told at its start. It answers no Message, so it is not told the Held Changes waiting or what changed. A Message sent while one is going waits behind it and keeps its own limit of 25 rounds.
+- A Brief with nothing to raise answers so in a fixed word, and Praxis leaves no Message for it. Each ends by naming the ids of the Tasks it raises, which Praxis takes off before showing it, and counts how many have been Finished since it was taken.
+- A Brief or Review the model could not be reached for is tried again after five minutes, then a gap doubling each time up to an hour, in code. One whose key the provider refused is not tried again: it is dropped, and the next is tried when it comes. Either way Attention's line stands until one of its kind runs. One due at the cap looks again every 15 minutes. Setting or switching on a time, or changing the time zone, starts none at once for a time already gone by that day: the next comes at its time.
 
 Changes that need no judgment are the system's and not the Agent's: a Recurrence making its next Occurrence, a wait ending, a Project's Tasks being dropped, the Trash expiring. They work when the model is unavailable.
 
@@ -808,7 +812,7 @@ ADR 0018.
 
 - An **Export** is an archive in a documented JSON format of Praxis's own (`docs/export-format.md`), stamped with a format version: one file for the Deployment and one per Context. It is always the whole Deployment. Only the person's hand makes one.
 - A **Backup** is the same file, made by the system once a day into R2 and deleted after 30 days. Always on, with no switch.
-- **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; Run records, without which changes each made, since those are lines of the change log; each Context's time zone, in its own file. From the Deployment: the Contexts with their names and accent colours, whether each is retired, their Brief and Review times and Notification switch; the spend cap; the monthly spend totals of deleted Contexts; Connections.
+- **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; Run records, without which changes each made, since those are lines of the change log; each Context's time zone and its Brief and Review times, in its own file. From the Deployment: the Contexts with their names and accent colours, whether each is retired, their Notification switch; the spend cap; the monthly spend totals of deleted Contexts; Connections.
 - **Out**: every Conversation and the runtime's record of it, the change log, the record of a Connection's calls, Devices and push subscriptions, both provider keys.
 - An Entry in the file is its plain words plus its links as data.
 - The words go out as typed, with an image as its address only. There is no Export of the Journal as Markdown files, no per-Context Export and no encryption of Praxis's own.

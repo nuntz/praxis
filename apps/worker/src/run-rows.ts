@@ -17,6 +17,14 @@ export type RunRow = {
   failure: RunFailure | null;
   from_record: number | null;
   told_through: number | null;
+  /** For a Brief or a Review once ended: whether it left a Message. */
+  raised: 0 | 1 | null;
+  /** Whether a newer one of its kind replaced it while unread. */
+  replaced: 0 | 1;
+  /** When Praxis first showed it, for a Brief or a Review. */
+  read_at: number | null;
+  /** The ids of the Tasks a Brief or a Review names, as JSON. */
+  tasks_named: string | null;
 };
 
 /** What a Run spent: its tokens, and their cost by the price table shipped with the code. */
@@ -74,11 +82,16 @@ export function lastToldChange(sql: SqlStorage): number | null {
 /**
  * Keep the record of a Run not started because the month's spend had reached the cap (section
  * 5.8): no Message was kept for it to answer, and it spent nothing. `list_runs` (#69) lists it.
+ * The clock's says it was a Brief or a Review.
  */
-export function recordRunNotStarted(sql: SqlStorage, run: { at: number; model: string }): void {
+export function recordRunNotStarted(
+  sql: SqlStorage,
+  run: { at: number; model: string; startedBy?: RunStart },
+): void {
   sql.exec(
-    `INSERT INTO runs (id, started_by, at, model, ended) VALUES (?, 'message', ?, ?, 'cap_reached')`,
+    `INSERT INTO runs (id, started_by, at, model, ended) VALUES (?, ?, ?, ?, 'cap_reached')`,
     crypto.randomUUID(),
+    run.startedBy ?? "message",
     run.at,
     run.model,
   );
@@ -142,11 +155,17 @@ export function runById(sql: SqlStorage, id: string): RunRow | null {
   return sql.exec<RunRow>(`SELECT * FROM runs WHERE id = ?`, id).toArray()[0] ?? null;
 }
 
-/** The newest Run answering a Message, the one the Conversation stands at, if any. */
+/**
+ * The newest Run answering a Message from the person, the one the Conversation stands at for
+ * them, if any. A Brief or a Review answers none.
+ */
 export function newestRun(sql: SqlStorage): RunRow | null {
   return (
     sql
-      .exec<RunRow>(`SELECT * FROM runs WHERE message IS NOT NULL ORDER BY seq DESC LIMIT 1`)
+      .exec<RunRow>(
+        `SELECT * FROM runs WHERE message IS NOT NULL AND started_by = 'message'
+         ORDER BY seq DESC LIMIT 1`,
+      )
       .toArray()[0] ?? null
   );
 }

@@ -69,6 +69,8 @@ const otherTables = [
   // Run records, which hold no words and no record.
   "runs",
   "run_changes",
+  // When the clock last started a Brief and a Review, which holds no record.
+  "clock_schedule",
 ];
 
 /** Each record's rows as JSON, by `kind:id`. */

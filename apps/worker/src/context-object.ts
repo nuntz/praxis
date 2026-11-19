@@ -23,7 +23,13 @@ import {
   success,
   type ToolResult,
 } from "@praxis/domain";
-import { type Bearings, ContextAgent, DIGEST_CHANGES, HELD_NAMED } from "./agent.ts";
+import {
+  type Bearings,
+  type ClockBearings,
+  ContextAgent,
+  DIGEST_CHANGES,
+  HELD_NAMED,
+} from "./agent.ts";
 import { arrivalTime, startTimer } from "./arrival.ts";
 import {
   appendChange,
@@ -34,6 +40,17 @@ import {
   lastChange,
   pruneChanges,
 } from "./change-log.ts";
+import {
+  clockCapped,
+  clockEnded,
+  clockNotices,
+  clockStarted,
+  dueClockRuns,
+  nextClockWake,
+  noClockWithoutAgent,
+  noteShown,
+  startSchedule,
+} from "./clock-rows.ts";
 import { contextFile } from "./context-file.ts";
 import { heldWaiting } from "./held-change-rows.ts";
 import { forgetOldKeys, holdsKeys, rememberKey, repeatedKey } from "./keys.ts";
@@ -44,6 +61,7 @@ import { deploymentOf } from "./routing.ts";
 import {
   lastToldChange,
   newestRun,
+  type RunRow,
   recordRunNotStarted,
   runById,
   runsNotEnded,
@@ -99,8 +117,6 @@ const ALARM_GAP = 24 * 60 * 60 * 1000;
  */
 const RUN_HEARTBEAT = 60 * 1000;
 
-const AGENT: Caller = { kind: "agent" };
-
 /** Why a Message is refused when there is no Agent: the person mends it in the configuration. */
 const NO_AGENT: Record<NoAgent, string> = {
   no_key:
@@ -108,6 +124,11 @@ const NO_AGENT: Record<NoAgent, string> = {
   model_has_no_price:
     "There is no Agent in this Deployment: its configuration names a model Praxis ships no price for, so no Run could be counted. Naming another is a change to the configuration and a deploy.",
 };
+
+/** A Message `note_shown` names that is no Brief or Review shown in this Conversation. */
+function noSuchBrief(): ToolResult<never> {
+  return failure("not_found", "There is no such Brief or Review in this Context's Conversation.");
+}
 
 /** A Run refused because the month's spend has reached the cap, with the cap in the way. */
 function capRefusal(cap: number): ToolResult<never> {
@@ -130,7 +151,8 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
     #agentWake: Wake = { active: false };
     /**
      * How far the clock requests arrive by stands from the platform's: none when deployed, and
-     * wherever a test has set it. The Agent's calls arrive by it.
+     * wherever a test has set it. The Agent's calls arrive by it, the alarm wakes by it, and the
+     * platform's alarm is set by the real clock it stands from.
      */
     #clockSkew = 0;
 
@@ -144,8 +166,13 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
      * `create_context`, before it lists the Context, so no request reaches a Context not yet
      * made. The Context's id is its object's, and it keeps the id of the Deployment object.
      */
-    async make(made: ContextMade, deployment: string): Promise<void> {
-      makeContext(this.ctx.storage.sql, this.ctx.id.toString(), made, deployment);
+    async make(made: ContextMade, deployment: string, at: number): Promise<void> {
+      const sql = this.ctx.storage.sql;
+      this.#clockSkew = at - arrivalTime();
+      makeContext(sql, this.ctx.id.toString(), made, deployment);
+      // Its first Brief and Review are the first to come after it was made.
+      startSchedule(sql, at);
+      await this.keepAlarm();
     }
 
     /**
@@ -181,6 +208,8 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
      * call reached the Worker.
      */
     async call(request: ToolRequest): Promise<ToolResult<unknown>> {
+      // The object's clock runs from when this request arrived, which a test sets.
+      this.#clockSkew = request.arrivedAt - arrivalTime();
       if (isConversationToolName(request.tool)) return this.converse(request.tool, request);
       if (isAskingTool(request.tool)) return this.listNotices(request);
       const elapsed = startTimer();
@@ -201,7 +230,12 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
       const elapsed = startTimer();
       const admitted = admit(request);
       const result = admitted.ok
-        ? success({ items: await this.deployment().standingNotices(request.arrivedAt) })
+        ? success({
+            items: [
+              ...(await this.deployment().standingNotices(request.arrivedAt)),
+              ...clockNotices(this.ctx.storage.sql),
+            ],
+          })
         : admitted;
       logCall({ tool: "list_notices", write: false }, result, elapsed());
       return result;
@@ -236,19 +270,39 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
         if (typeof agent === "string") return success({ items: [], next_cursor: null, agent });
         return success(await agent.messages(this.ctx.storage, cursor));
       }
-      const input = parsed.input as ConversationToolInput<"send_message" | "retry_run">;
-      if (typeof agent === "string") return refusal(NO_AGENT[agent], []);
+      const input = parsed.input as ConversationToolInput<
+        "send_message" | "retry_run" | "note_shown"
+      >;
+      if (typeof agent === "string") {
+        return "message" in input ? noSuchBrief() : refusal(NO_AGENT[agent], []);
+      }
       const sql = this.ctx.storage.sql;
       const { caller, arrivedAt } = request;
       const keyed = { caller, key: input.key, tool, at: arrivedAt };
       const repeated = repeatedKey(sql, keyed);
       if (repeated) return repeated;
       const result =
-        "run" in input
-          ? await this.retryRun(agent, input.run, arrivedAt)
-          : await this.startRun(agent, input, arrivedAt);
+        "message" in input
+          ? await this.noteShown(agent, input.message, arrivedAt)
+          : "run" in input
+            ? await this.retryRun(agent, input.run, arrivedAt)
+            : await this.startRun(agent, input, arrivedAt);
       if (input.key !== undefined) rememberKey(sql, { ...keyed, key: input.key, result });
       return result;
+    }
+
+    /**
+     * Note that Praxis has shown a Brief or a Review in a focused window (section 5.4): it is read,
+     * once for the Context, and every screen open on it hears so.
+     */
+    private async noteShown(
+      agent: ContextAgent,
+      id: string,
+      at: number,
+    ): Promise<ToolResult<unknown>> {
+      if (!noteShown(this.ctx.storage.sql, id, at)) return noSuchBrief();
+      await agent.carryMessage(this.ctx.storage, id);
+      return success({ message: id, read: true });
     }
 
     /**
@@ -263,7 +317,7 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
     ): Promise<ToolResult<unknown>> {
       const sql = this.ctx.storage.sql;
       const failed = runById(sql, id);
-      if (failed === null || failed.message === null) {
+      if (failed === null || failed.message === null || failed.started_by !== "message") {
         return failure("not_found", "There is no such Run in this Context's Conversation.");
       }
       if (failed.ended !== "failed") {
@@ -339,15 +393,26 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
      */
     private bearings(at: number, otherContexts: string[]): Bearings {
       const sql = this.ctx.storage.sql;
+      return {
+        ...this.clockBearings(at, otherContexts),
+        held: heldWaiting(sql, HELD_NAMED),
+        digest: changesByOthers(sql, lastToldChange(sql), DIGEST_CHANGES),
+        lastRunCutShort: newestRun(sql)?.ended === "cut_short",
+      };
+    }
+
+    /**
+     * What every Run is told at its start (section 5.2), and all a Brief or a Review is: today,
+     * this Context's name and the others', and its Standing Entries.
+     */
+    private clockBearings(at: number, otherContexts: string[]): ClockBearings {
+      const sql = this.ctx.storage.sql;
       const settings = readSettings(sql, at);
       return {
         today: settings.today,
         context: settings.name,
         otherContexts,
         standing: standingEntries(sql, settings.time_zone),
-        held: heldWaiting(sql, HELD_NAMED),
-        digest: changesByOthers(sql, lastToldChange(sql), DIGEST_CHANGES),
-        lastRunCutShort: newestRun(sql)?.ended === "cut_short",
       };
     }
 
@@ -359,6 +424,15 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
         : this.env.DEPLOYMENT.get(this.env.DEPLOYMENT.idFromString(kept));
     }
 
+    /**
+     * Whether this Context has an Agent, asked without opening it, so a Context keeps the model it
+     * is first asked with in a Run.
+     */
+    private hasAgent(): boolean {
+      const agent = this.#agent ?? modelOf(this.env);
+      return typeof agent !== "string";
+    }
+
     /** The Agent of this Context, or why the Deployment has none. */
     private agent(): ContextAgent | NoAgent {
       if (this.#agent !== undefined) return this.#agent;
@@ -368,7 +442,7 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
           ? model
           : new ContextAgent(
               {
-                call: (tool, input) => this.callAsAgent(tool, input),
+                call: (tool, input, caller) => this.callAsAgent(tool, input, caller),
                 sql: this.ctx.storage.sql,
                 send: (message) => this.send(message),
                 arm: (wake) => {
@@ -376,6 +450,7 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
                   return this.keepAlarm();
                 },
                 reportKey: (report) => this.deployment().takeKeyReport(report),
+                clockEnded: (run) => this.clockEnded(run),
                 reportSpend: (at) =>
                   this.deployment().takeSpendReport({
                     context: this.ctx.id.toString(),
@@ -388,14 +463,17 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
       return this.#agent;
     }
 
-    /** A call from the Agent in a Run, through the same registry as every other caller. */
-    private callAsAgent(tool: string, input: unknown) {
+    /**
+     * A call from the Agent in a Run, or from the clock in a Brief or a Review, through the same
+     * registry as every other caller.
+     */
+    private callAsAgent(tool: string, input: unknown, caller: Caller) {
       const sql = this.ctx.storage.sql;
       const arrivedAt = arrivalTime() + this.#clockSkew;
       const elapsed = startTimer();
       const before = lastChange(sql);
       const result = dispatch(handlers, this.ctx.storage, {
-        caller: AGENT,
+        caller,
         tool,
         input,
         arrivedAt,
@@ -469,9 +547,12 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
       }
     }
 
-    /** The platform fires the alarm by the real clock. Tests call `wake` themselves. */
+    /**
+     * The platform fires the alarm by the real clock, and the object wakes by its own, which runs
+     * from where the last request set it: the same when deployed. Tests call `wake` themselves.
+     */
     async alarm(): Promise<void> {
-      this.wake(arrivalTime());
+      await this.wake(arrivalTime() + this.#clockSkew);
       // A Run a lost instance left going, or one the runtime is waiting to retry, is taken up.
       const agent = this.agent();
       if (
@@ -484,16 +565,65 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
     }
 
     /**
-     * Everything the Context's clock does, as at `at`: for now, forgetting keys past 30 days,
-     * removing for good what has been in the Trash 30 days, and pruning the change log at 90.
+     * Everything the Context's clock does, as at `at`: forgetting keys past 30 days, removing for
+     * good what has been in the Trash 30 days, pruning the change log at 90, and starting a Brief
+     * or a Review that is due.
      */
-    wake(at: number): void {
+    async wake(at: number): Promise<void> {
       const sql = this.ctx.storage.sql;
+      this.#clockSkew = at - arrivalTime();
       this.ctx.storage.transactionSync(() => {
         forgetOldKeys(sql, at);
         expireTrash(sql, at);
         pruneChanges(sql, at);
       });
+      await this.startClockRuns(at);
+      await this.keepAlarm();
+    }
+
+    /** The clock's starts run one at a time, so two wakes never start one Brief twice. */
+    #clocking: Promise<void> = Promise.resolve();
+
+    /**
+     * Start each Brief and Review due at `at` (section 5.4), unless one of its kind is going. At
+     * the cap it waits, and one Run not started is recorded for it. Without the Agent's key none
+     * is ever due.
+     */
+    private startClockRuns(at: number): Promise<void> {
+      this.#clocking = this.#clocking.then(async () => {
+        const agent = this.agent();
+        const sql = this.ctx.storage.sql;
+        if (typeof agent === "string") return noClockWithoutAgent(sql, at);
+        startSchedule(sql, at);
+        const going = new Set(runsNotEnded(sql).map((run) => run.started_by));
+        for (const { kind, due } of dueClockRuns(sql, readSettings(sql, at), at)) {
+          if (going.has(kind)) continue;
+          const { otherContexts, spend } = await this.deployment().beforeRun(
+            this.ctx.id.toString(),
+            at,
+          );
+          if (spend.notice === "cap_reached") {
+            if (clockCapped(sql, kind, due, at)) {
+              recordRunNotStarted(sql, { at, model: agent.model, startedBy: kind });
+            }
+            continue;
+          }
+          clockStarted(sql, kind, due);
+          await agent.startClock(this.ctx.storage, kind, at, this.clockBearings(at, otherContexts));
+        }
+      });
+      return this.#clocking;
+    }
+
+    /** A Brief's or Review's Run has ended: the clock takes it from there, and keeps the alarm. */
+    private async clockEnded(run: RunRow): Promise<void> {
+      if (run.started_by === "message" || run.ended === null) return;
+      clockEnded(this.ctx.storage.sql, run.started_by, {
+        how: run.ended,
+        failure: run.failure,
+        at: run.at,
+      });
+      await this.keepAlarm();
     }
 
     /**
@@ -511,16 +641,26 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
      */
     private async keepAlarm(): Promise<void> {
       const storage = this.ctx.storage;
-      const now = arrivalTime();
+      // The object's time, which a test sets; the platform's alarm is set by the real clock.
+      const skew = this.#clockSkew;
+      const now = arrivalTime() + skew;
       const wanted: number[] = [];
       if (holdsKeys(storage.sql) || holdsChanges(storage.sql)) wanted.push(now + ALARM_GAP);
       const expiry = nextExpiry(storage.sql);
       if (expiry !== null) wanted.push(expiry);
       if (this.#agentWake.active) wanted.push(now + RUN_HEARTBEAT);
-      if (this.#agentWake.at !== undefined) wanted.push(this.#agentWake.at);
+      if (this.#agentWake.at !== undefined) wanted.push(this.#agentWake.at + skew);
+      // Without the Agent's key, no Brief or Review is ever due.
+      if (
+        this.hasAgent() &&
+        storage.sql.exec(`SELECT 1 FROM context_settings`).toArray().length > 0
+      ) {
+        const clock = nextClockWake(storage.sql, readSettings(storage.sql, now), now);
+        if (clock !== null) wanted.push(clock);
+      }
       const set = await storage.getAlarm();
       if (wanted.length === 0) return;
-      const earliest = Math.min(...wanted);
+      const earliest = Math.min(...wanted) - skew;
       // The daily wake is kept as it was set; only something sooner moves it.
       if (set === null || earliest < set) await storage.setAlarm(earliest);
     }

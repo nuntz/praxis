@@ -208,7 +208,11 @@ function createTablesAsMade(sql: SqlStorage): void {
       name TEXT NOT NULL,
       time_zone TEXT NOT NULL,
       -- The Deployment object that made it, which it asks for the other Contexts' names.
-      deployment TEXT
+      deployment TEXT,
+      -- When the Brief and the Review come, in its time zone: a time is null while it is off.
+      brief_time TEXT DEFAULT '07:00',
+      review_day TEXT NOT NULL DEFAULT 'sunday',
+      review_time TEXT DEFAULT '17:00'
     );
 
     -- The change log (section 4.4): one row per write that changed something, and its Effects.
@@ -254,9 +258,11 @@ function createTablesAsMade(sql: SqlStorage): void {
     CREATE TABLE IF NOT EXISTS runs (
       seq INTEGER PRIMARY KEY,
       id TEXT NOT NULL UNIQUE,
-      -- What started it: for now only a Message from the person, sent or tried again.
+      -- What started it: a Message from the person, sent or tried again, or the clock, for a Brief
+      -- or a Review.
       started_by TEXT NOT NULL,
-      -- The id of the person's Message it answers, never its words.
+      -- The id of the person's Message it answers, never its words; for the clock's, the id of the
+      -- record that started it in the Conversation.
       message TEXT,
       -- The runtime's handle on the Message it answers, to learn how it ended after a restart.
       -- None for a Run never started, because the month's spend had reached the cap.
@@ -278,7 +284,32 @@ function createTablesAsMade(sql: SqlStorage): void {
       from_record INTEGER,
       -- For a Run answering a new Message, the number of the change the log stood at when the
       -- Agent was told what changed since the last Message it answered: the next is told from there.
-      told_through INTEGER
+      told_through INTEGER,
+      -- For a Brief or a Review once it has ended: whether it left a Message (a Brief with nothing
+      -- to raise leaves none), whether a newer one of its kind replaced it unread, when Praxis first
+      -- showed it, and the ids of the Tasks it names, as JSON.
+      raised INTEGER,
+      replaced INTEGER NOT NULL DEFAULT 0,
+      read_at INTEGER,
+      tasks_named TEXT
+    );
+    -- When the clock last started a Brief and a Review, and how its tries at one that was due are
+    -- going (section 5.4). One row each.
+    CREATE TABLE IF NOT EXISTS clock_schedule (
+      kind TEXT PRIMARY KEY,
+      -- The newest time it came whose Run has been answered, or that came before the Context was
+      -- made or its time was set: nothing at or before it is due.
+      through INTEGER NOT NULL,
+      -- The time it came that the Run going, or the last tried, is for.
+      trying INTEGER,
+      -- How many tries at it have failed, when the next may be made, and why the last failed.
+      tries INTEGER NOT NULL DEFAULT 0,
+      retry_at INTEGER,
+      failure TEXT,
+      -- Since when its tries have failed, for the Notice, until one of its kind runs.
+      failing_since INTEGER,
+      -- The time it came for which a Run not started at the cap has been recorded.
+      capped INTEGER
     );
     -- The changes a Run made, as the change log numbers them. One may point at a line pruned since.
     CREATE TABLE IF NOT EXISTS run_changes (
@@ -297,6 +328,13 @@ const ADDED_COLUMNS: { table: string; column: string; type: string }[] = [
   { table: "runs", column: "failure", type: "TEXT" },
   { table: "runs", column: "from_record", type: "INTEGER" },
   { table: "runs", column: "told_through", type: "INTEGER" },
+  { table: "runs", column: "raised", type: "INTEGER" },
+  { table: "runs", column: "replaced", type: "INTEGER NOT NULL DEFAULT 0" },
+  { table: "runs", column: "read_at", type: "INTEGER" },
+  { table: "runs", column: "tasks_named", type: "TEXT" },
+  { table: "context_settings", column: "brief_time", type: "TEXT DEFAULT '07:00'" },
+  { table: "context_settings", column: "review_day", type: "TEXT NOT NULL DEFAULT 'sunday'" },
+  { table: "context_settings", column: "review_time", type: "TEXT DEFAULT '17:00'" },
 ];
 
 /** Add each column a table made before it was added still lacks. */

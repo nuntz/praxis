@@ -1,5 +1,6 @@
 export * from "./attention.ts";
 export * from "./callers.ts";
+export * from "./clock.ts";
 export * from "./compare.ts";
 export * from "./conversation.ts";
 export * from "./day.ts";

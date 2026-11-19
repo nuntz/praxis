@@ -10,7 +10,7 @@ import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
 import { newRecurrence } from "./recurrence.ts";
 import { failure, type ToolResult } from "./results.ts";
-import type { Settings } from "./settings.ts";
+import { clockTime, type Settings, weekday } from "./settings.ts";
 import type { Task } from "./task.ts";
 import type { Removal, TrashItem } from "./trash.ts";
 
@@ -503,7 +503,7 @@ export const tools = {
   get_settings: {
     kind: "read",
     description:
-      "Get this Context's settings: its name, its time zone, and today's date there. Today, and so whether a Task is Overdue or Deferred, is the current day in that time zone. Use them to resolve a day such as \"next Friday\" before giving it to a tool.",
+      "Get this Context's settings: its name, its time zone, today's date there, and when the Brief and the Review come, each a time of day in that time zone, null while it is off. Today, and so whether a Task is Overdue or Deferred, is the current day in that time zone. Use them to resolve a day such as \"next Friday\" before giving it to a tool.",
     input: z.strictObject({}),
     offered: toEveryCaller,
   },
@@ -514,6 +514,22 @@ export const tools = {
       "Change this Context's time zone, a zone of the IANA database such as Europe/Paris. It moves no date, since a Due Date and a Defer Date are days: only today shifts.",
     input: writeInput({ time_zone: timeZone }),
     offered: toHandOnly,
+  },
+  set_brief_time: {
+    kind: "write",
+    destructive: false,
+    description:
+      "Set the time of day the Brief comes in this Context, HH:MM on the 24-hour clock in its time zone, or switch it off with null. The Brief is the Message the Agent leaves each day, unasked, saying what needs attention. Set it only when the person asks.",
+    input: writeInput({ time: clockTime.nullable() }),
+    offered: { ...toHandOnly, agent: "yes" },
+  },
+  set_review_time: {
+    kind: "write",
+    destructive: false,
+    description:
+      "Set the day of the week and the time of day the Review comes in this Context, HH:MM on the 24-hour clock in its time zone, or switch it off with a time of null. A day left out stays as it was, and switching it off keeps its day. The Review is the Message the Agent leaves each week, unasked, listing what has gone stale or been missed. Set it only when the person asks.",
+    input: writeInput({ day: weekday.optional(), time: clockTime.nullable() }),
+    offered: { ...toHandOnly, agent: "yes" },
   },
   view_attention: {
     kind: "read",
@@ -666,6 +682,8 @@ export type ToolOutput = {
   list_persons: Page<Person>;
   get_settings: Settings;
   set_time_zone: Written<Settings>;
+  set_brief_time: Written<Settings>;
+  set_review_time: Written<Settings>;
   view_attention: Attention;
   restore: Written<TrashItem>;
   remove_for_good: Written<Removal>;

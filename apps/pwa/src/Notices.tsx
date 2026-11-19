@@ -80,5 +80,7 @@ function noticeWords(notice: StandingNotice): string {
     case "cap_reached":
     case "nearing_cap":
       return capWords({ notice: notice.kind, spent: notice.spent, cap: notice.cap });
+    case "clock_failed":
+      return `The ${notice.clock === "brief" ? "Brief" : "Review"} could not run since ${sinceFormat.format(new Date(notice.since))}: ${notice.failure === "key_refused" ? "the model's provider refused this Deployment's key" : "the model could not be reached"}. It is tried again a little later each time, until it runs or the next one is due.`;
   }
 }

@@ -1,4 +1,5 @@
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { NOTHING_TO_RAISE } from "../src/agent.ts";
 import { contextObject } from "../src/context-object.ts";
 import { lastWords, SCRIPTED_RETRY, scriptModel, testModel, UNAVAILABLE } from "./model-fake.ts";
 
@@ -7,13 +8,15 @@ import { lastWords, SCRIPTED_RETRY, scriptModel, testModel, UNAVAILABLE } from "
 // a model asked to record something: "Record: <words>" records an Entry of those words, and
 // "Edit <id> at <version>: <words>" changes that Entry's words, and then it answers. "Unreachable
 // once: <words>" fails as an overloaded provider does for the whole of the first Run that asks,
-// then answers when the Run is tried again. Anything else it only answers. Never deployed.
+// then answers when the Run is tried again. A Brief has nothing to raise, so one the clock starts
+// while a journey runs leaves no Message. Anything else it only answers. Never deployed.
 
 export { DeploymentObject, default } from "../src/index.ts";
 
 const RECORD = /^Record: ([\s\S]+)$/;
 const EDIT = /^Edit (\S+) at (\d+): ([\s\S]+)$/;
 const UNREACHABLE_ONCE = /^Unreachable once: /;
+const CLOCK_STARTED = /^The clock started this Run/;
 
 /** How often each Message the model is to fail once has been asked, by its words. */
 const asks = new Map<string, number>();
@@ -22,6 +25,7 @@ scriptModel(
   (context) => {
     if (context.messages.at(-1)?.role === "toolResult") return fauxAssistantMessage("Recorded.");
     const words = lastWords(context).trim();
+    if (CLOCK_STARTED.test(words)) return fauxAssistantMessage(NOTHING_TO_RAISE);
     if (UNREACHABLE_ONCE.test(words)) {
       const times = (asks.get(words) ?? 0) + 1;
       asks.set(words, times);

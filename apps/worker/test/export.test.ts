@@ -42,6 +42,7 @@ describe("make_export", () => {
     const deployment = newDeployment("2026-11-15T09:00:00.000Z");
     const work = await makeContext(deployment, "Work", { time_zone: "Europe/Paris" });
     const home = await makeContext(deployment, "Home", { accent: "teal" });
+    await deployment.context(work).call(hand, "set_review_time", { day: "friday", time: null });
     await deployment.call(hand, "retire_context", { id: home });
 
     const made = value(await deployment.call(hand, "make_export", {}));
@@ -68,8 +69,11 @@ describe("make_export", () => {
       id: work,
       name: "Work",
       time_zone: "Europe/Paris",
+      brief_time: "07:00",
+      review_day: "friday",
+      review_time: null,
     });
-    expect(fileOf(made, home).context.time_zone).toBe("UTC");
+    expect(fileOf(made, home).context).toMatchObject({ time_zone: "UTC", review_time: "17:00" });
   });
 
   test("holds the spend cap and every Connection, ended ones too, and no Context's spend while it is not deleted", async () => {

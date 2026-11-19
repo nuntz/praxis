@@ -46,6 +46,9 @@ describe("create_context", () => {
       name: "Work",
       time_zone: "Pacific/Auckland",
       today: "2026-11-16",
+      brief_time: "07:00",
+      review_day: "sunday",
+      review_time: "17:00",
     });
   });
 

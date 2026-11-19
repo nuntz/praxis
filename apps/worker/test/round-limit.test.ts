@@ -7,7 +7,7 @@ import { hand, newContext, value } from "./seam.ts";
 
 // A Run cannot run away (section 5.2): it is limited to 25 model rounds when the person started
 // it, in code. One that reaches the limit stops, says so in its last Message, and its record marks
-// it as cut short. The clock's limit of 10 is for the Brief and the Review (#67).
+// it as cut short. The clock's limit of 10, for the Brief and the Review, is in brief.test.ts.
 
 describe("send_message: a Run that reaches the limit of model rounds", () => {
   test("stops after 25, says so in its Message, and is marked cut short, not failed", async () => {

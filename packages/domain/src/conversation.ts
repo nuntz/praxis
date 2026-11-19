@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Caller, CallerKind } from "./callers.ts";
+import type { ClockKind } from "./clock.ts";
 import type { Effect } from "./effects.ts";
 import type { RunNotice } from "./notice.ts";
 import type { ErrorCode } from "./results.ts";
@@ -33,6 +34,22 @@ export type AgentMessage = {
   from: "agent";
   words: string;
   run: RunFold;
+  /** For a Brief or a Review, what it is and when it was taken; null for an answer to the person. */
+  clock: ClockFold | null;
+};
+
+/**
+ * A Brief or a Review as the Conversation shows it (section 8.5): which it is, when it was taken,
+ * whether it has been read, and how many of the Tasks it names have been finished since, which it
+ * says once there are any.
+ */
+export type ClockFold = {
+  kind: ClockKind;
+  /** When the clock's Run started, as an ISO 8601 instant. */
+  taken: string;
+  /** Whether Praxis has shown it in a focused window on any Device, held once per Context. */
+  read: boolean;
+  finished_since: number;
 };
 
 export type Message = PersonMessage | AgentMessage;
@@ -63,8 +80,8 @@ export type RunCall = { tool: string; result: "ok" | ErrorCode | "running"; effe
  */
 export type RunEnd = "answered" | "cut_short" | "failed" | "cap_reached";
 
-/** What started a Run. Only a Message from the person, for now; the clock starts Briefs and Reviews. */
-export type RunStart = "message";
+/** What started a Run: a Message from the person, or the clock, for a Brief or a Review. */
+export type RunStart = "message" | ClockKind;
 
 /**
  * Why a Deployment has no Agent (ADR 0017): its configuration gives no key for the model, or names
@@ -106,6 +123,12 @@ export const conversationTools = {
       "Try a Run that failed again, from the person's Message it was answering, as a new Run. Only the newest Message's Run can be: a Message sent since has moved the Conversation on. It is refused while a Run is going, and at the spend cap as send_message is.",
     input: writeInput({ run: z.string().min(1) }),
   },
+  note_shown: {
+    kind: "write",
+    description:
+      "Note that Praxis has shown a Brief or a Review, by its Message's id, in a focused window on this Device: it is then read, once for the Context and on every Device, and a newer one no longer replaces it. The screen calls it; the person never marks one read. Noting one again changes nothing.",
+    input: writeInput({ message: z.string().min(1) }),
+  },
   list_messages: {
     kind: "read",
     description:
@@ -142,6 +165,8 @@ export type ConversationToolOutput = {
   send_message: { message: PersonMessage };
   /** The person's Message being answered again, its Notice gone. The answer comes on the live channel. */
   retry_run: { message: PersonMessage };
+  /** The Brief or Review now read, by its Message's id. */
+  note_shown: { message: string; read: true };
   list_messages: MessagesPage;
 };
 

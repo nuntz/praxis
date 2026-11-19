@@ -142,7 +142,8 @@ function dayInMonth(index: number, date: number): Day {
   return `${String(year).padStart(4, "0")}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function weekdayOf(day: Day): Weekday {
+/** The day of the week a day falls on. */
+export function weekdayOf(day: Day): Weekday {
   // getUTCDay counts from Sunday; the weekdays run from Monday.
   return weekdays[modulo(new Date(utcMidnight(day)).getUTCDay() - 1, 7)] as Weekday;
 }

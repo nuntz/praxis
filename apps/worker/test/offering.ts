@@ -62,6 +62,9 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   list_persons: [  "yes", "yes", "yes", "yes",      "yes" ],
   get_settings: [  "yes", "yes", "yes", "yes",      "yes" ],
   set_time_zone: [ "yes", "no",  "no",  "no",       "no"  ],
+  set_brief_time: ["yes", "yes", "no",  "no",       "no"  ],
+  set_review_time: [
+                   "yes", "yes", "no",  "no",       "no"  ],
   view_attention: ["yes", "yes", "yes", "yes",      "yes" ],
   restore: [       "yes", "yes", "no",  "no",       "no"  ],
   remove_for_good: [
@@ -79,6 +82,7 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   // The Conversation tools (section 4.12): the person's hand only.
   send_message: [  "yes", "no",  "no",  "no",       "no"  ],
   retry_run: [     "yes", "no",  "no",  "no",       "no"  ],
+  note_shown: [    "yes", "no",  "no",  "no",       "no"  ],
   list_messages: [ "yes", "no",  "no",  "no",       "no"  ],
 };
 
@@ -155,6 +159,8 @@ export const runsWith: Record<string, () => unknown> = {
   list_persons: () => ({}),
   get_settings: () => ({}),
   set_time_zone: () => ({ time_zone: "Europe/Paris" }),
+  set_brief_time: () => ({ time: "06:30" }),
+  set_review_time: () => ({ day: "friday", time: "16:00" }),
   view_attention: () => ({}),
   restore: () => ({ id: "no-such-record" }),
   remove_for_good: () => ({ id: "no-such-record" }),
@@ -167,6 +173,7 @@ export const runsWith: Record<string, () => unknown> = {
   list_notices: () => ({}),
   send_message: () => ({ words: marked("Offered") }),
   retry_run: () => ({ run: "no-such-run" }),
+  note_shown: () => ({ message: "no-such-message" }),
   list_messages: () => ({}),
 };
 

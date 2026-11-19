@@ -15,7 +15,7 @@ import { Connections } from "./Connections.tsx";
 import { ContextSettings, deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
 import { Contexts, NewContext } from "./Contexts.tsx";
-import { Conversation } from "./Conversation.tsx";
+import { Conversation, unreadBriefs } from "./Conversation.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
@@ -384,6 +384,7 @@ export function App() {
                     </TabButton>
                     <TabButton tab="conversation" shown={tab()} onShow={setTab}>
                       Agent
+                      <Badge count={unreadBriefs()} label="unread" />
                     </TabButton>
                   </nav>
                 </CurrentHeldChanges.Provider>
