@@ -32,7 +32,7 @@ Every file starts with the same four fields, so a file read alone says what it i
 |---|---|
 | `contexts` | Every Context, retired or not: `id`, `name`, `accent` (one of `blue`, `rust`, `teal`, `plum`, `moss`, `slate`), `retired`, and `file`, the path of its file |
 | `spend_cap` | The monthly cap in US dollars the person set, or `null` while they have set none (a Deployment then has 20) |
-| `deleted_contexts_spend` | What deleted Contexts spent, as `{ month: "YYYY-MM", dollars }` per calendar month (UTC), with no name attached. A Context that is not deleted is counted from its own Run records instead. |
+| `deleted_contexts_spend` | What deleted Contexts spent, one entry per calendar month (UTC): `month` as `YYYY-MM`, and `dollars`, with no name attached. A Context that is not deleted is counted from its own Run records instead. |
 | `connections` | Every Connection ever made: `id`, `name` and `context_id`. A restore brings each back ended, and the person makes the permission again at the new address. |
 
 ## `contexts/<id>.json`
@@ -74,7 +74,7 @@ A **Recurrence** is only on the open Occurrence. It is a schedule counted from t
 
 **A Person** has `id`, `name` and `at`.
 
-**A Trash item** is what one delete sent there. `deleted` is the record deleted, `went_with` is what could not exist without it, in the order made, and `at` is the delete. The item is removed for good 30 days after `at`, a restore included. `dormant_links` are the links from Tasks not in the Trash to a record in the item, which the delete took away and a restore brings back: `{ task, what: "project" | "delegation" | "wait", to }`. The records themselves are in their own lists above.
+**A Trash item** is what one delete sent there. `deleted` is the record deleted, `went_with` is what could not exist without it, in the order made, and `at` is the delete. The item is removed for good 30 days after `at`, a restore included. `dormant_links` are the links from Tasks not in the Trash to a record in the item, which the delete took away and a restore brings back. Each has `task`, the Task's id, `what` (`project`, `delegation` or `wait`) and `to`, the record it links to. The records themselves are in their own lists above.
 
 **A Run record** holds no words: `id`, `started_by` (`"message"`), `at`, `model`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `cost` in US dollars by the price table of the code that ran it, `ended` (`"answered"`, `"failed"`, `"cap_reached"`, or `null` for one still going) and `failure` (`"model_unavailable"`, `"key_refused"` or `null`). Which changes it made is not kept, since the file holds no change log.
 

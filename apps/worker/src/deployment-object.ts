@@ -29,7 +29,8 @@ import { readSpend, type SpendReport, takeSpendReport } from "./spend-rows.ts";
 /**
  * The one object that belongs to the Deployment rather than to a Context (ADR 0006). It holds the
  * list of Contexts with their names and accents, and nothing from any Journal, and never reads
- * one.
+ * one. Each call between it and a Context's object is on the closed lists of ADR 0006 and SPEC
+ * section 9.2: a new one amends both.
  */
 export class DeploymentObject extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
