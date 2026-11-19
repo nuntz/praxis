@@ -107,7 +107,9 @@ export function Composer(props: {
           ...tasks.value.items.map(taskChoice),
         ].slice(0, OFFERED);
       }
-      if (!current()) return;
+      // Shut meanwhile, by Escape or by leaving the words, the query is no longer asked: its
+      // answer would show for the next query until that one's own answer lands.
+      if (!current() || query() !== found) return;
       const made: Choice[] =
         typed === ""
           ? []
@@ -170,7 +172,15 @@ export function Composer(props: {
       return;
     }
     const found = query();
-    if (!found || !open()) return;
+    if (!found) return;
+    // Escape shuts a picker whose first answer is still out, or that answer opens it after.
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setShut(found.start);
+      shutPicker();
+      return;
+    }
+    if (!open()) return;
     const last = choices().length - 1;
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -182,10 +192,6 @@ export function Composer(props: {
       event.preventDefault();
       const choice = choices()[highlight()];
       if (choice) choose(choice);
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      setShut(found.start);
-      shutPicker();
     }
   }
 
