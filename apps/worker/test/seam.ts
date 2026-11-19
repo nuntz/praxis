@@ -34,7 +34,8 @@ export const DAY = 24 * 60 * 60 * 1000;
  * A fresh Deployment object, at a time the test sets, holding no Context until one is made.
  * Its tools are called as a named caller, and a Context in it is reached the way the Worker
  * reaches one: the Deployment object says which object it is, and every call to that object
- * goes through the oracle.
+ * goes through the oracle. Tests in a file share storage, every binding's, and each file has its
+ * own: so each makes its own objects by a fresh id, and a test of the bucket empties it first.
  */
 export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
   const stub = env.DEPLOYMENT.get(env.DEPLOYMENT.newUniqueId());
