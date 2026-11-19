@@ -1,10 +1,20 @@
-import type { AgentMessage, Effect, Message, MessagesPage, RunCall } from "@praxis/domain";
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import type {
+  AgentMessage,
+  Effect,
+  Message,
+  MessagesPage,
+  PersonMessage,
+  RunCall,
+  RunFailure,
+} from "@praxis/domain";
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { Peer } from "./design/Peer.tsx";
 import { HeldChangeItem, useHeldChanges } from "./HeldChanges.tsx";
 import { recordAnchor } from "./Journal.tsx";
 import { useLive } from "./live-context.ts";
+import { readNotices } from "./Notices.tsx";
+import { online } from "./online.ts";
 import { CapNotice, readSpend, spend } from "./Spend.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 import { Words } from "./Words.tsx";
@@ -20,7 +30,8 @@ const moneyFormat = new Intl.NumberFormat(undefined, {
  * to the start, and the composer that sends one. The Agent's answer is shown as it is written, and
  * a Run's calls fold under the Message it left. Without the model's key there is no Agent, and the
  * Conversation says so in place of its composer; at the spend cap, the cap's Notice and a way to
- * the cap in settings take the composer's place.
+ * the cap in settings take the composer's place, and without a network a Notice saying so. A
+ * person's Message whose Run failed keeps a Notice under it, and the newest a way to try again.
  */
 export function Conversation(props: {
   contextName: string | undefined;
@@ -66,16 +77,73 @@ export function Conversation(props: {
   /** A Message now whole: in its place by its id, or after the others as the newest. */
   function place(message: Message) {
     if (message.from === "agent") setWriting(null);
-    // What a Run spent is counted once it ends, and may bring the warning or the cap.
-    if (message.from === "agent" && message.run.ended !== null) void readSpend();
+    // A Run that ended counts what it spent, which may bring the warning or the cap, and may have
+    // found the key refused or taken: a failed one's Notice comes on the person's Message.
+    if (
+      (message.from === "agent" && message.run.ended !== null) ||
+      (message.from === "person" && message.notice !== null)
+    ) {
+      void readSpend();
+      void readNotices();
+    }
     const at = messages.findIndex((shown) => shown.id === message.id);
     if (at !== -1) return setMessages(at, reconcile(message, { key: "id" }));
     setMessages((shown) => [...shown, message]);
   }
 
+  /**
+   * The person's Message as a tool answered with it, sent or tried again. The live channel may
+   * have brought it already, and newer: a Run can fail before the answer arrives. So it is placed
+   * only where it is not shown, or where what is shown is the Run it says it replaced.
+   */
+  function placeAnswered(message: PersonMessage, replacing?: string) {
+    const shown = messages.find((placed) => placed.id === message.id) as PersonMessage | undefined;
+    if (shown === undefined || (replacing !== undefined && shown.notice?.run === replacing)) {
+      place(message);
+    }
+  }
+
+  /** The newest of the person's Messages: only its Run can be tried again. */
+  const newestOfPerson = createMemo(() =>
+    messages.findLast((message) => message.from === "person"),
+  );
+
+  /** Try the failed Run under the person's Message again. */
+  async function retry(message: PersonMessage): Promise<void> {
+    // Read before the call: the Message is the one shown, which the live channel may change
+    // while the call is out, as when the Run tried again fails before its answer arrives.
+    const failed = message.notice?.run;
+    if (failed === undefined) return;
+    try {
+      const result = await callTool("retry_run", { run: failed });
+      if (!result.ok) {
+        if (result.error.in_the_way?.some((thing) => thing.kind === "spend_cap")) {
+          void readSpend();
+        }
+        setProblem(result.error.message);
+        return;
+      }
+      setProblem(null);
+      placeAnswered(result.value.message, failed);
+    } catch (error) {
+      setProblem(unreachableMessage(error));
+    }
+  }
+
   // At the cap the composer gives way to a Notice. Whether the cap is reached is the spend's to say,
   // read for the whole screen.
   const capReached = () => spend()?.notice === "cap_reached";
+
+  /**
+   * What the foot of the Conversation shows, in place of the composer or as it: no Agent, no
+   * network, the cap reached, or the composer, when a Message can be sent and a Run tried again.
+   */
+  const foot = (): MessagesPage["agent"] | "offline" | "cap_reached" | "composer" | null => {
+    const there = agent();
+    if (there !== "available") return there;
+    if (!online()) return "offline";
+    return capReached() ? "cap_reached" : "composer";
+  };
 
   // Read once the live channel is open, so a Message added meanwhile is either read or brought.
   onMount(async () => {
@@ -113,10 +181,11 @@ export function Conversation(props: {
               <Show
                 when={message.from === "agent" ? (message as AgentMessage) : null}
                 fallback={
-                  <li class="message from-person" data-testid="message">
-                    <span class="message-from">You</span>
-                    <p class="message-words">{message.words}</p>
-                  </li>
+                  <PersonMessageItem
+                    message={message as PersonMessage}
+                    canRetry={message.id === newestOfPerson()?.id && foot() === "composer"}
+                    onRetry={retry}
+                  />
                 }
               >
                 {(said) => <AgentMessageItem message={said()} onShowRecord={props.onShowRecord} />}
@@ -141,19 +210,25 @@ export function Conversation(props: {
             </p>
           )}
         </Show>
-        <Show when={agent() === "no_key"}>
+        <Show when={foot() === "no_key"}>
           <p class="notice" role="status">
             There is no Agent here: this Deployment's configuration gives no key for its model. The
             Journal works as ever.
           </p>
         </Show>
-        <Show when={agent() === "model_has_no_price"}>
+        <Show when={foot() === "model_has_no_price"}>
           <p class="notice" role="status">
             There is no Agent here: this Deployment's configuration names a model Praxis ships no
             price for. The Journal works as ever.
           </p>
         </Show>
-        <Show when={agent() === "available" && capReached()}>
+        <Show when={foot() === "offline"}>
+          <p class="notice" role="status">
+            No network: the Conversation needs one. The Agent can be reached again once this Device
+            is back online.
+          </p>
+        </Show>
+        <Show when={foot() === "cap_reached"}>
           <div class="cap-reached">
             <CapNotice />
             <button type="button" class="quiet" onClick={() => props.onShowCap()}>
@@ -161,18 +236,70 @@ export function Conversation(props: {
             </button>
           </div>
         </Show>
-        <Show when={agent() === "available" && !capReached()}>
+        <Show when={foot() === "composer"}>
           <MessageComposer
             contextName={props.contextName}
             onSent={(message) => {
               setProblem(null);
-              place(message);
+              placeAnswered(message);
             }}
             onProblem={setProblem}
           />
         </Show>
       </div>
     </Peer>
+  );
+}
+
+/** Why a Run failed, as the Notice under the person's Message says it. */
+const FAILED: Record<RunFailure, string> = {
+  model_unavailable:
+    "The model could not be reached, so the Agent did not answer. Your Message is kept.",
+  key_refused:
+    "The model's provider refused this Deployment's key, so the Agent did not answer. Your Message is kept.",
+};
+
+/**
+ * A Message from the person, shown as typed. While its Run has failed, a Notice under it says why,
+ * which is not a Message, with a way to try again on the newest (section 8.5).
+ */
+function PersonMessageItem(props: {
+  message: PersonMessage;
+  canRetry: boolean;
+  onRetry: (message: PersonMessage) => Promise<void>;
+}) {
+  const [retrying, setRetrying] = createSignal(false);
+  return (
+    <li class="message from-person" data-testid="message">
+      <span class="message-from">You</span>
+      <p class="message-words">{props.message.words}</p>
+      <Show when={props.message.notice}>
+        {(notice) => (
+          <div class="run-notice">
+            <p class="notice" role="status">
+              {FAILED[notice().failure]}
+            </p>
+            <Show when={props.canRetry}>
+              <button
+                type="button"
+                class="quiet"
+                disabled={retrying()}
+                onClick={async () => {
+                  setRetrying(true);
+                  try {
+                    await props.onRetry(props.message);
+                  } finally {
+                    setRetrying(false);
+                  }
+                }}
+              >
+                Try again
+              </button>
+            </Show>
+          </div>
+        )}
+      </Show>
+    </li>
   );
 }
 
@@ -290,7 +417,7 @@ function CallItem(props: { call: RunCall; onShowRecord: (anchor: string) => void
 /** The Conversation's composer, which sends a Message to the Agent and nothing else (ADR 0022). */
 function MessageComposer(props: {
   contextName: string | undefined;
-  onSent: (message: Message) => void;
+  onSent: (message: PersonMessage) => void;
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();

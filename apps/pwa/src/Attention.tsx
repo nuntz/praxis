@@ -10,7 +10,7 @@ import { createSignal, For, type JSX, onCleanup, onMount, Show } from "solid-js"
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
-import { CapNotice } from "./Spend.tsx";
+import { StandingNotices } from "./Notices.tsx";
 import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
@@ -92,7 +92,7 @@ export function Attention(props: {
   return (
     <div class="peer-body attention-body">
       {/* Standing Notices sit above the sections of the view, and are not counted (section 8.3). */}
-      <CapNotice />
+      <StandingNotices />
       <Show when={problem()}>
         {(message) => (
           <p class="problem" role="alert">

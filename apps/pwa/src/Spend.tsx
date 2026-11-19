@@ -1,6 +1,7 @@
 import type { Spend } from "@praxis/domain";
 import { createSignal, Show } from "solid-js";
 import { latestRead } from "./latest-read.ts";
+import { capWords, money, readNotices } from "./Notices.tsx";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
 
 /**
@@ -40,21 +41,16 @@ export function focusCapField(): void {
   field?.focus();
 }
 
-export const money = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" });
-
 /**
- * The standing Notice the month's spend gives, if any: past 80% of the cap, or the cap reached.
- * It stays until its cause is gone. `list_notices` (#65) will carry it, with the other standing
- * Notices; until then the screen reads it from `get_spend`.
+ * The cap's Notice in the Conversation, in place of its composer at the cap, as the spend last
+ * read says. Attention and settings show it among the standing Notices, from `list_notices`.
  */
 export function CapNotice() {
   return (
     <Show when={spend()?.notice ? spend() : null}>
       {(shown) => (
         <p class="notice" role="status" data-testid="spend-notice">
-          {shown().notice === "cap_reached"
-            ? `This month's spend has reached its cap of ${money.format(shown().cap)}: the Agent starts no new Run until the cap is raised or the month turns.`
-            : `This month's spend, ${money.format(shown().spent)}, has passed 80% of its cap of ${money.format(shown().cap)}.`}
+          {capWords({ ...shown(), notice: shown().notice ?? "nearing_cap" })}
         </p>
       )}
     </Show>
@@ -81,7 +77,7 @@ export function SpendSettings() {
       const set = await writeToDeployment("set_spend_cap", { cap: dollars }, setProblem);
       if (set) {
         setCap("");
-        await readSpend();
+        await Promise.all([readSpend(), readNotices()]);
       }
     } finally {
       setSaving(false);
@@ -100,7 +96,6 @@ export function SpendSettings() {
           </p>
         )}
       </Show>
-      <CapNotice />
       <form
         class="context-rename"
         onSubmit={(event) => {

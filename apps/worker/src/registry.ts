@@ -31,8 +31,18 @@ export type ToolCall<N extends ToolName> = {
   sql: SqlStorage;
 };
 
+/**
+ * The Context tools that ask the Deployment object what they answer, so cannot run inside one
+ * transaction of the Context's SQL: the Context's object runs them itself, after the same checks.
+ */
+export type AskingToolName = "list_notices";
+
+export function isAskingTool(name: string): name is AskingToolName {
+  return name === "list_notices";
+}
+
 export type Handlers = {
-  [N in ToolName]: (call: ToolCall<N>) => ToolResult<ToolOutput[N]>;
+  [N in Exclude<ToolName, AskingToolName>]: (call: ToolCall<N>) => ToolResult<ToolOutput[N]>;
 };
 
 export type ToolRequest = {
@@ -43,34 +53,50 @@ export type ToolRequest = {
 };
 
 /**
- * The one way into a Context's tools. It refuses a tool the caller is not offered, checks the
- * input against the tool's schema, and runs the tool as one transaction. For a write it also
- * answers a repeated key with the first result, and puts the Effects in the change log.
+ * A call let in to a Context tool: one its caller is offered, with input its schema takes. Every
+ * Context tool is let in by `admit`, whether `dispatch` runs it or the Context's object does.
+ */
+export type Admitted = { [N in ToolName]: { tool: N; input: ToolInput<N> } }[ToolName];
+
+/** Refuse a tool the caller is not offered, and check the input against the tool's schema. */
+export function admit(request: ToolRequest): ToolResult<Admitted> {
+  const { caller, tool } = request;
+  if (!isToolName(tool) || !isOffered(tool, caller.kind)) {
+    return failure("not_offered", `The tool ${tool} is not offered to this caller.`);
+  }
+  const parsed = parseToolInput(tool, request.input);
+  if (!parsed.ok) return parsed;
+  return success({ tool, input: parsed.input } as Admitted);
+}
+
+/**
+ * The one way into a Context's tools but those asking the Deployment object. It lets the call in,
+ * and runs the tool as one transaction. For a write it also answers a repeated key with the first
+ * result, and puts the Effects in the change log.
  */
 export function dispatch(
   handlers: Handlers,
   storage: DurableObjectStorage,
   request: ToolRequest,
 ): ToolResult<unknown> {
-  const { caller, tool } = request;
-  if (!isToolName(tool) || !isOffered(tool, caller.kind)) {
-    return failure("not_offered", `The tool ${tool} is not offered to this caller.`);
-  }
-  return runTool(tool, handlers, storage, request);
+  const admitted = admit(request);
+  if (!admitted.ok) return admitted;
+  const { tool, input } = admitted.value;
+  if (isAskingTool(tool)) throw new Error(`${tool} is run by the Context's object, not dispatched`);
+  return runTool(tool, input, handlers, storage, request);
 }
 
-function runTool<N extends ToolName>(
+function runTool<N extends Exclude<ToolName, AskingToolName>>(
   tool: N,
+  input: ToolInput<N>,
   handlers: Handlers,
   storage: DurableObjectStorage,
   request: ToolRequest,
 ): ToolResult<unknown> {
-  const parsed = parseToolInput(tool, request.input);
-  if (!parsed.ok) return parsed;
   const handler = handlers[tool] as (call: ToolCall<N>) => ToolResult<ToolOutput[N]>;
   const call: ToolCall<N> = {
     caller: request.caller,
-    input: parsed.input,
+    input,
     arrivedAt: request.arrivedAt,
     today: dayIn(request.arrivedAt, timeZoneOf(storage.sql)),
     sql: storage.sql,

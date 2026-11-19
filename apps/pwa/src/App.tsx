@@ -23,6 +23,7 @@ import { CurrentHeldChanges, followHeldChanges } from "./HeldChanges.tsx";
 import { Journal } from "./Journal.tsx";
 import { Live, socketOpener } from "./live.ts";
 import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
+import { followNotices, hasNotices, StandingNotices } from "./Notices.tsx";
 import { focusCapField, followSpend, SpendSettings } from "./Spend.tsx";
 import { Standing } from "./Standing.tsx";
 import { Trash } from "./Trash.tsx";
@@ -306,6 +307,7 @@ export function App() {
         {(id) => {
           const live = openLive(id);
           const heldChanges = followHeldChanges(contextTools(id), live);
+          onCleanup(followNotices(contextTools(id)));
           createEffect(() => setHeldCount(heldChanges.all().length));
           return (
             <CurrentContextTools.Provider value={contextTools(id)}>
@@ -313,6 +315,14 @@ export function App() {
                 <CurrentHeldChanges.Provider value={heldChanges}>
                   <Show when={showSettings()}>
                     <div id="settings" class="settings-panel">
+                      <Show when={hasNotices()}>
+                        <section class="settings" aria-labelledby="notices-heading">
+                          <h2 id="notices-heading" class="column-heading">
+                            Notices
+                          </h2>
+                          <StandingNotices />
+                        </section>
+                      </Show>
                       <Show when={settings()}>
                         {(read) => (
                           <>

@@ -35,9 +35,9 @@ import {
 import { forgetOldKeys, holdsKeys, rememberKey, repeatedKey } from "./keys.ts";
 import { logCall } from "./log.ts";
 import type { AgentModel } from "./model.ts";
-import { dispatch, type Handlers, type ToolRequest } from "./registry.ts";
+import { admit, dispatch, type Handlers, isAskingTool, type ToolRequest } from "./registry.ts";
 import { deploymentOf } from "./routing.ts";
-import { recordRunNotStarted, runsNotEnded, spentInMonth } from "./run-rows.ts";
+import { newestRun, recordRunNotStarted, runById, runsNotEnded, spentInMonth } from "./run-rows.ts";
 import {
   contextEffect,
   deploymentOfContext,
@@ -98,6 +98,14 @@ const NO_AGENT: Record<NoAgent, string> = {
     "There is no Agent in this Deployment: its configuration names a model Praxis ships no price for, so no Run could be counted. Naming another is a change to the configuration and a deploy.",
 };
 
+/** A Run refused because the month's spend has reached the cap, with the cap in the way. */
+function capRefusal(cap: number): ToolResult<never> {
+  return refusal(
+    `This month's spend has reached the cap of ${dollars(cap)}, so no new Run starts. Raising the cap in the Deployment's settings lets one start at once; otherwise Runs start again when the month turns.`,
+    [capInTheWay(cap)],
+  );
+}
+
 /**
  * The Context object, given where its Agent's model comes from: the Deployment's configuration, or
  * a scripted model in tests (section 13). Without a model, `modelOf` says why there is no Agent.
@@ -154,12 +162,28 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
      */
     async call(request: ToolRequest): Promise<ToolResult<unknown>> {
       if (isConversationToolName(request.tool)) return this.converse(request.tool, request);
+      if (isAskingTool(request.tool)) return this.listNotices(request);
       const elapsed = startTimer();
       const before = lastChange(this.ctx.storage.sql);
       const result = dispatch(handlers, this.ctx.storage, request);
       const tool = isToolName(request.tool) ? request.tool : null;
       logCall({ tool, write: isWrite(request.tool) }, result, elapsed());
       if (isWrite(request.tool)) await this.afterWrite(before);
+      return result;
+    }
+
+    /**
+     * `list_notices`: the standing Notices, offered to the hand only (section 8.3). The ones this
+     * Context shows are the Deployment's, which its object is asked for: the key refused and the
+     * month's spend against the cap.
+     */
+    private async listNotices(request: ToolRequest): Promise<ToolResult<unknown>> {
+      const elapsed = startTimer();
+      const admitted = admit(request);
+      const result = admitted.ok
+        ? success({ items: await this.deployment().standingNotices(request.arrivedAt) })
+        : admitted;
+      logCall({ tool: "list_notices", write: false }, result, elapsed());
       return result;
     }
 
@@ -192,45 +216,96 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
         if (typeof agent === "string") return success({ items: [], next_cursor: null, agent });
         return success(await agent.messages(this.ctx.storage, cursor));
       }
-      const input = parsed.input as ConversationToolInput<"send_message">;
+      const input = parsed.input as ConversationToolInput<"send_message" | "retry_run">;
       if (typeof agent === "string") return refusal(NO_AGENT[agent], []);
       const sql = this.ctx.storage.sql;
       const { caller, arrivedAt } = request;
       const keyed = { caller, key: input.key, tool, at: arrivedAt };
       const repeated = repeatedKey(sql, keyed);
       if (repeated) return repeated;
-      const result = await this.startRun(agent, input, arrivedAt);
+      const result =
+        "run" in input
+          ? await this.retryRun(agent, input.run, arrivedAt)
+          : await this.startRun(agent, input, arrivedAt);
       if (input.key !== undefined) rememberKey(sql, { ...keyed, key: input.key, result });
       return result;
     }
 
     /**
-     * Start a Run for the person's Message, once the Deployment object has said one may: at the
-     * cap none starts, and the Message is refused and kept nowhere, though the Run still leaves a
-     * record (section 5.7).
+     * Try a failed Run again from the person's Message, as a new Run (section 5.6): only the
+     * newest Message's, since one sent since has moved the Conversation on, and only once the
+     * Deployment object says a Run may start, as for a Message.
      */
-    private async startRun(
+    private async retryRun(
       agent: ContextAgent,
-      input: ConversationToolInput<"send_message">,
+      id: string,
       at: number,
     ): Promise<ToolResult<unknown>> {
+      const sql = this.ctx.storage.sql;
+      const failed = runById(sql, id);
+      if (failed === null || failed.message === null) {
+        return failure("not_found", "There is no such Run in this Context's Conversation.");
+      }
+      if (failed.ended !== "failed") {
+        return refusal(
+          failed.ended === null
+            ? "This Run is still going."
+            : "This Run did not fail, so there is nothing to try again.",
+          [],
+        );
+      }
+      if (newestRun(sql)?.id !== failed.id) {
+        return refusal(
+          "Only the newest Message's Run can be tried again: a Message sent since has moved the Conversation on. Send this one again instead.",
+          [],
+        );
+      }
+      const allowed = await this.mayStartRun(agent, at);
+      if (!allowed.ok) return allowed;
+      const message = await agent.retry(this.ctx.storage, failed, at);
+      if (message === null) {
+        return refusal("A Run is going in this Conversation: try again once it has ended.", []);
+      }
+      return success({ message });
+    }
+
+    /**
+     * Ask the Deployment object whether a Run may start, as at the start of every Run (section
+     * 5.2), with the other Contexts' names. At the cap none starts: the Run not started still
+     * leaves a record, and the call is refused with the cap in the way (section 5.7).
+     */
+    private async mayStartRun(
+      agent: ContextAgent,
+      at: number,
+    ): Promise<ToolResult<{ otherContexts: string[] }>> {
       const { otherContexts, spend } = await this.deployment().beforeRun(
         this.ctx.id.toString(),
         at,
       );
       if (spend.notice === "cap_reached") {
         recordRunNotStarted(this.ctx.storage.sql, { at, model: agent.model });
-        return refusal(
-          `This month's spend has reached the cap of ${dollars(spend.cap)}, so no new Run starts. Raising the cap in the Deployment's settings lets one start at once; otherwise Runs start again when the month turns.`,
-          [capInTheWay(spend.cap)],
-        );
+        return capRefusal(spend.cap);
       }
       // The Agent's calls are timed by the clock the caller's requests arrive by.
       this.#clockSkew = at - arrivalTime();
+      return success({ otherContexts });
+    }
+
+    /**
+     * Start a Run for the person's Message, once the Deployment object has said one may: at the
+     * cap none starts, and the Message is refused and kept nowhere.
+     */
+    private async startRun(
+      agent: ContextAgent,
+      input: ConversationToolInput<"send_message">,
+      at: number,
+    ): Promise<ToolResult<unknown>> {
+      const allowed = await this.mayStartRun(agent, at);
+      if (!allowed.ok) return allowed;
       const message = await agent.send(
         this.ctx.storage,
         { words: input.words, spoken: input.spoken ?? false, at },
-        this.bearings(at, otherContexts),
+        this.bearings(at, allowed.value.otherContexts),
       );
       return success({ message });
     }
@@ -275,6 +350,7 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
                   this.#agentWake = wake;
                   return this.keepAlarm();
                 },
+                reportKey: (report) => this.deployment().takeKeyReport(report),
                 reportSpend: (at) =>
                   this.deployment().takeSpendReport({
                     context: this.ctx.id.toString(),

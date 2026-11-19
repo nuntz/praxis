@@ -75,8 +75,10 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
                    "yes", "yes", "no",  "no",       "no"  ],
   list_held_changes: [
                    "yes", "yes", "yes", "no",       "no"  ],
+  list_notices: [  "yes", "no",  "no",  "no",       "no"  ],
   // The Conversation tools (section 4.12): the person's hand only.
   send_message: [  "yes", "no",  "no",  "no",       "no"  ],
+  retry_run: [     "yes", "no",  "no",  "no",       "no"  ],
   list_messages: [ "yes", "no",  "no",  "no",       "no"  ],
 };
 
@@ -161,7 +163,9 @@ export const runsWith: Record<string, () => unknown> = {
   make_held_change: () => ({ id: "no-such-held-change" }),
   cancel_held_change: () => ({ id: "no-such-held-change" }),
   list_held_changes: () => ({}),
+  list_notices: () => ({}),
   send_message: () => ({ words: marked("Offered") }),
+  retry_run: () => ({ run: "no-such-run" }),
   list_messages: () => ({}),
 };
 

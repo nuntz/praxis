@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Caller, CallerKind } from "./callers.ts";
 import type { Effect } from "./effects.ts";
+import type { RunNotice } from "./notice.ts";
 import type { ErrorCode } from "./results.ts";
 import { type Parsed, parseInput, writeInput } from "./tools.ts";
 
@@ -16,6 +17,11 @@ export type PersonMessage = {
   at: string;
   /** Whether it was spoken in a Call rather than typed. */
   spoken: boolean;
+  /**
+   * The Notice under it while its newest Run has failed, with a way to try again: never a
+   * Message, and nothing answers it later by itself (section 5.6).
+   */
+  notice: RunNotice | null;
 };
 
 /**
@@ -93,10 +99,16 @@ export const conversationTools = {
       "Send the person's Message to the Agent in this Context's Conversation. It starts a Run, which answers on the live channel; the answer is not this tool's result, and is read back with list_messages.",
     input: writeInput({ words, spoken: z.boolean().optional() }),
   },
+  retry_run: {
+    kind: "write",
+    description:
+      "Try a Run that failed again, from the person's Message it was answering, as a new Run. Only the newest Message's Run can be: a Message sent since has moved the Conversation on. It is refused while a Run is going, and at the spend cap as send_message is.",
+    input: writeInput({ run: z.string().min(1) }),
+  },
   list_messages: {
     kind: "read",
     description:
-      "List this Context's Conversation, newest Message first, back to the start by cursor, each Agent Message with its Run's calls folded under it. Says whether there is an Agent at all.",
+      "List this Context's Conversation, newest Message first, back to the start by cursor, each Agent Message with its Run's calls folded under it, and the Notice under a person's Message whose Run failed. Says whether there is an Agent at all.",
     input: z.strictObject({
       cursor: z
         .string()
@@ -127,6 +139,8 @@ export type ConversationToolInput<N extends ConversationToolName> = z.infer<
 export type ConversationToolOutput = {
   /** The person's Message as it was added. The answer comes on the live channel. */
   send_message: { message: PersonMessage };
+  /** The person's Message being answered again, its Notice gone. The answer comes on the live channel. */
+  retry_run: { message: PersonMessage };
   list_messages: MessagesPage;
 };
 

@@ -9,7 +9,7 @@ import {
 import type { JsonObject } from "@earendil-works/pi-durable";
 import type { NoAgent } from "@praxis/domain";
 import { personsWords } from "../src/agent.ts";
-import { type AgentModel, DEFAULT_MODEL, PRICES } from "../src/model.ts";
+import { type AgentModel, DEFAULT_MODEL, PRICES, type RunRetry } from "../src/model.ts";
 
 // The model is one of the four faked things (section 13). The fake is pi-ai's faux provider
 // playing a script: fixed tool calls and words, through the real runtime loop in workerd. It runs
@@ -19,7 +19,13 @@ import { type AgentModel, DEFAULT_MODEL, PRICES } from "../src/model.ts";
 /** What the scripted model does with each request it is sent. */
 export type Script = FauxResponseFactory;
 
-let playing: AgentModel | NoAgent = "no_key";
+let playingModel: AgentModel | NoAgent = "no_key";
+
+/**
+ * The scripted model is asked again as the real one is, but at once: twice more, a millisecond
+ * apart, so a test sees the asking again without waiting seconds for it.
+ */
+export const SCRIPTED_RETRY: RunRetry = { maxRetries: 2, baseDelayMs: 1, maxAgentDelayMs: 1 };
 
 /** The scripted model is priced as the model it stands in for. */
 const SCRIPTED_PRICE = PRICES[DEFAULT_MODEL] ?? {
@@ -45,20 +51,25 @@ export function scriptModel(script: Script, { wordsPerSecond }: { wordsPerSecond
   });
   const models = createModels();
   models.setProvider(faux.provider);
-  // Each request takes the next response; one script for every request it might make.
-  faux.setResponses(Array.from({ length: 500 }, () => script));
-  playing = { models, provider: "scripted", id: DEFAULT_MODEL };
+  // Each request takes the next response, and each puts the script back for the one after, so
+  // it never runs out: a provider with no response left fails the request, as a model error.
+  const step: Script = (...args) => {
+    faux.appendResponses([step]);
+    return script(...args);
+  };
+  faux.setResponses([step]);
+  playingModel = { models, provider: "scripted", id: DEFAULT_MODEL, retry: SCRIPTED_RETRY };
   return faux;
 }
 
 /** No model: a Deployment whose configuration gives no key, which has no Agent. */
 export function noModel(why: NoAgent = "no_key"): void {
-  playing = why;
+  playingModel = why;
 }
 
 /** The model the Context objects of the tests run their Agent on, or why there is none. */
 export function testModel(): AgentModel | NoAgent {
-  return playing;
+  return playingModel;
 }
 
 type ModelMessage = TranscriptContext["messages"][number];
@@ -101,4 +112,20 @@ export function calling(
 /** A script that answers every Message in these words, calling nothing. */
 export function answering(words: string): Script {
   return () => fauxAssistantMessage(words);
+}
+
+/**
+ * What Anthropic answers when it cannot answer for now: overloaded. Only waiting mends it, so a
+ * Run asks again.
+ */
+export const UNAVAILABLE =
+  '529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}';
+
+/** What Anthropic answers when the key is wrong. Asking again would not mend it. */
+export const KEY_REFUSED =
+  '401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}';
+
+/** A script whose every answer is the provider's error, in these words. */
+export function failing(error: string): Script {
+  return () => fauxAssistantMessage([], { stopReason: "error", errorMessage: error });
 }

@@ -1,7 +1,13 @@
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { describe, expect, inject, test } from "vitest";
-import { type AgentModel, anthropicModel, PRICES, unpricedModel } from "../src/model.ts";
-import { lastWords, scriptModel, testModel } from "./model-fake.ts";
+import {
+  type AgentModel,
+  anthropicModel,
+  PRICES,
+  runFailure,
+  unpricedModel,
+} from "../src/model.ts";
+import { KEY_REFUSED, lastWords, scriptModel, testModel, UNAVAILABLE } from "./model-fake.ts";
 
 // The model's one contract suite (section 13). In CI it runs against the scripted model only, so
 // CI never calls a model. By hand it runs against the real one too, with the person's own key:
@@ -32,7 +38,11 @@ function ask(model: AgentModel, text: string, tools: (typeof RECORD)[] = []) {
   });
 }
 
-function contract(name: string, model: () => AgentModel) {
+/**
+ * The contract, run against one model. `refusedKey` gives what its provider says when it refuses
+ * the key: for the real one, what it answers a key that is not one.
+ */
+function contract(name: string, model: () => AgentModel, refusedKey: () => Promise<string>) {
   describe(`the model: ${name}`, () => {
     test("it is one the code ships a price for", () => {
       expect(PRICES[model().id]).toBeDefined();
@@ -47,6 +57,11 @@ function contract(name: string, model: () => AgentModel) {
       expect(answer.usage.output).toBeGreaterThan(0);
     });
 
+    test("the provider refusing the key is told apart from it being unavailable", async () => {
+      expect(runFailure("model_error", await refusedKey())).toBe("key_refused");
+      expect(runFailure("model_error", UNAVAILABLE)).toBe("model_unavailable");
+    });
+
     test("offered a tool and asked to use it, it calls it with input the schema takes", async () => {
       const answer = await ask(model(), "Use record_note to record: buy milk.", [RECORD]);
 
@@ -57,27 +72,36 @@ function contract(name: string, model: () => AgentModel) {
   });
 }
 
-contract("scripted", () => {
-  // Scripted to do what the contract asks, as a model would.
-  scriptModel((context) =>
-    lastWords(context).includes("record_note")
-      ? fauxAssistantMessage(fauxToolCall("record_note", { words: "buy milk" }), {
-          stopReason: "toolUse",
-        })
-      : fauxAssistantMessage("Hello."),
-  );
-  const scripted = testModel();
-  if (typeof scripted === "string") throw new Error("No scripted model");
-  return scripted;
-});
+contract(
+  "scripted",
+  () => {
+    // Scripted to do what the contract asks, as a model would.
+    scriptModel((context) =>
+      lastWords(context).includes("record_note")
+        ? fauxAssistantMessage(fauxToolCall("record_note", { words: "buy milk" }), {
+            stopReason: "toolUse",
+          })
+        : fauxAssistantMessage("Hello."),
+    );
+    const scripted = testModel();
+    if (typeof scripted === "string") throw new Error("No scripted model");
+    return scripted;
+  },
+  async () => KEY_REFUSED,
+);
 
 const real = inject("realModel");
 if (real) {
-  contract("real", () => {
-    const configured = anthropicModel({ AGENT_API_KEY: real.key, AGENT_MODEL: real.model });
-    if (typeof configured === "string") throw new Error(`No model to run against: ${configured}`);
-    return configured;
-  });
+  const configured = (key: string) => {
+    const found = anthropicModel({ AGENT_API_KEY: key, AGENT_MODEL: real.model });
+    if (typeof found === "string") throw new Error(`No model to run against: ${found}`);
+    return found;
+  };
+  contract(
+    "real",
+    () => configured(real.key),
+    async () => (await ask(configured("sk-ant-not-a-key"), "Hello.")).errorMessage ?? "",
+  );
 }
 
 describe("the deploy's check of the configured model", () => {

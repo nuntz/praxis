@@ -10,6 +10,7 @@ import {
   LiveDoc,
   type LiveState,
   type Report,
+  type Submission,
   type SubmissionId,
   section,
   type Wake,
@@ -26,12 +27,13 @@ import {
   offeredTo,
   type PersonMessage,
   type RunCall,
-  type RunEnd,
+  type RunFailure,
   type ToolName,
   type ToolResult,
   tools,
 } from "@praxis/domain";
-import { type AgentModel, costOf } from "./model.ts";
+import { type AgentModel, costOf, runFailure } from "./model.ts";
+import type { KeyReport } from "./notice-rows.ts";
 import {
   addRunChange,
   endRun,
@@ -82,6 +84,12 @@ export type AgentHost = {
    * falls in, so it counts against the cap.
    */
   reportSpend(at: number): Promise<void>;
+  /**
+   * Tell the Deployment object the provider refused the key in a Run started at `at`, or took it
+   * in one: a refused key is a standing Notice in every Context until a call succeeds (section
+   * 5.6).
+   */
+  reportKey(report: KeyReport): Promise<void>;
 };
 
 /**
@@ -250,8 +258,14 @@ export class ContextAgent {
           toolExecution: "sequential",
           // One Message per Run: each answers one, in the order they were sent.
           followUpMode: "one-at-a-time",
-          // Nothing is answered later by itself: a Message queued behind a failed Run fails too.
-          afterFailedRun: "withdraw",
+          // A model not reached is asked again for seconds, by Praxis's policy alone: the
+          // provider's own client asks no more times inside each.
+          retry: { enabled: true, ...this.#model.retry },
+          stream: { maxRetries: 0 },
+          // A Message queued behind a failed Run is answered in its turn, as after an answer, so
+          // it stays in the Conversation with a Notice of its own if it fails too. Nothing waits
+          // to be answered later by itself.
+          afterFailedRun: "continue",
         },
         // The runtime's own failures, by kind and never with what was said (ADR 0010).
         onReport: (report: Report) => console.error(JSON.stringify({ agent: report.kind })),
@@ -328,6 +342,44 @@ export class ContextAgent {
     return sent;
   }
 
+  /**
+   * Try a failed Run again from the person's Message it answered, as a new Run on the
+   * Conversation as it stands, which ends in that Message. Null when the runtime is busy with a
+   * Run, or the Message is not the newest. The Message is carried down without its Notice.
+   */
+  async retry(
+    storage: DurableObjectStorage,
+    failed: RunRow,
+    at: number,
+  ): Promise<PersonMessage | null> {
+    const { harness, root } = await this.open(storage);
+    const [newest] = (await this.page(root, undefined, 2)).items.filter(
+      (message): message is PersonMessage => message.from === "person",
+    );
+    if (newest?.id !== failed.message) return null;
+    const last = (await root.entries({ order: "descending" }, 1, undefined, context)).items[0];
+    await this.#host.arm({ ...harness.wake(), active: true });
+    let submission: Submission;
+    try {
+      submission = await root.submit({ type: "continue", requestId: crypto.randomUUID() }, context);
+    } catch {
+      // A Run is going, which a continue never waits behind.
+      return null;
+    }
+    const run = startRun(this.#host.sql, {
+      startedBy: "message",
+      message: newest.id,
+      submission: submission.id,
+      at,
+      model: this.#model.id,
+      fromRecord: last === undefined ? 1 : (last.id as number) + 1,
+    });
+    this.#follow(harness, root, run);
+    const retried: PersonMessage = { ...newest, notice: null };
+    this.#host.send({ kind: "message", message: retried });
+    return retried;
+  }
+
   /** Every Run going or waiting has ended, and its record says how. */
   async runsEnded(storage: DurableObjectStorage): Promise<void> {
     await this.open(storage);
@@ -341,25 +393,58 @@ export class ContextAgent {
     this.#settling.add(settling);
   }
 
-  /** Wait for a Run to end, then record how and what it spent, and carry its Message down. */
+  /**
+   * Wait for a Run to end, then record how, why if it failed, and what it spent, and carry its
+   * Message down: the Agent's, and the person's with its Notice if it failed.
+   */
   async #settle(harness: Harness, root: Conversation, run: RunRow): Promise<void> {
     const submission = await harness.submission(run.submission as SubmissionId, context);
     if (!submission) {
-      endRun(this.#host.sql, run.id, "failed", NOTHING_SPENT);
+      endRun(
+        this.#host.sql,
+        run.id,
+        { how: "failed", failure: "model_unavailable" },
+        NOTHING_SPENT,
+      );
       await this.#reportSpend(run.at);
       return;
     }
     const settled = await submission.wait(context);
-    const ended: RunEnd = settled.status === "done" ? "answered" : "failed";
-    const entries = settled.entry === undefined ? [] : await runRecords(root, settled.entry);
-    endRun(this.#host.sql, run.id, ended, spendOf(run.model, entries));
+    const failure = settled.status === "done" ? null : runFailure(settled.reason, settled.detail);
+    // Why, by the runtime's code and never its detail, which may quote what was said (ADR 0010).
+    if (failure !== null) {
+      console.error(JSON.stringify({ agent: "run_failed", reason: settled.reason, failure }));
+    }
+    // A Run trying a failed one again places no Message: its records start where it started.
+    const first = settled.entry ?? run.from_record;
+    const records = first === undefined || first === null ? [] : await runRecords(root, first);
+    endRun(
+      this.#host.sql,
+      run.id,
+      { how: failure === null ? "answered" : "failed", failure },
+      spendOf(run.model, records),
+    );
     // Counted before the screen learns the Run ended, so the spend it reads then holds it.
     await this.#reportSpend(run.at);
+    if (failure === "key_refused") await this.#reportKey({ key: "refused", at: run.at });
+    else if (reachedModel(records)) await this.#reportKey({ key: "taken", at: run.at });
     // A Message sent meanwhile may already be newer than this Run's.
-    const answer = (await this.page(root, undefined, RECENT_MESSAGES)).items.find(
-      (message) => message.from === "agent" && message.run.id === run.id,
-    );
+    const recent = (await this.page(root, undefined, RECENT_MESSAGES)).items;
+    const answer = recent.find((message) => message.from === "agent" && message.run.id === run.id);
     if (answer) this.#host.send({ kind: "message", message: answer });
+    const noticed = recent.find(
+      (message) => message.from === "person" && message.notice?.run === run.id,
+    );
+    if (noticed) this.#host.send({ kind: "message", message: noticed });
+  }
+
+  /** Report whether the key was refused. One that fails is made good by the next Run's. */
+  async #reportKey(report: KeyReport): Promise<void> {
+    try {
+      await this.#host.reportKey(report);
+    } catch {
+      console.error(JSON.stringify({ agent: "key_not_reported" }));
+    }
   }
 
   /**
@@ -409,6 +494,8 @@ export class ContextAgent {
     const items: Message[] = [];
     let said: { words: string[]; calls: RunCall[] } = { words: [], calls: [] };
     const answering: { item: number; message: string }[] = [];
+    // Each person's Message on the page, which carries a Notice while its newest Run has failed.
+    const fromPerson: number[] = [];
     const results = new Map<string, CallDetails>();
     let next: number | undefined = before === undefined ? undefined : before - 1;
     let last: number | null = null;
@@ -428,6 +515,7 @@ export class ContextAgent {
             items.push(agentMessage(said.words, said.calls.toReversed()));
           }
           said = { words: [], calls: [] };
+          fromPerson.push(items.length);
           items.push(personMessage(data));
           last = entry.id as number;
           if (items.length >= size) break scan;
@@ -471,8 +559,13 @@ export class ContextAgent {
     }
     const runs = runsAnswering(
       this.#host.sql,
-      answering.map(({ message }) => message),
+      fromPerson.map((item) => items[item]?.id ?? ""),
     );
+    for (const item of fromPerson) {
+      const shown = items[item] as PersonMessage;
+      const run = runs.get(shown.id);
+      if (run?.ended === "failed") shown.notice = noticeOf(run);
+    }
     for (const { item, message } of answering) {
       const run = runs.get(message);
       const shown = items[item] as AgentMessage;
@@ -510,7 +603,28 @@ function personMessage(data: MessageData): PersonMessage {
     words: data.words,
     at: instantToIso(data.at),
     spoken: data.spoken,
+    notice: null,
   };
+}
+
+/** The Notice under a person's Message whose newest Run failed. */
+function noticeOf(run: RunRow): { run: string; failure: RunFailure } {
+  return { run: run.id, failure: run.failure ?? "model_unavailable" };
+}
+
+/**
+ * Whether a Run reached the model: one of its answers came back, an answer that is not the
+ * provider's error. Such a call succeeding ends a refused key's standing Notice.
+ */
+function reachedModel(records: EntryRecord[]): boolean {
+  return records.some((record) =>
+    (record.model ?? []).some(
+      (message) =>
+        message.role === "assistant" &&
+        message.stopReason !== "error" &&
+        message.stopReason !== "aborted",
+    ),
+  );
 }
 
 function agentMessage(words: string[], calls: RunCall[]): AgentMessage {

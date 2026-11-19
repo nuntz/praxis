@@ -245,7 +245,7 @@ export function createTables(sql: SqlStorage): void {
     CREATE TABLE IF NOT EXISTS runs (
       seq INTEGER PRIMARY KEY,
       id TEXT NOT NULL UNIQUE,
-      -- What started it: for now only a Message from the person.
+      -- What started it: for now only a Message from the person, sent or tried again.
       started_by TEXT NOT NULL,
       -- The id of the person's Message it answers, never its words.
       message TEXT,
@@ -261,7 +261,12 @@ export function createTables(sql: SqlStorage): void {
       -- In US dollars, by the price table shipped with the code.
       cost REAL NOT NULL DEFAULT 0,
       -- How it ended, null while it is going.
-      ended TEXT
+      ended TEXT,
+      -- Why it failed, for a Run that did: the model not reached, or the key refused.
+      failure TEXT,
+      -- For a Run trying a failed one again, the runtime's first record that may be its own: the
+      -- records before it are the Runs' before it, and their spend counted with them.
+      from_record INTEGER
     );
     -- The changes a Run made, as the change log numbers them. One may point at a line pruned since.
     CREATE TABLE IF NOT EXISTS run_changes (

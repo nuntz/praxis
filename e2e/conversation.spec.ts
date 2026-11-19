@@ -43,3 +43,42 @@ test("asking the Agent for a change, the Journal shows it as it is made", async 
   await expect(shown).toBeVisible();
   await expect(shown).toBeFocused();
 });
+
+test("a Run that failed keeps the Message with a Notice under it, and Try again answers it", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const context = await makeContext(page, {
+    name: `Unreached ${tag}`,
+    time_zone: "UTC",
+    accent: "teal",
+  });
+  await lastShown(page, context.id);
+  await page.goto("/");
+  if (onPhone(testInfo)) {
+    await page
+      .getByRole("navigation", { name: "Columns" })
+      .getByRole("button", { name: "Agent", exact: true })
+      .click();
+  }
+  const conversation = page.getByRole("region", { name: "Conversation" });
+
+  const words = `Unreachable once: are you there ${tag}`;
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in Unreached ${tag}`, exact: true })
+    .fill(words);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+
+  const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
+  const sent = messages.filter({ hasText: words });
+  await expect(sent.getByText(/The model could not be reached/)).toBeVisible();
+  await expect(messages).toHaveCount(1);
+
+  const retried = page.waitForResponse(/\/retry_run$/);
+  await sent.getByRole("button", { name: "Try again", exact: true }).click();
+  expect(await (await retried).json()).toMatchObject({ ok: true });
+
+  await expect(messages.last().getByText("Back again.", { exact: true })).toBeVisible();
+  await expect(messages).toHaveCount(2);
+  await expect(sent.getByText(/The model could not be reached/)).toHaveCount(0);
+});

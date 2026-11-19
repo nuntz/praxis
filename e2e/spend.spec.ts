@@ -1,4 +1,4 @@
-import type { Spend } from "@praxis/domain";
+import type { Spend, StandingNotice } from "@praxis/domain";
 import { expect, lastShown, makeContext, onPhone, test } from "./fixtures.ts";
 
 // The spend cap (section 5.7, ADR 0017): one cap for the whole Deployment, set in its settings,
@@ -55,6 +55,19 @@ test("at the cap, the Conversation's composer gives way to a Notice that opens t
       json: { ok: true, value: { ...value, spent: value.cap, notice: "cap_reached" } },
     });
   });
+  // The standing Notices say the same, among any others the shared Deployment has, at the cap
+  // the Deployment has: read afresh, since another journey may set it.
+  await page.route(/\/list_notices$/, async (route) => {
+    const answer = await route.fetch();
+    const { value } = (await answer.json()) as { value: { items: StandingNotice[] } };
+    const spend = await page.request.post("/api/deployment/tools/get_spend", { data: {} });
+    const { cap } = ((await spend.json()) as { value: Spend }).value;
+    const items = [
+      ...value.items.filter((notice) => notice.kind === "key_refused"),
+      { kind: "cap_reached", spent: cap, cap },
+    ];
+    await route.fulfill({ response: answer, json: { ok: true, value: { items } } });
+  });
   await page.goto("/");
   if (onPhone(testInfo)) {
     await page
@@ -70,6 +83,9 @@ test("at the cap, the Conversation's composer gives way to a Notice that opens t
   await conversation.getByRole("button", { name: "Raise the cap in settings" }).click();
   await expect(page.getByLabel("Monthly cap, US dollars", { exact: true })).toBeFocused();
   await expect(
-    page.getByRole("region", { name: "Spend" }).getByTestId("spend-notice"),
+    page
+      .getByRole("region", { name: "Notices" })
+      .getByTestId("standing-notice")
+      .filter({ hasText: /This month's spend has reached its cap/ }),
   ).toBeVisible();
 });

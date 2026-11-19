@@ -1,6 +1,6 @@
 import { createModels, type Models, type Usage } from "@earendil-works/pi-ai";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
-import type { NoAgent } from "@praxis/domain";
+import type { NoAgent, RunFailure } from "@praxis/domain";
 
 /**
  * The model the Agent runs on (section 5.6, ADR 0017): one model from one provider, reached
@@ -13,7 +13,19 @@ export interface AgentModel {
   readonly provider: string;
   /** The model's name, as the Deployment's configuration gives it and the Run record keeps it. */
   readonly id: string;
+  /** How a Run asks it again when it cannot be reached. */
+  readonly retry: RunRetry;
 }
+
+/**
+ * How a Run asks the model again when it cannot be reached: a few times, each after twice the
+ * wait of the last, so for seconds and no more, and then the Run fails (section 5.6). An answer
+ * that only waiting mends is asked again; one that says the key is refused is not.
+ */
+export type RunRetry = { maxRetries: number; baseDelayMs: number; maxAgentDelayMs: number };
+
+/** For the real model: after 1, 2 and 4 seconds, so a Run fails some 7 seconds in. */
+export const RUN_RETRY: RunRetry = { maxRetries: 3, baseDelayMs: 1000, maxAgentDelayMs: 4000 };
 
 /** What a model costs, in US dollars per million tokens. */
 export type Price = { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -77,5 +89,25 @@ export function anthropicModel(env: ModelConfiguration): AgentModel | NoAgent {
     },
   });
   models.setProvider(anthropicProvider());
-  return { models, provider: "anthropic", id };
+  return { models, provider: "anthropic", id, retry: RUN_RETRY };
+}
+
+/**
+ * What the provider says when it refuses the key rather than being unavailable: the key is wrong
+ * or not allowed (401, 403), the account is out of credit, or it has reached the spend limit set
+ * with the provider. Asking again does not mend these, and the person can (section 5.6).
+ */
+const KEY_REFUSED =
+  /(?<![a-z0-9])(?:401|403)(?![a-z0-9])|authentication_error|permission_error|x-api-key|credit balance|billing|usage limits?/i;
+
+/**
+ * Why a Run failed, from how the runtime says it ended: the provider refusing the key, told by
+ * its own words for it, or the model not being reached, which is everything else, since only
+ * waiting mends it (section 5.6).
+ */
+export function runFailure(reason: string, detail: unknown): RunFailure {
+  if (reason === "model_error" && typeof detail === "string" && KEY_REFUSED.test(detail)) {
+    return "key_refused";
+  }
+  return "model_unavailable";
 }

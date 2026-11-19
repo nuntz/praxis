@@ -406,7 +406,7 @@ ADR 0001, 0010. Offered to the hand only, never to the Agent, the Clock or a Con
 |---|---|
 | `send_message` | A Message from the person is added to the Context's Conversation and starts a Run. It says whether it was typed or spoken. |
 | `list_messages` | The Conversation's Messages, paged back to the start, with the Notices under them and each Run's folded calls. |
-| `retry_run` | A Run that failed is tried again from the person's Message. |
+| `retry_run` | A Run that failed is tried again from the person's Message, as a new Run. Only the newest Message's: one sent since has moved the Conversation on. |
 | `start_call`, `end_call` | A Call is set up in this Context, or ended (section 6). |
 
 - They return no Effects and write nothing to the change log, because the Conversation is not data. What a Run changes is reported by the Context tools it calls, as always.
@@ -487,8 +487,8 @@ ADR 0017.
 - The key and the model's name are in the Deployment's configuration outside the repo (section 12). No tool or screen reads or sets the key, and it is never in an object.
 - The model must be one the code ships a price for. One with no shipped price fails the deploy with the reason. The first release ships a price for one model, Claude Sonnet 5.5, which also writes the compaction summary. Another model is a release.
 - **The key is optional.** Without one there is no Agent: the Conversation says so in place of its composer. The Journal, the screen, Connections and search work as normal, and nothing is shown as broken.
-- **When the model cannot be reached**, a Run the person started retries for seconds, then ends as failed. The person's Message stays, with a Notice under it that is not a Message and a way to try again. Nothing is answered later by itself.
-- **Two failures are told apart.** The provider being unavailable shows only on the Run that failed. The provider refusing the key (wrong, out of credit, or at the provider's own limit) is a standing Notice in Attention and in settings until a call succeeds.
+- **When the model cannot be reached**, a Run the person started retries for seconds, then ends as failed. The person's Message stays, with a Notice under it that is not a Message and a way to try again. Nothing is answered later by itself. A Message sent while that Run was going is answered in its turn, as after an answer, and keeps a Notice of its own if it fails too. Trying again is a new Run, with its own record, that answers the Conversation as it stands: what the failed Run already changed stays changed, and the new Run sees it.
+- **Two failures are told apart.** The provider being unavailable shows only on the Run that failed. The provider refusing the key (wrong, out of credit, or at the provider's own limit) is a standing Notice in Attention and in settings until a call succeeds. It is not retried, and since the key is the Deployment's, its Notice shows in every Context and a call succeeding in any ends it. The provider's own words tell the two apart, and anything not a refused key counts as unavailable.
 - A Brief or Review that was due retries with a growing gap during an outage. Attention shows one line with the reason, and no Notification is sent.
 
 ### 5.7 Spend

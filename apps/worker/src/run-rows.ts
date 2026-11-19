@@ -1,4 +1,4 @@
-import { monthBounds, type RunEnd, type RunStart } from "@praxis/domain";
+import { monthBounds, type RunEnd, type RunFailure, type RunStart } from "@praxis/domain";
 
 /** A Run record as the Context's object keeps it (section 5.8). It holds no words. */
 export type RunRow = {
@@ -14,6 +14,8 @@ export type RunRow = {
   cache_write_tokens: number;
   cost: number;
   ended: RunEnd | null;
+  failure: RunFailure | null;
+  from_record: number | null;
 };
 
 /** What a Run spent: its tokens, and their cost by the price table shipped with the code. */
@@ -25,14 +27,25 @@ export type RunSpend = {
   cost: number;
 };
 
-/** Keep the record of a Run as it starts, before the runtime runs anything. */
+/**
+ * Keep the record of a Run as it starts, before the runtime runs anything. A Run trying a failed
+ * one again says from which of the runtime's records it may be its own.
+ */
 export function startRun(
   sql: SqlStorage,
-  run: { startedBy: RunStart; message: string; submission: number; at: number; model: string },
+  run: {
+    startedBy: RunStart;
+    message: string;
+    submission: number;
+    at: number;
+    model: string;
+    fromRecord?: number;
+  },
 ): RunRow {
   return sql
     .exec<RunRow>(
-      `INSERT INTO runs (id, started_by, message, submission, at, model) VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO runs (id, started_by, message, submission, at, model, from_record)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       crypto.randomUUID(),
       run.startedBy,
@@ -40,6 +53,7 @@ export function startRun(
       run.submission,
       run.at,
       run.model,
+      run.fromRecord ?? null,
     )
     .one();
 }
@@ -57,13 +71,19 @@ export function recordRunNotStarted(sql: SqlStorage, run: { at: number; model: s
   );
 }
 
-/** Say how a Run ended, and what it spent. */
-export function endRun(sql: SqlStorage, id: string, ended: RunEnd, spend: RunSpend): void {
+/** Say how a Run ended, why if it failed, and what it spent. */
+export function endRun(
+  sql: SqlStorage,
+  id: string,
+  ended: { how: RunEnd; failure: RunFailure | null },
+  spend: RunSpend,
+): void {
   sql.exec(
-    `UPDATE runs SET ended = ?, input_tokens = ?, output_tokens = ?, cache_read_tokens = ?,
-       cache_write_tokens = ?, cost = ?
+    `UPDATE runs SET ended = ?, failure = ?, input_tokens = ?, output_tokens = ?,
+       cache_read_tokens = ?, cache_write_tokens = ?, cost = ?
      WHERE id = ? AND ended IS NULL`,
-    ended,
+    ended.how,
+    ended.failure,
     spend.input,
     spend.output,
     spend.cacheRead,
@@ -91,12 +111,29 @@ export function addRunChange(sql: SqlStorage, run: string, change: number): void
   sql.exec(`INSERT OR IGNORE INTO run_changes (run, change) VALUES (?, ?)`, run, change);
 }
 
-/** The Runs answering these Messages, by the Message's id. */
+/** A Run by its id, if there is one. */
+export function runById(sql: SqlStorage, id: string): RunRow | null {
+  return sql.exec<RunRow>(`SELECT * FROM runs WHERE id = ?`, id).toArray()[0] ?? null;
+}
+
+/** The newest Run answering a Message, the one the Conversation stands at, if any. */
+export function newestRun(sql: SqlStorage): RunRow | null {
+  return (
+    sql
+      .exec<RunRow>(`SELECT * FROM runs WHERE message IS NOT NULL ORDER BY seq DESC LIMIT 1`)
+      .toArray()[0] ?? null
+  );
+}
+
+/**
+ * The Run answering each of these Messages, by the Message's id: the newest, when a failed one
+ * was tried again.
+ */
 export function runsAnswering(sql: SqlStorage, messages: string[]): Map<string, RunRow> {
   if (messages.length === 0) return new Map();
   const rows = sql
     .exec<RunRow>(
-      `SELECT * FROM runs WHERE message IN (${messages.map(() => "?").join(", ")})`,
+      `SELECT * FROM runs WHERE message IN (${messages.map(() => "?").join(", ")}) ORDER BY seq`,
       ...messages,
     )
     .toArray();

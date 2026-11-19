@@ -8,6 +8,7 @@ import {
   offeredDeploymentTool,
   parseDeploymentToolInput,
   type Spend,
+  type StandingNotice,
   type ToolResult,
 } from "@praxis/domain";
 import { startTimer } from "./arrival.ts";
@@ -21,6 +22,7 @@ import {
 } from "./deployment-tools.ts";
 import { rememberKey, repeatedKey } from "./keys.ts";
 import { logCall } from "./log.ts";
+import { type KeyReport, standingNotices, takeKeyReport } from "./notice-rows.ts";
 import type { ToolRequest } from "./registry.ts";
 import { readSpend, type SpendReport, takeSpendReport } from "./spend-rows.ts";
 
@@ -82,6 +84,23 @@ export class DeploymentObject extends DurableObject<Env> {
    */
   async takeSpendReport(report: SpendReport): Promise<void> {
     takeSpendReport(this.ctx.storage.sql, report);
+  }
+
+  /**
+   * A Context's report that the model's provider refused the key in a Run, or took it. The key is
+   * the Deployment's, so its refusal is a standing Notice in every Context until a call succeeds
+   * in any (section 5.6).
+   */
+  async takeKeyReport(report: KeyReport): Promise<void> {
+    takeKeyReport(this.ctx.storage.sql, report);
+  }
+
+  /**
+   * The Deployment's standing Notices as at `at`, which a Context's `list_notices` gives with its
+   * own (section 8.3).
+   */
+  async standingNotices(at: number): Promise<StandingNotice[]> {
+    return standingNotices(this.ctx.storage.sql, at);
   }
 
   private async run<N extends DeploymentToolName>(

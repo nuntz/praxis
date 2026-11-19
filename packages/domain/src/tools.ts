@@ -5,6 +5,7 @@ import { day, daysBefore, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
 import { type Entry, type Page, STANDING_CEILING, type Version } from "./entry.ts";
 import type { Held, HeldChange } from "./held-change.ts";
+import type { StandingNotice } from "./notice.ts";
 import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
 import { newRecurrence } from "./recurrence.ts";
@@ -575,6 +576,13 @@ export const tools = {
     input: z.strictObject({ cursor }),
     offered: { ...toEveryCaller, connection: "no", read_only_connection: "no" },
   },
+  list_notices: {
+    kind: "read",
+    description:
+      "List the standing Notices: what Praxis says of its own condition until its cause is gone, such as the model's provider refusing the key, or the month's spend nearing or reaching the cap.",
+    input: z.strictObject({}),
+    offered: toHandOnly,
+  },
   list_changes: {
     kind: "read",
     description:
@@ -667,6 +675,7 @@ export type ToolOutput = {
   make_held_change: Written<HeldChange>;
   cancel_held_change: Written<HeldChange>;
   list_held_changes: Page<HeldChange>;
+  list_notices: { items: StandingNotice[] };
 };
 
 /** A tool's input checked against its schema, or the `invalid_input` saying what is wrong. */

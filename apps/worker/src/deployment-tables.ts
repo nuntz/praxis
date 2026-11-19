@@ -1,7 +1,7 @@
 /**
  * The Deployment object's own tables. It holds nothing from any Journal (ADR 0006): for now the
  * list of Contexts with their names and accents, the Connections, the spend cap and what each
- * Context spent each month, and the keys of the writes made to it. The upgrade ladder of section
+ * Context spent each month, whether the model's provider refuses the key, and the keys of the writes made to it. The upgrade ladder of section
  * 11 replaces this with numbered steps before the first release.
  */
 export function createDeploymentTables(sql: SqlStorage): void {
@@ -40,6 +40,13 @@ export function createDeploymentTables(sql: SqlStorage): void {
       context_id TEXT NOT NULL,
       dollars REAL NOT NULL,
       PRIMARY KEY (month, context_id)
+    );
+
+    -- The model's provider refusing the key (section 5.6): one row, from the first Run it refused
+    -- until a call succeeds. A standing Notice in every Context while it is there.
+    CREATE TABLE IF NOT EXISTS key_refused (
+      one INTEGER PRIMARY KEY CHECK (one = 1),
+      since INTEGER NOT NULL
     );
 
     -- Each caller's keys for its writes and the first result, remembered 30 days (section 4.5),
