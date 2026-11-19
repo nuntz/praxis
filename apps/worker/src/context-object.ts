@@ -23,23 +23,32 @@ import {
   success,
   type ToolResult,
 } from "@praxis/domain";
-import { type Bearings, ContextAgent } from "./agent.ts";
+import { type Bearings, ContextAgent, DIGEST_CHANGES, HELD_NAMED } from "./agent.ts";
 import { arrivalTime, startTimer } from "./arrival.ts";
 import {
   appendChange,
   changesAfter,
+  changesByOthers,
   encodeCursor,
   holdsChanges,
   lastChange,
   pruneChanges,
 } from "./change-log.ts";
 import { contextFile } from "./context-file.ts";
+import { heldWaiting } from "./held-change-rows.ts";
 import { forgetOldKeys, holdsKeys, rememberKey, repeatedKey } from "./keys.ts";
 import { logCall } from "./log.ts";
 import type { AgentModel } from "./model.ts";
 import { admit, dispatch, type Handlers, isAskingTool, type ToolRequest } from "./registry.ts";
 import { deploymentOf } from "./routing.ts";
-import { newestRun, recordRunNotStarted, runById, runsNotEnded, spentInMonth } from "./run-rows.ts";
+import {
+  lastToldChange,
+  newestRun,
+  recordRunNotStarted,
+  runById,
+  runsNotEnded,
+  spentInMonth,
+} from "./run-rows.ts";
 import {
   contextEffect,
   deploymentOfContext,
@@ -324,7 +333,9 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
     /**
      * What the Agent is told at the start of a Run: the Context's Standing Entries with their
      * dates, today, this Context's name, and the other Contexts' names, which this object asks the
-     * Deployment object for (section 5.2). They are read as they stand when the Message is sent.
+     * Deployment object for (section 5.2); and each turn, the Held Changes still waiting, what
+     * others changed since its last turn, and whether that turn was cut short at the limit of
+     * model rounds. They are read as they stand when the Message is sent.
      */
     private bearings(at: number, otherContexts: string[]): Bearings {
       const sql = this.ctx.storage.sql;
@@ -334,6 +345,9 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
         context: settings.name,
         otherContexts,
         standing: standingEntries(sql, settings.time_zone),
+        held: heldWaiting(sql, HELD_NAMED),
+        digest: changesByOthers(sql, lastToldChange(sql), DIGEST_CHANGES),
+        lastRunCutShort: newestRun(sql)?.ended === "cut_short",
       };
     }
 

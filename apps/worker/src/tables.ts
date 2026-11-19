@@ -275,7 +275,10 @@ function createTablesAsMade(sql: SqlStorage): void {
       failure TEXT,
       -- For a Run trying a failed one again, the runtime's first record that may be its own: the
       -- records before it are the Runs' before it, and their spend counted with them.
-      from_record INTEGER
+      from_record INTEGER,
+      -- For a Run answering a new Message, the number of the change the log stood at when the
+      -- Agent was told what changed since its last turn: the next is told from there.
+      told_through INTEGER
     );
     -- The changes a Run made, as the change log numbers them. One may point at a line pruned since.
     CREATE TABLE IF NOT EXISTS run_changes (
@@ -293,6 +296,7 @@ function createTablesAsMade(sql: SqlStorage): void {
 const ADDED_COLUMNS: { table: string; column: string; type: string }[] = [
   { table: "runs", column: "failure", type: "TEXT" },
   { table: "runs", column: "from_record", type: "INTEGER" },
+  { table: "runs", column: "told_through", type: "INTEGER" },
 ];
 
 /** Add each column a table made before it was added still lacks. */

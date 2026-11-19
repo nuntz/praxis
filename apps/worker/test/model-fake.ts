@@ -6,7 +6,7 @@ import {
   fauxToolCall,
   type TranscriptContext,
 } from "@earendil-works/pi-ai";
-import type { JsonObject } from "@earendil-works/pi-durable";
+import type { CompactionPolicy, JsonObject } from "@earendil-works/pi-durable";
 import type { NoAgent } from "@praxis/domain";
 import { personsWords } from "../src/agent.ts";
 import { type AgentModel, DEFAULT_MODEL, PRICES, type RunRetry } from "../src/model.ts";
@@ -40,10 +40,21 @@ const SCRIPTED_PRICE = PRICES[DEFAULT_MODEL] ?? {
  * for the model the Deployment ships a price for. A Context keeps the model it was first asked
  * with, so script the model before the first Message.
  */
-export function scriptModel(script: Script, { wordsPerSecond }: { wordsPerSecond?: number } = {}) {
+export function scriptModel(
+  script: Script,
+  {
+    wordsPerSecond,
+    contextWindow = 200_000,
+    compaction,
+  }: {
+    wordsPerSecond?: number;
+    contextWindow?: number;
+    compaction?: Partial<CompactionPolicy>;
+  } = {},
+) {
   const faux = fauxProvider({
     provider: "scripted",
-    models: [{ id: DEFAULT_MODEL, cost: SCRIPTED_PRICE, contextWindow: 200_000 }],
+    models: [{ id: DEFAULT_MODEL, cost: SCRIPTED_PRICE, contextWindow }],
     // Streamed a few characters at a time, as a model writes, when a pace is given.
     ...(wordsPerSecond === undefined
       ? {}
@@ -58,7 +69,13 @@ export function scriptModel(script: Script, { wordsPerSecond }: { wordsPerSecond
     return script(...args);
   };
   faux.setResponses([step]);
-  playingModel = { models, provider: "scripted", id: DEFAULT_MODEL, retry: SCRIPTED_RETRY };
+  playingModel = {
+    models,
+    provider: "scripted",
+    id: DEFAULT_MODEL,
+    retry: SCRIPTED_RETRY,
+    ...(compaction === undefined ? {} : { compaction }),
+  };
   return faux;
 }
 

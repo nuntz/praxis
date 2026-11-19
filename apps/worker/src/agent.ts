@@ -1,12 +1,15 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT, type Context } from "@earendil-works/chord/context";
 import type { AssistantMessage, Message as ModelMessage } from "@earendil-works/pi-ai";
 import {
+  CompactionTask,
   type Conversation,
   createRegistry,
   defineExtension,
   defineTool,
   type EntryRecord,
   Harness,
+  type HookApi,
+  hook,
   LiveDoc,
   type LiveState,
   type Report,
@@ -18,6 +21,7 @@ import {
 import { openDurableObjectSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/cloudflare";
 import {
   type AgentMessage,
+  type Change,
   type Effect,
   inputJsonSchema,
   instantToIso,
@@ -32,10 +36,14 @@ import {
   type ToolResult,
   tools,
 } from "@praxis/domain";
+import { type Digest, encodeCursor } from "./change-log.ts";
+import { summaryRequest } from "./compaction.ts";
+import { type HeldWaiting, heldWaiting } from "./held-change-rows.ts";
 import { type AgentModel, costOf, runFailure } from "./model.ts";
 import type { KeyReport } from "./notice-rows.ts";
 import {
   addRunChange,
+  addRunSpend,
   endRun,
   type RunRow,
   type RunSpend,
@@ -102,9 +110,19 @@ export type Bearings = {
   otherContexts: string[];
   /** The Context's Standing Entries, oldest first, each with its day (section 5.5). */
   standing: StandingEntry[];
-  // The Held Changes still waiting are given each turn with the digest of what changed (#64);
-  // until then the Agent reads them with list_held_changes.
+  /** The Held Changes still waiting, named, and how many more than are named (section 4.7). */
+  held: HeldWaiting;
+  /** What others changed since the Agent's last turn (section 4.4). */
+  digest: Digest;
+  /** Whether the Run answering the newest Message before this one was cut short (section 5.2). */
+  lastRunCutShort: boolean;
 };
+
+/** How many waiting Held Changes a Message names; the rest the Agent lists for itself. */
+export const HELD_NAMED = 20;
+
+/** How many changes the digest of a Message names; the earlier ones the Agent reads for itself. */
+export const DIGEST_CHANGES = 30;
 
 /**
  * Who the Agent is and how it works, the same every Run, so the model's prompt cache holds. What
@@ -115,10 +133,12 @@ const PREAMBLE = `You are the Agent of Praxis, a journal-centric task manager fo
 - Act at once when asked: record Entries; create, finish, reschedule, delegate and delete Tasks; make Projects and Persons. Do not ask for a confirmation first, and always say what you changed.
 - Changing or deleting the words of an Entry the person wrote changes nothing at once: it leaves a Held Change, which only their tap in Praxis makes. Say so, and that a typed or spoken yes does not make it. Cancel one when they tell you to.
 - When you record the person's words as an Entry, keep them verbatim, trimmed of filler, never paraphrased, with no Markdown added. Compose prose only when asked.
+- When you compose, in an Entry or a Message, you may use this Markdown, with CommonMark's syntax: emphasis and strong, inline code and code blocks, links and bare addresses, bulleted and numbered lists, quotes, headings, tables and images. A link or an image takes only an https address. Anything else is shown as typed, so do not use it: raw HTML, footnotes, strikethrough, rules and task-list checkboxes. An image you put in an Entry waits for the person's tap before it loads, and one in a Message never loads.
 - You know the other Contexts' names and nothing else of them. Asked about one, say the person can switch to it by hand.
 - You cannot open links, search the web or run code. Say so when asked.
 - Dates you give to tools are days (YYYY-MM-DD) in the Context's time zone; resolve "next Friday" yourself from today's date.
 - You are given the Context's Standing Entries with each Message: keep honouring them, and when two disagree, the newer wins. They and the Journal are your only memory: what is said only in the Conversation may be lost.
+- With each Message you are also told the Held Changes still waiting for the person's tap and what others changed since your last turn, each named by its id and not by its words: read what you need through the tools.
 - Mark an Entry standing only when the person asks you to keep honouring something, recording it first in their words if it is not yet an Entry. Never mark or unmark one unasked.`;
 
 /** The Agent's tools: the Context tools in its column of the offering table, and nothing else. */
@@ -174,10 +194,62 @@ function presented(words: string, bearings: Bearings): string {
       : `The other Contexts are: ${bearings.otherContexts.map((name) => JSON.stringify(name)).join(", ")}.`;
   // The Standing Entries are bearings too, so the person's words come last and alone.
   return `<bearings>
-Today is ${bearings.today}. This Context is ${JSON.stringify(bearings.context)}. ${others}
+Today is ${bearings.today}. This Context is ${JSON.stringify(bearings.context)}. ${others}${bearings.lastRunCutShort ? `\n\nYour last Run was cut short at the limit of ${RUN_ROUNDS.message} model rounds, before you had finished: the person may want you to carry on.` : ""}
 
 ${standingPresented(bearings.standing)}
+
+${heldPresented(bearings.held)}
+
+${digestPresented(bearings.digest)}
 ${BEARINGS_END}${words}`;
+}
+
+/**
+ * What changed since the Agent's last turn as the model is shown it: each change by its caller and
+ * tool, each of its Effects naming what it changed by kind and id. None of the words: the Agent
+ * reads what it needs through the tools, so what it knew shows in its calls.
+ */
+function digestPresented(digest: Digest): string {
+  const { items, earlier, after, pruned, told } = digest;
+  const heading = !told
+    ? items.length === 0
+      ? "Nobody else has changed anything yet."
+      : "You have not been told before what others changed. The newest changes they made, oldest first:"
+    : items.length === 0
+      ? "Nobody else has changed anything since your last turn."
+      : "What others changed since your last turn, oldest first:";
+  const lines = [heading, ...items.map(changePresented)];
+  if (earlier > 0) {
+    lines.push(
+      `${earlier} earlier ${earlier === 1 ? "change is" : "changes are"} not shown: list_changes from the cursor "${encodeCursor(after)}" gives them.`,
+    );
+  }
+  if (pruned) lines.push("Some changes since your last turn are older than the change log keeps.");
+  return lines.join("\n");
+}
+
+function changePresented({ at, caller, tool, effects }: Change): string {
+  const who =
+    "name" in caller ? `the Connection ${JSON.stringify(caller.name)}` : CALLER_NAMED[caller.kind];
+  const what = effects
+    .map(({ kind, id, what, by }) => `${kind} ${id} ${what}${by === "rule" ? " by rule" : ""}`)
+    .join("; ");
+  return `<change at="${at}" by="${who}" tool="${tool}">${what}</change>`;
+}
+
+const CALLER_NAMED = { hand: "the person", agent: "you", clock: "the clock" } as const;
+
+/** The Held Changes still waiting as the model is shown them: each named, none of its words. */
+function heldPresented({ items, more }: HeldWaiting): string {
+  if (items.length === 0) return "No Held Change is waiting for the person's tap.";
+  const named = items.map(
+    ({ id, summary, entry }) => `<held_change id="${id}" entry="${entry}">${summary}</held_change>`,
+  );
+  const rest =
+    more === 0
+      ? ""
+      : `\n${more} more ${more === 1 ? "waits" : "wait"}: list_held_changes lists them all.`;
+  return `The Held Changes still waiting for the person's tap, oldest first:\n${named.join("\n")}${rest}`;
 }
 
 /** Where the bearings end and the person's words begin, in a Message as the model is shown it. */
@@ -244,6 +316,12 @@ export class ContextAgent {
         name: "praxis",
         tools: agentTools(this.#host),
         sections: [section("preamble", () => PREAMBLE, { tag: false })],
+        // Praxis supplies the summary that stands in for the older Conversation (section 5.5).
+        hooks: [
+          hook(CompactionTask, {
+            beforeCompact: (compaction, api, within) => this.#summarize(compaction, api, within),
+          }),
+        ],
       }),
     );
     const harness = await Harness.open(
@@ -266,22 +344,28 @@ export class ContextAgent {
           // it stays in the Conversation with a Notice of its own if it fails too. Nothing waits
           // to be answered later by itself.
           afterFailedRun: "continue",
+          // Compacted only inside a Run, as it is about to ask the model, so what writing the
+          // summary costs is that Run's. The model may narrow the window, as a scripted one does.
+          compaction: { backgroundTokens: 0, ...this.#model.compaction },
         },
         // The runtime's own failures, by kind and never with what was said (ADR 0010).
         onReport: (report: Report) => console.error(JSON.stringify({ agent: report.kind })),
       },
       context,
     );
-    const root = await harness.root(context, {
-      agent: { model: { provider: this.#model.provider, modelId: this.#model.id } },
-    });
-    // A deploy may have changed the model: the Conversation follows it.
-    const current = (await root.agent(context)).model;
-    if (current?.provider !== this.#model.provider || current.modelId !== this.#model.id) {
-      await root.configure(
-        { model: { provider: this.#model.provider, modelId: this.#model.id } },
-        context,
-      );
+    const agent = {
+      model: { provider: this.#model.provider, modelId: this.#model.id },
+      maxTurns: RUN_ROUNDS.message,
+    };
+    const root = await harness.root(context, { agent });
+    // A deploy may have changed the model or the limit: the Conversation follows them.
+    const current = await root.agent(context);
+    if (
+      current.model?.provider !== agent.model.provider ||
+      current.model.modelId !== agent.model.modelId ||
+      current.maxTurns !== agent.maxTurns
+    ) {
+      await root.configure(agent, context);
     }
     await harness.observeDoc(
       LiveDoc,
@@ -335,6 +419,7 @@ export class ContextAgent {
       submission: submission.id,
       at: message.at,
       model: this.#model.id,
+      toldThrough: bearings.digest.through,
     });
     this.#follow(harness, root, run);
     const sent = personMessage(data);
@@ -410,7 +495,10 @@ export class ContextAgent {
       return;
     }
     const settled = await submission.wait(context);
-    const failure = settled.status === "done" ? null : runFailure(settled.reason, settled.detail);
+    // A Run that reached the limit of model rounds was cut short, which is not a failure.
+    const cutShort = settled.status !== "done" && settled.reason === ROUNDS_REACHED;
+    const failure =
+      settled.status === "done" || cutShort ? null : runFailure(settled.reason, settled.detail);
     // Why, by the runtime's code and never its detail, which may quote what was said (ADR 0010).
     if (failure !== null) {
       console.error(JSON.stringify({ agent: "run_failed", reason: settled.reason, failure }));
@@ -421,8 +509,11 @@ export class ContextAgent {
     endRun(
       this.#host.sql,
       run.id,
-      { how: failure === null ? "answered" : "failed", failure },
-      spendOf(run.model, records),
+      { how: cutShort ? "cut_short" : failure === null ? "answered" : "failed", failure },
+      spendOf(
+        run.model,
+        records.flatMap((record) => record.model ?? []),
+      ),
     );
     // Counted before the screen learns the Run ended, so the spend it reads then holds it.
     await this.#reportSpend(run.at);
@@ -436,6 +527,53 @@ export class ContextAgent {
       (message) => message.from === "person" && message.notice?.run === run.id,
     );
     if (noticed) this.#host.send({ kind: "message", message: noticed });
+  }
+
+  /**
+   * Write the summary that stands in for the older Conversation once it is compacted (section
+   * 5.5): the model writes what is in flight on Praxis's instructions, and the Held Changes still
+   * waiting are added here, named. What it costs counts in the Run it was written in. When the
+   * model cannot write one, nothing is compacted this time, and the request that follows decides
+   * how the Run goes: the runtime's own summary, which a throw here would fall back to, is never
+   * used.
+   */
+  async #summarize(
+    compaction: { readonly messages: readonly ModelMessage[] },
+    api: HookApi,
+    within: Context,
+  ): Promise<{ summary: string } | { decline: true }> {
+    try {
+      return await this.#writeSummary(compaction.messages, api, within);
+    } catch {
+      console.error(JSON.stringify({ agent: "summary_not_written" }));
+      return { decline: true };
+    }
+  }
+
+  async #writeSummary(
+    messages: readonly ModelMessage[],
+    api: HookApi,
+    within: Context,
+  ): Promise<{ summary: string } | { decline: true }> {
+    const { models, provider, id } = this.#model;
+    const model = models.getModel(provider, id);
+    if (!model) return { decline: true };
+    const answer = await models.completeSimple(
+      model,
+      { messages: summaryRequest(withoutBearings(messages), messages.at(-1)?.timestamp ?? 0) },
+      { maxTokens: SUMMARY_TOKENS },
+    );
+    const live = await api.snapshot(LiveDoc, api.conversationId, within);
+    const run = runAnswering(this.#host.sql, live?.run?.inputs[0]);
+    if (run) addRunSpend(this.#host.sql, run.id, spendOf(run.model, [answer]));
+    else console.error(JSON.stringify({ agent: "summary_spend_not_counted" }));
+    const words = textOf(answer);
+    if (answer.stopReason !== "stop" || words === "") {
+      console.error(JSON.stringify({ agent: "summary_not_written", stop: answer.stopReason }));
+      return { decline: true };
+    }
+    const held = heldPresented(heldWaiting(this.#host.sql, HELD_NAMED));
+    return { summary: `${words}\n\n${held}` };
   }
 
   /** Report whether the key was refused. One that fails is made good by the next Run's. */
@@ -570,6 +708,9 @@ export class ContextAgent {
       const run = runs.get(message);
       const shown = items[item] as AgentMessage;
       if (run) {
+        if (run.ended === "cut_short") {
+          shown.words = [shown.words, CUT_SHORT].filter((words) => words !== "").join("\n\n");
+        }
         shown.id = run.id;
         shown.run = {
           ...shown.run,
@@ -584,6 +725,22 @@ export class ContextAgent {
   }
 }
 
+/**
+ * How many rounds of the model a Run takes at most (section 5.2): 25 when the person started it,
+ * 10 when the clock did. In code, not a setting. The runtime ends a Run that reaches it.
+ */
+export const RUN_ROUNDS = { message: 25, clock: 10 } as const;
+// The clock's limit applies once the clock starts Runs, for the Brief and the Review (#67).
+
+/** How the runtime says a Run reached the limit of model rounds, which it calls turns. */
+const ROUNDS_REACHED = "turn_limit";
+
+/**
+ * What a Run cut short at the limit says at the end of its Message, in Praxis's words rather than
+ * the model's, since the model was not asked again.
+ */
+const CUT_SHORT = `I stopped here: a Run takes at most ${RUN_ROUNDS.message} rounds of the model, and this one reached the limit before I had finished. Tell me to carry on if you want me to.`;
+
 /** The tools the Agent is offered. */
 const AGENT_TOOLS = new Set<ToolName>(offeredTo("agent"));
 
@@ -593,6 +750,9 @@ const PAGE_MESSAGES = 50;
 const RECENT_MESSAGES = 12;
 /** How many of the runtime's records are read at a time to make a page. */
 const SCAN_RECORDS = 200;
+
+/** The most the model may write of a compaction summary. */
+const SUMMARY_TOKENS = 8_192;
 
 const NOTHING_SPENT: RunSpend = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
 
@@ -646,6 +806,24 @@ function textOf(message: Pick<AssistantMessage, "content">): string {
     .trim();
 }
 
+/**
+ * The Conversation's messages with each Message's bearings taken out, as the compaction summary is
+ * written from them: what the bearings name is given afresh each turn, and the summary would only
+ * restate it.
+ */
+function withoutBearings(messages: readonly ModelMessage[]): ModelMessage[] {
+  return messages.map((message) => {
+    if (message.role !== "user") return message;
+    const content =
+      typeof message.content === "string"
+        ? personsWords(message.content)
+        : message.content.map((block) =>
+            block.type === "text" ? { ...block, text: personsWords(block.text) } : block,
+          );
+    return { ...message, content };
+  });
+}
+
 /** The runtime's records of one Run: from the Message it answers to the next Message. */
 async function runRecords(root: Conversation, first: number): Promise<EntryRecord[]> {
   const found: EntryRecord[] = [];
@@ -666,17 +844,15 @@ async function runRecords(root: Conversation, first: number): Promise<EntryRecor
   }
 }
 
-/** What a Run spent: the tokens of every answer the model gave in it, priced. */
-function spendOf(model: string, entries: EntryRecord[]): RunSpend {
+/** What the model's answers among these messages spent: their tokens, priced. */
+function spendOf(model: string, messages: readonly ModelMessage[]): RunSpend {
   const spend = { ...NOTHING_SPENT };
-  for (const entry of entries) {
-    for (const message of entry.model ?? ([] as readonly ModelMessage[])) {
-      if (message.role !== "assistant") continue;
-      spend.input += message.usage.input;
-      spend.output += message.usage.output;
-      spend.cacheRead += message.usage.cacheRead;
-      spend.cacheWrite += message.usage.cacheWrite;
-    }
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    spend.input += message.usage.input;
+    spend.output += message.usage.output;
+    spend.cacheRead += message.usage.cacheRead;
+    spend.cacheWrite += message.usage.cacheWrite;
   }
   spend.cost = costOf(model, spend);
   return spend;

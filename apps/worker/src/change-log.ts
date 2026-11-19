@@ -73,21 +73,71 @@ export function changesAfter(
     )
     .toArray();
   const page = calls.slice(0, limit);
-  const last = page.at(-1)?.seq ?? after;
+  return {
+    items: withEffects(sql, page),
+    last: page.at(-1)?.seq ?? after,
+    more: calls.length > limit,
+  };
+}
+
+/** Each call as a change, with its Effects in order. */
+function withEffects(sql: SqlStorage, calls: CallRow[]): Change[] {
+  const first = calls[0]?.seq;
+  const last = calls.at(-1)?.seq;
+  if (first === undefined || last === undefined) return [];
   const effects = Map.groupBy(
     sql
       .exec<EffectRow>(
-        `SELECT * FROM changes WHERE call > ? AND call <= ? ORDER BY call, ord`,
-        after,
+        `SELECT * FROM changes WHERE call >= ? AND call <= ? ORDER BY call, ord`,
+        first,
         last,
       )
       .toArray(),
     (row) => row.call,
   );
+  return calls.map((call) => toChange(call, effects.get(call.seq) ?? []));
+}
+
+/**
+ * What the Agent is told changed since its last turn (section 4.4): the newest changes a caller
+ * other than the Agent made after `after`, oldest first, how many earlier ones are left out, and
+ * through where the log was read, where it stands now. Its own changes are in its Runs' calls.
+ * `told` is false when it was never told before, and the digest is then of the newest changes.
+ */
+export type Digest = {
+  items: Change[];
+  earlier: number;
+  after: number;
+  through: number;
+  /** Whether some changes after `after` were pruned from the log before they could be told. */
+  pruned: boolean;
+  told: boolean;
+};
+
+/** The digest of the changes others made after `after`, or of the newest when it is null. */
+export function changesByOthers(sql: SqlStorage, after: number | null, limit: number): Digest {
+  const from = after ?? 0;
+  const calls = sql
+    .exec<CallRow>(
+      `SELECT * FROM change_calls WHERE seq > ? AND caller_kind != 'agent' ORDER BY seq DESC LIMIT ?`,
+      from,
+      limit,
+    )
+    .toArray()
+    .toReversed();
+  const { count } = sql
+    .exec<{ count: number }>(
+      `SELECT count(*) AS count FROM change_calls WHERE seq > ? AND caller_kind != 'agent'`,
+      from,
+    )
+    .one();
   return {
-    items: page.map((call) => toChange(call, effects.get(call.seq) ?? [])),
-    last,
-    more: calls.length > limit,
+    items: withEffects(sql, calls),
+    earlier: count - calls.length,
+    after: from,
+    through: lastChange(sql),
+    pruned: after !== null && after < prunedThrough(sql),
+    told: after !== null,
   };
 }
 

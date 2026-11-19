@@ -16,6 +16,7 @@ export type RunRow = {
   ended: RunEnd | null;
   failure: RunFailure | null;
   from_record: number | null;
+  told_through: number | null;
 };
 
 /** What a Run spent: its tokens, and their cost by the price table shipped with the code. */
@@ -29,7 +30,8 @@ export type RunSpend = {
 
 /**
  * Keep the record of a Run as it starts, before the runtime runs anything. A Run trying a failed
- * one again says from which of the runtime's records it may be its own.
+ * one again says from which of the runtime's records it may be its own; one answering a new
+ * Message, where the change log stood when the Agent was told what changed.
  */
 export function startRun(
   sql: SqlStorage,
@@ -40,12 +42,13 @@ export function startRun(
     at: number;
     model: string;
     fromRecord?: number;
+    toldThrough?: number;
   },
 ): RunRow {
   return sql
     .exec<RunRow>(
-      `INSERT INTO runs (id, started_by, message, submission, at, model, from_record)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO runs (id, started_by, message, submission, at, model, from_record, told_through)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       crypto.randomUUID(),
       run.startedBy,
@@ -54,8 +57,18 @@ export function startRun(
       run.at,
       run.model,
       run.fromRecord ?? null,
+      run.toldThrough ?? null,
     )
     .one();
+}
+
+/**
+ * The number of the change the Agent was last told the log stood at, with the newest Message it
+ * was given, or null when it has never been told.
+ */
+export function lastToldChange(sql: SqlStorage): number | null {
+  return sql.exec<{ through: number | null }>(`SELECT max(told_through) AS through FROM runs`).one()
+    .through;
 }
 
 /**
@@ -71,19 +84,32 @@ export function recordRunNotStarted(sql: SqlStorage, run: { at: number; model: s
   );
 }
 
-/** Say how a Run ended, why if it failed, and what it spent. */
+/**
+ * Say how a Run ended, why if it failed, and what its answers spent, on top of what it spent
+ * while going: a compaction summary written in it.
+ */
 export function endRun(
   sql: SqlStorage,
   id: string,
   ended: { how: RunEnd; failure: RunFailure | null },
   spend: RunSpend,
 ): void {
+  addRunSpend(sql, id, spend);
   sql.exec(
-    `UPDATE runs SET ended = ?, failure = ?, input_tokens = ?, output_tokens = ?,
-       cache_read_tokens = ?, cache_write_tokens = ?, cost = ?
-     WHERE id = ? AND ended IS NULL`,
+    `UPDATE runs SET ended = ?, failure = ? WHERE id = ? AND ended IS NULL`,
     ended.how,
     ended.failure,
+    id,
+  );
+}
+
+/** Count what a Run spent while going, beside its answers: a compaction summary written in it. */
+export function addRunSpend(sql: SqlStorage, id: string, spend: RunSpend): void {
+  sql.exec(
+    `UPDATE runs SET input_tokens = input_tokens + ?, output_tokens = output_tokens + ?,
+       cache_read_tokens = cache_read_tokens + ?, cache_write_tokens = cache_write_tokens + ?,
+       cost = cost + ?
+     WHERE id = ? AND ended IS NULL`,
     spend.input,
     spend.output,
     spend.cacheRead,

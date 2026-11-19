@@ -57,10 +57,11 @@ export type RunFold = {
 export type RunCall = { tool: string; result: "ok" | ErrorCode | "running"; effects: Effect[] };
 
 /**
- * How a Run ended: it answered, it failed and the person may try again, or it never started
- * because the month's spend had reached the cap (section 5.7), which still leaves a record.
+ * How a Run ended: it answered, it was cut short at the limit of model rounds (section 5.2), it
+ * failed and the person may try again, or it never started because the month's spend had reached
+ * the cap (section 5.7), which still leaves a record.
  */
-export type RunEnd = "answered" | "failed" | "cap_reached";
+export type RunEnd = "answered" | "cut_short" | "failed" | "cap_reached";
 
 /** What started a Run. Only a Message from the person, for now; the clock starts Briefs and Reviews. */
 export type RunStart = "message";

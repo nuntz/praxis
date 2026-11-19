@@ -76,7 +76,7 @@ A **Recurrence** is only on the open Occurrence. It is a schedule counted from t
 
 **A Trash item** is what one delete sent there. `deleted` is the record deleted, `went_with` is what could not exist without it, in the order made, and `at` is the delete. The item is removed for good 30 days after `at`, a restore included. `dormant_links` are the links from Tasks not in the Trash to a record in the item, which the delete took away and a restore brings back. Each has `task`, the Task's id, `what` (`project`, `delegation` or `wait`) and `to`, the record it links to. The records themselves are in their own lists above.
 
-**A Run record** holds no words: `id`, `started_by` (`"message"`), `at`, `model`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `cost` in US dollars by the price table of the code that ran it, `ended` (`"answered"`, `"failed"`, `"cap_reached"`, or `null` for one still going) and `failure` (`"model_unavailable"`, `"key_refused"` or `null`). Which changes it made is not kept, since the file holds no change log.
+**A Run record** holds no words: `id`, `started_by` (`"message"`), `at`, `model`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `cost` in US dollars by the price table of the code that ran it, `ended` (`"answered"`, `"cut_short"` for one that reached the limit of model rounds, `"failed"`, `"cap_reached"`, or `null` for one still going) and `failure` (`"model_unavailable"`, `"key_refused"` or `null`). Which changes it made is not kept, since the file holds no change log.
 
 ## What is not in it
 

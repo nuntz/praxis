@@ -1,5 +1,6 @@
 import { createModels, type Models, type Usage } from "@earendil-works/pi-ai";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
+import type { CompactionPolicy } from "@earendil-works/pi-durable";
 import type { NoAgent, RunFailure } from "@praxis/domain";
 
 /**
@@ -15,6 +16,11 @@ export interface AgentModel {
   readonly id: string;
   /** How a Run asks it again when it cannot be reached. */
   readonly retry: RunRetry;
+  /**
+   * When the Conversation is compacted, over the runtime's defaults: none for the real model. A
+   * scripted one narrows its window so a test fills it in a few rounds.
+   */
+  readonly compaction?: Partial<CompactionPolicy>;
 }
 
 /**

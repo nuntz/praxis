@@ -57,6 +57,30 @@ export function leaveHeldChange(
   return { record: left, effects: [heldEffect(left, "made", "call")], changed: true, held: true };
 }
 
+/** A Held Change named for the Agent, with none of the words: its id, what it does, its Entry. */
+export type HeldNamed = { id: string; summary: string; entry: string };
+
+/** The Held Changes still waiting, as many as are named, and how many more wait. */
+export type HeldWaiting = { items: HeldNamed[]; more: number };
+
+/**
+ * The Held Changes still waiting, oldest first, at most `limit` of them, and how many more wait:
+ * what the Agent is told each turn (section 4.7), named and never restated.
+ */
+export function heldWaiting(sql: SqlStorage, limit: number): HeldWaiting {
+  const rows = sql
+    .exec<Pick<HeldRow, "id" | "entry" | "tool">>(
+      `SELECT id, entry, tool FROM held_changes ORDER BY seq`,
+    )
+    .toArray();
+  return {
+    items: rows
+      .slice(0, limit)
+      .map(({ id, entry, tool }) => ({ id, summary: HELD_SUMMARY[tool], entry })),
+    more: Math.max(0, rows.length - limit),
+  };
+}
+
 /** A Held Change still there to tap, by its id, as a read gives it, or null when none is. */
 export function readHeldChange(sql: SqlStorage, id: string): HeldChange | null {
   const row = heldRow(sql, id);
