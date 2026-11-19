@@ -3,6 +3,7 @@ import type { Wake } from "@earendil-works/pi-durable";
 import {
   type Caller,
   type Change,
+  type ClockKind,
   type ContextFile,
   type ContextMade,
   type ConversationToolInput,
@@ -451,6 +452,7 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
                 },
                 reportKey: (report) => this.deployment().takeKeyReport(report),
                 clockEnded: (run) => this.clockEnded(run),
+                notify: (kind) => this.notify(kind),
                 reportSpend: (at) =>
                   this.deployment().takeSpendReport({
                     context: this.ctx.id.toString(),
@@ -613,6 +615,21 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
         }
       });
       return this.#clocking;
+    }
+
+    /**
+     * Ask the Deployment object to send a Brief's or Review's Notification to the Devices, when
+     * this Context's switch is on. It is told the kind and nothing of what was said, and a failure
+     * to reach it costs only the Notification.
+     */
+    private async notify(kind: ClockKind): Promise<void> {
+      const at = arrivalTime() + this.#clockSkew;
+      if (!readSettings(this.ctx.storage.sql, at).notifications) return;
+      try {
+        await this.deployment().notifyDevices(this.ctx.id.toString(), kind, at);
+      } catch {
+        console.error(JSON.stringify({ notify: "unreached", kind }));
+      }
     }
 
     /** A Brief's or Review's Run has ended: the clock takes it from there, and keeps the alarm. */

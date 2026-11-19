@@ -41,8 +41,14 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
   const time = { now: Date.parse(startAt) };
   const contextOf = (id: string) => env.CONTEXT.get(env.CONTEXT.idFromString(id));
   // Every call goes through the oracle, which holds a write's reach into a Context to its Effects.
-  const callAny = (caller: Caller, tool: string, input: unknown) =>
-    throughDeploymentOracle(stub, contextOf, { caller, tool, input, arrivedAt: time.now });
+  const callAny = (caller: Caller, tool: string, input: unknown, device?: string) =>
+    throughDeploymentOracle(stub, contextOf, {
+      caller,
+      tool,
+      input,
+      arrivedAt: time.now,
+      ...(device === undefined ? {} : { device }),
+    });
 
   return {
     /** Move the Deployment's clock on, and every Context's in it. */
@@ -51,6 +57,10 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
     },
     call<N extends DeploymentToolName>(caller: Caller, tool: N, input: unknown) {
       return callAny(caller, tool, input) as Promise<ToolResult<DeploymentToolOutput[N]>>;
+    },
+    /** Call a Deployment tool as the hand from the screen on a Device, as its header names it. */
+    callFrom<N extends DeploymentToolName>(device: string, tool: N, input: unknown) {
+      return callAny(hand, tool, input, device) as Promise<ToolResult<DeploymentToolOutput[N]>>;
     },
     /** For calling a Deployment tool the registry may not have, by any name. */
     callAny,

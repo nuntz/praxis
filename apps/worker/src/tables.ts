@@ -212,7 +212,9 @@ function createTablesAsMade(sql: SqlStorage): void {
       -- When the Brief and the Review come, in its time zone: a time is null while it is off.
       brief_time TEXT DEFAULT '07:00',
       review_day TEXT NOT NULL DEFAULT 'sunday',
-      review_time TEXT DEFAULT '17:00'
+      review_time TEXT DEFAULT '17:00',
+      -- Its one Notification switch, covering the Brief and the Review (section 8.7).
+      notifications INTEGER NOT NULL DEFAULT 1
     );
 
     -- The change log (section 4.4): one row per write that changed something, and its Effects.
@@ -335,6 +337,7 @@ const ADDED_COLUMNS: { table: string; column: string; type: string }[] = [
   { table: "context_settings", column: "brief_time", type: "TEXT DEFAULT '07:00'" },
   { table: "context_settings", column: "review_day", type: "TEXT NOT NULL DEFAULT 'sunday'" },
   { table: "context_settings", column: "review_time", type: "TEXT DEFAULT '17:00'" },
+  { table: "context_settings", column: "notifications", type: "INTEGER NOT NULL DEFAULT 1" },
 ];
 
 /** Add each column a table made before it was added still lacks. */

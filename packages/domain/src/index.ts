@@ -5,6 +5,7 @@ export * from "./compare.ts";
 export * from "./conversation.ts";
 export * from "./day.ts";
 export * from "./deployment.ts";
+export * from "./device.ts";
 export * from "./effects.ts";
 export * from "./entry.ts";
 export * from "./export.ts";

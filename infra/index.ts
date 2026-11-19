@@ -34,6 +34,10 @@ const allowedEmailDomain = config.get("allowedEmailDomain");
 // Both optional: without a key there is no Agent, and without a model the Worker's default.
 const agentApiKey = config.getSecret("agentApiKey");
 const agentModel = config.get("agentModel");
+// The Web Push signing key pair the wizard makes once. Without it no Device can switch
+// Notifications on.
+const pushPublicKey = config.get("pushPublicKey") ?? "";
+const pushPrivateKey = config.getSecret("pushPrivateKey");
 // Optional, and chosen once: none when left out.
 const jurisdiction = config.get("jurisdiction") ?? "";
 
@@ -118,6 +122,9 @@ export const workerVars = pulumi.secret(
     ACCESS_AUD: aud,
     JURISDICTION: jurisdiction,
     AGENT_MODEL: agentModel ?? "",
+    PUSH_PUBLIC_KEY: pushPublicKey,
+    // Who the push services are told sends a Notification: the Deployment's own address.
+    PUSH_SUBJECT: `https://${hostname}`,
   })),
 );
 /**
@@ -125,7 +132,10 @@ export const workerVars = pulumi.secret(
  * only adds, so the deploy deletes a key taken out of the configuration itself.
  */
 export const workerSecrets = pulumi.secret(
-  pulumi.output(agentApiKey).apply((key) => (key ? { AGENT_API_KEY: key } : {})),
+  pulumi.all([agentApiKey, pushPrivateKey]).apply(([key, push]) => ({
+    ...(key ? { AGENT_API_KEY: key } : {}),
+    ...(push ? { PUSH_PRIVATE_KEY: push } : {}),
+  })),
 );
 export const hostnameBound = domain !== undefined;
 

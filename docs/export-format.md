@@ -39,7 +39,7 @@ Every file starts with the same four fields, so a file read alone says what it i
 
 | Field | What |
 |---|---|
-| `context` | `id`, `name` and `time_zone`, a zone of the IANA database; `brief_time`, when the Brief comes each day, and `review_day` and `review_time`, when the Review comes each week, each time `HH:MM` on the 24-hour clock in that zone and `null` while it is off, the day one of `"monday"` to `"sunday"`, kept while the Review is off |
+| `context` | `id`, `name` and `time_zone`, a zone of the IANA database; `brief_time`, when the Brief comes each day, and `review_day` and `review_time`, when the Review comes each week, each time `HH:MM` on the 24-hour clock in that zone and `null` while it is off, the day one of `"monday"` to `"sunday"`, kept while the Review is off; and `notifications`, whether the Context's one Notification switch, covering its Brief and its Review, is on |
 | `entries` | Every Entry, including those in the Trash |
 | `tasks` | Every Task, including those in the Trash |
 | `projects` | Every Project, including those in the Trash |

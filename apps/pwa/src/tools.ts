@@ -10,7 +10,9 @@ import type {
   ToolOutput,
   ToolResult,
 } from "@praxis/domain";
+import { DEVICE_HEADER } from "@praxis/domain";
 import { createContext, createSignal, useContext } from "solid-js";
+import { thisDevice } from "./device.ts";
 
 /** A call that never reached a tool, so it has no result. */
 export class Unreachable extends Error {}
@@ -27,12 +29,16 @@ const [signInLapsed, setSignInLapsed] = createSignal(false);
 export { signInLapsed };
 
 /** Call a tool at its address, as the person's hand. */
-async function post<T>(path: string, input: unknown): Promise<ToolResult<T>> {
+async function post<T>(
+  path: string,
+  input: unknown,
+  headers: Record<string, string> = {},
+): Promise<ToolResult<T>> {
   let response: Response;
   try {
     response = await fetch(path, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(input),
       // Access in front answers a lapsed sign-in by sending the browser to its login page,
       // elsewhere. Followed, that fails as a network failure would; not followed, it is told apart.
@@ -50,12 +56,16 @@ async function post<T>(path: string, input: unknown): Promise<ToolResult<T>> {
   return (await response.json()) as ToolResult<T>;
 }
 
-/** Call a Deployment tool, which the screen reaches whatever Context is current. */
+/**
+ * Call a Deployment tool, which the screen reaches whatever Context is current. Each call names
+ * this browser as a Device, so the Device list shows when it was last seen.
+ */
 export function callDeploymentTool<N extends DeploymentToolName>(
   tool: N,
   input: DeploymentToolInput<N>,
 ): Promise<ToolResult<DeploymentToolOutput[N]>> {
-  return post(`/api/deployment/tools/${tool}`, input);
+  const device = thisDevice();
+  return post(`/api/deployment/tools/${tool}`, input, device ? { [DEVICE_HEADER]: device } : {});
 }
 
 /** What a Deployment write returns as its record: a Context or a Connection, as it now is. */

@@ -65,6 +65,8 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   set_brief_time: ["yes", "yes", "no",  "no",       "no"  ],
   set_review_time: [
                    "yes", "yes", "no",  "no",       "no"  ],
+  set_notifications: [
+                   "yes", "no",  "no",  "no",       "no"  ],
   view_attention: ["yes", "yes", "yes", "yes",      "yes" ],
   restore: [       "yes", "yes", "no",  "no",       "no"  ],
   remove_for_good: [
@@ -105,6 +107,11 @@ export const deploymentOffering: Record<string, [Offer, Offer, Offer, Offer, Off
   set_connection_reading_only: [
                         "yes", "no",  "no",  "no",       "no"  ],
   end_connection: [     "yes", "no",  "no",  "no",       "no"  ],
+  list_devices: [       "yes", "no",  "no",  "no",       "no"  ],
+  rename_device: [      "yes", "no",  "no",  "no",       "no"  ],
+  set_device_notifications: [
+                        "yes", "no",  "no",  "no",       "no"  ],
+  remove_device: [      "yes", "no",  "no",  "no",       "no"  ],
   get_spend: [          "yes", "no",  "no",  "no",       "no"  ],
   set_spend_cap: [      "yes", "no",  "no",  "no",       "no"  ],
   make_export: [        "yes", "no",  "no",  "no",       "no"  ],
@@ -161,6 +168,7 @@ export const runsWith: Record<string, () => unknown> = {
   set_time_zone: () => ({ time_zone: "Europe/Paris" }),
   set_brief_time: () => ({ time: "06:30" }),
   set_review_time: () => ({ day: "friday", time: "16:00" }),
+  set_notifications: () => ({ on: false }),
   view_attention: () => ({}),
   restore: () => ({ id: "no-such-record" }),
   remove_for_good: () => ({ id: "no-such-record" }),
@@ -190,6 +198,10 @@ export const deploymentRunsWith: Record<string, (id: string) => unknown> = {
   rename_connection: () => ({ id: "no-such-connection", name: "Laptop" }),
   set_connection_reading_only: () => ({ id: "no-such-connection", reading_only: true }),
   end_connection: () => ({ id: "no-such-connection" }),
+  list_devices: () => ({}),
+  rename_device: () => ({ id: "no-such-device", name: "Laptop" }),
+  set_device_notifications: () => ({ id: "no-such-device", on: false }),
+  remove_device: () => ({ id: "no-such-device" }),
   get_spend: () => ({}),
   set_spend_cap: () => ({ cap: 25 }),
   make_export: () => ({}),

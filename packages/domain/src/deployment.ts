@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Caller, CallerKind } from "./callers.ts";
 import { timeZone } from "./day.ts";
+import { type Device, pushSubscription } from "./device.ts";
 import type { Written } from "./effects.ts";
 import type { Export } from "./export.ts";
 import type { Spend, SpendCap } from "./spend.ts";
@@ -66,6 +67,15 @@ const connectionName = z
   .string()
   .refine((value) => value.trim().length > 0, { message: "A Connection needs a name." })
   .refine((value) => !/[\r\n]/.test(value), { message: "A Connection's name is one line." });
+
+/** A Device's id, as its browser keeps it. */
+const deviceId = z.string().min(1).max(100);
+
+/** A Device's name: one line, kept exactly as given. */
+const deviceName = z
+  .string()
+  .refine((value) => value.trim().length > 0, { message: "A Device needs a name." })
+  .refine((value) => !/[\r\n]/.test(value), { message: "A Device's name is one line." });
 
 /** A spend cap in US dollars a month, more than nothing. */
 const cap = z
@@ -141,6 +151,36 @@ export const deploymentTools = {
       "End a Connection: its next call is refused, and it is never brought back. Its name stays on what it made. Ending one already ended changes nothing.",
     input: writeInput({ id }),
   },
+  list_devices: {
+    kind: "read",
+    description:
+      "List the Devices Praxis keeps a record of, those with Notifications or an Offline Copy switched on, in the order they were first switched on, each with its name and when it was last seen, and the public key a browser subscribes to Notifications with: null when the Deployment has none.",
+    input: z.strictObject({}),
+  },
+  rename_device: {
+    kind: "write",
+    description: "Change a Device's name. Renaming it to the name it has changes nothing.",
+    input: writeInput({ id: deviceId, name: deviceName }),
+  },
+  set_device_notifications: {
+    kind: "write",
+    description:
+      "Switch Notifications on or off for a Device, by the id its browser keeps. Switched on, it is listed, with the push subscription its browser gave and named from its browser and system by the user agent, and is sent a Notification when the Agent leaves a Brief or a Review in a Context whose switch is on. Switched off with nothing else on there, it leaves the list. Giving it what it has changes nothing.",
+    input: writeInput({
+      id: deviceId,
+      on: z.boolean(),
+      subscription: pushSubscription.optional(),
+      user_agent: z.string().optional(),
+    }).refine((input) => !input.on || (input.subscription && input.user_agent !== undefined), {
+      message: "Switching Notifications on takes the browser's push subscription and user agent.",
+    }),
+  },
+  remove_device: {
+    kind: "write",
+    description:
+      "Remove a Device, from any Device: everything switched on there is switched off, and it leaves the list. It is not signed out, since the sign-in is Access's.",
+    input: writeInput({ id: deviceId }),
+  },
   get_spend: {
     kind: "read",
     description:
@@ -191,6 +231,12 @@ export type DeploymentToolOutput = {
   rename_connection: Written<Connection>;
   set_connection_reading_only: Written<Connection>;
   end_connection: Written<Connection>;
+  list_devices: { items: Device[]; push_key: string | null };
+  rename_device: Written<Device>;
+  /** The Device as it now is, or null once it has left the list. */
+  set_device_notifications: Written<Device | null>;
+  /** Null: the Device has left the list. */
+  remove_device: Written<null>;
   get_spend: Spend;
   set_spend_cap: Written<SpendCap>;
   make_export: Export;

@@ -293,10 +293,39 @@ describe("the oracle, on a Deployment write", () => {
 
   test("fails a change to a Connection that no Effect reports, or an Effect on one unchanged", () => {
     expect(judgeDeployment(anEnding([]))).toEqual([
-      expect.stringMatching(/Connections and cap changed are not the Effects/),
+      expect.stringMatching(/Connections, Devices and cap changed are not the Effects/),
     ]);
     expect(judgeDeployment(anEnding([ended, { ...ended, id: "k2" }]))).toEqual([
-      expect.stringMatching(/Connections and cap changed are not the Effects/),
+      expect.stringMatching(/Connections, Devices and cap changed are not the Effects/),
+    ]);
+  });
+
+  /** Switching a Device's Notifications off, which takes it from the list, with these Effects. */
+  function aDeviceGone(effects: Effect[]): SeenDeployment {
+    return {
+      request: {
+        caller: hand,
+        tool: "set_device_notifications",
+        input: {},
+        arrivedAt: Date.parse(at),
+      },
+      result: { ok: true, value: { record: null, effects, changed: effects.length > 0 } },
+      contexts: new Map(),
+      kept: { before: new Map([["device:d1", "on"]]), after: new Map() },
+    };
+  }
+
+  test("passes a Device gone from the list its Effects report, and fails one they leave out", () => {
+    const gone: Effect = {
+      kind: "device",
+      id: "d1",
+      what: "deleted",
+      summary: "Phone",
+      by: "call",
+    };
+    expect(judgeDeployment(aDeviceGone([gone]))).toEqual([]);
+    expect(judgeDeployment(aDeviceGone([]))).toEqual([
+      expect.stringMatching(/Connections, Devices and cap changed are not the Effects/),
     ]);
   });
 
@@ -323,7 +352,7 @@ describe("the oracle, on a Deployment write", () => {
   test("passes a change to the spend cap its Effects report, and fails one they leave out", () => {
     expect(judgeDeployment(aCapSet([capSet]))).toEqual([]);
     expect(judgeDeployment(aCapSet([]))).toEqual([
-      expect.stringMatching(/Connections and cap changed are not the Effects/),
+      expect.stringMatching(/Connections, Devices and cap changed are not the Effects/),
     ]);
   });
 });

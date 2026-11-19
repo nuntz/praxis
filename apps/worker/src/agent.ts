@@ -119,6 +119,11 @@ export type AgentHost = {
   reportKey(report: KeyReport): Promise<void>;
   /** A Brief's or Review's Run has ended and its record says how: the clock takes it from there. */
   clockEnded(run: RunRow): Promise<void>;
+  /**
+   * The Agent has left a Brief or a Review with something to raise: the Deployment object sends
+   * its Notification to the Devices, when the Context's switch is on (section 8.7).
+   */
+  notify(kind: ClockKind): Promise<void>;
 };
 
 /**
@@ -261,7 +266,7 @@ const TASKS_NAMED = /\n*<tasks_named>([^<]*)<\/tasks_named>\s*$/;
 /** What the clock asks of the Agent in a Brief and in a Review (section 5.4). */
 const CLOCK_ASKS: Record<ClockKind, string> = {
   brief: `The clock started this Run for this Context's Brief: no Message from the person started it. Read the Journal through your tools, beginning with view_attention, and leave one Message saying what needs attention today: what is due, what became actionable, and what is Delegated or Waiting and has gone quiet, which is your judgment from the Journal. If there is nothing to raise, answer with exactly ${NOTHING_TO_RAISE} and nothing else.`,
-  review: `The clock started this Run for this Context's weekly Review: no Message from the person started it. Read the Journal through your tools and leave one Message listing stale Tasks, Projects with no next Task, and Entries that look like they hold a Task nobody made. If there is nothing to raise, say so in one line.`,
+  review: `The clock started this Run for this Context's weekly Review: no Message from the person started it. Read the Journal through your tools and leave one Message listing stale Tasks, Projects with no next Task, and Entries that look like they hold a Task nobody made. If there is nothing to raise, answer with exactly ${NOTHING_TO_RAISE} and nothing else: Praxis says so in one line.`,
 };
 
 /** The clock's instructions as the model is shown them, after the Run's bearings. */
@@ -697,7 +702,9 @@ export class ContextAgent {
       );
       // Each one replaced leaves every screen open on the Context, its Message named by its Run.
       for (const gone of replaced) this.#host.send({ kind: "gone", message: gone });
-      // A Brief or Review that left a Message notifies the Devices, by the Deployment object (#68).
+      // One with nothing to raise sends nothing, whether it leaves a Message or not (ADR 0013).
+      const notifies = raised && shown !== NOTHING_TO_RAISE;
+      if (notifies) await this.#host.notify(kind);
     }
     // Counted before the screen learns the Run ended, so the spend it reads then holds it.
     await this.#reportSpend(run.at);

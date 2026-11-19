@@ -26,15 +26,16 @@ import type { RunRow } from "./run-rows.ts";
  * its own table, not its view, so what is in the Trash is in the file.
  */
 export function contextFile(sql: SqlStorage, at: number): ContextFile {
-  const settings = sql
-    .exec<ContextFile["context"]>(
-      `SELECT id, name, time_zone, brief_time, review_day, review_time FROM context_settings`,
+  const { notifications, ...settings } = sql
+    .exec<Omit<ContextFile["context"], "notifications"> & { notifications: number }>(
+      `SELECT id, name, time_zone, brief_time, review_day, review_time, notifications
+       FROM context_settings`,
     )
     .one();
   return {
     ...exportStamp(at),
     kind: "context",
-    context: settings,
+    context: { ...settings, notifications: notifications === 1 },
     entries: entries(sql),
     tasks: tasks(sql),
     projects: projects(sql),

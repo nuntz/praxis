@@ -28,6 +28,13 @@
 #        # Optional: the Agent's model, one Praxis ships a price for; a deploy with any other fails.
 #        # Without it, claude-sonnet-5-5.
 #        # praxis:agentModel: claude-sonnet-5-5
+#        # The Web Push signing key pair, which `bun apps/worker/scripts/push-keys.ts` makes: the
+#        # public key on its first line, the private key as a JWK on its second. Make it once and
+#        # keep it: every browser's subscription is bound to it. Without it no Device gets a
+#        # Notification.
+#        praxis:pushPublicKey: BExamplePublicKey
+#        praxis:pushPrivateKey:
+#          fn::secret: '{"kty":"EC","crv":"P-256","x":"…","y":"…","d":"…"}'
 #        # Optional, and chosen once: where every object is kept, "eu", "us" or "fedramp". Without
 #        # it, wherever Cloudflare places them. A deploy that would change it fails: moving takes an
 #        # Export restored into a new Deployment.

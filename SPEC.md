@@ -268,6 +268,7 @@ A result is a success or an error from a closed set of codes:
 - A Deployment tool that changes a Context returns its Effect on the Context to its caller. Only a rename goes in that Context's change log, since it is the one such change a reader of the Context sees: the accent shows only on the person's screen, a retired Context cannot be read, and a new Context's log starts empty. The Deployment object keeps no change log.
 - A Connection is not a record either. A Deployment tool that makes or changes one returns an Effect on it, carrying its id and its name as the summary. Retiring a Context ends its Connections, each an Effect by rule. None of these goes in a change log.
 - Nor is a Held Change (section 4.7). Leaving one is an Effect on it, made, and making, cancelling or lapsing one an Effect on it, deleted, carrying its id and its summary. These go in the change log, so the screen hears them, but `list_changes` gives a Connection none of them, and no change whose Effects were all on Held Changes. The person's tap still shows to it as the change it made to the Entry, under `make_held_change`.
+- Nor is a Device. A Device tool returns an Effect on it, carrying its id and its name as the summary: made when something is first switched on there, changed when it is renamed or switched, and deleted when it leaves the list. None goes in a change log. When it was last seen changes with no Effect.
 - Neither is the spend cap. `set_spend_cap` returns an Effect on it, carrying its fixed id and its new amount as the summary, and it goes in no change log.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
 - `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since the last Message it answered.
@@ -463,7 +464,7 @@ ADR 0004. Glossary: Brief, Review.
 - A Brief or Review sees the Journal only. It neither mentions a calendar nor apologises for lacking one.
 - Without the Agent's key no Brief or Review is ever due.
 - A Brief or Review is a Run like any other, after any going, and told what every Run is told at its start. It answers no Message, so it is not told the Held Changes waiting or what changed. A Message sent while one is going waits behind it and keeps its own limit of 25 rounds.
-- A Brief with nothing to raise answers so in a fixed word, and Praxis leaves no Message for it. Each ends by naming the ids of the Tasks it raises, which Praxis takes off before showing it, and counts how many have been Finished since it was taken.
+- A Brief or Review with nothing to raise answers so in a fixed word. Praxis leaves no Message for a Brief, and its own one line for a Review. Each ends by naming the ids of the Tasks it raises, which Praxis takes off before showing it, and counts how many have been Finished since it was taken.
 - A Brief or Review the model could not be reached for is tried again after five minutes, then a gap doubling each time up to an hour, in code. One whose key the provider refused is not tried again: it is dropped, and the next is tried when it comes. Either way Attention's line stands until one of its kind runs. One due at the cap looks again every 15 minutes. Setting or switching on a time, or changing the time zone, starts none at once for a time already gone by that day: the next comes at its time.
 
 Changes that need no judgment are the system's and not the Agent's: a Recurrence making its next Occurrence, a wait ending, a Project's Tasks being dropped, the Trash expiring. They work when the model is unavailable.
@@ -671,10 +672,11 @@ The column is composed by the screen from four sources, in this order:
 ADR 0013. Glossary: Notification.
 
 - Sent by Web Push when the Agent leaves a Brief or a Review. Nothing else in Praxis ever sends one.
-- Fixed wording naming the kind and the Context, such as "Work: your Brief is ready". Nothing from the Message or the Journal, not even a count.
-- Off until the person switches them on for a Device, from a tap. Each Context has one switch covering both kinds. No quiet hours, no switch per kind.
+- Fixed wording naming the kind and the Context: "Work: your Brief is ready", or "Work: your Review is ready". Nothing from the Message or the Journal, not even a count.
+- Off until the person switches them on for a Device, from a tap. Each Context has one switch covering both kinds, on for a new Context, so a Device switched on hears from every Context until one is switched off. No quiet hours, no switch per kind.
+- The Context's object asks the Deployment object to notify, telling it the kind only. The Deployment object words it from the Context's name and sends it to each Device switched on.
 - Nothing to raise sends nothing, for either kind. A late run notifies when it finally happens.
-- A new Brief's Notification replaces the earlier one for that Context on a Device, and the same for a Review. Two Contexts give two Notifications.
+- A new Brief's Notification replaces the earlier one for that Context on a Device, and the same for a Review: one tag per kind and Context where it is shown, and one topic per kind and Context at the push service while it waits there undelivered, for a day at most. Two Contexts give two Notifications.
 - Every switched-on Device receives it, including one with Praxis open.
 - It cannot be withdrawn, so one may linger after the Brief was read elsewhere. Tapping it opens that Context's Conversation.
 - The Worker holds a signing key pair. A Device whose subscription the push service reports gone is switched off.
@@ -726,7 +728,7 @@ Glossary: Device.
 
 - A Device is one browser's installation of Praxis, known by an id Praxis keeps in that browser's storage.
 - Praxis holds a record of a Device only while Notifications or an Offline Copy is switched on there. A browser with neither is not listed, and one whose last switch goes off leaves the list.
-- It is named by itself from the browser and the system, such as "Safari on iPhone". The person can rename it. The list shows when each was last seen.
+- It is named by itself from the browser and the system its user agent names, such as "Safari on iPhone". The person can rename it, and switching it on again keeps the name. The list shows when each was last seen: the screen names its Device in a header on each Deployment call, and a call from a Device listed is a sighting of it.
 - Removing a Device, from any Device, switches both off. Its Offline Copy is cleared on its next contact (section 8.8).
 - Removing a Device does not sign it out. The sign-in is Access's session, and settings says so.
 - Unsent writes and the Context a browser last showed are kept in the browser and need no record.
@@ -812,7 +814,7 @@ ADR 0018.
 
 - An **Export** is an archive in a documented JSON format of Praxis's own (`docs/export-format.md`), stamped with a format version: one file for the Deployment and one per Context. It is always the whole Deployment. Only the person's hand makes one.
 - A **Backup** is the same file, made by the system once a day into R2 and deleted after 30 days. Always on, with no switch.
-- **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; Run records, without which changes each made, since those are lines of the change log; each Context's time zone and its Brief and Review times, in its own file. From the Deployment: the Contexts with their names and accent colours, whether each is retired, their Notification switch; the spend cap; the monthly spend totals of deleted Contexts; Connections.
+- **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; Run records, without which changes each made, since those are lines of the change log; each Context's time zone, its Brief and Review times and its Notification switch, in its own file. From the Deployment: the Contexts with their names and accent colours, whether each is retired; the spend cap; the monthly spend totals of deleted Contexts; Connections.
 - **Out**: every Conversation and the runtime's record of it, the change log, the record of a Connection's calls, Devices and push subscriptions, both provider keys.
 - An Entry in the file is its plain words plus its links as data.
 - The words go out as typed, with an image as its address only. There is no Export of the Journal as Markdown files, no per-Context Export and no encryption of Praxis's own.

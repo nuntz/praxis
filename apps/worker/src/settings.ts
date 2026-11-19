@@ -15,6 +15,7 @@ type SettingsRow = {
   brief_time: string | null;
   review_day: Weekday;
   review_time: string | null;
+  notifications: number;
 };
 
 /**
@@ -66,14 +67,27 @@ export function setReviewTime(sql: SqlStorage, day: Weekday, time: string | null
   sql.exec(`UPDATE context_settings SET review_day = ?, review_time = ?`, day, time);
 }
 
+/** Switch the Context's Notifications on or off. */
+export function setNotifications(sql: SqlStorage, on: boolean): void {
+  sql.exec(`UPDATE context_settings SET notifications = ?`, on ? 1 : 0);
+}
+
 export function setTimeZone(sql: SqlStorage, zone: string): void {
   sql.exec(`UPDATE context_settings SET time_zone = ?`, zone);
 }
 
 /** The Context's settings as callers read them, with today as at `at`. */
 export function readSettings(sql: SqlStorage, at: number): Settings {
-  const { name, time_zone, brief_time, review_day, review_time } = row(sql);
-  return { name, time_zone, today: dayIn(at, time_zone), brief_time, review_day, review_time };
+  const { name, time_zone, brief_time, review_day, review_time, notifications } = row(sql);
+  return {
+    name,
+    time_zone,
+    today: dayIn(at, time_zone),
+    brief_time,
+    review_day,
+    review_time,
+    notifications: notifications === 1,
+  };
 }
 
 /** The Effect of a call on the Context's settings, summarised by the Context's name. */
@@ -84,7 +98,8 @@ export function contextEffect(sql: SqlStorage): Effect {
 function row(sql: SqlStorage): SettingsRow {
   return sql
     .exec<SettingsRow>(
-      `SELECT id, name, time_zone, brief_time, review_day, review_time FROM context_settings`,
+      `SELECT id, name, time_zone, brief_time, review_day, review_time, notifications
+       FROM context_settings`,
     )
     .one();
 }

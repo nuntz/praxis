@@ -21,6 +21,11 @@ export type Settings = {
   review_day: Weekday;
   /** When the Review comes on its day, in the Context's time zone, or null when it is off. */
   review_time: ClockTime | null;
+  /**
+   * The Context's one Notification switch, covering its Brief and its Review (section 8.7). On for
+   * a new Context: a Device is sent nothing until Notifications are switched on there too.
+   */
+  notifications: boolean;
 };
 
 /** A Review's day: a day of the week, named as a Recurrence names it. */

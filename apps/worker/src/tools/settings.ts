@@ -5,6 +5,7 @@ import {
   contextEffect,
   readSettings,
   setBriefTime,
+  setNotifications,
   setReviewTime,
   setTimeZone,
   timeZoneOf,
@@ -12,7 +13,7 @@ import {
 
 export const settingsTools: Pick<
   Handlers,
-  "get_settings" | "set_time_zone" | "set_brief_time" | "set_review_time"
+  "get_settings" | "set_time_zone" | "set_brief_time" | "set_review_time" | "set_notifications"
 > = {
   get_settings({ arrivedAt, sql }) {
     return success(readSettings(sql, arrivedAt));
@@ -50,6 +51,14 @@ export const settingsTools: Pick<
     }
     setReviewTime(sql, day, input.time);
     restartSchedule(sql, "review", arrivedAt, input.time !== null);
+    return success(written(readSettings(sql, arrivedAt), [contextEffect(sql)]));
+  },
+
+  set_notifications({ input, arrivedAt, sql }) {
+    if (input.on === readSettings(sql, arrivedAt).notifications) {
+      return success(written(readSettings(sql, arrivedAt), []));
+    }
+    setNotifications(sql, input.on);
     return success(written(readSettings(sql, arrivedAt), [contextEffect(sql)]));
   },
 };

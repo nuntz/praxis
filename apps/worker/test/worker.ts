@@ -1,11 +1,16 @@
 import { contextObject } from "../src/context-object.ts";
+import { deploymentObject } from "../src/deployment-object.ts";
 import { testModel } from "./model-fake.ts";
+import { fakePush } from "./push-fake.ts";
 
 // The Worker the tests run against: Praxis as deployed, but with each Context's Agent on the
-// scripted model the test chose (test/model-fake.ts), so no test calls a real model. The plugin
-// runs it in the tests' own isolate, which is how a test scripts the model.
+// scripted model the test chose (test/model-fake.ts), so no test calls a real model, and its
+// Notifications sent to the fake push service (test/push-fake.ts). The plugin runs it in the
+// tests' own isolate, which is how a test scripts the model and reads what was pushed.
 
-export { DeploymentObject, default } from "../src/index.ts";
+export { default } from "../src/index.ts";
+
+export const DeploymentObject = deploymentObject(() => fakePush);
 
 /**
  * How far before the real now an alarm may be set: the runtime arms one a few milliseconds back

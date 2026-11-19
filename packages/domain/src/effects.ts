@@ -6,11 +6,17 @@ export type RecordKind = "entry" | "task" | "project" | "person";
 
 /**
  * What an Effect can name: a record, the Context itself, whose settings a write can change, a
- * Held Change, waiting in the Context for the person's tap, a Connection, or the spend cap, both
- * of which the Deployment object keeps. None of these but the records is a record, but a change to
- * one is a change like any other.
+ * Held Change, waiting in the Context for the person's tap, a Connection, a Device, or the spend
+ * cap, the last three of which the Deployment object keeps. None of these but the records is a
+ * record, but a change to one is a change like any other.
  */
-export type EffectKind = RecordKind | "context" | "held_change" | "connection" | "spend_cap";
+export type EffectKind =
+  | RecordKind
+  | "context"
+  | "held_change"
+  | "connection"
+  | "device"
+  | "spend_cap";
 
 /**
  * One thing a change brought about (section 4.4): a record made, changed or deleted, or the
@@ -82,6 +88,14 @@ export function effectOnConnection(
   by: Effect["by"] = "call",
 ): Effect {
   return { kind: "connection", id: connection.id, what, summary: connection.name, by };
+}
+
+/**
+ * An Effect on a Device: listed once something is switched on there, renamed, switched, or gone
+ * from the list once nothing is. Summarised by its name.
+ */
+export function effectOnDevice(device: { id: string; name: string }, what: Effect["what"]): Effect {
+  return { kind: "device", id: device.id, what, summary: device.name, by: "call" };
 }
 
 /**

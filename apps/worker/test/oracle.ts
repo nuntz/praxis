@@ -25,7 +25,14 @@ import { markersIn } from "./markers.ts";
 
 type Stub = ReturnType<typeof env.CONTEXT.get>;
 
-export type Request = { caller: Caller; tool: string; input: unknown; arrivedAt: number };
+export type Request = {
+  caller: Caller;
+  tool: string;
+  input: unknown;
+  arrivedAt: number;
+  /** The Device the screen called from, for a Deployment tool. */
+  device?: string;
+};
 
 /**
  * Each domain table, with the kind of thing an Effect names that its rows belong to (a record, or
@@ -216,9 +223,10 @@ function judgeConversation(changed: Pick<Effect, "kind" | "id" | "what">[], logg
 // The same promise for a Deployment write, which can reach into a Context's object (to make it or
 // rename it): every Context listed is snapshotted before and after, and what changed in each must
 // be Effects the call returned, logged in that Context with the caller. A Context the call made
-// holds its settings and nothing else, and its change log starts empty. The Connections and the
-// spend cap the Deployment object keeps are held the same way: the ones changed are exactly the
-// ones its Effects name, and the Deployment object keeps no change log for them.
+// holds its settings and nothing else, and its change log starts empty. The Connections, the
+// Devices and the spend cap the Deployment object keeps are held the same way: the ones changed
+// are exactly the ones its Effects name, and the Deployment object keeps no change log for them.
+// When a Device was last seen is a sighting, not a change, and is left out.
 
 type DeploymentStub = ReturnType<typeof env.DEPLOYMENT.get>;
 
@@ -276,11 +284,11 @@ export function judgeDeployment(seen: SeenDeployment): string[] {
 
   const keptChanged = differences(seen.kept.before, seen.kept.after);
   const onKept = effects
-    .filter((e) => e.kind === "connection" || e.kind === "spend_cap")
+    .filter((e) => e.kind === "connection" || e.kind === "device" || e.kind === "spend_cap")
     .map(({ kind, id, what }) => ({ kind, id, what }));
   if (!same(sorted(keptChanged), sorted(onKept))) {
     problems.push(
-      `The Connections and cap changed are not the Effects on them returned. Changed: ${canonical(sorted(keptChanged))}. Effects: ${canonical(sorted(onKept))}.`,
+      `The Connections, Devices and cap changed are not the Effects on them returned. Changed: ${canonical(sorted(keptChanged))}. Effects: ${canonical(sorted(onKept))}.`,
     );
   }
 
@@ -343,16 +351,22 @@ function listedContexts(deployment: DeploymentStub): Promise<string[]> {
 }
 
 /**
- * The Deployment object's Connections, each as a record is, by `connection:id`, and its spend cap
- * by `spend_cap:spend_cap`, which there always is: before the person sets one, the default.
+ * The Deployment object's Connections and Devices, each as a record is, by `connection:id` and
+ * `device:id`, a Device without when it was last seen, and its spend cap by `spend_cap:spend_cap`,
+ * which there always is: before the person sets one, the default.
  */
 function keptByDeployment(deployment: DeploymentStub): Promise<Records> {
   return runInDurableObject(deployment, (_, state) => {
     const sql = state.storage.sql;
     const rows = sql.exec<{ id: string }>(`SELECT * FROM connections ORDER BY seq`);
+    const devices = sql.exec<{ id: string; seen?: number }>(`SELECT * FROM devices ORDER BY seq`);
     const set = sql.exec<{ dollars: number }>(`SELECT dollars FROM spend_cap`).toArray()[0];
     return new Map([
       ...[...rows].map((row): [string, string] => [`connection:${row.id}`, canonical(row)]),
+      ...[...devices].map(({ seen: _, ...row }): [string, string] => [
+        `device:${row.id}`,
+        canonical(row),
+      ]),
       [`spend_cap:${SPEND_CAP_ID}`, canonical({ dollars: set?.dollars ?? DEFAULT_SPEND_CAP })],
     ]);
   });

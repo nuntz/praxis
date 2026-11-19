@@ -1,4 +1,4 @@
-import { type Caller, failure, type ToolResult } from "@praxis/domain";
+import { type Caller, DEVICE_HEADER, failure, type ToolResult } from "@praxis/domain";
 import { ACCESS_TOKEN_HEADER, type Access, type AccessApplication, AccessGate } from "./access.ts";
 import { arrivalTime } from "./arrival.ts";
 import { connectionCaller, connectionIdIn, noConnection, serveConnection } from "./mcp.ts";
@@ -68,7 +68,13 @@ export function praxis(accessOf: (env: Env) => Access) {
       const deployment = deploymentOf(env);
       if (deploymentTool?.[1]) {
         return Response.json(
-          await deployment.call({ caller: HAND, tool: deploymentTool[1], input, arrivedAt }),
+          await deployment.call({
+            caller: HAND,
+            tool: deploymentTool[1],
+            input,
+            arrivedAt,
+            ...deviceOf(request),
+          }),
         );
       }
       const [, contextId = "", tool = ""] = contextTool ?? [];
@@ -77,6 +83,12 @@ export function praxis(accessOf: (env: Env) => Access) {
       );
     },
   } satisfies ExportedHandler<Env>;
+}
+
+/** The Device the screen names in a request, if it names one. */
+function deviceOf(request: Request): { device?: string } {
+  const device = request.headers.get(DEVICE_HEADER);
+  return device ? { device } : {};
 }
 
 /**

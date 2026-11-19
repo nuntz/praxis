@@ -17,8 +17,18 @@
   // JURISDICTION is where every object of the Deployment is kept: "eu", "us" or "fedramp", or none
   // when empty. The wizard offers it once, and a deploy that would change it fails (section 9.2).
   // AGENT_MODEL is the Agent's model, one the code ships a price for, or the default when empty.
+  // PUSH_PUBLIC_KEY is the public half of the Web Push signing key pair the wizard makes, which a
+  // browser subscribes with, and PUSH_SUBJECT the address the push services are told it is from:
+  // the Deployment's own. With no key no Device can switch Notifications on.
   // A deploy gives each with --var (infra/index.ts), and one it leaves out is empty, as here.
-  "vars": { "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "", "JURISDICTION": "", "AGENT_MODEL": "" },
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": "",
+    "JURISDICTION": "",
+    "AGENT_MODEL": "",
+    "PUSH_PUBLIC_KEY": "",
+    "PUSH_SUBJECT": ""
+  },
   "durable_objects": {
     "bindings": [
       { "name": "CONTEXT", "class_name": "ContextObject" },

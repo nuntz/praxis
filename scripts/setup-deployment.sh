@@ -318,6 +318,18 @@ if ! AGENT_MODEL="${AGENT_MODEL:-}" bun apps/worker/scripts/check-model.ts; then
 fi
 write_env AGENT_MODEL "${AGENT_MODEL:-}"
 note "Changing the key or the model later is a change to this configuration and a deploy."
+# The Web Push signing key pair, made once: every browser's subscription is bound to its public
+# key, so a new pair would leave each Device switched on sent nothing.
+if [[ -n "$(_existing PUSH_PUBLIC_KEY || true)" && -n "$(_existing PUSH_PRIVATE_KEY || true)" ]]; then
+  note "The Web Push signing key pair is made already, and kept: a new one would orphan every Device."
+else
+  { read -r push_public; read -r push_private; } < <(bun apps/worker/scripts/push-keys.ts)
+  write_env PUSH_PUBLIC_KEY "$push_public"
+  write_env PUSH_PRIVATE_KEY "$push_private"
+  note "Made the Web Push signing key pair, which sends a Device its Notification of a Brief or Review."
+fi
+PUSH_PUBLIC_KEY="$(_existing PUSH_PUBLIC_KEY)"
+PUSH_PRIVATE_KEY="$(_existing PUSH_PRIVATE_KEY)"
 
 # ── 7 ─────────────────────────────────────────────────────────────────────
 stage "Where your objects are kept: the jurisdiction, chosen once"
@@ -364,6 +376,8 @@ definition=$(mktemp); trap 'rm -f "$definition"' EXIT
   printf '    praxis:googleClientSecret:\n      fn::secret: %s\n' "$(yaml_str "$GOOGLE_CLIENT_SECRET")"
   [[ -n "${AGENT_API_KEY:-}" ]] && printf '    praxis:agentApiKey:\n      fn::secret: %s\n' "$(yaml_str "$AGENT_API_KEY")"
   [[ -n "${AGENT_MODEL:-}" ]] && printf '    praxis:agentModel: %s\n' "$(yaml_str "$AGENT_MODEL")"
+  printf '    praxis:pushPublicKey: %s\n' "$(yaml_str "$PUSH_PUBLIC_KEY")"
+  printf '    praxis:pushPrivateKey:\n      fn::secret: %s\n' "$(yaml_str "$PUSH_PRIVATE_KEY")"
   [[ -n "${JURISDICTION:-}" ]] && printf '    praxis:jurisdiction: %s\n' "$(yaml_str "$JURISDICTION")"
   true
 } > "$definition"

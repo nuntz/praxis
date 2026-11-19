@@ -501,6 +501,7 @@ const KIND: Record<Effect["kind"], string> = {
   context: "Context",
   held_change: "Held Change",
   connection: "Connection",
+  device: "Device",
   spend_cap: "Spend cap",
 };
 

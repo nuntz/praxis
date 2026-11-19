@@ -1,9 +1,13 @@
 import { publishedKeySet } from "./access.ts";
 import { contextObject } from "./context-object.ts";
+import { deploymentObject } from "./deployment-object.ts";
 import { anthropicModel } from "./model.ts";
+import { webPush } from "./push.ts";
 import { praxis } from "./worker.ts";
 
-export { DeploymentObject } from "./deployment-object.ts";
+/** The Deployment object, sending Notifications by Web Push with the Deployment's key pair. */
+export const DeploymentObject = deploymentObject(webPush);
+export type DeploymentObject = InstanceType<typeof DeploymentObject>;
 
 /** Each Context's object, its Agent on the model the Deployment's configuration names. */
 export const ContextObject = contextObject(anthropicModel);

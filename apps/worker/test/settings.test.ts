@@ -129,6 +129,7 @@ describe("set_time_zone", () => {
       time_zone: "Europe/London",
       today: "2026-11-15",
       ...FIRST_TIMES,
+      notifications: true,
     };
     expect(result.record).toEqual(settings);
     expect(result.effects).toEqual([
@@ -176,7 +177,13 @@ describe("set_time_zone", () => {
     for (const time_zone of ["Europe/Paris", "europe/paris"]) {
       const result = value(await context.call(hand, "set_time_zone", { time_zone }));
       expect(result).toEqual({
-        record: { name: "Work", time_zone: "Europe/Paris", today: "2026-11-15", ...FIRST_TIMES },
+        record: {
+          name: "Work",
+          time_zone: "Europe/Paris",
+          today: "2026-11-15",
+          ...FIRST_TIMES,
+          notifications: true,
+        },
         effects: [],
         changed: false,
       });
@@ -191,5 +198,46 @@ describe("set_time_zone", () => {
       expect(result).toMatchObject({ ok: false, error: { code: "invalid_input" } });
     }
     expect(value(await context.call(hand, "get_settings", {})).time_zone).toBe("UTC");
+  });
+});
+
+describe("set_notifications", () => {
+  test("a new Context's switch is on: whether a Device is sent its Notifications is the Device's", async () => {
+    const context = newContext();
+
+    expect(value(await context.call(connection, "get_settings", {}))).toMatchObject({
+      notifications: true,
+    });
+  });
+
+  test("turns the Context's one switch, covering the Brief and the Review, an Effect on the Context", async () => {
+    const context = newContext("2026-11-15T09:00:00.000Z", { name: "Work", time_zone: "UTC" });
+
+    const off = value(await context.call(hand, "set_notifications", { on: false }));
+    const again = value(await context.call(hand, "set_notifications", { on: false }));
+    const on = value(await context.call(hand, "set_notifications", { on: true }));
+
+    expect(off.record).toMatchObject({ notifications: false });
+    expect(off.effects).toEqual([
+      { kind: "context", id: expect.any(String), what: "changed", summary: "Work", by: "call" },
+    ]);
+    expect(again).toMatchObject({ effects: [], changed: false });
+    expect(on.record).toMatchObject({ notifications: true });
+    expect(value(await context.call(agent, "get_settings", {}))).toMatchObject({
+      notifications: true,
+      brief_time: "07:00",
+      review_time: "17:00",
+    });
+  });
+
+  test("is said on or off", async () => {
+    const context = newContext();
+
+    for (const input of [{}, { on: "yes" }]) {
+      expect(await context.call(hand, "set_notifications", input)).toMatchObject({
+        ok: false,
+        error: { code: "invalid_input" },
+      });
+    }
   });
 });

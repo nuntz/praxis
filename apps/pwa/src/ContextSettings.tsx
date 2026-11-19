@@ -141,6 +141,22 @@ export function ContextSettings(props: {
           />
         </label>
       </fieldset>
+      {/* One switch for both, beside their times (ADR 0013). A Device is sent one only while
+        Notifications are switched on there too, in the Deployment's settings. */}
+      <fieldset class="clock-setting">
+        <legend>Notifications</legend>
+        <label>
+          <input
+            type="checkbox"
+            checked={props.settings.notifications}
+            disabled={sending()}
+            onChange={(event) =>
+              void change(() => callTool("set_notifications", { on: event.currentTarget.checked }))
+            }
+          />{" "}
+          Tell my Devices when the Brief or the Review is ready
+        </label>
+      </fieldset>
       <Show when={problem()}>
         {(message) => (
           <p class="problem" role="alert">

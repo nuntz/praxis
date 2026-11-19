@@ -96,8 +96,6 @@ export type ExportedContext = {
   name: string;
   accent: Accent;
   retired: boolean;
-  // A Context's Notification switch (#68) joins the file, here or in its own file beside its time
-  // zone, as section 10.1 lists it, once a Context has one.
   /** The path of its file within the Export. */
   file: string;
 };
@@ -109,7 +107,10 @@ export type ExportedContext = {
  */
 export type ContextFile = Stamped & {
   kind: "context";
-  /** Its settings: when its Brief and Review come, in its time zone, each time null while off. */
+  /**
+   * Its settings: when its Brief and Review come, in its time zone, each time null while off, and
+   * its Notification switch, which its own object keeps beside them.
+   */
   context: {
     id: string;
     name: string;
@@ -117,6 +118,7 @@ export type ContextFile = Stamped & {
     brief_time: ClockTime | null;
     review_day: Weekday;
     review_time: ClockTime | null;
+    notifications: boolean;
   };
   /** In the order made, as are the lists after it. */
   entries: ExportedEntry[];

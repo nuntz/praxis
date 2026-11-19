@@ -26,12 +26,20 @@ export function markersIn(text: string): string[] {
   return text.match(/MARKER-[0-9a-f-]{36}/g) ?? [];
 }
 
-/** Everything logged since the last test began, one string per console call. */
+/** Everything logged or carried since the last test began, one string per console call. */
 export function logs(): readonly string[] {
   return logged;
 }
 
-/** The markers found in anything logged. */
+/**
+ * Something that left Praxis other than by a log line, such as a Notification, held to the same
+ * check: no marker may appear in it.
+ */
+export function carried(text: string): void {
+  logged.push(text);
+}
+
+/** The markers found in anything logged or carried. */
 export function leakedMarkers(): string[] {
   return [...markers].filter((marker) => logged.some((line) => line.includes(marker)));
 }

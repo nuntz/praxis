@@ -4,10 +4,12 @@ import { env, exports } from "cloudflare:workers";
 // whose calls the oracle does not see. It covers only the endpoint's own work: the sign-in every
 // request needs, which object, which caller, which tool, and the body. What the tools do is
 // tested at the seam.
+import { DEVICE_HEADER, type Device } from "@praxis/domain";
 import { beforeEach, describe, expect, test } from "vitest";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
 import { praxis } from "../src/worker.ts";
 import { fakeAccess, TEST_APPLICATION, TOKEN_LIFE } from "./access-fake.ts";
+import { subscribe } from "./push-fake.ts";
 
 /** The Worker behind a fake Access, and a token Access put on the person's requests. */
 let access: Awaited<ReturnType<typeof fakeAccess>>;
@@ -138,6 +140,34 @@ describe("the screen's tool endpoint", () => {
       accent: "moss",
       retired: false,
     });
+  });
+
+  test("the Device a Deployment call names in its header is seen then", async () => {
+    const device = crypto.randomUUID();
+    const fromDevice = (tool: string, input: unknown) =>
+      send(`/api/deployment/tools/${tool}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", [DEVICE_HEADER]: device },
+        body: JSON.stringify(input),
+      }).then((response) => response.json() as Promise<{ value: unknown }>);
+    const seen = async () => {
+      const { value } = await fromDevice("list_devices", {});
+      return (value as { items: Device[] }).items.find(({ id }) => id === device)?.seen;
+    };
+    await fromDevice("set_device_notifications", {
+      id: device,
+      on: true,
+      subscription: subscribe(),
+      user_agent: "Mozilla/5.0 (Macintosh) Version/18.1 Safari/605.1.15",
+    });
+    const first = await seen();
+    // The Worker reads the real clock when a request arrives.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const later = await seen();
+
+    expect(first).toEqual(expect.any(String));
+    expect(Date.parse(later ?? "")).toBeGreaterThan(Date.parse(first ?? ""));
   });
 
   test("the screen calls a Context's tools as the person's hand, at the address naming it", async () => {

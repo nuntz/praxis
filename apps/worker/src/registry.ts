@@ -50,6 +50,11 @@ export type ToolRequest = {
   tool: string;
   input: unknown;
   arrivedAt: number;
+  /**
+   * The Device the screen called from, by the id its browser keeps, for a Deployment tool: that
+   * Device, if listed, was seen then (section 8.10).
+   */
+  device?: string;
 };
 
 /**

@@ -49,6 +49,7 @@ describe("create_context", () => {
       brief_time: "07:00",
       review_day: "sunday",
       review_time: "17:00",
+      notifications: true,
     });
   });
 

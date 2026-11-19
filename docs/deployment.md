@@ -22,7 +22,7 @@ It walks you through each step in the browser and keeps what you enter in `~/.co
 3. Has you make a Cloudflare API token for Pulumi and Wrangler, with these permissions on your account and zone: Account · Workers Scripts · Edit; Account · Access: Apps and Policies · Edit; Account · Access: Organizations, Identity Providers, and Groups · Edit; Zone · Workers Routes · Edit; Zone · DNS · Edit.
 4. Has you make a Google OAuth client for Access's Google sign-in.
 5. Takes who may sign in: your Google address, or a Workspace domain.
-6. Takes the Agent's key and model, both optional, checks the model is one Praxis ships a price for, and says to set a spend limit with Anthropic.
+6. Takes the Agent's key and model, both optional, checks the model is one Praxis ships a price for, and says to set a spend limit with Anthropic. It makes the Web Push signing key pair, once (`apps/worker/scripts/push-keys.ts`), and keeps it on every run after: each browser's subscription to Notifications is bound to its public key.
 7. Offers the jurisdiction, once (below).
 8. Writes the ESC environment `<org>/praxis/production` and the stack `<org>/praxis/production`, whose gitignored stack file only imports the environment.
 9. Sets up CI's sign-in to Pulumi Cloud (below), and the `CLOUDFLARE_API_TOKEN` and `PULUMI_CI_USER` secrets and the `PULUMI_STACK` and `PULUMI_ESC_ENVIRONMENT` variables.
@@ -37,7 +37,7 @@ The `deploy` job in `.github/workflows/ci.yml` runs after the checks pass, on a 
 1. Signs in to Pulumi Cloud through OIDC and masks every configuration value, since the logs are public.
 2. Checks the model is one Praxis ships a price for, so a deploy with any other fails before anything changes.
 3. `pulumi up` (`infra/index.ts`): Google as an identity provider, an Access policy for you, and one Access application for the hostname, with managed OAuth on. That lets in MCP clients that register themselves and come back to Claude (`https://claude.ai/api/mcp/auth_callback`, and `https://claude.com/...` beside it), to ChatGPT (`https://chatgpt.com/connector_platform_oauth_redirect` and `https://chatgpt.com/connector/oauth/*`), or to localhost and loopback, as Claude Code does.
-4. `wrangler deploy` makes the Worker and its Durable Object classes, with `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `JURISDICTION` and `AGENT_MODEL` as vars, set afresh each time, and `AGENT_API_KEY` as a secret. A key taken out of the configuration is deleted from the Worker, which then has no Agent.
+4. `wrangler deploy` makes the Worker and its Durable Object classes, with `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `JURISDICTION`, `AGENT_MODEL`, `PUSH_PUBLIC_KEY` and `PUSH_SUBJECT` (the Deployment's own address, which push services are told sends its Notifications) as vars, set afresh each time, and `AGENT_API_KEY` and `PUSH_PRIVATE_KEY` as secrets. A key taken out of the configuration is deleted from the Worker, which then has no Agent, or sends no Notification.
 5. On a first deploy, a second `pulumi up` binds the hostname to the Worker, which makes its DNS record.
 
 Never run `wrangler deploy` by hand against a Deployment. Without the vars the deploy gives, the Worker would lose its Access application and its jurisdiction, and name its objects where none of them are.

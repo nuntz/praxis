@@ -2,6 +2,13 @@ import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
 const { ACCESS_TEAM_DOMAIN, ACCESS_AUD, ACCESS_TOKEN, AGENT_API_KEY, AGENT_MODEL } = process.env;
+const {
+  PUSH_PUBLIC_KEY,
+  PUSH_PRIVATE_KEY,
+  PUSH_SUBJECT,
+  PUSH_SUBSCRIPTION,
+  PUSH_GONE_SUBSCRIPTION,
+} = process.env;
 
 export default defineConfig({
   plugins: [
@@ -26,6 +33,19 @@ export default defineConfig({
       // The person's own model key, given by hand, to run the model's contract against the real
       // model as well as the scripted one (test/model.test.ts). CI gives none.
       realModel: AGENT_API_KEY ? { key: AGENT_API_KEY, model: AGENT_MODEL ?? "" } : null,
+      // A real push service, given by hand: the Deployment's key pair and subject, and a browser's
+      // subscription for that key, to run the Web Push sender's contract against
+      // (test/push.test.ts). CI gives none.
+      realPush:
+        PUSH_PUBLIC_KEY && PUSH_PRIVATE_KEY && PUSH_SUBJECT && PUSH_SUBSCRIPTION
+          ? {
+              publicKey: PUSH_PUBLIC_KEY,
+              privateKey: PUSH_PRIVATE_KEY,
+              subject: PUSH_SUBJECT,
+              subscription: PUSH_SUBSCRIPTION,
+              gone: PUSH_GONE_SUBSCRIPTION ?? null,
+            }
+          : null,
     },
   },
 });

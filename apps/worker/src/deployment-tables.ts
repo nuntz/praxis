@@ -1,6 +1,6 @@
 /**
  * The Deployment object's own tables. It holds nothing from any Journal (ADR 0006): for now the
- * list of Contexts with their names and accents, the Connections, the spend cap and what each
+ * list of Contexts with their names and accents, the Connections, the Devices, the spend cap and what each
  * Context spent each month, whether the model's provider refuses the key, and the keys of the
  * writes made to it. The upgrade ladder of section 11 replaces this with numbered steps before
  * the first release.
@@ -30,6 +30,19 @@ export function createDeploymentTables(sql: SqlStorage): void {
       context_id TEXT NOT NULL REFERENCES contexts (id),
       reading_only INTEGER NOT NULL,
       ended INTEGER NOT NULL
+    );
+
+    -- One row per Device while something is switched on there (section 8.10), in the order first
+    -- switched on. Its id is the one its browser keeps. With Notifications on it holds the push
+    -- subscription its browser gave, as JSON; once nothing is on, the row goes.
+    CREATE TABLE IF NOT EXISTS devices (
+      seq INTEGER PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      notifications INTEGER NOT NULL,
+      subscription TEXT,
+      -- When it last called a Deployment tool: a sighting, which no write reports as an Effect.
+      seen INTEGER NOT NULL
     );
 
     -- The monthly spend cap in US dollars (section 5.7): one row, once the person has set it.

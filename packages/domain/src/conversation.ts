@@ -176,3 +176,32 @@ export function parseConversationToolInput<N extends ConversationToolName>(
 ): Parsed<ConversationToolInput<N>> {
   return parseInput(conversationTools[name].input, input);
 }
+
+/**
+ * Where the screen opens on a Context's Conversation: the address a Notification's tap opens
+ * (section 8.7), which the screen reads as it starts.
+ */
+export function conversationAddress(contextId: string): string {
+  return `/?context=${encodeURIComponent(contextId)}&peer=conversation`;
+}
+
+/** The Context whose Conversation an address of `conversationAddress` opens, or null for another. */
+export function conversationOpened(search: string): string | null {
+  // The domain package runs anywhere, so it reads the address with no URL API.
+  const params = new Map(
+    search
+      .replace(/^\?/, "")
+      .split("&")
+      .map((pair): [string, string] => {
+        const [name = "", given = ""] = pair.split("=");
+        return [name, given];
+      }),
+  );
+  const context = params.get("context");
+  if (params.get("peer") !== "conversation" || !context) return null;
+  try {
+    return decodeURIComponent(context);
+  } catch {
+    return null;
+  }
+}

@@ -23,6 +23,8 @@ import {
   type ToolResult,
   written,
 } from "@praxis/domain";
+import type { DeviceToolName } from "./devices.ts";
+import type { PushSender } from "./push.ts";
 import { newContextObject } from "./routing.ts";
 import { capChosen, deletedContextsSpend, readCap, readSpend, writeCap } from "./spend-rows.ts";
 
@@ -35,6 +37,8 @@ export type DeploymentCall<N extends DeploymentToolName> = {
   env: Env;
   /** The Deployment object's own id, which each Context it makes keeps, to ask it things. */
   deploymentId: string;
+  /** How a Notification is sent, and the key a browser subscribes with. */
+  push: PushSender;
 };
 
 export type DeploymentHandlers = {
@@ -53,7 +57,8 @@ type ConnectionRow = {
   ended: number;
 };
 
-export const deploymentHandlers: DeploymentHandlers = {
+/** The Deployment tools but the Device tools, which are in devices.ts. */
+export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName> = {
   async list_contexts({ sql }) {
     return success({ items: everyContext(sql) });
   },

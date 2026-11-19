@@ -1,4 +1,4 @@
-import type { ContextListing, Settings } from "@praxis/domain";
+import { type ContextListing, conversationOpened, type Settings } from "@praxis/domain";
 import SettingsIcon from "lucide-solid/icons/settings";
 import {
   createEffect,
@@ -16,6 +16,7 @@ import { ContextSettings, deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
 import { Contexts, NewContext } from "./Contexts.tsx";
 import { Conversation, unreadBriefs } from "./Conversation.tsx";
+import { Devices } from "./Devices.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
@@ -74,7 +75,13 @@ export function App() {
   // The Deployment's Contexts, once read. One is current: the one this browser last showed, or
   // the first not retired. Everything below the top bar is that Context's alone.
   const [contexts, setContexts] = createSignal<ContextListing[] | null>(null);
-  const [chosen, setChosen] = createSignal<string | null>(lastShown());
+  // A Notification's tap opens Praxis on its Context's Conversation (section 8.7).
+  const opened = conversationOpened(location.search);
+  if (opened !== null) {
+    rememberShown(opened);
+    history.replaceState(null, "", "/");
+  }
+  const [chosen, setChosen] = createSignal<string | null>(opened ?? lastShown());
   const current = createMemo(() => {
     const shown = (contexts() ?? []).filter((context) => !context.retired);
     return shown.find((context) => context.id === chosen()) ?? shown[0] ?? null;
@@ -84,7 +91,7 @@ export function App() {
   const [settings, setSettings] = createSignal<Settings | null>(null);
   const [showSettings, setShowSettings] = createSignal(false);
   const [problem, setProblem] = createSignal<string | null>(null);
-  const [tab, setTab] = createSignal<PeerId>("attention");
+  const [tab, setTab] = createSignal<PeerId>(opened === null ? "attention" : "conversation");
   const [attentionOpen, setAttentionOpen] = createSignal(false);
   // Without the settings the Journal is still shown, its times in the Device's zone.
   const [unread, setUnread] = createSignal(false);
@@ -160,6 +167,20 @@ export function App() {
   }
 
   onMount(() => onCleanup(followSpend()));
+
+  // A tap on a Notification while Praxis is open here brings its Conversation into view.
+  onMount(() => {
+    const worker = navigator.serviceWorker;
+    if (!worker) return;
+    const onMessage = (event: MessageEvent<{ open?: string }>) => {
+      const id = conversationOpened(new URL(event.data?.open ?? "/", location.origin).search);
+      if (id === null) return;
+      switchTo(id);
+      setTab("conversation");
+    };
+    worker.addEventListener("message", onMessage);
+    onCleanup(() => worker.removeEventListener("message", onMessage));
+  });
 
   onMount(async () => {
     try {
@@ -339,6 +360,7 @@ export function App() {
                         onMade={addContext}
                       />
                       <Connections contexts={contexts() ?? []} />
+                      <Devices />
                       <SpendSettings />
                       <ExportSettings />
                     </div>

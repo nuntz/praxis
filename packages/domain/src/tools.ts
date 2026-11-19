@@ -503,7 +503,7 @@ export const tools = {
   get_settings: {
     kind: "read",
     description:
-      "Get this Context's settings: its name, its time zone, today's date there, and when the Brief and the Review come, each a time of day in that time zone, null while it is off. Today, and so whether a Task is Overdue or Deferred, is the current day in that time zone. Use them to resolve a day such as \"next Friday\" before giving it to a tool.",
+      "Get this Context's settings: its name, its time zone, today's date there, when the Brief and the Review come, each a time of day in that time zone, null while it is off, and whether their Notifications are switched on. Today, and so whether a Task is Overdue or Deferred, is the current day in that time zone. Use them to resolve a day such as \"next Friday\" before giving it to a tool.",
     input: z.strictObject({}),
     offered: toEveryCaller,
   },
@@ -530,6 +530,14 @@ export const tools = {
       "Set the day of the week and the time of day the Review comes in this Context, HH:MM on the 24-hour clock in its time zone, or switch it off with a time of null. A day left out stays as it was, and switching it off keeps its day. The Review is the Message the Agent leaves each week, unasked, listing what has gone stale or been missed. Set it only when the person asks.",
     input: writeInput({ day: weekday.optional(), time: clockTime.nullable() }),
     offered: { ...toHandOnly, agent: "yes" },
+  },
+  set_notifications: {
+    kind: "write",
+    destructive: false,
+    description:
+      "Switch this Context's Notifications on or off: one switch for both its Brief and its Review. A Device is sent one only while Notifications are switched on there too. Switching it to what it is changes nothing.",
+    input: writeInput({ on: z.boolean() }),
+    offered: toHandOnly,
   },
   view_attention: {
     kind: "read",
@@ -684,6 +692,7 @@ export type ToolOutput = {
   set_time_zone: Written<Settings>;
   set_brief_time: Written<Settings>;
   set_review_time: Written<Settings>;
+  set_notifications: Written<Settings>;
   view_attention: Attention;
   restore: Written<TrashItem>;
   remove_for_good: Written<Removal>;
