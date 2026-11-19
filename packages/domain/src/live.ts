@@ -10,11 +10,14 @@ import type { Change } from "./effects.ts";
  *   so a screen that joins part-way shows it whole from then on. It is not kept.
  * - `message`: a Message now whole in the Conversation, as `list_messages` would give it, placed by
  *   its id. A Message missed while away is read with `list_messages`.
+ * - `gone`: a Message no longer in the Conversation, by its id: a Brief or a Review a newer one of
+ *   its kind replaced unread (section 5.4).
  */
 export type LiveMessage =
   | { kind: "changes"; items: Change[]; cursor: string }
   | { kind: "answer"; words: string }
-  | { kind: "message"; message: Message };
+  | { kind: "message"; message: Message }
+  | { kind: "gone"; message: string };
 
 /** A message of the live channel carrying changes. */
 export type LiveChanges = Extract<LiveMessage, { kind: "changes" }>;

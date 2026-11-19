@@ -14,7 +14,7 @@ Without being spoken to, the Agent does two things: a Brief once a day and a Rev
 ## Consequences
 
 - Each Context has its own Brief time and Review day and time, and either can be switched off there. There is no Brief across Contexts.
-- A new Brief replaces one the person has not read, and the same for a Review, so there is never a backlog. One that has been read stays as an ordinary Message.
+- A new Brief replaces one the person has not read, and the same for a Review, so there is never a backlog. One that has been read stays as an ordinary Message. A Brief with nothing to raise still takes away one not read, since what it said is no longer so, and leaves nothing in its place.
 - A Brief with nothing to raise leaves no Message. A Review with nothing to raise says so in one line, so that silence cannot be mistaken for it not having run.
 - A run that could not happen on time happens as soon as it can and is dropped once the next one is due.
 - The Review is one Message. What the person does about it is ordinary Conversation, not a guided mode.

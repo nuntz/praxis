@@ -213,6 +213,7 @@ export function Conversation(props: {
     live.listen({
       answer: setWriting,
       message: place,
+      gone: (id) => setMessages((shown) => shown.filter((message) => message.id !== id)),
       // A Brief or Review says how many of the Tasks it names have been finished since: a change to
       // a Task may change that, so the newest page is read again while one is shown.
       changed: async (change) => {

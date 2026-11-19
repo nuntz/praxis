@@ -511,3 +511,55 @@ describe("set_time_zone and the clock", () => {
     expect(await messages(context)).toEqual([]);
   });
 });
+
+describe("a Brief with nothing to raise", () => {
+  test("still takes away one not yet read, since what that one said is no longer so", async () => {
+    let raising = true;
+    scriptModel(() => fauxAssistantMessage(raising ? "The rent is due." : NOTHING_TO_RAISE));
+    const context = newContext("2026-11-16T06:59:00.000Z");
+    context.advance(MINUTE);
+    await wake(context);
+    const first = await messages(context);
+
+    raising = false;
+    context.advance(DAY);
+    await wake(context);
+
+    expect(first).toMatchObject([{ words: "The rent is due.", clock: { read: false } }]);
+    expect(await messages(context)).toEqual([]);
+  });
+
+  test("a screen open on the Context hears that the one it shows is gone", async () => {
+    let raising = true;
+    scriptModel(() => fauxAssistantMessage(raising ? "The rent is due." : NOTHING_TO_RAISE));
+    const context = newContext("2026-11-16T06:59:00.000Z");
+    context.advance(MINUTE);
+    await wake(context);
+    const [first] = (await messages(context)) as [AgentMessage];
+    const channel = await context.listen();
+    await channel.next();
+
+    raising = false;
+    context.advance(DAY);
+    await wake(context);
+
+    expect(await channel.next()).toEqual({ kind: "gone", message: first.id });
+    channel.close();
+  });
+
+  test("one that failed takes nothing away: it never read the Journal", async () => {
+    let down = false;
+    scriptModel(failingWhile(() => down));
+    const context = newContext("2026-11-16T06:59:00.000Z");
+    context.advance(MINUTE);
+    await wake(context);
+
+    down = true;
+    context.advance(DAY);
+    await wake(context);
+
+    expect(await messages(context)).toMatchObject([
+      { words: "Back again.", clock: { taken: "2026-11-16T07:00:00.000Z", read: false } },
+    ]);
+  });
+});

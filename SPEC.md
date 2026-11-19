@@ -455,7 +455,7 @@ ADR 0004. Glossary: Brief, Review.
 - Either can be switched off for a Context. There is no Brief across Contexts.
 - A Clock Run is offered reads only. It cannot change anything or leave a Held Change. If it thinks something should change, it says so.
 - It leaves one Message in the Context's Conversation and never an Entry.
-- A new Brief replaces an unread one, and the same for a Review. One that has been read stays as an ordinary Message.
+- A new Brief replaces an unread one, and the same for a Review. One that has been read stays as an ordinary Message. A Brief with nothing to raise still takes away an unread one, since what that one said is no longer so; one that failed, or waits at the cap, takes nothing away, since it read nothing.
 - A Brief with nothing to raise leaves no Message. A Review with nothing to raise says so in one line.
 - A Brief or Review is **read** once Praxis has shown it in a focused window on any Device. Read is held once per Context. There is no "mark as read".
 - A run that could not happen on time happens as soon as it can and is dropped once the next one is due.
@@ -797,7 +797,7 @@ ADR 0023. From [Recall](https://github.com/nuntz/praxis/issues/21).
 ### 9.5 Live updates
 
 - The PWA holds one WebSocket to its current Context's object, which hibernates when idle.
-- It carries two things, both downward: the Effects of each change in that Context, from which the PWA patches what it shows, and the Agent's answer as it is written.
+- It carries two things, both downward: the Effects of each change in that Context, from which the PWA patches what it shows, and the Conversation: the Agent's answer as it is written, each Message once it is whole, and a Brief or Review gone once a newer one replaced it.
 - On opening, it first says where the change log stands. Each change after comes with the cursor after it, as `list_changes` would give it.
 - Nothing travels up it. Every send is a tool call, and anything sent up closes it.
 - A PWA that was away catches up from `list_changes` and `list_messages`. An answer missed part-way is not replayed: the Message is read once it is whole.

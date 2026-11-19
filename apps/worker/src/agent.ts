@@ -689,7 +689,14 @@ export class ContextAgent {
       const raised =
         cutShort ||
         (failure === null && shown !== "" && (kind === "review" || shown !== NOTHING_TO_RAISE));
-      settleClockRun(this.#host.sql, { id: run.id, kind }, { raised, tasksNamed });
+      const ran = cutShort || failure === null;
+      const replaced = settleClockRun(
+        this.#host.sql,
+        { id: run.id, kind },
+        { ran, raised, tasksNamed },
+      );
+      // Each one replaced leaves every screen open on the Context, its Message named by its Run.
+      for (const gone of replaced) this.#host.send({ kind: "gone", message: gone });
       // A Brief or Review that left a Message notifies the Devices, by the Deployment object (#68).
     }
     // Counted before the screen learns the Run ended, so the spend it reads then holds it.

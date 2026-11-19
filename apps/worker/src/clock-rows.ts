@@ -213,28 +213,34 @@ export function clockNotices(sql: SqlStorage): StandingNotice[] {
 }
 
 /**
- * A Brief or Review has ended: whether it left a Message, and the ids of the Tasks it names. One
- * that left a Message replaces each of its kind not yet read (section 5.4).
+ * A Brief or Review has ended: whether it ran, whether it left a Message, and the ids of the Tasks
+ * it names. One that ran replaces each of its kind not yet read (section 5.4), even with nothing to
+ * raise, since what that one said is no longer so; one that failed read nothing, and replaces none.
+ * Returns the ids of those it replaced, each a Message no longer shown.
  */
 export function settleClockRun(
   sql: SqlStorage,
   run: { id: string; kind: ClockKind },
-  answer: { raised: boolean; tasksNamed: string[] },
-): void {
+  answer: { ran: boolean; raised: boolean; tasksNamed: string[] },
+): string[] {
   sql.exec(
     `UPDATE runs SET raised = ?, tasks_named = ? WHERE id = ?`,
     answer.raised ? 1 : 0,
     JSON.stringify(answer.tasksNamed),
     run.id,
   );
-  if (!answer.raised) return;
-  sql.exec(
-    `UPDATE runs SET replaced = 1
-     WHERE started_by = ? AND raised = 1 AND read_at IS NULL AND replaced = 0
-       AND seq < (SELECT seq FROM runs WHERE id = ?)`,
-    run.kind,
-    run.id,
-  );
+  if (!answer.ran) return [];
+  return sql
+    .exec<{ id: string }>(
+      `UPDATE runs SET replaced = 1
+       WHERE started_by = ? AND raised = 1 AND read_at IS NULL AND replaced = 0
+         AND seq < (SELECT seq FROM runs WHERE id = ?)
+       RETURNING id`,
+      run.kind,
+      run.id,
+    )
+    .toArray()
+    .map(({ id }) => id);
 }
 
 /** How many of these Tasks have been Finished since `at`, and are so still. */
