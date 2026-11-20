@@ -12,7 +12,7 @@ export type AccessApplication = { teamDomain: string; audience: string };
 export type AccessKey = JsonWebKey & { kid: string };
 
 /**
- * The keys an Access team signs its tokens with. One of the four faked things (section 13):
+ * The keys an Access team signs its tokens with. One of the faked things (section 13):
  * the real one reads them from the team domain, and tests sign with a key of their own.
  */
 export interface AccessKeySet {

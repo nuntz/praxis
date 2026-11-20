@@ -18,6 +18,7 @@ import { RUNTIME_TABLES } from "../src/agent.ts";
 import { WORDS_INDEX } from "../src/tables.ts";
 import { REFERENCES_CLEARED } from "../src/trash-rows.ts";
 import { markersIn } from "./markers.ts";
+import { fakeEmbedding, heldEmbeddings } from "./meaning-fake.ts";
 
 // The oracle (ADR 0015), the one place tests read tables. It snapshots the Context's domain
 // tables before and after each call, and fails unless the difference is exactly the Effects the
@@ -79,6 +80,11 @@ const otherTables = [
   "run_changes",
   // When the clock last started a Brief and a Review, which holds no record.
   "clock_schedule",
+  // What the object keeps of the meaning index, held to the index itself below, and what
+  // embedding cost.
+  "meaning_index",
+  "meaning_queue",
+  "meaning_spend",
 ];
 
 /** Each record's rows as JSON, by `kind:id`. */
@@ -121,6 +127,12 @@ export async function throughOracle(stub: Stub, request: Request): Promise<ToolR
   return result;
 }
 
+/**
+ * The writes that change no record and leave no Effect, judged as a read is: rebuilding the
+ * meaning index, which is derived (section 9.4).
+ */
+const CHANGING_NO_RECORD = ["rebuild_search_index"];
+
 /** What is wrong with one call as the oracle saw it. Nothing, when the call kept its word. */
 export function judge(seen: Seen): string[] {
   const { request, result, logged, firstWithKey } = seen;
@@ -132,7 +144,7 @@ export function judge(seen: Seen): string[] {
   }
   problems.push(...wordsLeftBehind(seen));
   if (isConversationToolName(request.tool)) return judgeConversation(changed, logged);
-  const write = isWrite(request.tool);
+  const write = isWrite(request.tool) && !CHANGING_NO_RECORD.includes(request.tool);
   if (!write || !result.ok || firstWithKey !== null) {
     const why = !write ? "A read" : !result.ok ? "A call that failed" : "A repeated key";
     if (changed.length > 0) problems.push(`${why} changed records: ${canonical(changed)}`);
@@ -482,6 +494,34 @@ function snapshot(stub: Stub): Promise<{
       byRecord(`SELECT kind || ':' || record_id AS record, text FROM ${WORDS_INDEX}`),
       "The words index holds the words of each record not in the Trash, and nothing else",
     ).toEqual(byRecord(SEARCHED));
+    // The meaning index is derived (section 9.4), and outside the object, so it lags: whatever a
+    // call did, each Entry, in the Trash or not, is queued to be embedded or held with the
+    // embedding of its words as they are, and the index holds nothing else but what is queued to
+    // be taken out. Nothing a write does can leave it behind for good.
+    const queuedFor = new Map(
+      sql
+        .exec<{ entry: string; what: string }>(`SELECT entry, what FROM meaning_queue`)
+        .toArray()
+        .map(({ entry, what }) => [entry, what]),
+    );
+    const held = heldEmbeddings(state.id.toString());
+    const behind: string[] = [];
+    for (const { id, words } of sql.exec<{ id: string; words: string }>(
+      `SELECT id, words FROM entries`,
+    )) {
+      const embedding = held.get(id);
+      held.delete(id);
+      if (queuedFor.get(id) === "embed") continue;
+      if (embedding === undefined) behind.push(`entry:${id} is neither queued nor in the index`);
+      else if (!same(embedding, fakeEmbedding(words))) {
+        behind.push(`entry:${id} is in the index with words it no longer has`);
+      }
+    }
+    for (const id of held.keys()) {
+      if (queuedFor.get(id) !== "remove")
+        behind.push(`entry:${id} is in the index, not the Journal`);
+    }
+    expect(behind, "The meaning index holds each Entry's words, or has it queued").toEqual([]);
     // A record removed for good leaves no reference to it behind, which the foreign keys refuse.
     const uncleared = tables.flatMap((table) =>
       sql

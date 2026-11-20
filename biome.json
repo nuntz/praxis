@@ -75,7 +75,8 @@
         "!apps/worker/test/endpoint.test.ts",
         "!apps/worker/test/mcp.test.ts",
         "!apps/worker/test/tables.test.ts",
-        "!apps/worker/test/oracle-tables.test.ts"
+        "!apps/worker/test/oracle-tables.test.ts",
+        "!apps/worker/test/meaning-index.test.ts"
       ],
       "linter": {
         "rules": {
@@ -86,7 +87,7 @@
                 "patterns": [
                   {
                     "group": ["cloudflare:test", "cloudflare:workers"],
-                    "message": "A seam test reaches a Context only through newContext() in seam.ts, so every call goes through the oracle and no test reads tables or writes rows (ADR 0015). endpoint.test.ts and mcp.test.ts alone test the Worker's HTTP path, tables.test.ts alone starts from tables of an older shape, until the upgrade ladder (#76), and oracle-tables.test.ts alone gives an object a table the oracle does not know."
+                    "message": "A seam test reaches a Context only through newContext() in seam.ts, so every call goes through the oracle and no test reads tables or writes rows (ADR 0015). endpoint.test.ts and mcp.test.ts alone test the Worker's HTTP path, tables.test.ts alone starts from tables of an older shape, until the upgrade ladder (#76), oracle-tables.test.ts alone gives an object a table the oracle does not know, and meaning-index.test.ts alone reads the meaning index's bindings, for its contract run by hand."
                   }
                 ]
               }

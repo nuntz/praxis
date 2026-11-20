@@ -10,7 +10,7 @@ import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
 import { newRecurrence } from "./recurrence.ts";
 import { failure, type ToolResult } from "./results.ts";
-import type { SearchResults } from "./search.ts";
+import type { SearchIndex, SearchResults } from "./search.ts";
 import { clockTime, type Settings, weekday } from "./settings.ts";
 import type { Task } from "./task.ts";
 import type { Removal, TrashItem } from "./trash.ts";
@@ -550,7 +550,7 @@ export const tools = {
   search: {
     kind: "read",
     description:
-      "Search this Context by words: one ranked list of the Entries, Tasks, Projects and Persons whose words, title or name hold every word given, best match first, 50 to a page. Case and accents are set aside, and the last word, with nothing after it, also finds the words it begins, as while it is typed. Nothing in the Trash and no earlier Version of an Entry is searched. Each hit gives the record's kind, id and summary, when it was made, and an excerpt with the spans that matched; read the record by its id. Narrow it with any of: `from` and `to`, days in the Context's time zone, both included, by when a record was made; `project_id`, to the Tasks in that Project and the Entries that Reference it or hold a Task in it; `person_id`, to the Entries that Mention that Person and the Tasks ever Delegated to them; `author`, to the Entries and Tasks whose Author that is, a Connection by its name if given. Narrowed by a Project, a Person or an Author, no Project or Person is listed.",
+      "Search this Context: one ranked list, best match first, 50 to a page, of the Entries, Tasks, Projects and Persons whose words, title or name hold every word given, and of the Entries whose words mean what the words given mean, though they may not use them. Case and accents are set aside, and the last word, with nothing after it, also finds the words it begins, as while it is typed. Nothing in the Trash and no earlier Version of an Entry is searched. Each hit gives the record's kind, id and summary, when it was made, and an excerpt with the spans that matched by words, none for an Entry found by meaning alone; read the record by its id. `words_only` is null when meaning was used, and otherwise says why the list is from words alone: `missing`, no meaning index in this Deployment; `stale`, it is being built from the Journal; `unreachable`, it did not answer this time; `cap_reached`, the month's spend has reached the cap. An Entry saved a moment ago is found by words at once and by meaning shortly after. Narrow it with any of: `from` and `to`, days in the Context's time zone, both included, by when a record was made; `project_id`, to the Tasks in that Project and the Entries that Reference it or hold a Task in it; `person_id`, to the Entries that Mention that Person and the Tasks ever Delegated to them; `author`, to the Entries and Tasks whose Author that is, a Connection by its name if given. Narrowed by a Project, a Person or an Author, no Project or Person is listed.",
     input: z
       .strictObject({
         words: z
@@ -573,6 +573,14 @@ export const tools = {
         message: "`from` is a day on or before `to`.",
       }),
     offered: toEveryCaller,
+  },
+  rebuild_search_index: {
+    kind: "write",
+    destructive: false,
+    description:
+      "Rebuild this Context's meaning index from its Journal: every Entry is embedded afresh, which costs a little and counts toward the spend cap. Until it is done, search answers from words alone and says so. No record changes.",
+    input: writeInput({}),
+    offered: toHandOnly,
   },
   restore: {
     kind: "write",
@@ -723,6 +731,7 @@ export type ToolOutput = {
   set_notifications: Written<Settings>;
   view_attention: Attention;
   search: SearchResults;
+  rebuild_search_index: SearchIndex;
   restore: Written<TrashItem>;
   remove_for_good: Written<Removal>;
   empty_trash: Written<Removal>;

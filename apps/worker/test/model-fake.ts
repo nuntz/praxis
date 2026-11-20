@@ -11,7 +11,7 @@ import type { NoAgent } from "@praxis/domain";
 import { personsWords } from "../src/agent.ts";
 import { type AgentModel, DEFAULT_MODEL, PRICES, type RunRetry } from "../src/model.ts";
 
-// The model is one of the four faked things (section 13). The fake is pi-ai's faux provider
+// The model is one of the faked things (section 13). The fake is pi-ai's faux provider
 // playing a script: fixed tool calls and words, through the real runtime loop in workerd. It runs
 // in the isolate the Context objects run in, so a test scripts it before it sends a Message. What
 // the Agent says or chooses is never asserted: only what its calls did.

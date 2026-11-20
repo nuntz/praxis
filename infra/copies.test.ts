@@ -10,6 +10,8 @@ import { JURISDICTIONS } from "./jurisdiction.ts";
 const program = await Bun.file(new URL("index.ts", import.meta.url)).text();
 const wizard = await Bun.file(new URL("../scripts/setup-deployment.sh", import.meta.url)).text();
 const routing = await Bun.file(new URL("../apps/worker/src/routing.ts", import.meta.url)).text();
+const meaning = await Bun.file(new URL("../apps/worker/src/meaning.ts", import.meta.url)).text();
+const deploy = await Bun.file(new URL("../scripts/deploy-config.ts", import.meta.url)).text();
 
 /** The jurisdictions the Worker keeps objects in, as routing.ts lists them. */
 const WORKER_JURISDICTIONS = [
@@ -39,4 +41,12 @@ test("infra and the wizard offer the jurisdictions the Worker keeps objects in",
   expect(WORKER_JURISDICTIONS).toEqual([...JURISDICTIONS]);
   const offered = /case "\$\{JURISDICTION:-\}" in ""\|([a-z|]+)\)/.exec(wizard)?.[1];
   expect(offered?.split("|")).toEqual([...WORKER_JURISDICTIONS]);
+});
+
+test("the meaning index infra makes is the one the deploy binds, as long as the model's embeddings", () => {
+  const made = /^const MEANING_INDEX = "([^"]*)";$/m.exec(program)?.[1];
+  expect(made).toBeDefined();
+  expect(/^export const MEANING_INDEX = "([^"]*)";$/m.exec(deploy)?.[1]).toBe(made);
+  const dimensions = /^const MEANING_DIMENSIONS = (\d+);$/m.exec(program)?.[1];
+  expect(/^export const MEANING_DIMENSIONS = (\d+);$/m.exec(meaning)?.[1]).toBe(dimensions);
 });

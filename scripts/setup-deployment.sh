@@ -258,6 +258,7 @@ note "  Account · Workers Scripts · Edit"
 note "  Account · Access: Apps and Policies · Edit"
 note "  Account · Access: Organizations, Identity Providers, and Groups · Edit"
 note "  Account · Workers R2 Storage · Edit"
+note "  Account · Vectorize · Edit"
 note "  Zone · Workers Routes · Edit"
 note "  Zone · DNS · Edit"
 step "Account Resources: your account. Zone Resources: Specific zone → $CF_ZONE."
@@ -342,7 +343,8 @@ else
   say "Cloudflare can keep every object of the Deployment, and so all of its data, inside one"
   say "jurisdiction: eu (the European Union), us, or fedramp, and its daily Backups with them. Without"
   say "one, it keeps them wherever it places them. This is chosen once: changing it later takes an"
-  say "Export restored into a new Deployment."
+  say "Export restored into a new Deployment. Search by meaning keeps each Entry as an embedding in"
+  say "Vectorize, which keeps nothing in a jurisdiction, so those are kept wherever Cloudflare keeps it."
   while :; do
     ask JURISDICTION "Jurisdiction (eu, us or fedramp; blank for none):" || true
     case "${JURISDICTION:-}" in ""|eu|us|fedramp) break ;; esac

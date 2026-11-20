@@ -1,4 +1,5 @@
 import { monthBounds, type RunEnd, type RunFailure, type RunStart } from "@praxis/domain";
+import { embeddedInMonth } from "./meaning-rows.ts";
 
 /** A Run record as the Context's object keeps it (section 5.8). It holds no words. */
 export type RunRow = {
@@ -186,16 +187,18 @@ export function runsAnswering(sql: SqlStorage, messages: string[]): Map<string, 
 }
 
 /**
- * What this Context's Runs started in the calendar month `at` falls in have spent, in all, in US
- * dollars: what it reports to the Deployment object, which counts it against the cap.
+ * What this Context has spent in the calendar month `at` falls in, in all, in US dollars: its Runs
+ * started in it and its embedding for the meaning index. It is what it reports to the Deployment
+ * object, which counts it against the cap (section 5.7).
  */
 export function spentInMonth(sql: SqlStorage, at: number): number {
   const { start, end } = monthBounds(at);
-  return sql
+  const runs = sql
     .exec<{ cost: number }>(
       `SELECT coalesce(sum(cost), 0) AS cost FROM runs WHERE at >= ? AND at < ?`,
       start,
       end,
     )
     .one().cost;
+  return runs + embeddedInMonth(sql, at);
 }

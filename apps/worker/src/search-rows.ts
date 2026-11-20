@@ -12,6 +12,7 @@ import {
   summarizeWords,
   type ToolInput,
   type ToolResult,
+  type WordsOnly,
 } from "@praxis/domain";
 import { type AuthorColumns, toAuthor } from "./author.ts";
 import { listCursor, listPosition } from "./newest-first.ts";
@@ -76,15 +77,19 @@ type HitRow = AuthorColumns & {
 };
 
 /**
- * One page of what `search` finds (section 9.4): the records whose words, title or name hold
- * every word given, best match first, and the newest first among equals. Only the records not in
- * the Trash are in the words index, and no earlier Version is.
+ * What the meaning index answered for a search: the Entries nearest what was searched for, nearest
+ * first, each alike enough to be found; or why it was left out, so the answer is from words alone.
  */
-export function search(
-  sql: SqlStorage,
-  input: ToolInput<"search">,
-  zone: string,
-): ToolResult<SearchResults> {
+export type MeaningAnswer = { nearest: string[] } | { words_only: WordsOnly };
+
+/** A search let in, before the meaning index is asked: where its page starts, and its query. */
+export type SearchAsked = { offset: number; query: string | null };
+
+/**
+ * Check a search before anything outside is asked: its cursor is one the list gave, and the
+ * Project or Person it is narrowed by is there. The query is null when nothing typed is a word.
+ */
+export function askSearch(sql: SqlStorage, input: ToolInput<"search">): ToolResult<SearchAsked> {
   let offset = 0;
   if (input.cursor !== undefined) {
     const position = listPosition("search", input.cursor);
@@ -97,18 +102,73 @@ export function search(
   if (input.person_id !== undefined && !exists(sql, "untrashed_persons", input.person_id)) {
     return failure("not_found", NO_SUCH_PERSON);
   }
-  const query = wordsQuery(input.words);
-  if (query === null) return success({ items: [], next_cursor: null });
+  return success({ offset, query: wordsQuery(input.words) });
+}
 
-  const at = `coalesce(e.at, t.at, p.at, pe.at)`;
-  const where: string[] = [`${WORDS_INDEX} MATCH ?`];
-  const bound: (string | number)[] = [query];
+/**
+ * How far down its list a record may be and still lift its place in the one list: each list gives
+ * a record 1 / (FUSED + its place), and the two are added, so a record found by words and by
+ * meaning comes before one found by either alone at the same place. 60 is the usual choice.
+ */
+const FUSED = 60;
+
+/** A record in one of the two ranked lists, by `kind:id`. */
+type Ranked = { key: string; kind: SearchHit["kind"]; id: string; at: number; row: number | null };
+
+/**
+ * One page of what `search` finds (section 9.4), from words and from meaning in one ranked list.
+ * By words: the records whose words, title or name hold every word given, best match first, and the
+ * newest first among equals. By meaning: the Entries the meaning index found nearest, as narrowed.
+ * Only the records not in the Trash are in the words index, and no earlier Version is; an Entry in
+ * the Trash keeps its embedding, so the meaning index may name it, and it is left out here.
+ */
+export function search(
+  sql: SqlStorage,
+  input: ToolInput<"search">,
+  zone: string,
+  asked: SearchAsked,
+  meaning: MeaningAnswer,
+): SearchResults {
+  const words_only = "words_only" in meaning ? meaning.words_only : null;
+  const { offset, query } = asked;
+  if (query === null) return { items: [], next_cursor: null, words_only };
+
+  const narrowed = narrowing(input, zone);
+  const byWords = wordsRanking(sql, query, narrowed);
+  const byMeaning = "nearest" in meaning ? meaningRanking(sql, meaning.nearest, narrowed) : [];
+  const fused = fuse(byWords, byMeaning);
+  const page = fused.slice(offset, offset + PAGE_SIZE + 1);
+  const rows = hitRows(sql, query, page.slice(0, PAGE_SIZE));
+
+  return {
+    items: page.slice(0, PAGE_SIZE).flatMap(({ key }) => {
+      const row = rows.get(key);
+      return row ? [hitOf(row)] : [];
+    }),
+    next_cursor: page.length > PAGE_SIZE ? listCursor("search", offset + PAGE_SIZE) : null,
+    words_only,
+  };
+}
+
+/** When a record was made, from whichever record table its row of the words index joins. */
+const AT = `coalesce(e.at, t.at, p.at, pe.at)`;
+
+/**
+ * The narrowing a search asks for, as SQL over a record joined as `e`, `t`, `p` or `pe` by its
+ * kind, the others null: by date range, Project, Person and Author, together or alone.
+ */
+function narrowing(
+  input: ToolInput<"search">,
+  zone: string,
+): { where: string[]; bound: (string | number)[] } {
+  const where: string[] = [];
+  const bound: (string | number)[] = [];
   if (input.from !== undefined) {
-    where.push(`${at} >= ?`);
+    where.push(`${AT} >= ?`);
     bound.push(dayStart(input.from, zone));
   }
   if (input.to !== undefined) {
-    where.push(`${at} < ?`);
+    where.push(`${AT} < ?`);
     bound.push(dayStart(addDays(input.to, 1), zone));
   }
   if (input.project_id !== undefined) {
@@ -137,15 +197,99 @@ export function search(
       bound.push(input.author.name);
     }
   }
+  return { where, bound };
+}
 
-  const rows = sql
-    .exec<HitRow>(
+/** Every record the words find, as narrowed, best match first and the newest among equals. */
+function wordsRanking(
+  sql: SqlStorage,
+  query: string,
+  { where, bound }: ReturnType<typeof narrowing>,
+): Ranked[] {
+  return sql
+    .exec<{ row: number; kind: SearchHit["kind"]; id: string; at: number }>(
+      `SELECT ${WORDS_INDEX}.rowid AS row, ${WORDS_INDEX}.kind AS kind,
+         ${WORDS_INDEX}.record_id AS id, ${AT} AS at
+       FROM ${WORDS_INDEX}
+       LEFT JOIN entries e ON ${WORDS_INDEX}.kind = 'entry' AND e.id = ${WORDS_INDEX}.record_id
+       LEFT JOIN tasks t ON ${WORDS_INDEX}.kind = 'task' AND t.id = ${WORDS_INDEX}.record_id
+       LEFT JOIN projects p ON ${WORDS_INDEX}.kind = 'project' AND p.id = ${WORDS_INDEX}.record_id
+       LEFT JOIN persons pe ON ${WORDS_INDEX}.kind = 'person' AND pe.id = ${WORDS_INDEX}.record_id
+       WHERE ${[`${WORDS_INDEX} MATCH ?`, ...where].join(" AND ")}
+       ORDER BY bm25(${WORDS_INDEX}), at DESC, ${WORDS_INDEX}.rowid DESC`,
+      query,
+      ...bound,
+    )
+    .toArray()
+    .map(({ row, kind, id, at }) => ({ key: `${kind}:${id}`, kind, id, at, row }));
+}
+
+/**
+ * The Entries the meaning index found, in its order, that are not in the Trash and are kept by
+ * the narrowing. An Entry is joined as `e` alone, so what the narrowing asks of a Task, a Project
+ * or a Person holds for none.
+ */
+function meaningRanking(
+  sql: SqlStorage,
+  nearest: string[],
+  { where, bound }: ReturnType<typeof narrowing>,
+): Ranked[] {
+  if (nearest.length === 0) return [];
+  const kept = new Map(
+    sql
+      .exec<{ id: string; at: number }>(
+        `SELECT e.id AS id, e.at AS at
+         FROM untrashed_entries e
+         LEFT JOIN tasks t ON 0 LEFT JOIN projects p ON 0 LEFT JOIN persons pe ON 0
+         WHERE ${[`e.id IN (${nearest.map(() => "?").join(", ")})`, ...where].join(" AND ")}`,
+        ...nearest,
+        ...bound,
+      )
+      .toArray()
+      .map(({ id, at }) => [id, at]),
+  );
+  return nearest.flatMap((id) => {
+    const at = kept.get(id);
+    return at === undefined
+      ? []
+      : [{ key: `entry:${id}`, kind: "entry" as const, id, at, row: null }];
+  });
+}
+
+/**
+ * The two ranked lists as one: each record by the sum of what its place in each list gives it,
+ * best first, and the newest first among equals. A list from words alone keeps its order.
+ */
+function fuse(byWords: Ranked[], byMeaning: Ranked[]): Ranked[] {
+  const fused = new Map<string, Ranked & { score: number; order: number }>();
+  for (const list of [byWords, byMeaning]) {
+    list.forEach((ranked, place) => {
+      const score = 1 / (FUSED + place + 1);
+      const held = fused.get(ranked.key);
+      if (held) {
+        held.score += score;
+        held.row ??= ranked.row;
+      } else fused.set(ranked.key, { ...ranked, score, order: fused.size });
+    });
+  }
+  return [...fused.values()].sort((a, b) => b.score - a.score || b.at - a.at || a.order - b.order);
+}
+
+/**
+ * The rows of the records on a page, by `kind:id`: one the words found with its excerpt cut
+ * around what matched, and an Entry found by meaning alone with its first words.
+ */
+function hitRows(sql: SqlStorage, query: string, page: Ranked[]): Map<string, HitRow> {
+  const rows = new Map<string, HitRow>();
+  const matched = page.flatMap(({ row }) => (row === null ? [] : [row]));
+  if (matched.length > 0) {
+    for (const row of sql.exec<HitRow>(
       `SELECT ${WORDS_INDEX}.kind AS kind, ${WORDS_INDEX}.record_id AS id,
          CASE ${WORDS_INDEX}.kind
            WHEN 'entry' THEN snippet(${WORDS_INDEX}, 2, char(2), char(3), '…', ${EXCERPT_WORDS})
            ELSE highlight(${WORDS_INDEX}, 2, char(2), char(3))
          END AS excerpt,
-         ${at} AS at, ${WORDS_INDEX}.text AS text,
+         ${AT} AS at, ${WORDS_INDEX}.text AS text,
          coalesce(e.author_kind, t.author_kind) AS author_kind,
          coalesce(e.author_name, t.author_name) AS author_name,
          t.origin_entry AS origin_entry
@@ -154,19 +298,32 @@ export function search(
        LEFT JOIN tasks t ON ${WORDS_INDEX}.kind = 'task' AND t.id = ${WORDS_INDEX}.record_id
        LEFT JOIN projects p ON ${WORDS_INDEX}.kind = 'project' AND p.id = ${WORDS_INDEX}.record_id
        LEFT JOIN persons pe ON ${WORDS_INDEX}.kind = 'person' AND pe.id = ${WORDS_INDEX}.record_id
-       WHERE ${where.join(" AND ")}
-       ORDER BY bm25(${WORDS_INDEX}), at DESC, ${WORDS_INDEX}.rowid DESC
-       LIMIT ? OFFSET ?`,
-      ...bound,
-      PAGE_SIZE + 1,
-      offset,
-    )
-    .toArray();
+       WHERE ${WORDS_INDEX} MATCH ? AND ${WORDS_INDEX}.rowid IN (${matched.map(() => "?").join(", ")})`,
+      query,
+      ...matched,
+    )) {
+      rows.set(`${row.kind}:${row.id}`, row);
+    }
+  }
+  const meant = page.flatMap(({ row, id }) => (row === null ? [id] : []));
+  if (meant.length > 0) {
+    for (const row of sql.exec<Omit<HitRow, "excerpt">>(
+      `SELECT 'entry' AS kind, id, at, words AS text, author_kind, author_name,
+         NULL AS origin_entry
+       FROM entries WHERE id IN (${meant.map(() => "?").join(", ")})`,
+      ...meant,
+    )) {
+      rows.set(`entry:${row.id}`, { ...row, excerpt: firstWords(row.text) });
+    }
+  }
+  return rows;
+}
 
-  return success({
-    items: rows.slice(0, PAGE_SIZE).map(hitOf),
-    next_cursor: rows.length > PAGE_SIZE ? listCursor("search", offset + PAGE_SIZE) : null,
-  });
+/** An Entry's first words, as many as an excerpt keeps, marked as cut when it goes on. */
+function firstWords(words: string): string {
+  const all = words.trim().split(/\s+/u);
+  const kept = all.slice(0, EXCERPT_WORDS).join(" ");
+  return all.length > EXCERPT_WORDS ? `${kept}…` : kept;
 }
 
 function hitOf(row: HitRow): SearchHit {

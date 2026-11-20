@@ -1,6 +1,7 @@
 import { publishedKeySet } from "./access.ts";
 import { contextObject } from "./context-object.ts";
 import { deploymentObject } from "./deployment-object.ts";
+import { workersAiMeaning } from "./meaning.ts";
 import { anthropicModel } from "./model.ts";
 import { webPush } from "./push.ts";
 import { praxis } from "./worker.ts";
@@ -9,8 +10,11 @@ import { praxis } from "./worker.ts";
 export const DeploymentObject = deploymentObject(webPush);
 export type DeploymentObject = InstanceType<typeof DeploymentObject>;
 
-/** Each Context's object, its Agent on the model the Deployment's configuration names. */
-export const ContextObject = contextObject(anthropicModel);
+/**
+ * Each Context's object, its Agent on the model the Deployment's configuration names, and its
+ * meaning index on the Deployment's Workers AI and Vectorize.
+ */
+export const ContextObject = contextObject(anthropicModel, workersAiMeaning);
 export type ContextObject = InstanceType<typeof ContextObject>;
 
 /** Praxis as deployed: behind the Access application its configuration names. */

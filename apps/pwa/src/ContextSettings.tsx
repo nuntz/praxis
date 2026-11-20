@@ -49,6 +49,26 @@ export function ContextSettings(props: {
   const briefOn = () => props.settings.brief_time !== null;
   const reviewOn = () => props.settings.review_time !== null;
 
+  // What the last rebuild of the meaning index said, until the screen is left.
+  const [rebuilding, setRebuilding] = createSignal<string | null>(null);
+
+  async function rebuild() {
+    setSending(true);
+    try {
+      const result = await callTool("rebuild_search_index", {});
+      if (!result.ok) return setProblem(result.error.message);
+      setProblem(null);
+      const count = result.value.entries_to_embed;
+      setRebuilding(
+        `Rebuilding from ${count} ${count === 1 ? "Entry" : "Entries"}. Search finds by words alone until it is done.`,
+      );
+    } catch (error) {
+      setProblem(unreachableMessage(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
   const setBrief = (time: string | null) => change(() => callTool("set_brief_time", { time }));
   const setReview = (input: { day?: Weekday; time: string | null }) =>
     change(() => callTool("set_review_time", input));
@@ -156,6 +176,17 @@ export function ContextSettings(props: {
           />{" "}
           Tell my Devices when the Brief or the Review is ready
         </label>
+      </fieldset>
+      {/* The meaning index is derived and kept outside the Context, so it can always be thrown
+        away and made again from the Journal (section 9.4). */}
+      <fieldset class="clock-setting">
+        <legend>Search by meaning</legend>
+        <button type="button" disabled={sending()} onClick={() => void rebuild()}>
+          Rebuild from the Journal
+        </button>
+        <p class="setting-note" role="status">
+          {rebuilding() ?? ""}
+        </p>
       </fieldset>
       <Show when={problem()}>
         {(message) => (

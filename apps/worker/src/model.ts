@@ -5,7 +5,7 @@ import type { NoAgent, RunFailure } from "@praxis/domain";
 
 /**
  * The model the Agent runs on (section 5.6, ADR 0017): one model from one provider, reached
- * directly from the Worker with the person's own key. One of the four faked things (section 13):
+ * directly from the Worker with the person's own key. One of the faked things (section 13):
  * the real one is Anthropic's, and tests put a scripted model in its place. Either way it is
  * pi-ai's models holding the provider, and which of its models to ask.
  */

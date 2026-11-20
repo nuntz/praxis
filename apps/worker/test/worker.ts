@@ -1,14 +1,16 @@
 import { contextObject } from "../src/context-object.ts";
 import { deploymentObject } from "../src/deployment-object.ts";
 import { refusableBucket } from "./bucket.ts";
+import { testMeaning } from "./meaning-fake.ts";
 import { testModel } from "./model-fake.ts";
 import { fakePush } from "./push-fake.ts";
 
 // The Worker the tests run against: Praxis as deployed, but with each Context's Agent on the
-// scripted model the test chose (test/model-fake.ts), so no test calls a real model, and its
-// Notifications sent to the fake push service (test/push-fake.ts), and its Backups kept in a bucket
-// a test can make refuse them (test/bucket.ts). The plugin runs it in the tests' own
-// isolate, which is how a test scripts the model and reads what was pushed.
+// scripted model the test chose (test/model-fake.ts), so no test calls a real model, its meaning
+// index on the fake (test/meaning-fake.ts), its Notifications sent to the fake push service
+// (test/push-fake.ts), and its Backups kept in a bucket a test can make refuse them
+// (test/bucket.ts). The plugin runs it in the tests' own isolate, which is how a test scripts the
+// model and reads what was pushed.
 
 export { default } from "../src/index.ts";
 
@@ -30,7 +32,7 @@ const ALARM_SLACK = 60 * 1000;
  * it stands from. One armed at a test's time unconverted would wake the object at the real time
  * while the test runs, starting a Brief or pruning by a date the test never set: that fails here.
  */
-export class ContextObject extends contextObject(testModel) {
+export class ContextObject extends contextObject(testModel, testMeaning) {
   constructor(ctx: DurableObjectState, env: Env) {
     const setAlarm = ctx.storage.setAlarm.bind(ctx.storage);
     ctx.storage.setAlarm = (time, options) => {

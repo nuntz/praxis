@@ -42,3 +42,28 @@ test("the person searches the Journal, sees the excerpt as typed, opens the Entr
   await expect(journal.getByText("Nothing found")).toBeVisible();
   await expect(hit).toHaveCount(0);
 });
+
+test("the person finds an Entry by what it means, though it shares no word with the search", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}${crypto.randomUUID().replaceAll("-", "")}`;
+
+  await page.goto("/");
+  const { journal, composer } = await openJournal(page, testInfo);
+  // The journeys' meaning index says a molar and a dentist mean alike (journey-worker.ts).
+  await composer.fill(`The molar aches again ${tag}`);
+  await journal.getByRole("button", { name: "Record" }).click();
+  await expect(journal.getByTestId("entry").filter({ hasText: tag })).toBeVisible();
+
+  const search = journal.getByRole("searchbox", { name: "Search this Context" });
+  // Other runs' Entries are found too, so this one is picked out by its tag.
+  const hit = journal.getByTestId("search-hit").filter({ hasText: tag });
+  // Found by meaning shortly after it is saved, not at once: each try asks afresh.
+  await expect(async () => {
+    await search.fill("");
+    await search.fill("dentist");
+    await expect(hit).toHaveCount(1, { timeout: 1000 });
+  }).toPass();
+  // Nothing in it matched the words, so nothing is marked.
+  await expect(hit.locator("mark")).toHaveCount(0);
+});

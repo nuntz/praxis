@@ -5,7 +5,8 @@ import { createTables, WORDS_INDEX } from "../src/tables.ts";
 
 // A stand-in for the upgrade test of section 13 until the upgrade ladder (#76) replaces
 // createTables with numbered steps: a Deployment is live, and its objects made before a column was
-// added to one of their tables, or before the words index, must gain it when they wake. It starts from a table of the older
+// added to one of their tables, or before the words index or the meaning index, must gain it when
+// they wake. It starts from a table of the older
 // shape, so it is the one test outside the harness that writes the tables itself.
 
 /** The columns of a table, in order. */
@@ -86,5 +87,33 @@ describe("createTables on a Context object made before the words index", () => {
       "project:p1 A Project from before",
       "task:t1 A Task from before",
     ]);
+  });
+});
+
+describe("createTables on a Context object made before the meaning index", () => {
+  test("queues its whole Journal, so search answers from words, saying so, until it is built", async () => {
+    const stub = env.CONTEXT.get(env.CONTEXT.newUniqueId());
+
+    const queued = await runInDurableObject(stub, (_, state) => {
+      const sql = state.storage.sql;
+      // The object as it was before: nothing of the meaning index, and nothing keeping it.
+      for (const name of ["meaning_entry_made", "meaning_entry_changed", "meaning_entry_removed"]) {
+        sql.exec(`DROP TRIGGER ${name}`);
+      }
+      for (const table of ["meaning_queue", "meaning_index", "meaning_spend"]) {
+        sql.exec(`DROP TABLE ${table}`);
+      }
+      sql.exec(`INSERT INTO entries (id, words, at, author_kind, through_conversation)
+        VALUES ('e1', 'Before the meaning index', 0, 'person', 0)`);
+
+      createTables(sql);
+      createTables(sql);
+      return {
+        queue: sql.exec(`SELECT entry, what FROM meaning_queue`).toArray(),
+        built: sql.exec(`SELECT built FROM meaning_index`).one().built,
+      };
+    });
+
+    expect(queued).toEqual({ queue: [{ entry: "e1", what: "embed" }], built: 0 });
   });
 });

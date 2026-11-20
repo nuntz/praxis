@@ -1,17 +1,21 @@
 // The Pulumi program of a Praxis Deployment on the person's own Cloudflare account (section 12):
 // the Access application every caller signs in through, with managed OAuth for MCP clients
-// (ADR 0009), the R2 bucket the daily Backups are kept in, the Worker's configuration and its
-// hostname. Every value comes from the Deployment's
+// (ADR 0009), the R2 bucket the daily Backups are kept in, the Vectorize index search by meaning
+// keeps its embeddings in, the Worker's configuration and its hostname. Every value comes from the Deployment's
 // Pulumi ESC environment, never from this repo; Pulumi.example.yaml names them. The Worker's code
 // and its Durable Object classes deploy with `wrangler deploy` after this, given the vars and
 // secrets it exports (.github/workflows/ci.yml).
 import * as cloudflare from "@pulumi/cloudflare";
 import * as pulumi from "@pulumi/pulumi";
 import { deployedJurisdiction, jurisdictionRefusal } from "./jurisdiction.ts";
+import { MeaningIndex } from "./meaning-index.ts";
 
 // Copies, as Node cannot read wrangler.jsonc's comments: copies.test.ts keeps them in step.
 const WORKER_NAME = "praxis";
 const BACKUP_BUCKET = "praxis-backups";
+const MEANING_INDEX = "praxis-meaning";
+/** How long each embedding of the model the Worker embeds Entries with is. */
+const MEANING_DIMENSIONS = 1024;
 
 /**
  * Where the hosted clients the spec promises send the person back after sign-in (section 7.1):
@@ -107,6 +111,16 @@ new cloudflare.R2Bucket("backups", {
   accountId,
   name: BACKUP_BUCKET,
   jurisdiction: jurisdiction || "default",
+});
+
+// Where each Context's Entries are kept as embeddings for search by meaning (section 9.4). Vectorize
+// keeps no index in a jurisdiction: it is on the person's own account, wherever Cloudflare keeps
+// it. `wrangler deploy` binds it, so it is made first.
+new MeaningIndex("meaning", {
+  accountId,
+  name: MEANING_INDEX,
+  dimensions: MEANING_DIMENSIONS,
+  metric: "cosine",
 });
 
 // The custom domain needs the Worker, which `wrangler deploy` makes, so a first deploy binds the

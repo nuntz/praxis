@@ -1,7 +1,7 @@
 import type { ClockKind, PushSubscription } from "@praxis/domain";
 
 /**
- * Sending a Notification by Web Push (section 8.7, ADR 0013). One of the four faked things
+ * Sending a Notification by Web Push (section 8.7, ADR 0013). One of the faked things
  * (section 13): the real one signs with the Deployment's key pair and encrypts to the Device's
  * subscription, and tests take what is sent from the fake in test/push-fake.ts.
  */

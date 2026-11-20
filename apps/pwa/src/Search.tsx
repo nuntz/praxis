@@ -1,4 +1,4 @@
-import type { Excerpt, SearchHit } from "@praxis/domain";
+import { type Excerpt, type SearchHit, type WordsOnly, wordsOnlySaying } from "@praxis/domain";
 import { createSignal, For, Index, onCleanup, Show } from "solid-js";
 import { recordAnchor } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
@@ -15,7 +15,8 @@ const KIND: Record<SearchHit["kind"], string> = {
 
 /**
  * Search in the Journal column (sections 8.4 and 9.4): one field, and while it holds words, the
- * one ranked list `search` gives in place of the Entries. An Entry or a Task found is brought into
+ * one ranked list `search` gives in place of the Entries, from words and from meaning, and a line
+ * saying so when it is from words alone. An Entry or a Task found is brought into
  * view in the Journal. An excerpt is shown as plain text with what matched marked, never as
  * Markdown, since it is cut from the words wherever the match fell.
  *
@@ -33,6 +34,7 @@ export function createSearch(props: {
   const [words, setWords] = createSignal("");
   const [hits, setHits] = createSignal<SearchHit[] | null>(null);
   const [nextCursor, setNextCursor] = createSignal<string | null>(null);
+  const [wordsOnly, setWordsOnly] = createSignal<WordsOnly | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
   // Counts each first page shown or list cleared: a later page asked for before is from an older
   // answer, whose cursor reads the same as the newer one's, so it is dropped.
@@ -51,6 +53,7 @@ export function createSearch(props: {
       setProblem(null);
       setHits(result.value.items);
       setNextCursor(result.value.next_cursor);
+      setWordsOnly(result.value.words_only);
     } catch (error) {
       if (current() && words() === asked) setProblem(unreachableMessage(error));
     }
@@ -72,6 +75,7 @@ export function createSearch(props: {
       answers += 1;
       setHits(null);
       setNextCursor(null);
+      setWordsOnly(null);
       setProblem(null);
       // A read still out answers for words no longer asked, so it is dropped.
       changed();
@@ -135,6 +139,9 @@ export function createSearch(props: {
                 : `Found ${found().length}${nextCursor() === null ? "" : " and more"}`}
             </p>
           )}
+        </Show>
+        <Show when={hits() && wordsOnly()}>
+          {(why) => <p class="search-words-only">{wordsOnlySaying(why())}</p>}
         </Show>
         <Show when={problem()}>
           {(message) => (

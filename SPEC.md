@@ -503,7 +503,7 @@ ADR 0010, 0017.
 - One cap, in money, per calendar month, for the whole Deployment. Set by the person's hand. There is always one: a Deployment starts with 20 US dollars, which setup says. The month is UTC's, since the Contexts may each keep another time zone.
 - Counted from Run records, Call records and embedding, against a price table shipped with the code. Each Context's object reports what it spent to the Deployment object, which keeps the month's running total and answers whether a Run or a Call may start. A report is the Context's whole total for the month, so one repeated or overtaken counts once. A Run counts in the month it started. The provider's own spend limit is the hard backstop, and setup says to set one.
 - A warning shows at 80%.
-- At the cap: no new Run starts, whether the person or the clock would start it, and `send_message` is refused with the cap in the way and its Message kept nowhere; a Run already going finishes, and so does one for a Message accepted before the cap was reached, waiting behind it; no Call starts; embedding of newly saved Entries stops. The Conversation's composer is replaced by a Notice that links to the cap in settings. The Journal's composer, the screen and Connections keep working.
+- At the cap: no new Run starts, whether the person or the clock would start it, and `send_message` is refused with the cap in the way and its Message kept nowhere; a Run already going finishes, and so does one for a Message accepted before the cap was reached, waiting behind it; no Call starts; embedding of newly saved Entries stops, and search answers from words and says so. The Conversation's composer is replaced by a Notice that links to the cap in settings. The Journal's composer, the screen and Connections keep working.
 - A Brief or Review due at the cap waits for the cap to be raised or the month to turn, and is dropped once the next one is due.
 - Raising the cap takes effect at once.
 - The spend of a deleted Context stays as monthly totals with no name attached, so the month's count never goes down.
@@ -763,7 +763,7 @@ ADR 0006, 0010, 0017, 0023, 0024.
 - **One Deployment object** holds the list of Contexts with their names and accent colours, the Connections, the Devices with their push subscriptions and switches, the spend cap, the month's running spend total, the monthly spend totals of deleted Contexts, when the last Backup was made, and which Context has a Call. It holds nothing from any Journal.
 - The Worker asks the Deployment object which Context a request is for, then talks to that Context's object. A Context's object reaches the Deployment object only through a closed set of calls:
   - the other Contexts' names;
-  - whether a Run or a Call may start, which is the cap;
+  - whether a Run or a Call may start, or embedding go on, which is the cap;
   - what a Run, a Call or embedding cost;
   - notify the Devices that this Context has a Brief or a Review;
   - a Call is starting here, or has ended.
@@ -780,7 +780,7 @@ Anything kept outside a Context's object is derived from it, kept per Context, a
 
 | Thing | Where | Notes |
 |---|---|---|
-| Meaning index | Vectorize, embeddings by Workers AI, on the person's account | Section 9.4 |
+| Meaning index | Vectorize, embeddings by Workers AI, on the person's account: one index, a part per Context, in no jurisdiction | Section 9.4 |
 | Backups | R2 on the person's account | Section 10 |
 | Offline Copy | The Device's browser storage | Section 8.8 |
 
@@ -798,10 +798,12 @@ ADR 0023. From [Recall](https://github.com/nuntz/praxis/issues/21).
   - Narrowed by a Project, a Person or an Author, no Project or Person is listed, since none is in a Project, Mentioned or made by an Author.
 - By words, a record holds every word given, its case and accents set aside. The last word, with nothing typed after it, also finds the words it begins, so a list follows what is being typed. Nothing typed is read as a query language. The best match comes first, and the newest among equals.
 - Each result gives the record's kind, id, summary and time, an Entry's and a Task's Author, a Task's Entry, and an excerpt: one line of the words, title or name, an Entry's cut around what matched, with the spans that matched. The record itself is read by its id.
-- The words index is inside the Context's object, kept by SQLite as the records and the Trash change, so no write can leave it behind. The meaning index is outside it. Its embeddings come from `@cf/baai/bge-m3` on Workers AI, chosen because it handles Entries in more than one language. The model is fixed in code and is not configuration: a release that changes it marks every meaning index stale. Nothing goes to a third party, and embedding spend counts toward the cap.
-- If the meaning index is missing or stale, search still answers from words, and tells every caller that it did.
-- A saved Entry is findable by words at once and by meaning shortly after. A deleted Entry leaves both indexes at once and returns on restore.
-- The person can start a full rebuild from settings.
+- By meaning, an Entry is found when the meaning index holds it alike enough to the words given, by a measure fixed in code with the model, whether or not it holds them. The two are one list: each record scores by its place in the list by words and its place in the list by meaning, added, so an Entry found both ways comes before one found either way alone at the same place. An Entry found by meaning alone has its first words as its excerpt, with no spans.
+- The words index is inside the Context's object, kept by SQLite as the records and the Trash change, so no write can leave it behind. The meaning index is outside it. Its embeddings come from `@cf/baai/bge-m3` on Workers AI, chosen because it handles Entries in more than one language. The model is fixed in code and is not configuration: a release that changes it marks every meaning index stale. Nothing goes to a third party, and embedding spend counts toward the cap: Workers AI does not say what a call took, so the cost is reckoned from the length of the words, the Entries' and those searched for.
+- The Context's object keeps the queue of Entries the meaning index has still to take in, kept by SQLite as the words index is: an Entry made or whose words change is queued to be embedded, and one removed for good to be taken out. The object works through it after each write and when its alarm comes, and an Entry leaves the queue only while it is as it was read. Each Context has its own part of the index, by its id.
+- If the meaning index is missing or stale, search still answers from words, and tells every caller that it did, and why: there is no meaning index in the Deployment, it is being built from the Journal, it did not answer, or the month's spend has reached the cap.
+- A saved Entry is findable by words at once and by meaning shortly after. A deleted Entry leaves both indexes at once and returns on restore: its embedding stays in the index while it is in the Trash and search never returns it, so a restore needs no embedding again. One removed for good leaves the index.
+- The person can start a full rebuild from settings, `rebuild_search_index`: every Entry is queued afresh, and search answers from words until it is done. It changes no record and leaves no Effect. A Context's object made before the meaning index, or under another embedding model, does the same as it wakes.
 
 ### 9.5 Live updates
 
@@ -928,7 +930,7 @@ ADR 0015, 0019, 0020, 0021.
 
 **The browser.** A Playwright suite gates CI from the start, against the built PWA served by the real Worker, at desktop and phone width. Journeys: record an Entry with an Inline Task; finish a Task from Attention; ask the Agent for a change and see the screen patch; tap a Held Change; restore from the Trash; make a Connection; and the five offline journeys of ADR 0015. Each journey also runs an automated accessibility check, in light and in dark, except in the nightly run under load, where it found nothing the push's run does not and took the time the journeys need.
 
-**Fakes.** Four things are faked: the model, the voice provider (on the Device, with scripted text and no sound), the Web Push sender and the Access key set. Each adapter has one contract suite, run in CI against the fake and by hand against the real service. The bucket of Backups is not faked: it is workerd's own R2, outside the objects like a Device's push service, so a test reads what is kept there, and can make it refuse to keep anything, to see what a failed Backup leaves.
+**Fakes.** Five things are faked: the model, the voice provider (on the Device, with scripted text and no sound), the Web Push sender, the Access key set, and the meaning index, Workers AI and Vectorize together, which takes words a test says mean alike to be alike. Each adapter has one contract suite, run in CI against the fake and by hand against the real service. The meaning index is bound only by the deploy, never in `wrangler.jsonc`, since a binding to either reaches the account even in tests; its contract by hand runs under a configuration of its own that binds both remotely. The bucket of Backups is not faked: it is workerd's own R2, outside the objects like a Device's push service, so a test reads what is kept there, and can make it refuse to keep anything, to see what a failed Backup leaves.
 
 **Upgrades.** Each release commits one fixture: a Context object and a Deployment object filled by a fixed scenario run through the tools, saved as a dump beside the Export it produced. The upgrade test wakes every fixture under the current code and checks the tables' shape, the Export brought forward, a few reads, and a step made to fail. A guard fails CI when a released step's text changes.
 

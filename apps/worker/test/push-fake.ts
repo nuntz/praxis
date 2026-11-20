@@ -2,7 +2,7 @@ import type { PushSubscription } from "@praxis/domain";
 import type { Notification, PushSender } from "../src/push.ts";
 import { carried } from "./markers.ts";
 
-// The Web Push sender is one of the four faked things (section 13). The fake stands in for every
+// The Web Push sender is one of the faked things (section 13). The fake stands in for every
 // browser's push service at once: it hands out subscriptions as a browser would get them, keeps
 // what is sent to each, and says a subscription is gone once it is unsubscribed. It runs in the
 // tests' own isolate, as the scripted model does, so a test reads what its Deployment sent.

@@ -1,7 +1,7 @@
 import type { AccessApplication, AccessKey, AccessKeySet } from "../src/access.ts";
 import { ACCESS_SIGNING, KeySetUnreachable } from "../src/access.ts";
 
-// The Access key set is one of the four faked things (section 13). The fake publishes a key of
+// The Access key set is one of the faked things (section 13). The fake publishes a key of
 // its own and signs tokens with it as Access would, so tests sign in without Access. It uses
 // nothing but Web Crypto, so the Vitest suite in workerd and the stand-in for Access in front of
 // `wrangler dev` (scripts/access-stand-in.ts) share it.

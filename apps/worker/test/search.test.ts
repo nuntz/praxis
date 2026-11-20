@@ -36,7 +36,8 @@ describe("search", () => {
       author: { kind: "person" },
       excerpt: { text: words, matches: [{ start: 2, end: 8 }] },
     };
-    for (const answer of answers) expect(answer).toEqual({ items: [hit], next_cursor: null });
+    for (const answer of answers)
+      expect(answer).toEqual({ items: [hit], next_cursor: null, words_only: null });
   });
 
   test("finds Tasks, Projects and Persons by title or name, in one list with Entries, best first", async () => {
@@ -353,7 +354,7 @@ describe("search", () => {
     );
 
     expect(first.items.map(({ kind, id }) => `${kind}:${id}`)).toEqual(made.slice(0, 50));
-    expect(second).toEqual({ items: expect.any(Array), next_cursor: null });
+    expect(second).toEqual({ items: expect.any(Array), next_cursor: null, words_only: null });
     expect(second.items.map(({ kind, id }) => `${kind}:${id}`)).toEqual(made.slice(50));
     const otherList = value(await context.call(hand, "list_entries", {})).next_cursor;
     expect(

@@ -32,17 +32,21 @@ export type ToolCall<N extends ToolName> = {
 };
 
 /**
- * The Context tools that ask the Deployment object what they answer, so cannot run inside one
- * transaction of the Context's SQL: the Context's object runs them itself, after the same checks.
+ * The Context tools the Context's object runs itself, after the same checks, since they cannot run
+ * inside one transaction of its SQL: `list_notices` asks the Deployment object what it answers,
+ * `search` asks the meaning index, and `rebuild_search_index` sets the index to be built afresh,
+ * which changes no record and leaves no Effect.
  */
-export type AskingToolName = "list_notices";
+export type ObjectToolName = "list_notices" | "search" | "rebuild_search_index";
 
-export function isAskingTool(name: string): name is AskingToolName {
-  return name === "list_notices";
+const OBJECT_TOOLS: readonly string[] = ["list_notices", "search", "rebuild_search_index"];
+
+export function isObjectTool(name: string): name is ObjectToolName {
+  return OBJECT_TOOLS.includes(name);
 }
 
 export type Handlers = {
-  [N in Exclude<ToolName, AskingToolName>]: (call: ToolCall<N>) => ToolResult<ToolOutput[N]>;
+  [N in Exclude<ToolName, ObjectToolName>]: (call: ToolCall<N>) => ToolResult<ToolOutput[N]>;
 };
 
 export type ToolRequest = {
@@ -75,7 +79,7 @@ export function admit(request: ToolRequest): ToolResult<Admitted> {
 }
 
 /**
- * The one way into a Context's tools but those asking the Deployment object. It lets the call in,
+ * The one way into a Context's tools but those its object runs itself. It lets the call in,
  * and runs the tool as one transaction. For a write it also answers a repeated key with the first
  * result, and puts the Effects in the change log.
  */
@@ -87,11 +91,11 @@ export function dispatch(
   const admitted = admit(request);
   if (!admitted.ok) return admitted;
   const { tool, input } = admitted.value;
-  if (isAskingTool(tool)) throw new Error(`${tool} is run by the Context's object, not dispatched`);
+  if (isObjectTool(tool)) throw new Error(`${tool} is run by the Context's object, not dispatched`);
   return runTool(tool, input, handlers, storage, request);
 }
 
-function runTool<N extends Exclude<ToolName, AskingToolName>>(
+function runTool<N extends Exclude<ToolName, ObjectToolName>>(
   tool: N,
   input: ToolInput<N>,
   handlers: Handlers,

@@ -1051,9 +1051,15 @@ button.quiet.attention-project-toggle {
   display: none;
 }
 
-.search-count {
+.search-count,
+.search-words-only,
+.setting-note {
   color: var(--muted);
   font: var(--type-meta);
+}
+
+.setting-note:empty {
+  display: none;
 }
 
 .search-hits {

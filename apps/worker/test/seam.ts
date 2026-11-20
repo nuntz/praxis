@@ -100,6 +100,7 @@ export function newContext(
     },
     listen: () => context.then((reached) => reached.listen()),
     runsEnded: () => context.then((reached) => reached.runsEnded()),
+    meaningSettled: () => context.then((reached) => reached.meaningSettled()),
   };
 }
 
@@ -139,6 +140,13 @@ function contextHandle(time: { now: number }, reach: () => ReturnType<typeof rea
      */
     async runsEnded() {
       return (await stub()).runsEnded();
+    },
+    /**
+     * Wait until the Context's meaning index has taken in what its writes queued, as far as it
+     * goes: an Entry is found by meaning shortly after it is saved, not at once.
+     */
+    async meaningSettled() {
+      return (await stub()).meaningSettled();
     },
     /** Open a live channel to the Context's object, as the screen does (section 9.5). */
     async listen() {

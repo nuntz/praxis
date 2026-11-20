@@ -108,11 +108,22 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
     }
 
     /**
-     * A Context's report of what its Runs have spent in a calendar month, in all, counted against
-     * the cap (section 5.7). Embedding (#58) will report through here too.
+     * A Context's report of what its Runs and its embedding have spent in a calendar month, in
+     * all, counted against the cap (section 5.7).
      */
     async takeSpendReport(report: SpendReport): Promise<void> {
       takeSpendReport(this.ctx.storage.sql, report);
+    }
+
+    /**
+     * Whether a Context may embed for its meaning index, which is the cap: at it, embedding stops
+     * (section 5.7). It brings the Context's report of what it has spent so far, so what its
+     * searches cost is counted as they go.
+     */
+    async beforeEmbedding(report: SpendReport, at: number): Promise<Spend> {
+      const sql = this.ctx.storage.sql;
+      takeSpendReport(sql, report);
+      return readSpend(sql, at);
     }
 
     /**

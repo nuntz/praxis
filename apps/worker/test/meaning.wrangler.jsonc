@@ -1,0 +1,10 @@
+{
+  // Only for the meaning index's contract run by hand against the real service
+  // (test/meaning-index.test.ts, `bun run test:meaning`): Workers AI and a Vectorize index made for
+  // the run, both reached remotely on the account wrangler is signed in to. It costs a little.
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "praxis-meaning-contract",
+  "compatibility_date": "2026-10-01",
+  "ai": { "binding": "AI", "remote": true },
+  "vectorize": [{ "binding": "MEANING", "index_name": "praxis-meaning-contract", "remote": true }]
+}

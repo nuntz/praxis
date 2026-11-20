@@ -1,3 +1,5 @@
+import { MEANING_MODEL } from "./meaning.ts";
+
 /**
  * The Context object's own tables. The upgrade ladder of section 11 replaces this with
  * numbered steps before the first release. Foreign keys are enforced: a delete first clears every
@@ -10,6 +12,7 @@ export function createTables(sql: SqlStorage): void {
   createTablesAsMade(sql);
   addMissingColumns(sql);
   createWordsIndex(sql);
+  createMeaningQueue(sql);
 }
 
 /** Every table as a new object makes it. */
@@ -434,4 +437,87 @@ function createWordsIndex(sql: SqlStorage): void {
         SELECT ${indexRow("seq", slot)}, '${kind}', id, ${column} FROM untrashed_${table}
     `);
   }
+}
+
+/**
+ * What the Context's object keeps of its part of the meaning index (section 9.4), which is outside
+ * it, in Vectorize: the embedding model it is built with and whether it is built from the whole
+ * Journal, the Entries whose embedding it has still to put or take away, and what embedding has
+ * cost each month. None of it is a record, and all of it can be thrown away and rebuilt.
+ *
+ * The queue is kept by SQLite, as the words index is, so no write can leave the index behind: an
+ * Entry made, or whose words change, is queued to be embedded, and one removed for good to be taken
+ * out. An Entry sent to the Trash keeps its embedding, which search never returns while it is
+ * there, so a restore brings it back to search by meaning at once. Each queued Entry carries the
+ * number it was queued at, so the object takes it off the queue only while it is the one it read.
+ *
+ * An object made before it, or under another embedding model, has its whole Journal queued as it
+ * wakes, and its index is stale until the queue is empty: search answers from words till then.
+ */
+function createMeaningQueue(sql: SqlStorage): void {
+  sql.exec(`
+    CREATE TABLE IF NOT EXISTS meaning_index (
+      one INTEGER PRIMARY KEY CHECK (one = 1),
+      model TEXT NOT NULL,
+      -- 1 once every Entry queued when it was last marked stale has been embedded.
+      built INTEGER NOT NULL,
+      -- The number the next Entry queued is queued at.
+      queued INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS meaning_queue (
+      entry TEXT PRIMARY KEY,
+      what TEXT NOT NULL CHECK (what IN ('embed', 'remove')),
+      -- The number it was queued at, which is new each time it is queued.
+      queued INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS meaning_queue_in_order ON meaning_queue (queued);
+    -- What embedding cost in each calendar month (YYYY-MM, UTC), in US dollars, counted toward the
+    -- cap with the Run records (section 5.7).
+    CREATE TABLE IF NOT EXISTS meaning_spend (
+      month TEXT PRIMARY KEY,
+      dollars REAL NOT NULL
+    );
+  `);
+  const queue = (entry: string, what: "embed" | "remove") => `
+    UPDATE meaning_index SET queued = queued + 1;
+    INSERT OR REPLACE INTO meaning_queue (entry, what, queued)
+      VALUES (${entry}, '${what}', (SELECT queued FROM meaning_index));`;
+  sql.exec(`
+    CREATE TRIGGER IF NOT EXISTS meaning_entry_made AFTER INSERT ON entries BEGIN
+      ${queue("NEW.id", "embed")}
+    END;
+    CREATE TRIGGER IF NOT EXISTS meaning_entry_changed AFTER UPDATE OF words ON entries BEGIN
+      ${queue("NEW.id", "embed")}
+    END;
+    CREATE TRIGGER IF NOT EXISTS meaning_entry_removed AFTER DELETE ON entries BEGIN
+      ${queue("OLD.id", "remove")}
+    END;
+  `);
+  const kept = sql.exec<{ model: string }>(`SELECT model FROM meaning_index`).toArray()[0];
+  if (kept === undefined) {
+    sql.exec(
+      `INSERT INTO meaning_index (one, model, built, queued) VALUES (1, ?, 0, 0)`,
+      MEANING_MODEL,
+    );
+    queueWholeJournal(sql);
+  } else if (kept.model !== MEANING_MODEL) {
+    sql.exec(`UPDATE meaning_index SET model = ?`, MEANING_MODEL);
+    queueWholeJournal(sql);
+  }
+}
+
+/**
+ * Queue every Entry to be embedded afresh, in the Trash or not, and mark the meaning index stale
+ * until they are: on waking under a new embedding model and on `rebuild_search_index`. A Journal
+ * with no Entry has nothing to build. Returns how many Entries it queued.
+ */
+export function queueWholeJournal(sql: SqlStorage): number {
+  sql.exec(`
+    INSERT OR REPLACE INTO meaning_queue (entry, what, queued)
+      SELECT id, 'embed', (SELECT queued FROM meaning_index) + row_number() OVER (ORDER BY seq)
+      FROM entries
+  `);
+  const { count } = sql.exec<{ count: number }>(`SELECT count(*) AS count FROM entries`).one();
+  sql.exec(`UPDATE meaning_index SET queued = queued + ?, built = ?`, count, count === 0 ? 1 : 0);
+  return count;
 }

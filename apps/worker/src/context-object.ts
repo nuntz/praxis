@@ -21,7 +21,9 @@ import {
   offeredConversationTool,
   parseConversationToolInput,
   refusal,
+  type SearchIndex,
   success,
+  type ToolInput,
   type ToolResult,
 } from "@praxis/domain";
 import {
@@ -56,8 +58,17 @@ import { contextFile } from "./context-file.ts";
 import { heldWaiting } from "./held-change-rows.ts";
 import { forgetOldKeys, holdsKeys, rememberKey, repeatedKey } from "./keys.ts";
 import { logCall } from "./log.ts";
+import { embeddingCost, LIKE_ENOUGH, type MeaningIndex, NEAREST } from "./meaning.ts";
+import {
+  anythingQueued,
+  entriesToEmbed,
+  meaningBuilt,
+  queued,
+  recordEmbedding,
+  takeOffQueue,
+} from "./meaning-rows.ts";
 import type { AgentModel } from "./model.ts";
-import { admit, dispatch, type Handlers, isAskingTool, type ToolRequest } from "./registry.ts";
+import { admit, dispatch, type Handlers, isObjectTool, type ToolRequest } from "./registry.ts";
 import { deploymentOf } from "./routing.ts";
 import {
   lastToldChange,
@@ -68,15 +79,18 @@ import {
   runsNotEnded,
   spentInMonth,
 } from "./run-rows.ts";
+import { askSearch, type MeaningAnswer, search } from "./search-rows.ts";
 import {
   contextEffect,
   deploymentOfContext,
   makeContext,
   readSettings,
   renameContext,
+  timeZoneOf,
 } from "./settings.ts";
+import type { SpendReport } from "./spend-rows.ts";
 import { standingEntries } from "./standing-rows.ts";
-import { createTables } from "./tables.ts";
+import { createTables, queueWholeJournal } from "./tables.ts";
 import { attentionTools } from "./tools/attention.ts";
 import { changeTools } from "./tools/changes.ts";
 import { entryTools } from "./tools/entries.ts";
@@ -84,7 +98,6 @@ import { heldChangeTools } from "./tools/held-changes.ts";
 import { personTools } from "./tools/persons.ts";
 import { projectTools } from "./tools/projects.ts";
 import { recurrenceTools } from "./tools/recurrences.ts";
-import { searchTools } from "./tools/search.ts";
 import { settingsTools } from "./tools/settings.ts";
 import { taskTools } from "./tools/tasks.ts";
 import { trashTools } from "./tools/trash.ts";
@@ -106,7 +119,6 @@ const handlers: Handlers = {
   ...settingsTools,
   ...changeTools,
   ...attentionTools,
-  ...searchTools,
   ...trashTools,
   ...heldChangeTools,
 };
@@ -133,6 +145,24 @@ function noSuchBrief(): ToolResult<never> {
   return failure("not_found", "There is no such Brief or Review in this Context's Conversation.");
 }
 
+/** How many queued Entries the object embeds, or takes out of the meaning index, at once. */
+const MEANING_BATCH = 20;
+
+/**
+ * How soon the alarm comes back to try the meaning index's queue again, once embedding stopped at
+ * a failure or at the cap: a write or a search tries sooner.
+ */
+const MEANING_RETRY = 10 * 60 * 1000;
+
+/**
+ * Log that the meaning index failed, by the name of what was thrown alone: its message may carry
+ * what was sent, and no words are logged (section 13).
+ */
+function meaningFailed(during: "search" | "embedding", error: unknown): void {
+  const name = error instanceof Error ? error.name : typeof error;
+  console.error(JSON.stringify({ meaning: "failed", during, error: name }));
+}
+
 /** A Run refused because the month's spend has reached the cap, with the cap in the way. */
 function capRefusal(cap: number): ToolResult<never> {
   return refusal(
@@ -144,8 +174,12 @@ function capRefusal(cap: number): ToolResult<never> {
 /**
  * The Context object, given where its Agent's model comes from: the Deployment's configuration, or
  * a scripted model in tests (section 13). Without a model, `modelOf` says why there is no Agent.
+ * Its meaning index is the Deployment's bindings, or the fake in tests, or none.
  */
-export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
+export function contextObject(
+  modelOf: (env: Env) => AgentModel | NoAgent,
+  meaningOf: (env: Env) => MeaningIndex | null,
+) {
   /** One Context: its Journal and everything else it holds, on its own SQLite (ADR 0006). */
   return class ContextObject extends DurableObject<Env> {
     /** The Agent, opened on first use: most requests never need it. */
@@ -158,6 +192,11 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
      * platform's alarm is set by the real clock it stands from.
      */
     #clockSkew = 0;
+    /** The meaning index's queue being worked through, one pass at a time. */
+    #meaning: Promise<void> = Promise.resolve();
+    #embedding = false;
+    /** Whether the last pass stopped at a failure or at the cap, leaving the queue for the alarm. */
+    #meaningStopped = false;
 
     constructor(ctx: DurableObjectState, env: Env) {
       super(ctx, env);
@@ -214,7 +253,20 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
       // The object's clock runs from when this request arrived, which a test sets.
       this.#clockSkew = request.arrivedAt - arrivalTime();
       if (isConversationToolName(request.tool)) return this.converse(request.tool, request);
-      if (isAskingTool(request.tool)) return this.listNotices(request);
+      // An object new to a release may have its whole Journal to embed: any call starts it.
+      this.keepMeaning();
+      if (isObjectTool(request.tool)) {
+        const elapsed = startTimer();
+        const result =
+          request.tool === "list_notices"
+            ? await this.listNotices(request)
+            : request.tool === "search"
+              ? await this.search(request)
+              : this.rebuildSearchIndex(request);
+        // None of them returns Effects: what `rebuild_search_index` changes is derived.
+        logCall({ tool: request.tool, write: false }, result, elapsed());
+        return result;
+      }
       const elapsed = startTimer();
       const before = lastChange(this.ctx.storage.sql);
       const result = dispatch(handlers, this.ctx.storage, request);
@@ -230,18 +282,203 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
      * month's spend against the cap.
      */
     private async listNotices(request: ToolRequest): Promise<ToolResult<unknown>> {
-      const elapsed = startTimer();
       const admitted = admit(request);
-      const result = admitted.ok
-        ? success({
-            items: [
-              ...(await this.deployment().standingNotices(request.arrivedAt)),
-              ...clockNotices(this.ctx.storage.sql),
-            ],
-          })
-        : admitted;
-      logCall({ tool: "list_notices", write: false }, result, elapsed());
+      if (!admitted.ok) return admitted;
+      return success({
+        items: [
+          ...(await this.deployment().standingNotices(request.arrivedAt)),
+          ...clockNotices(this.ctx.storage.sql),
+        ],
+      });
+    }
+
+    /**
+     * `search` (section 9.4): one ranked list from words and from meaning, the same for every
+     * caller. It is checked before the meaning index is asked, so a call it refuses costs nothing,
+     * and the store is read again after, as it stands once the meaning index has answered.
+     */
+    private async search(request: ToolRequest): Promise<ToolResult<unknown>> {
+      const admitted = admit(request);
+      if (!admitted.ok) return admitted;
+      const input = admitted.value.input as ToolInput<"search">;
+      const sql = this.ctx.storage.sql;
+      const asked = askSearch(sql, input);
+      if (!asked.ok) return asked;
+      if (asked.value.query === null) {
+        return success(search(sql, input, timeZoneOf(sql), asked.value, { nearest: [] }));
+      }
+      const meaning = await this.askMeaning(input.words, request.arrivedAt);
+      // Read again as the store stands once the meaning index has answered: a Project or Person
+      // narrowed by may have gone to the Trash meanwhile.
+      const now = askSearch(sql, input);
+      if (!now.ok) return now;
+      return success(search(sql, input, timeZoneOf(sql), now.value, meaning));
+    }
+
+    /**
+     * The Entries the meaning index finds nearest the words, alike enough to be found; or why it
+     * was left out: there is none, it is being built, it did not answer, or the month's spend has
+     * reached the cap, where embedding stops (section 5.7).
+     */
+    private async askMeaning(words: string, at: number): Promise<MeaningAnswer> {
+      const index = meaningOf(this.env);
+      if (index === null) return { words_only: "missing" };
+      const sql = this.ctx.storage.sql;
+      if (!meaningBuilt(sql)) return { words_only: "stale" };
+      try {
+        const spend = await this.deployment().beforeEmbedding(this.spendReport(at), at);
+        if (spend.notice === "cap_reached") return { words_only: "cap_reached" };
+        const [embedding] = await index.embed([words]);
+        recordEmbedding(sql, at, embeddingCost([words]));
+        if (embedding === undefined) throw new Error("No embedding for the words searched");
+        const nearest = await index.nearest(this.contextId(), embedding, NEAREST);
+        return {
+          nearest: nearest
+            .filter((found) => found.likeness >= LIKE_ENOUGH)
+            .map(({ entry }) => entry),
+        };
+      } catch (error) {
+        meaningFailed("search", error);
+        return { words_only: "unreachable" };
+      }
+    }
+
+    /**
+     * `rebuild_search_index`, by the person's hand from the Context's settings: every Entry is
+     * queued to be embedded afresh, and search answers from words until it is done. It changes no
+     * record and leaves no Effect, so nothing goes in the change log; a repeated key answers as
+     * the first call did.
+     */
+    private rebuildSearchIndex(request: ToolRequest): ToolResult<unknown> {
+      const admitted = admit(request);
+      if (!admitted.ok) return admitted;
+      const { key } = admitted.value.input as ToolInput<"rebuild_search_index">;
+      const sql = this.ctx.storage.sql;
+      const keyed = {
+        caller: request.caller,
+        key,
+        tool: "rebuild_search_index",
+        at: request.arrivedAt,
+      };
+      const repeated = repeatedKey(sql, keyed);
+      if (repeated) return repeated;
+      const result: ToolResult<SearchIndex> =
+        meaningOf(this.env) === null
+          ? refusal(
+              "This Deployment has no meaning index, so there is nothing to rebuild: search finds by words alone. Its setup makes one (docs/deployment.md).",
+              [],
+            )
+          : success({
+              meaning: "building",
+              entries_to_embed: this.ctx.storage.transactionSync(() => {
+                queueWholeJournal(sql);
+                return entriesToEmbed(sql);
+              }),
+            });
+      if (key !== undefined) rememberKey(sql, { ...keyed, key, result });
+      this.keepMeaning();
       return result;
+    }
+
+    /** This Context's id, which is its object's: its part of the meaning index goes by it. */
+    private contextId(): string {
+      return this.ctx.id.toString();
+    }
+
+    /** What this Context has spent in the month `at` falls in, as reported to the Deployment. */
+    private spendReport(at: number): SpendReport {
+      return {
+        context: this.contextId(),
+        month: monthOf(at),
+        spent: spentInMonth(this.ctx.storage.sql, at),
+      };
+    }
+
+    /**
+     * Work through the meaning index's queue, unless a pass is going or there is nothing to do: a
+     * pass takes up what was queued while it ran, so nothing waits for the next write.
+     */
+    private keepMeaning(): void {
+      if (this.#embedding || meaningOf(this.env) === null) return;
+      if (!anythingQueued(this.ctx.storage.sql)) return;
+      this.#embedding = true;
+      this.#meaning = this.embedQueued().then(async (finished) => {
+        this.#embedding = false;
+        this.#meaningStopped = !finished;
+        if (finished) this.keepMeaning();
+        else await this.keepAlarm();
+      });
+    }
+
+    /**
+     * One pass through the meaning index's queue, a batch at a time: the Entries removed for good
+     * are taken out, then the Entries made or changed are embedded and put in, until the queue is
+     * empty. Each is taken off the queue only while it is as it was read, so one changed meanwhile
+     * is embedded again. Embedding stops at the cap (section 5.7) and at a failure, and the queue
+     * waits for the next write, search or alarm. What it cost is reported once the pass is done.
+     * True when the queue was emptied.
+     */
+    private async embedQueued(): Promise<boolean> {
+      const index = meaningOf(this.env);
+      if (index === null) return false;
+      const sql = this.ctx.storage.sql;
+      const context = this.contextId();
+      let spent = false;
+      let finished = false;
+      try {
+        for (;;) {
+          const batch = queued(sql, MEANING_BATCH);
+          if (batch.length === 0) {
+            finished = true;
+            break;
+          }
+          const removed = batch.filter((item) => item.what === "remove");
+          if (removed.length > 0) {
+            await index.remove(
+              context,
+              removed.map(({ entry }) => entry),
+            );
+            takeOffQueue(sql, removed);
+            continue;
+          }
+          const embedded = batch.flatMap((item) => (item.what === "embed" ? [item] : []));
+          const at = arrivalTime() + this.#clockSkew;
+          const spend = await this.deployment().beforeEmbedding(this.spendReport(at), at);
+          if (spend.notice === "cap_reached") break;
+          const texts = embedded.map(({ words }) => words);
+          const embeddings = await index.embed(texts);
+          recordEmbedding(sql, at, embeddingCost(texts));
+          spent = true;
+          await index.put(
+            context,
+            embedded.map(({ entry }, place) => ({ entry, embedding: embeddings[place] ?? [] })),
+          );
+          takeOffQueue(sql, embedded);
+        }
+      } catch (error) {
+        meaningFailed("embedding", error);
+      }
+      if (spent) {
+        const at = arrivalTime() + this.#clockSkew;
+        try {
+          await this.deployment().takeSpendReport(this.spendReport(at));
+        } catch {
+          // Counted with the next report: each is the month's whole total.
+        }
+      }
+      return finished;
+    }
+
+    /**
+     * Wait until the meaning index's queue has been worked through, as far as it goes. For tests,
+     * which cannot see it otherwise.
+     */
+    async meaningSettled(): Promise<void> {
+      for (;;) {
+        const going = this.#meaning;
+        await going;
+        if (going === this.#meaning) return;
+      }
     }
 
     /**
@@ -455,12 +692,7 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
                 reportKey: (report) => this.deployment().takeKeyReport(report),
                 clockEnded: (run) => this.clockEnded(run),
                 notify: (kind) => this.notify(kind),
-                reportSpend: (at) =>
-                  this.deployment().takeSpendReport({
-                    context: this.ctx.id.toString(),
-                    month: monthOf(at),
-                    spent: spentInMonth(this.ctx.storage.sql, at),
-                  }),
+                reportSpend: (at) => this.deployment().takeSpendReport(this.spendReport(at)),
               },
               model,
             );
@@ -488,9 +720,13 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
       return { result, change: after !== before ? after : null };
     }
 
-    /** After a write: carry what it added to the log live, and keep the alarm that prunes it. */
+    /**
+     * After a write: carry what it added to the log live, embed what it queued for the meaning
+     * index, and keep the alarm that prunes the log.
+     */
     private async afterWrite(before: number): Promise<void> {
       this.carryChangesAfter(before);
+      this.keepMeaning();
       await this.keepAlarm();
     }
 
@@ -557,6 +793,7 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
      */
     async alarm(): Promise<void> {
       await this.wake(arrivalTime() + this.#clockSkew);
+      this.keepMeaning();
       // A Run a lost instance left going, or one the runtime is waiting to retry, is taken up.
       const agent = this.agent();
       if (
@@ -669,6 +906,7 @@ export function contextObject(modelOf: (env: Env) => AgentModel | NoAgent) {
       if (expiry !== null) wanted.push(expiry);
       if (this.#agentWake.active) wanted.push(now + RUN_HEARTBEAT);
       if (this.#agentWake.at !== undefined) wanted.push(this.#agentWake.at + skew);
+      if (this.#meaningStopped && anythingQueued(storage.sql)) wanted.push(now + MEANING_RETRY);
       // Without the Agent's key, no Brief or Review is ever due.
       if (
         this.hasAgent() &&
