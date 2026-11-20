@@ -729,6 +729,44 @@ describe("move_record", () => {
     expect(value(await to.call(hand, "get_task", { id: water.id })).state.is).toBe("open");
   });
 
+  test("the Context left holds none of the unit's words 30 days after the move, though its keys answered with them", async () => {
+    const { deployment, work, home, from, to } = await twoContexts();
+    const entry = atOnce(
+      await from.call(hand, "record_entry", {
+        words: marked("Garden"),
+        tasks: [{ title: marked("Water") }],
+        key: "recorded",
+      }),
+    ).record;
+    value(await move(deployment, work.id, home.id, from, { kind: "entry", id: entry.id }));
+
+    // The object left wakes 30 days on, and the oracle finds none of the unit's words in any table.
+    deployment.advance(30 * DAY);
+    await deployment.fireAlarmOf(work.id);
+
+    expect(value(await to.call(hand, "get_entry", { id: entry.id })).words).toBe(entry.words);
+    expect(await from.call(hand, "get_entry", { id: entry.id })).toMatchObject({
+      ok: false,
+      error: { code: "not_found" },
+    });
+  });
+
+  test("an interrupted move's 30 days in the Context left count from when the alarm finished it", async () => {
+    const { deployment, work, home, from, to } = await twoContexts();
+    const entry = await anEntry(from, marked("Garden"));
+    failMovesInto(home.id, 2, "before");
+    value(await move(deployment, work.id, home.id, from, { kind: "entry", id: entry.id }));
+    deployment.advance(DAY);
+    await from.fireAlarm();
+    expect(ids(value(await to.call(hand, "list_entries", {})).items)).toEqual([entry.id]);
+
+    // The object left wakes 30 days after the unit arrived, and the oracle finds none of its words.
+    deployment.advance(30 * DAY);
+    await deployment.fireAlarmOf(work.id);
+
+    expect(value(await from.call(hand, "list_entries", {})).items).toEqual([]);
+  });
+
   test("a key given again returns the first result and moves nothing twice", async () => {
     const { deployment, work, home, from, to } = await twoContexts();
     const entry = await anEntry(from, marked("Garden"));

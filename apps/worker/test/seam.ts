@@ -15,7 +15,7 @@ import {
   type ToolResult,
 } from "@praxis/domain";
 import { reachContext } from "../src/routing.ts";
-import { throughDeploymentOracle, throughOracle } from "./oracle.ts";
+import { throughDeploymentOracle, throughOracle, wakeThroughOracle } from "./oracle.ts";
 import { addSteps, failingStep } from "./upgrade-faults.ts";
 
 export const hand: Caller = { kind: "hand" };
@@ -111,7 +111,7 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z", existing?: s
      * every object's: a retired Context is reached by no request.
      */
     fireAlarmOf(id: string) {
-      return contextOf(id).wake(time.now);
+      return wakeThroughOracle(contextOf(id), time.now);
     },
     /**
      * Wake a Context's object again, as when it is evicted and the next thing reaches it, under the
@@ -196,7 +196,7 @@ function contextHandle(time: { now: number }, reach: () => ReturnType<typeof rea
   return {
     /** Fire the Context's alarm at the time the test has set. */
     async fireAlarm() {
-      return (await stub()).wake(time.now);
+      return wakeThroughOracle(await stub(), time.now);
     },
     /**
      * Run the alarm the platform has scheduled, as the platform would, by the real clock.

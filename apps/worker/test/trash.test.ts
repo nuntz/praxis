@@ -761,3 +761,58 @@ describe("the Trash's clock", () => {
     expect(value(await context.call(hand, "list_trash", {})).items).toEqual([]);
   });
 });
+
+describe("what a removal for good leaves", () => {
+  test("emptying the Trash leaves none of the words removed in the Context 30 days on, and the keys that answered with them are forgotten", async () => {
+    const context = newContext();
+    const entry = value(
+      await context.call(hand, "record_entry", {
+        words: marked("House"),
+        tasks: [{ title: marked("Paint") }],
+        key: "recorded",
+      }),
+    ).record;
+    value(
+      await context.call(hand, "edit_entry", {
+        id: entry.id,
+        words: marked("Houses"),
+        version: 0,
+        key: "edited",
+      }),
+    );
+    value(await context.call(hand, "delete_entry", { id: entry.id, key: "deleted" }));
+    value(await context.call(hand, "empty_trash", { key: "emptied" }));
+
+    // The object wakes 30 days on, and the oracle finds none of their words in any table.
+    context.advance(30 * DAY);
+    await context.fireAlarm();
+
+    const again = value(
+      await context.call(hand, "record_entry", { words: marked("Garden"), key: "recorded" }),
+    ).record;
+    expect(again.id).not.toBe(entry.id);
+  });
+
+  test("the alarm's removal at 30 days leaves none of the words removed in the Context 30 days after that", async () => {
+    const context = newContext();
+    const entry = value(
+      await context.call(hand, "record_entry", {
+        words: marked("House"),
+        tasks: [{ title: marked("Paint") }],
+        key: "recorded",
+      }),
+    ).record;
+    value(await context.call(hand, "delete_entry", { id: entry.id, key: "deleted" }));
+    context.advance(30 * DAY);
+    await context.fireAlarm();
+    expect(value(await context.call(hand, "list_trash", {})).items).toEqual([]);
+
+    context.advance(30 * DAY);
+    await context.fireAlarm();
+
+    expect(await context.call(hand, "get_entry", { id: entry.id })).toMatchObject({
+      ok: false,
+      error: { code: "not_found" },
+    });
+  });
+});

@@ -12,6 +12,7 @@ import {
   isWrite,
   keysForgottenBy,
   SPEND_CAP_ID,
+  summarizeWords,
   type ToolResult,
 } from "@praxis/domain";
 import { expect } from "vitest";
@@ -116,10 +117,10 @@ export type Seen = {
 
 /** Call a tool through the oracle, failing the test on anything it finds. */
 export async function throughOracle(stub: Stub, request: Request): Promise<ToolResult<unknown>> {
-  const before = await snapshot(stub);
+  const before = await snapshot(stub, request.arrivedAt);
   const firstWithKey = await rememberedResult(stub, request);
   const result = await stub.call(request);
-  const after = await snapshot(stub);
+  const after = await snapshot(stub, request.arrivedAt);
   const logged = await changesSince(stub, before.lastChange);
 
   const problems = judge({
@@ -272,7 +273,7 @@ export async function throughDeploymentOracle(
 ): Promise<ToolResult<unknown>> {
   const listedBefore = await listedContexts(deployment);
   const before = new Map<string, { records: Records; lastChange: number }>();
-  for (const id of listedBefore) before.set(id, await snapshot(contextOf(id)));
+  for (const id of listedBefore) before.set(id, await snapshot(contextOf(id), request.arrivedAt));
   const keptBefore = await keptByDeployment(deployment);
   const result = await deployment.call(request);
   const listedAfter = await listedContexts(deployment);
@@ -282,7 +283,7 @@ export async function throughDeploymentOracle(
   for (const id of listedAfter) {
     const stub = contextOf(id);
     const was = before.get(id);
-    const after = await snapshot(stub);
+    const after = await snapshot(stub, request.arrivedAt);
     const logged = await changesSince(stub, was?.lastChange ?? 0);
     contexts.set(id, { before: was?.records ?? null, after: after.records, logged });
   }
@@ -522,7 +523,150 @@ const SEARCHED = `
   UNION ALL SELECT 'project:' || id, name FROM untrashed_projects
   UNION ALL SELECT 'person:' || id, name FROM untrashed_persons`;
 
-function snapshot(stub: Stub): Promise<{
+/** Each record's words, title or name, in the Trash or not, by `kind:id`. */
+function saidIn(sql: SqlStorage): Map<string, string> {
+  return new Map(
+    sql
+      .exec<{ record: string; text: string }>(SAID)
+      .toArray()
+      .map((row) => [row.record, row.text]),
+  );
+}
+
+// A record gone from a Context, removed for good or moved to another Context, is gone from
+// everything its object holds within 30 days (sections 3.8 and 3.9), though a table may keep its
+// words until then, as a write's key keeps the result it answered. The oracle remembers each
+// record's words as it saw them, every one the record has had, and the time it first saw the
+// record gone, or, while a unit on its way out still holds it, the time the move finished. Once
+// the object has woken 30 days after, every text in every table it holds is read for the record's
+// markers and its summary, so a table added later is held to it without being named. The
+// runtime's tables are not: they hold the Conversation, kept until the person clears it (section
+// 5.8). Words a record still there has too, as an Inline Task's title is in its Entry, are its own.
+
+/** Within how long of going nothing of a record is left (section 3.8). */
+const FORGOTTEN_WITHIN = 30 * 24 * 60 * 60 * 1000;
+
+/** A record seen gone: what of it a table could keep, and since when it is gone. */
+type Gone = { record: string; traces: string[]; since: number };
+
+/**
+ * By object id, what the oracle has seen of a Context's object: each record still there with
+ * every words it has had, by `kind:id`, and each record gone.
+ */
+const forgetting = new Map<string, { had: Map<string, Set<string>>; gone: Gone[] }>();
+
+function seenOf(id: string) {
+  const seen = forgetting.get(id) ?? { had: new Map(), gone: [] };
+  forgetting.set(id, seen);
+  return seen;
+}
+
+/**
+ * What of a record's words a table could keep: each marker in them, and their summary when it is
+ * cut short of a marker, which nothing else would find.
+ */
+function tracesOf(words: string): string[] {
+  const summary = summarizeWords(words);
+  const cut = summary.endsWith("…") && markersIn(summary).length < markersIn(words).length;
+  return [...markersIn(words), ...(cut ? [summary] : [])];
+}
+
+/** Whether some text holds a trace, as it is or escaped inside JSON. */
+function holdsTrace(text: string, trace: string): boolean {
+  return text.includes(trace) || text.includes(JSON.stringify(trace).slice(1, -1));
+}
+
+/** Every text these tables hold, with where. */
+function textsIn(sql: SqlStorage, tables: string[]): { where: string; text: string }[] {
+  return tables.flatMap((table) =>
+    sql
+      .exec(`SELECT * FROM "${table}"`)
+      .toArray()
+      .flatMap((row) =>
+        Object.entries(row).flatMap(([column, text]) =>
+          typeof text === "string" ? [{ where: `${table}.${column}`, text }] : [],
+        ),
+      ),
+  );
+}
+
+/**
+ * Note, as at `at`, what has gone from a Context's object since the oracle last looked, given the
+ * words of each record it holds.
+ */
+function noteGone(sql: SqlStorage, id: string, at: number, said: Map<string, string>): void {
+  const seen = seenOf(id);
+  // A record back, as a unit whose destination was deleted comes back, is there again.
+  seen.gone = seen.gone.filter(({ record }) => !said.has(record));
+  // A unit on its way out still holds its records, so their 30 days start once it has arrived.
+  const leaving = textsIn(sql, ["moves_out"]).map(({ text }) => text);
+  for (const gone of seen.gone) {
+    if (gone.traces.some((trace) => leaving.some((text) => holdsTrace(text, trace)))) {
+      gone.since = at;
+    }
+  }
+  for (const [record, ever] of seen.had) {
+    if (said.has(record)) continue;
+    seen.gone.push({ record, traces: [...ever].flatMap(tracesOf), since: at });
+    seen.had.delete(record);
+  }
+  for (const [record, words] of said) {
+    seen.had.set(record, (seen.had.get(record) ?? new Set()).add(words));
+  }
+}
+
+/**
+ * Fail when a Context's object, woken at `at`, still holds in any table the words of a record gone
+ * 30 days or more. Each is checked once, on the first wake past its 30 days.
+ */
+function checkForgotten(sql: SqlStorage, id: string, at: number): void {
+  const seen = seenOf(id);
+  const due = seen.gone.filter(({ since }) => since + FORGOTTEN_WITHIN <= at);
+  seen.gone = seen.gone.filter((gone) => !due.includes(gone));
+  const stillThere = [...seen.had.values()].flatMap((ever) => [
+    ...ever,
+    ...[...ever].map(summarizeWords),
+  ]);
+  const texts = textsIn(
+    sql,
+    tablesIn(sql).filter((name) => !name.startsWith(RUNTIME_TABLES)),
+  );
+  const left = new Set(
+    due.flatMap(({ record, traces, since }) =>
+      traces
+        .filter((trace) => !stillThere.some((words) => words.includes(trace)))
+        .flatMap((trace) => texts.filter(({ text }) => holdsTrace(text, trace)))
+        .map(({ where }) => `${where} holds words of ${record}, gone since ${instantToIso(since)}`),
+    ),
+  );
+  expect(
+    [...left],
+    "A record gone from a Context leaves none of its words in any table once 30 days have passed and its object has woken (sections 3.8 and 3.9): forget them on the Context's alarm, as write keys are",
+  ).toEqual([]);
+}
+
+/**
+ * Fire a Context's alarm at `at`, as its clock does, then hold its object to what it forgets: it
+ * has woken. What went before the alarm, such as a unit since arrived, is noted first, as at `at`.
+ */
+export async function wakeThroughOracle(stub: Stub, at: number): Promise<void> {
+  const look = (woke: boolean) =>
+    runInDurableObject(stub, (_, state) => {
+      const sql = state.storage.sql;
+      const id = state.id.toString();
+      if (tablesIn(sql).length === 0) return void forgetting.delete(id);
+      noteGone(sql, id, at, saidIn(sql));
+      if (woke) checkForgotten(sql, id, at);
+    });
+  await look(false);
+  await stub.wake(at);
+  await look(true);
+}
+
+function snapshot(
+  stub: Stub,
+  at: number,
+): Promise<{
   records: Records;
   lastChange: number;
   words: Map<string, string>;
@@ -533,6 +677,7 @@ function snapshot(stub: Stub): Promise<{
     const tables = tablesIn(sql);
     // Only a Context deleted whose Deployment object never heard holds no table: it holds nothing.
     if (tables.length === 0) {
+      forgetting.delete(state.id.toString());
       return { records: new Map(), lastChange: 0, words: new Map(), summaries: [] };
     }
     const unknown = tables.filter(
@@ -623,12 +768,8 @@ function snapshot(stub: Stub): Promise<{
     const { seq } = sql
       .exec<{ seq: number | null }>(`SELECT max(seq) AS seq FROM change_calls`)
       .one();
-    const words = new Map(
-      sql
-        .exec<{ record: string; text: string }>(SAID)
-        .toArray()
-        .map((row) => [row.record, row.text]),
-    );
+    const words = saidIn(sql);
+    noteGone(sql, state.id.toString(), at, words);
     const summaries = sql
       .exec<{ summary: string }>(`SELECT summary FROM changes`)
       .toArray()
