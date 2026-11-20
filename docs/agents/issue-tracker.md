@@ -28,15 +28,15 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue.
+Create a GitHub issue. A ticket with an acceptance criterion that needs what another open ticket builds (a refusal for a state that ticket makes, a reason that ticket gives) is blocked by it: add the edge as in **Blocking** below, or write the stand-in into the criterion.
 
 ## When a skill says "fetch the relevant ticket"
 
-Read it as in **Read an issue** above.
+Read it as in **Read an issue** above, then its open blockers: `gh api repos/{owner}/{repo}/issues/<n>/dependencies/blocked_by --jq '.[] | select(.state=="open") | "#\(.number) \(.title)"'`. Any printed is work the ticket stands on that is not built yet: name each to the user and ask before building.
 
 A ticket is one **slice** of `SPEC.md`, and its open siblings own the rest. When reviewing a ticket against the spec or the ADRs, list the open tickets (`gh issue list --state open --json number,title`) and report what a sibling owns as deferred to that ticket, by number, rather than as missing.
 
-A ticket whose tool meets a rule a sibling ticket owns says what stands in until that sibling lands, such as a call refused until the Held Change it should leave exists. The implementer builds the stand-in, with a placeholder comment naming the sibling.
+A ticket whose tool meets a rule a sibling ticket owns, without that sibling blocking it, says what stands in until that sibling lands, such as a call refused until the Held Change it should leave exists. The implementer builds the stand-in, with a placeholder comment naming the sibling.
 
 ## Wayfinding operations
 

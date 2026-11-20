@@ -1,0 +1,45 @@
+name: Ticket closed
+
+# Closing a ticket can leave a comment in master naming it, which fails CI's ticket check from
+# then on, though nothing was pushed. This runs that check as the ticket closes and says on the
+# ticket which comments name it, so master is not left to the next push to find red.
+
+on:
+  issues:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  placeholders:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: master
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: No placeholder names a closed ticket
+        id: check
+        run: bun run check:tickets 2>&1 | tee "$RUNNER_TEMP/tickets.txt"
+        shell: bash -o pipefail {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Say so on the ticket
+        if: failure() && steps.check.outcome == 'failure'
+        run: |
+          {
+            echo "Closing this leaves a comment on master naming a closed ticket, which fails CI until it is cleared:"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/tickets.txt"
+            echo '```'
+          } > "$RUNNER_TEMP/comment.md"
+          gh issue comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
