@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "test:e2e:twice": "playwright test --repeat-each=2",
     "test:e2e:stress": "PRAXIS_E2E_STRESS=1 playwright test --repeat-each=8 --workers=16",
+    "test:e2e:runner": "taskset -c 0-1 bun run test:e2e:stress",
     "build": "bun run --cwd apps/pwa build",
     "dev": "bun run build && bun run --cwd apps/worker dev",
     "wizard": "bash scripts/setup-deployment.sh",

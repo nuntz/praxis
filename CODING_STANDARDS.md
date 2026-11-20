@@ -19,6 +19,7 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 - A refusal says whether the person can mend it (sign in again, change what they sent) or can only wait. One that only waiting mends is answered as unavailable, never as their doing.
 - A faked adapter takes the Access key set's shape: the interface in `src/`, the fake in `test/<name>-fake.ts`, and one `contract()` suite run against the fake and, given its environment variables through Vitest's `provide`, against the real service. The adapter is passed in, as `praxis(accessOf)` takes it, since the Vitest plugin cannot intercept outbound requests.
 - A fake's own fault, such as running out of script, fails the test as a fault, never as the service's error it stands in for.
+- A fake answers at once, unless the test it is given for asserts what the screen shows while it waits: a pace or delay set for every test is time each one spends under load, as the journeys' scripted model writing at 20 words a second put two seconds on every Run (#88).
 
 ## The Agent's runtime
 
