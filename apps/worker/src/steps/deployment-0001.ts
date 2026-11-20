@@ -1,15 +1,12 @@
-/**
- * The Deployment object's own tables. It holds nothing from any Journal (ADR 0006): for now the
- * list of Contexts with their names and accents, the Connections, the Devices, the spend cap and what each
- * Context spent each month, when the last Backup was made, whether the model's provider refuses the key, and the keys of the
- * writes made to it. The upgrade ladder of section 11 replaces this with numbered steps before
- * the first release.
- *
- * A Deployment is live: a column added to a table here reaches no Deployment object already
- * made, since its table exists. Add it where it is missing, as ADDED_COLUMNS in tables.ts does,
- * until the upgrade ladder (#76) replaces this.
- */
-export function createDeploymentTables(sql: SqlStorage): void {
+// Step 1 of the Deployment object's upgrade ladder (section 11, ADR 0019). Released: never
+// edited, dropped or squashed. A fix is a new step. It imports nothing, so nothing outside it can
+// change what it does (lint/steps.test.ts).
+//
+// The tables as the first release made them. The Deployment object holds nothing from any Journal
+// (ADR 0006). One made before the ladder holds some of them already: a table it holds is kept,
+// and a column added since is added.
+
+export default function deploymentStep1(sql: SqlStorage): void {
   sql.exec(`
     -- One row per Context, in the order they were made. A Context's id is its object's.
     CREATE TABLE IF NOT EXISTS contexts (
@@ -18,7 +15,10 @@ export function createDeploymentTables(sql: SqlStorage): void {
       name TEXT NOT NULL,
       accent TEXT NOT NULL,
       -- A retired Context is hidden and keeps everything.
-      retired INTEGER NOT NULL
+      retired INTEGER NOT NULL,
+      -- When the last Backup holding its file was made, null while none has: the one Backup kept
+      -- past its 30 days while the Context is stuck on an upgrade (section 11).
+      backed_up INTEGER
     );
 
     -- One row per Connection, in the order they were made (section 7.2). Its id is opaque and is
@@ -78,6 +78,14 @@ export function createDeploymentTables(sql: SqlStorage): void {
       last_made INTEGER
     );
 
+    -- Each Context whose object is stuck on an upgrade (section 11), as it or the daily Backup last
+    -- said, and the release it is stuck under. A standing Notice in every other Context while it is
+    -- here.
+    CREATE TABLE IF NOT EXISTS stuck_contexts (
+      context_id TEXT PRIMARY KEY,
+      release TEXT NOT NULL
+    );
+
     -- Each caller's keys for its writes and the first result, remembered 30 days (section 4.5),
     -- as a Context's object keeps them.
     CREATE TABLE IF NOT EXISTS write_keys (
@@ -89,4 +97,12 @@ export function createDeploymentTables(sql: SqlStorage): void {
       PRIMARY KEY (caller, key)
     );
   `);
+  const backedUp = sql
+    .exec(`SELECT 1 FROM pragma_table_info('contexts') WHERE name = 'backed_up'`)
+    .toArray().length;
+  if (backedUp === 0) {
+    sql.exec(`ALTER TABLE contexts ADD COLUMN backed_up INTEGER`);
+    // Every Backup made before this held every Context listed, so the last one made holds each.
+    sql.exec(`UPDATE contexts SET backed_up = (SELECT last_made FROM backups)`);
+  }
 }

@@ -403,6 +403,28 @@ export class ContextAgent {
     return this.#opened;
   }
 
+  /**
+   * Whether the runtime opens its tables. They are not on Praxis's upgrade ladder, and one that
+   * cannot open them never blocks the Journal: the Conversation shows as unavailable (section 11).
+   * It is tried once for as long as the object lives, and logged by kind alone.
+   */
+  async opens(storage: DurableObjectStorage): Promise<boolean> {
+    try {
+      await this.open(storage);
+      return true;
+    } catch (error) {
+      if (!this.#unopened) {
+        this.#unopened = true;
+        const name = error instanceof Error ? error.name : typeof error;
+        console.error(JSON.stringify({ agent: "unopened", error: name }));
+      }
+      return false;
+    }
+  }
+
+  /** Set once the runtime has failed to open its tables, so that is logged once. */
+  #unopened = false;
+
   async #open(storage: DurableObjectStorage) {
     const registry = createRegistry();
     registry.install(

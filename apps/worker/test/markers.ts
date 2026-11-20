@@ -21,6 +21,14 @@ export function marked(words: string): string {
   return `${words} ${marker()}`;
 }
 
+/**
+ * Hold the markers in some text to the same check, as if this test had made them: words a fixture
+ * saved by an earlier release carries (test/upgrade.test.ts).
+ */
+export function adoptMarkers(text: string): void {
+  for (const found of markersIn(text)) markers.add(found);
+}
+
 /** The markers in some text, such as a record's words. */
 export function markersIn(text: string): string[] {
   return text.match(/MARKER-[0-9a-f-]{36}/g) ?? [];

@@ -8,9 +8,30 @@ import { env } from "cloudflare:workers";
 
 let refusing = false;
 
+/** The next Backup's keeping, held: what it waits on, and what to tell once it waits. */
+let held: { until: Promise<void>; waiting: () => void } | null = null;
+
+/**
+ * Hold the next Backup's keeping until `release` is called, so a test can finish another
+ * meanwhile: `reached` settles once it waits. Each test starts with none held.
+ */
+export function holdKeeping(): { reached: Promise<void>; release: () => void } {
+  let release = () => {};
+  let waiting = () => {};
+  const reached = new Promise<void>((resolve) => {
+    waiting = resolve;
+  });
+  const until = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  held = { until, waiting };
+  return { reached, release };
+}
+
 /** Make the bucket refuse every Backup, or keep them again. Each test starts with it keeping. */
 export function setBucketRefusing(to: boolean): void {
   refusing = to;
+  held = null;
 }
 
 /** The bucket, refusing to keep anything while a test says so. */
@@ -20,6 +41,15 @@ export function refusableBucket(bucket: R2Bucket): R2Bucket {
       if (property === "put" && refusing) {
         return async () => {
           throw new Error("The bucket refused to keep the Backup, as the test asked.");
+        };
+      }
+      if (property === "put" && held !== null) {
+        const hold = held;
+        held = null;
+        return async (...args: Parameters<R2Bucket["put"]>) => {
+          hold.waiting();
+          await hold.until;
+          return target.put(...args);
         };
       }
       const found = Reflect.get(target, property);

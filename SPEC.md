@@ -771,7 +771,8 @@ ADR 0006, 0010, 0017, 0023, 0024.
   - what a Run, a Call or embedding cost;
   - notify the Devices that this Context has a Brief or a Review;
   - a Call is starting here, or has ended;
-  - carry a unit it holds on its way out to the Context it moves to, for a move interrupted (section 3.9).
+  - carry a unit it holds on its way out to the Context it moves to, for a move interrupted (section 3.9);
+  - it is stuck on its upgrade, or no longer (section 11).
 - The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to rename it, to delete it, for an Export or a Backup, a move, and ending a Call there when another starts elsewhere. For an Export or a Backup it carries the file the Context's object writes and reads none of it.
 - A Context's object keeps its own name, for its settings and the summary of an Effect on it. The Deployment object is its only writer, writes it before its own list, and runs its writes one at a time, so the two never disagree (ADR 0006).
 - Revoking a Connection or retiring a Context takes effect on the next request.
@@ -881,16 +882,18 @@ ADR 0019.
 - Each object upgrades its own tables when it wakes, before it serves anything, by a ladder of numbered steps. One ladder for a Context's object and one for the Deployment object.
 - The ladder goes forward only and reaches back to the first release for good. A released step is never edited, dropped or squashed. There are no down steps. A fix to a bad step is a new step. Skipping releases needs no ceremony.
 - There is no sweep at deploy: the daily Backup wakes every object, retired Contexts included.
-- Each step is its own transaction. Before its first pending step an object notes the platform's point-in-time bookmark.
-- **A step changes shape, never meaning.** It writes nothing to the change log, has no Author, makes no Version and never touches an Entry's words. Reads through a tool return the same before and after, apart from what the release adds. A change in meaning to existing records is a rule of the release that this spec states.
+- Each step is its own transaction. Before its first pending step an object notes the platform's point-in-time bookmark, which it keeps and logs. A new object, holding nothing, is made rather than upgraded and notes none.
+- A release is the commit CI deploys, which names it to the Worker.
+- **A step changes shape, never meaning.** It writes nothing to the change log, has no Author, makes no Version and never touches an Entry's words: a Context's object checks this around each step, and a step that does any of it fails. Reads through a tool return the same before and after, apart from what the release adds. A change in meaning to existing records is a rule of the release that this spec states.
 - A step carries across what the Export does not hold: the change log, Devices and their push subscriptions, and a Connection's standing.
 - A step never migrates anything outside the object. When a release changes what the meaning index holds, the step marks it stale and it is rebuilt.
 - **A failed step** leaves the object whole on the earlier step, serving nothing, reads included, until a fixed release is deployed. So does an object that finds its tables newer than the code.
-- **A stuck Context** is named in a standing Notice, and the other Contexts keep working. Everything on its clock stops: no Brief or Review, no Trash expiry, no finishing of an interrupted move. It tries again only when woken under a different release. The last Backup that holds it is kept past 30 days until it upgrades, and the Notice says so.
+- **A stuck Context** is named in a standing Notice, and the other Contexts keep working. It says so itself as it wakes, and the daily Backup finds it out too. Everything on its clock stops: no Brief or Review, no Trash expiry, no finishing of an interrupted move. It tries again only when woken under a different release, and its clock starts again at once when it comes back. The last Backup that holds it is kept past 30 days until it upgrades, and the Notice says so.
+- A stuck Context writes no file. An Export the person makes is refused, since it is always the whole Deployment. The daily Backup carries on without it, its listing and its Connections left out of the Deployment's file. It cannot be renamed or deleted, and a move into it is refused.
 - **A stuck Deployment object** means nothing can be routed. The Worker shows one plain page saying the upgrade failed and under which release.
 - **A deploy is a one-way door** once any object has woken under it. There is no gradual rollout. Going back is by fixing forward, or by restoring a Backup into a fresh Deployment.
-- The deploy (section 12, ADR 0026) checks that a Backup from the last day exists and stops with a warning if not, which the person can override.
-- The runtime's tables are not on the ladder. A runtime that cannot open its tables never blocks the Journal: the screen and Connections keep working, the Conversation shows as unavailable, and starting it afresh is the person's choice.
+- The deploy (section 12, ADR 0026) checks that a Backup from the last day exists, the one the daily trigger was last due to make, and stops with a warning if not, before anything changes. The person overrides it with a line `Deploy-Without-Backup: yes` in the message of the commit pushed. A first deploy has nothing to check.
+- The runtime's tables are not on the ladder. A runtime that cannot open its tables never blocks the Journal: the screen and Connections keep working, the Conversation shows as unavailable, and starting it afresh is the person's choice. Until then the Agent takes no Message there, and no Brief or Review runs.
 - The Export's format version is a separate number with its own ladder, which brings an old file forward as it is read and reaches back to format 1 for good.
 
 ## 12. Setup and configuration
@@ -938,7 +941,7 @@ ADR 0015, 0019, 0020, 0021.
 
 **Fakes.** Five things are faked: the model, the voice provider (on the Device, with scripted text and no sound), the Web Push sender, the Access key set, and the meaning index, Workers AI and Vectorize together, which takes words a test says mean alike to be alike. Each adapter has one contract suite, run in CI against the fake and by hand against the real service. The meaning index is bound only by the deploy, never in `wrangler.jsonc`, since a binding to either reaches the account even in tests; its contract by hand runs under a configuration of its own that binds both remotely. The bucket of Backups is not faked: it is workerd's own R2, outside the objects like a Device's push service, so a test reads what is kept there, and can make it refuse to keep anything, to see what a failed Backup leaves.
 
-**Upgrades.** Each release commits one fixture: a Context object and a Deployment object filled by a fixed scenario run through the tools, saved as a dump beside the Export it produced. The upgrade test wakes every fixture under the current code and checks the tables' shape, the Export brought forward, a few reads, and a step made to fail. A guard fails CI when a released step's text changes.
+**Upgrades.** Each release that adds a step commits one fixture: a Context object and a Deployment object filled by a fixed scenario run through the tools, saved as a dump beside the Export it produced, and named by the tops of its two ladders, since a release that adds no step has the tables of the one before. The upgrade test wakes every fixture under the current code and checks the tables' shape, the Export brought forward, a few reads, and a step made to fail, and fails when the current ladders have no fixture. A guard fails CI when a released step's text changes, when one is gone, or when a step imports anything.
 
 **By hand, per Deployment.** Real Access with real hosted clients, Web Push delivery, install to the Home Screen, real Calls.
 

@@ -96,8 +96,10 @@ export type MessagesPage = {
   /**
    * Whether there is an Agent at all: without the model's key there is none, and the Conversation
    * says so in place of its composer (ADR 0017). Whether the cap lets a Run start is `get_spend`'s.
+   * `unavailable` when the runtime cannot open this Conversation's tables under this release: the
+   * Conversation shows as unavailable, and the Journal is untouched (section 11).
    */
-  agent: "available" | NoAgent;
+  agent: "available" | NoAgent | "unavailable";
 };
 
 /** The words of a Message: what the person typed or said, never empty. */

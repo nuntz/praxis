@@ -28,10 +28,12 @@ import {
 import { countBackupsFrom } from "./backup-rows.ts";
 import type { BackupToolName } from "./backups.ts";
 import type { DeviceToolName } from "./devices.ts";
+import type { StuckUpgrade } from "./ladder.ts";
 import type { Move, MovedBy } from "./move-rows.ts";
 import type { PushSender } from "./push.ts";
 import { newContextObject } from "./routing.ts";
 import { capChosen, deletedContextsSpend, readCap, readSpend, writeCap } from "./spend-rows.ts";
+import { noteUpgrade } from "./upgrade-rows.ts";
 
 /** What a Deployment tool is given to run. Like a Context tool, it never reads the real clock. */
 export type DeploymentCall<N extends DeploymentToolName> = {
@@ -71,11 +73,13 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
   async create_context({ input, arrivedAt, sql, env, deploymentId }) {
     // The Context's object is made first, so the list never names one that is not there yet.
     const object = newContextObject(env);
-    await object.stub.make(
+    const madeThere = await object.stub.make(
       { name: input.name, time_zone: input.time_zone },
       deploymentId,
       arrivedAt,
     );
+    // A new object stuck on its upgrade is a release that cannot make a Context at all.
+    if (!madeThere.ok) return madeThere;
     const id = object.id.toString();
     sql.exec(
       `INSERT INTO contexts (id, name, accent, retired) VALUES (?, ?, ?, 0)`,
@@ -95,10 +99,11 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
     if (found.name === input.name) return success(written(found, []));
     // The Context's own object keeps its name too, for its settings and the summary of an Effect
     // on it, so the rename is in its change log for whoever reads that Context.
-    await env.CONTEXT.get(env.CONTEXT.idFromString(found.id)).rename(input.name, {
-      caller,
-      at: arrivedAt,
-    });
+    const renamedThere = await env.CONTEXT.get(env.CONTEXT.idFromString(found.id)).rename(
+      input.name,
+      { caller, at: arrivedAt },
+    );
+    if (!renamedThere.ok) return renamedThere;
     sql.exec(`UPDATE contexts SET name = ? WHERE id = ?`, input.name, found.id);
     const renamed = { ...found, name: input.name };
     return success(written(renamed, [effectOnContext(renamed, "changed")]));
@@ -165,6 +170,7 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
     );
     // Its rows of spend stay, keyed by an id no Context is listed by, so the month's count never
     // goes down and an Export gives them with no name attached (section 5.7).
+    noteUpgrade(sql, found.id, null);
     sql.exec(`DELETE FROM contexts WHERE id = ?`, found.id);
     return success(written(null, [effectOnContext(found, "deleted"), ...connections]));
   },
@@ -280,19 +286,49 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
   },
 
   async make_export({ sql, env, arrivedAt }) {
-    return success(await exportOf(sql, env, arrivedAt));
+    const { made, stuck } = await exportOf(sql, env, arrivedAt);
+    // An Export is always the whole Deployment (section 10.1): a Context stuck on its upgrade
+    // writes no file, so none is made, and only a release that mends it lets one be.
+    if (stuck.length > 0) {
+      return refusal(
+        `An Export is always the whole Deployment, and ${stuck.map(({ name }) => name).join(", ")} cannot write its file while stuck on its upgrade, so none was made: try again once a release that mends it is deployed.`,
+        stuck.map(contextInTheWay),
+      );
+    }
+    return success(made);
   },
 };
 
 /**
- * The whole Deployment's Export as at `at`: an Export the person makes, or the daily Backup. Every
- * Context is in it, retired ones too, since it is always the whole Deployment (section 10.1).
+ * The Deployment's Export as at `at`, for an Export the person makes or the daily Backup: every
+ * Context, retired ones too, since it is always the whole Deployment (section 10.1), but each
+ * whose object is stuck on its upgrade and writes no file (section 11). Those are left out, with
+ * their Connections, and listed apart; the Contexts it holds a file of are listed too.
  */
-export async function exportOf(sql: SqlStorage, env: Env, at: number): Promise<Export> {
-  const contexts = everyContext(sql).map((listed) => ({
-    ...listed,
-    file: contextFilePath(listed.id),
-  }));
+export async function exportOf(
+  sql: SqlStorage,
+  env: Env,
+  at: number,
+): Promise<{
+  made: Export;
+  stuck: (ContextListing & { stuck: StuckUpgrade })[];
+  filed: string[];
+}> {
+  // Each Context's object writes its own file. This object carries them and reads none (ADR 0006).
+  const answers = await Promise.all(
+    everyContext(sql).map(async (listed) => ({
+      listed,
+      answer: await env.CONTEXT.get(env.CONTEXT.idFromString(listed.id)).exportFile(at),
+    })),
+  );
+  const stuck = answers.flatMap(({ listed, answer }) =>
+    "stuck" in answer ? [{ ...listed, stuck: answer.stuck }] : [],
+  );
+  const files = answers.flatMap(({ listed, answer }) =>
+    "file" in answer ? [{ listed, file: contextFilePath(listed.id), content: answer.file }] : [],
+  );
+  const contexts = files.map(({ listed, file }) => ({ ...listed, file }));
+  const filed = new Set(contexts.map(({ id }) => id));
   const deployment: ExportFile = {
     path: DEPLOYMENT_FILE,
     content: {
@@ -303,20 +339,18 @@ export async function exportOf(sql: SqlStorage, env: Env, at: number): Promise<E
       deleted_contexts_spend: deletedContextsSpend(sql),
       connections: sql
         .exec<ExportedConnection>(`SELECT id, name, context_id FROM connections ORDER BY seq`)
-        .toArray(),
+        .toArray()
+        .filter(({ context_id }) => filed.has(context_id)),
     },
   };
-  // Each Context's object writes its own file. This object carries them and reads none (ADR 0006).
-  const files = await Promise.all(
-    contexts.map(async ({ id, file }): Promise<ExportFile> => {
-      const object = env.CONTEXT.get(env.CONTEXT.idFromString(id));
-      return { path: file, content: await object.exportFile(at) };
-    }),
-  );
   return {
-    format_version: EXPORT_FORMAT_VERSION,
-    made_at: instantToIso(at),
-    files: [deployment, ...files],
+    made: {
+      format_version: EXPORT_FORMAT_VERSION,
+      made_at: instantToIso(at),
+      files: [deployment, ...files.map(({ file, content }) => ({ path: file, content }))],
+    },
+    stuck,
+    filed: [...filed],
   };
 }
 

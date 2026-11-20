@@ -86,5 +86,11 @@ function noticeWords(notice: StandingNotice): string {
       return notice.last_made === null
         ? "No Backup has been made yet, though Praxis has tried for three days. It tries again each day."
         : `No Backup has been made since ${sinceFormat.format(new Date(notice.last_made))}. Praxis tries again each day, and keeps the last one made until another is.`;
+    case "context_stuck":
+      return `${notice.context} could not be upgraded under release ${notice.release}: it shows and changes nothing, and its Brief, Review and Trash wait, until a release that mends it is deployed. Nothing in it was lost. ${
+        notice.backup_kept === null
+          ? "No Backup holds it yet."
+          : `The Backup made ${sinceFormat.format(new Date(notice.backup_kept))}, the last that holds it, is kept past its 30 days until it upgrades.`
+      }`;
   }
 }

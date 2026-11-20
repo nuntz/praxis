@@ -9,6 +9,7 @@ import {
 } from "./meaning-fake.ts";
 import { answering, scriptModel } from "./model-fake.ts";
 import { setPushFailing, setPushKeyed } from "./push-fake.ts";
+import { clearUpgradeFaults } from "./upgrade-faults.ts";
 
 captureConsole();
 
@@ -22,6 +23,7 @@ beforeEach(() => {
   setMeaningFailing(false);
   forgetMeanings();
   holdEmbedding()();
+  clearUpgradeFaults();
 });
 
 // Every test starts with a Deployment that has a model, playing a script that only answers.

@@ -1,4 +1,4 @@
-import { runDurableObjectAlarm } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import {
   type Accent,
@@ -16,6 +16,7 @@ import {
 } from "@praxis/domain";
 import { reachContext } from "../src/routing.ts";
 import { throughDeploymentOracle, throughOracle } from "./oracle.ts";
+import { addSteps, failingStep } from "./upgrade-faults.ts";
 
 export const hand: Caller = { kind: "hand" };
 export const agent: Caller = { kind: "agent" };
@@ -31,19 +32,23 @@ export const everyCaller = [hand, agent, clock, connection, readOnlyConnection];
 export const DAY = 24 * 60 * 60 * 1000;
 
 /**
- * A fresh Deployment object, at a time the test sets, holding no Context until one is made.
+ * A fresh Deployment object, at a time the test sets, holding no Context until one is made, or
+ * the one with an id a fixture laid an earlier release's tables in (test/dump.ts).
  * Its tools are called as a named caller, and a Context in it is reached the way the Worker
  * reaches one: the Deployment object says which object it is, and every call to that object
  * goes through the oracle. Tests in a file share storage, every binding's, and each file has its
  * own: so each makes its own objects by a fresh id, and a test of the bucket empties it first.
  */
-export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
-  const stub = env.DEPLOYMENT.get(env.DEPLOYMENT.newUniqueId());
+export function newDeployment(startAt = "2026-11-15T09:00:00.000Z", existing?: string) {
+  const id =
+    existing === undefined ? env.DEPLOYMENT.newUniqueId() : env.DEPLOYMENT.idFromString(existing);
+  // Taken afresh for each call: a stub held across an object woken again is broken.
+  const deployment = () => env.DEPLOYMENT.get(id);
   const time = { now: Date.parse(startAt) };
   const contextOf = (id: string) => env.CONTEXT.get(env.CONTEXT.idFromString(id));
   // Every call goes through the oracle, which holds a write's reach into a Context to its Effects.
   const callAny = (caller: Caller, tool: string, input: unknown, device?: string) =>
-    throughDeploymentOracle(stub, contextOf, {
+    throughDeploymentOracle(deployment(), contextOf, {
       caller,
       tool,
       input,
@@ -52,6 +57,8 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
     });
 
   return {
+    /** The Deployment object's id. */
+    id: id.toString(),
     /** Move the Deployment's clock on, and every Context's in it. */
     advance(ms: number) {
       time.now += ms;
@@ -67,7 +74,7 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
     callAny,
     /** Make the daily Backup at the time the test has set, as the Worker's daily trigger asks. */
     backUp() {
-      return stub.backUp(time.now);
+      return deployment().backUp(time.now);
     },
     /**
      * Delete a Context's object for good as `delete_context` asks it to, with the Deployment object
@@ -82,7 +89,7 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
      * call returned, which the oracle would rightly fail.
      */
     callUnjudged<N extends DeploymentToolName>(caller: Caller, tool: N, input: unknown) {
-      return stub.call({ caller, tool, input, arrivedAt: time.now }) as Promise<
+      return deployment().call({ caller, tool, input, arrivedAt: time.now }) as Promise<
         ToolResult<DeploymentToolOutput[N]>
       >;
     },
@@ -106,11 +113,43 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
     fireAlarmOf(id: string) {
       return contextOf(id).wake(time.now);
     },
+    /**
+     * Wake a Context's object again, as when it is evicted and the next thing reaches it, under the
+     * release the test names: it climbs its ladder as it wakes (section 11).
+     */
+    wakeAgain(id: string) {
+      return wakeAgain(contextOf(id));
+    },
+    /** Wake this Deployment's own object again, as `wakeAgain` does a Context's. */
+    wakeItselfAgain() {
+      return wakeAgain(deployment());
+    },
+    /**
+     * Have a Context's object stuck on its upgrade (section 11), as when a step of the release
+     * fails: it wakes again with one that does at the top of its ladder.
+     */
+    stickOnUpgrade(id: string) {
+      addSteps(id, failingStep);
+      return wakeAgain(contextOf(id));
+    },
     /** The Context with this id, reached through the Deployment object as the Worker does. */
     context(id: string) {
-      return contextHandle(time, () => reachContext(env, stub, id));
+      return contextHandle(time, () => reachContext(env, deployment(), id));
     },
   };
+}
+
+/**
+ * Wake an object again: its instance is thrown away, its storage kept, and the next thing to reach
+ * it makes a new one, which climbs its ladder as it wakes (section 11). The stub given is broken
+ * from then on: reach the object by a new one.
+ */
+export async function wakeAgain(stub: DurableObjectStub): Promise<void> {
+  try {
+    await runInDurableObject(stub, (_, state) => state.abort("Woken again"));
+  } catch {
+    // Thrown by the abort itself.
+  }
 }
 
 /**

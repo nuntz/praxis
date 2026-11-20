@@ -18,5 +18,14 @@ declare module "vitest" {
       subscription: string;
       gone: string | null;
     } | null;
+    /** Where a release's fixture is sent to be saved, when one is made (scripts/fixture-sink.ts). */
+    fixtureSink: string;
+  }
+}
+
+declare global {
+  interface ImportMeta {
+    /** Vite's import of every module a pattern matches, by path: the fixtures (test/upgrade.test.ts). */
+    glob<T>(pattern: string, options: { eager: true; import: "default" }): Record<string, T>;
   }
 }

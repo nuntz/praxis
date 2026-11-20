@@ -158,3 +158,12 @@ export function holdEmbedding(): () => void {
 export function forgetMeanings(): void {
   meanings.clear();
 }
+
+/**
+ * Hold these Entries in a Context's part of the index, each with the embedding of its words, as
+ * the index outside the object held them when a fixture was saved (test/upgrade.test.ts): the
+ * index outlives a deploy, as the object does.
+ */
+export function holdMeanings(context: string, entries: { id: string; words: string }[]): void {
+  parts.set(context, new Map(entries.map(({ id, words }) => [id, fakeEmbedding(words)])));
+}

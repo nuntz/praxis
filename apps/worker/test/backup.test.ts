@@ -1,8 +1,9 @@
 import { exportZip } from "@praxis/domain";
 import { beforeEach, describe, expect, test } from "vitest";
-import { emptyBucket, keptBackups, setBucketRefusing } from "./bucket.ts";
+import { emptyBucket, holdKeeping, keptBackups, setBucketRefusing } from "./bucket.ts";
 import { marked } from "./markers.ts";
 import { atOnce, DAY, hand, newDeployment, value } from "./seam.ts";
+import { mendSteps, wakeUnder } from "./upgrade-faults.ts";
 
 // The daily Backup (sections 10.1, 10.3 and 10.5, ADR 0018): the Export's file, made by the system
 // once a day into R2 on the person's account and deleted after 30 days, always on. The Worker's
@@ -141,6 +142,91 @@ describe("the daily Backup", () => {
     expect(await deployment.backUp()).toBe("failed");
 
     expect([...(await keptBackups()).keys()]).toEqual([]);
+  });
+});
+
+describe("the daily Backup, while a Context is stuck on its upgrade", () => {
+  test("carries on for the other Contexts, and keeps the last that holds it past its 30 days until it upgrades, as its Notice says", async () => {
+    const deployment = newDeployment("2026-11-15T03:00:00.000Z");
+    const work = await makeContext(deployment, "Work");
+    const home = await makeContext(deployment, "Home");
+    await deployment.backUp();
+    await deployment.stickOnUpgrade(home);
+    deployment.advance(DAY);
+
+    expect(await deployment.backUp()).toBe("made");
+
+    const kept = await keptBackups();
+    const files = readArchive(kept.get("praxis-export-2026-11-16.zip") ?? new Uint8Array());
+    expect([...files.keys()]).toEqual(["deployment.json", `contexts/${work}.json`]);
+    expect(
+      JSON.parse(files.get("deployment.json") ?? "null").contexts.map(
+        ({ name }: { name: string }) => name,
+      ),
+    ).toEqual(["Work"]);
+    const notice = {
+      kind: "context_stuck",
+      context: "Home",
+      release: "unreleased",
+      backup_kept: "2026-11-15T03:00:00.000Z",
+    };
+    expect(value(await deployment.context(work).call(hand, "list_notices", {})).items).toEqual([
+      notice,
+    ]);
+
+    deployment.advance(30 * DAY);
+    await deployment.backUp();
+    expect([...(await keptBackups()).keys()]).toEqual([
+      "praxis-export-2026-11-15.zip",
+      "praxis-export-2026-12-16.zip",
+    ]);
+
+    // Upgraded under a release that mends it, the Backup holds it again, and the one kept for it
+    // goes with the others its age.
+    mendSteps(home);
+    wakeUnder("release-that-mends-it");
+    await deployment.wakeAgain(home);
+    deployment.advance(DAY);
+    await deployment.backUp();
+
+    expect([...(await keptBackups()).keys()]).toEqual([
+      "praxis-export-2026-12-16.zip",
+      "praxis-export-2026-12-17.zip",
+    ]);
+    expect(value(await deployment.context(work).call(hand, "list_notices", {})).items).toEqual([]);
+  });
+
+  test("keeps the last Backup that held it, though an earlier one finished after it", async () => {
+    const deployment = newDeployment("2026-11-15T03:00:00.000Z");
+    const work = await makeContext(deployment, "Work");
+    const home = await makeContext(deployment, "Home");
+    const { reached, release } = holdKeeping();
+    const earlier = deployment.backUp();
+    await reached;
+    deployment.advance(DAY);
+    // The later one is kept while the earlier waits, which finishes after it.
+    await deployment.backUp();
+    release();
+    await earlier;
+    await deployment.stickOnUpgrade(home);
+    deployment.advance(DAY);
+    await deployment.backUp();
+
+    expect(value(await deployment.context(work).call(hand, "list_notices", {})).items).toEqual([
+      expect.objectContaining({ context: "Home", backup_kept: "2026-11-16T03:00:00.000Z" }),
+    ]);
+  });
+
+  test("an Export the person makes is refused, since it is always the whole Deployment", async () => {
+    const deployment = newDeployment("2026-11-15T03:00:00.000Z");
+    await makeContext(deployment, "Work");
+    const home = await makeContext(deployment, "Home");
+    await deployment.stickOnUpgrade(home);
+
+    expect(await deployment.call(hand, "make_export", {})).toMatchObject({
+      ok: false,
+      error: { code: "refused", in_the_way: [{ kind: "context", id: home, summary: "Home" }] },
+    });
   });
 });
 

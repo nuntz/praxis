@@ -27,9 +27,14 @@ export type RunNotice = { run: string; failure: RunFailure };
  *   Notice stays until one of its kind runs.
  * - `no_backup`: no daily Backup has been made for three days (section 10.3), and when the last
  *   one was, or null when none has been. It stays until one is made. It is not a Notification.
+ * - `context_stuck`: a Context's object is stuck on its upgrade under this release (section 11),
+ *   by its name, and serves nothing until a release that mends it is deployed. The last Backup
+ *   holding it, made at `backup_kept`, or none when null, is kept past its 30 days until it
+ *   upgrades. It stays until the Context upgrades.
  */
 export type StandingNotice =
   | { kind: "key_refused"; since: string }
   | { kind: "nearing_cap" | "cap_reached"; spent: number; cap: number }
   | { kind: "clock_failed"; clock: ClockKind; failure: RunFailure; since: string }
-  | { kind: "no_backup"; last_made: string | null };
+  | { kind: "no_backup"; last_made: string | null }
+  | { kind: "context_stuck"; context: string; release: string; backup_kept: string | null };

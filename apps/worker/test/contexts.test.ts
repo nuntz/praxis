@@ -561,3 +561,22 @@ describe("nothing crosses a Context", () => {
     expect(value(await deployment.context(work).call(hand, "list_entries", {})).items).toEqual([]);
   });
 });
+
+describe("a Context stuck on its upgrade", () => {
+  test("is neither renamed nor deleted, with nothing changed, since only a release mends it", async () => {
+    const deployment = newDeployment();
+    await make(deployment, "Work");
+    const home = await make(deployment, "Home");
+    value(await deployment.call(hand, "retire_context", { id: home }));
+    await deployment.stickOnUpgrade(home);
+
+    const stuck = { ok: false, error: { code: "refused", in_the_way: [] } };
+    expect(
+      await deployment.call(hand, "rename_context", { id: home, name: "House" }),
+    ).toMatchObject(stuck);
+    expect(await deployment.call(hand, "delete_context", { id: home, name: "Home" })).toMatchObject(
+      stuck,
+    );
+    expect((await listed(deployment)).map(({ name }) => name)).toEqual(["Work", "Home"]);
+  });
+});

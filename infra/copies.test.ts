@@ -12,6 +12,7 @@ const wizard = await Bun.file(new URL("../scripts/setup-deployment.sh", import.m
 const routing = await Bun.file(new URL("../apps/worker/src/routing.ts", import.meta.url)).text();
 const meaning = await Bun.file(new URL("../apps/worker/src/meaning.ts", import.meta.url)).text();
 const deploy = await Bun.file(new URL("../scripts/deploy-config.ts", import.meta.url)).text();
+const workflow = await Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text();
 
 /** The jurisdictions the Worker keeps objects in, as routing.ts lists them. */
 const WORKER_JURISDICTIONS = [
@@ -34,7 +35,10 @@ test("the bucket infra makes for the Backups is the one wrangler.jsonc binds", (
 test("every var infra gives the Worker is one wrangler.jsonc declares, so its type is Env's", () => {
   const given = /workerVars = [\s\S]*?\(\{([\s\S]*?)\}\)/.exec(program)?.[1] ?? "";
   const names = [...given.matchAll(/^\s*([A-Z_]+):/gm)].map((match) => match[1]);
-  expect(names.sort()).toEqual(Object.keys(wrangler.vars).sort());
+  // The release is the commit CI deploys, which the deploy job names, not the configuration.
+  const declared = Object.keys(wrangler.vars).filter((name) => name !== "RELEASE");
+  expect(names.sort()).toEqual(declared.sort());
+  expect(workflow).toContain(`vars=(--var "RELEASE:\${GITHUB_SHA::12}")`);
 });
 
 test("infra and the wizard offer the jurisdictions the Worker keeps objects in", () => {

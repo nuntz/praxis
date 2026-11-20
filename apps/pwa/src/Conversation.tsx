@@ -296,6 +296,12 @@ export function Conversation(props: {
             price for. The Journal works as ever.
           </p>
         </Show>
+        <Show when={foot() === "unavailable"}>
+          <p class="notice" role="status">
+            This Conversation cannot be opened under this release of Praxis, so the Agent answers
+            nothing here. Nothing in the Journal is touched, and it works as ever.
+          </p>
+        </Show>
         <Show when={foot() === "offline"}>
           <p class="notice" role="status">
             No network: the Conversation needs one. The Agent can be reached again once this Device

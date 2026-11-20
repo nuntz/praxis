@@ -10,7 +10,7 @@ import type {
   ToolOutput,
   ToolResult,
 } from "@praxis/domain";
-import { DEVICE_HEADER } from "@praxis/domain";
+import { DEVICE_HEADER, UPGRADE_HEADER } from "@praxis/domain";
 import { createContext, createSignal, useContext } from "solid-js";
 import { thisDevice } from "./device.ts";
 
@@ -51,6 +51,12 @@ async function post<T>(
   if (response.type === "opaqueredirect" || response.status === 401) {
     setSignInLapsed(true);
     throw new SignInLapsed("Your sign-in has lapsed.");
+  }
+  // The Worker's page for a Deployment stuck on its upgrade (section 11): opening the screen again
+  // shows that page in its place, since nothing can be reached until a release mends it.
+  if (response.headers.get(UPGRADE_HEADER) === "stuck") {
+    location.reload();
+    throw new Unreachable("Praxis could not upgrade.");
   }
   if (!response.ok) throw new Unreachable(`Praxis answered ${response.status}.`);
   return (await response.json()) as ToolResult<T>;

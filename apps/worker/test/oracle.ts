@@ -91,6 +91,8 @@ const otherTables = [
   // sees it, and made there.
   "moves_out",
   "moves_in",
+  // Where the object stands on its upgrade ladder (section 11), which no call changes.
+  "ladder",
 ];
 
 /** Each record's rows as JSON, by `kind:id`. */
@@ -442,9 +444,19 @@ const keptDeploymentTables: Record<string, (sql: SqlStorage) => [string, string]
 /**
  * The Deployment object's other tables, whose rows no Effect names: the list of Contexts, held to
  * what changed in each Context instead; what each Context spent and whether the key is refused,
- * which Runs report; when the daily Backup was tried and made; and the keys of the writes made to it.
+ * which Runs report; when the daily Backup was tried and made; the keys of the writes made to it;
+ * the Contexts stuck on their upgrade, which they or the Backup report; and where it stands on its
+ * own upgrade ladder.
  */
-const otherDeploymentTables = ["contexts", "spend", "key_refused", "backups", "write_keys"];
+const otherDeploymentTables = [
+  "contexts",
+  "spend",
+  "key_refused",
+  "backups",
+  "write_keys",
+  "stuck_contexts",
+  "ladder",
+];
 
 /**
  * What the Deployment object keeps that Effects name, as records are, failing the test when it

@@ -1,7 +1,7 @@
 import type { Entry, MoveUnit, Task } from "@praxis/domain";
 import { afterEach, describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
-import { clearMoveFaults, failMovesInto, stickContext } from "./move-faults.ts";
+import { clearMoveFaults, failMovesInto } from "./move-faults.ts";
 import { agent, atOnce, DAY, everyCaller, hand, left, newDeployment, value } from "./seam.ts";
 
 // Moving a record between Contexts (section 3.9, ADR 0003 and 0006): the one act that crosses the
@@ -478,7 +478,7 @@ describe("move_record", () => {
   test("a move into a Context whose object is stuck on an upgrade is refused, with nothing moved", async () => {
     const { deployment, work, home, from } = await twoContexts();
     const entry = await anEntry(from, marked("Garden"));
-    stickContext(home.id);
+    await deployment.stickOnUpgrade(home.id);
 
     expect(
       await move(deployment, work.id, home.id, from, { kind: "entry", id: entry.id }),

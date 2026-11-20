@@ -1,6 +1,13 @@
-import { type Caller, DEVICE_HEADER, failure, type ToolResult } from "@praxis/domain";
+import {
+  type Caller,
+  DEVICE_HEADER,
+  failure,
+  type ToolResult,
+  UPGRADE_HEADER,
+} from "@praxis/domain";
 import { ACCESS_TOKEN_HEADER, type Access, type AccessApplication, AccessGate } from "./access.ts";
 import { arrivalTime } from "./arrival.ts";
+import { type StuckUpgrade, stuckIn, stuckWords } from "./ladder.ts";
 import { connectionCaller, connectionIdIn, noConnection, serveConnection } from "./mcp.ts";
 import type { ToolRequest } from "./registry.ts";
 import { deploymentOf, reachContext } from "./routing.ts";
@@ -45,42 +52,14 @@ export function praxis(accessOf: (env: Env) => Access) {
       const signIn = await gateFor(env).check(request.headers.get(ACCESS_TOKEN_HEADER), arrivedAt);
       if (signIn === "signed_out") return signedOut();
       if (signIn === "unavailable") return unavailable();
-
-      const { pathname } = new URL(request.url);
-      if (MCP_PATH.test(pathname)) return serveMcp(request, env, pathname, arrivedAt);
-      if (!pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
-      const live = LIVE_PATH.exec(pathname);
-      if (live) return openLive(request, env, live[1] ?? "");
-      const deploymentTool = DEPLOYMENT_TOOL_PATH.exec(pathname);
-      const contextTool = CONTEXT_TOOL_PATH.exec(pathname);
-      if (!deploymentTool && !contextTool) return new Response("Not found", { status: 404 });
-      if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405, headers: { allow: "POST" } });
-      }
-
-      let input: unknown;
       try {
-        input = await request.json();
-      } catch {
-        return Response.json(failure("invalid_input", "The body is not JSON."));
+        return await route(request, env, arrivedAt);
+      } catch (error) {
+        // Nothing can be routed while the Deployment object is stuck on its upgrade (section 11).
+        const stuck = stuckIn(error);
+        if (stuck !== null) return stuckPage(stuck);
+        throw error;
       }
-
-      const deployment = deploymentOf(env);
-      if (deploymentTool?.[1]) {
-        return Response.json(
-          await deployment.call({
-            caller: HAND,
-            tool: deploymentTool[1],
-            input,
-            arrivedAt,
-            ...deviceOf(request),
-          }),
-        );
-      }
-      const [, contextId = "", tool = ""] = contextTool ?? [];
-      return Response.json(
-        await callContext(env, deployment, contextId, { caller: HAND, tool, input, arrivedAt }),
-      );
     },
 
     /**
@@ -92,6 +71,103 @@ export function praxis(accessOf: (env: Env) => Access) {
       context.waitUntil(deploymentOf(env).backUp(controller.scheduledTime));
     },
   } satisfies ExportedHandler<Env>;
+}
+
+/** Route a request Access signed in: to MCP, the screen's files, a live channel or a tool. */
+async function route(request: Request, env: Env, arrivedAt: number): Promise<Response> {
+  const { pathname } = new URL(request.url);
+  if (MCP_PATH.test(pathname)) return serveMcp(request, env, pathname, arrivedAt);
+  if (!pathname.startsWith("/api/")) {
+    // Opening the screen asks first, so a stuck Deployment shows its page in place of a
+    // screen whose every call would fail.
+    if (opensTheScreen(request)) {
+      const stuck = await deploymentOf(env).upgradeStuck();
+      if (stuck !== null) return stuckPage(stuck);
+    }
+    return env.ASSETS.fetch(request);
+  }
+  const live = LIVE_PATH.exec(pathname);
+  if (live) return openLive(request, env, live[1] ?? "");
+  const deploymentTool = DEPLOYMENT_TOOL_PATH.exec(pathname);
+  const contextTool = CONTEXT_TOOL_PATH.exec(pathname);
+  if (!deploymentTool && !contextTool) return new Response("Not found", { status: 404 });
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", { status: 405, headers: { allow: "POST" } });
+  }
+
+  let input: unknown;
+  try {
+    input = await request.json();
+  } catch {
+    return Response.json(failure("invalid_input", "The body is not JSON."));
+  }
+
+  const deployment = deploymentOf(env);
+  if (deploymentTool?.[1]) {
+    return Response.json(
+      await deployment.call({
+        caller: HAND,
+        tool: deploymentTool[1],
+        input,
+        arrivedAt,
+        ...deviceOf(request),
+      }),
+    );
+  }
+  const [, contextId = "", tool = ""] = contextTool ?? [];
+  return Response.json(
+    await callContext(env, deployment, contextId, { caller: HAND, tool, input, arrivedAt }),
+  );
+}
+
+/**
+ * The one plain page a Deployment whose Deployment object is stuck on its upgrade shows for every
+ * request, saying under which release (section 11). Only a release that mends it changes that, so
+ * it is unavailable, never the person's doing, and the screen reloads into it when a call meets it.
+ */
+function stuckPage(stuck: StuckUpgrade): Response {
+  const release = escapeHtml(stuck.release);
+  const why = escapeHtml(stuckWords(stuck));
+  const page = `<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Praxis could not upgrade</title>
+<body style="font-family: system-ui, sans-serif; max-width: 36rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5">
+<h1>Praxis could not upgrade</h1>
+<p>The upgrade under release <code>${release}</code> failed: for the Deployment's own object, ${why}.</p>
+<p>Nothing was changed or lost: it stays as it was before the upgrade, and serves nothing until a release that mends it is deployed.</p>
+</body>
+</html>
+`;
+  return new Response(page, {
+    status: 503,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      [UPGRADE_HEADER]: "stuck",
+    },
+  });
+}
+
+/**
+ * Whether a request opens the screen, as a page rather than one of its files: by the mode the
+ * browser says, or, from a browser that says none, by asking for HTML. The screen reloads into the
+ * stuck page, so one never shown it would reload for good.
+ */
+function opensTheScreen(request: Request): boolean {
+  const mode = request.headers.get("sec-fetch-mode");
+  if (mode !== null) return mode === "navigate";
+  return request.method === "GET" && (request.headers.get("accept") ?? "").includes("text/html");
+}
+
+/** Text made safe to place in HTML. */
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 /** The Device the screen names in a request, if it names one. */

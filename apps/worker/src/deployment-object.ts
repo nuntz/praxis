@@ -14,7 +14,6 @@ import {
 } from "@praxis/domain";
 import { startTimer } from "./arrival.ts";
 import { type BackupOutcome, backUp, backupHandlers } from "./backups.ts";
-import { createDeploymentTables } from "./deployment-tables.ts";
 import {
   callableConnection,
   carryMove,
@@ -26,12 +25,15 @@ import {
 } from "./deployment-tools.ts";
 import { deviceHandlers, noteSeen, notifyDevices } from "./devices.ts";
 import { rememberKey, repeatedKey } from "./keys.ts";
+import { climb, deploymentStuck, releaseOf, type StuckUpgrade } from "./ladder.ts";
 import { logCall } from "./log.ts";
 import type { Move, MovedBy } from "./move-rows.ts";
 import { type KeyReport, standingNotices, takeKeyReport } from "./notice-rows.ts";
 import type { PushSender } from "./push.ts";
 import type { ToolRequest } from "./registry.ts";
 import { readSpend, type SpendReport, takeSpendReport } from "./spend-rows.ts";
+import { DEPLOYMENT_LADDER, type Step } from "./steps/index.ts";
+import { noteUpgrade } from "./upgrade-rows.ts";
 
 /** Every Deployment tool's handler. */
 const handlers: DeploymentHandlers = {
@@ -42,22 +44,59 @@ const handlers: DeploymentHandlers = {
 
 /**
  * The Deployment object, given how it sends a Notification: by Web Push with the Deployment's
- * key pair, or by the fake in tests (section 13).
+ * key pair, or by the fake in tests (section 13); and its ladder, the release's, or one a test
+ * gives it to make a step fail (test/upgrade-faults.ts).
  */
-export function deploymentObject(pushOf: (env: Env) => PushSender) {
+export function deploymentObject(
+  pushOf: (env: Env) => PushSender,
+  ladderFor: (id: string) => readonly Step[] = () => DEPLOYMENT_LADDER,
+) {
   /**
    * The one object that belongs to the Deployment rather than to a Context (ADR 0006). It holds
    * the list of Contexts with their names and accents, and nothing from any Journal, and never
    * reads one. Each call between it and a Context's object is on the closed lists of ADR 0006 and
    * SPEC section 9.2: a new one amends both.
+   *
+   * Stuck on its upgrade (section 11), it serves nothing: every call throws `deploymentStuck`,
+   * which the Worker answers with one plain page, but `upgradeStuck`, which says why.
    */
   return class DeploymentObject extends DurableObject<Env> {
     readonly #push: PushSender;
+    #stuck: StuckUpgrade | null = null;
 
     constructor(ctx: DurableObjectState, env: Env) {
       super(ctx, env);
       this.#push = pushOf(env);
-      ctx.blockConcurrencyWhile(async () => createDeploymentTables(ctx.storage.sql));
+      ctx.blockConcurrencyWhile(async () => {
+        const climbed = await climb(ctx.storage, {
+          object: "deployment",
+          ladder: ladderFor(ctx.id.toString()),
+          release: releaseOf(env),
+        });
+        this.#stuck = climbed.stuck;
+      });
+    }
+
+    /** Throw while the object is stuck on its upgrade: nothing can be routed (section 11). */
+    private serving(): void {
+      if (this.#stuck !== null) throw deploymentStuck(this.#stuck);
+    }
+
+    /**
+     * Why this object is stuck on its upgrade, or null: the Worker asks before it serves the
+     * screen, so a stuck Deployment shows one plain page (section 11).
+     */
+    async upgradeStuck(): Promise<StuckUpgrade | null> {
+      return this.#stuck;
+    }
+
+    /**
+     * A Context's object saying it is stuck on its upgrade, or no longer, as it wakes: every other
+     * Context names it in a standing Notice while it is (section 11).
+     */
+    async noteUpgrade(context: string, stuck: StuckUpgrade | null): Promise<void> {
+      this.serving();
+      noteUpgrade(this.ctx.storage.sql, context, stuck);
     }
 
     /**
@@ -65,6 +104,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      * caller is refused before its input is read.
      */
     async call(request: ToolRequest): Promise<ToolResult<unknown>> {
+      this.serving();
       const elapsed = startTimer();
       const { caller, tool } = request;
       const known = isDeploymentToolName(tool) ? tool : null;
@@ -86,6 +126,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
 
     /** Whether a request may reach the Context with this id: it was made and is not retired. */
     async isReachable(id: string): Promise<boolean> {
+      this.serving();
       return isReachable(this.ctx.storage.sql, id);
     }
 
@@ -95,6 +136,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      * retired, or there never was one: the caller cannot tell these apart.
      */
     async callableConnection(id: string): Promise<Connection | null> {
+      this.serving();
       return callableConnection(this.ctx.storage.sql, id);
     }
 
@@ -105,6 +147,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      * before it spends, and stops at the cap.
      */
     async beforeRun(id: string, at: number): Promise<{ otherContexts: string[]; spend: Spend }> {
+      this.serving();
       const sql = this.ctx.storage.sql;
       return { otherContexts: otherContextNames(sql, id), spend: readSpend(sql, at) };
     }
@@ -114,6 +157,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      * all, counted against the cap (section 5.7).
      */
     async takeSpendReport(report: SpendReport): Promise<void> {
+      this.serving();
       takeSpendReport(this.ctx.storage.sql, report);
     }
 
@@ -123,6 +167,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      * searches cost is counted as they go.
      */
     async beforeEmbedding(report: SpendReport, at: number): Promise<Spend> {
+      this.serving();
       const sql = this.ctx.storage.sql;
       takeSpendReport(sql, report);
       return readSpend(sql, at);
@@ -134,6 +179,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      * in any (section 5.6).
      */
     async takeKeyReport(report: KeyReport): Promise<void> {
+      this.serving();
       takeKeyReport(this.ctx.storage.sql, report);
     }
 
@@ -142,6 +188,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      * own (section 8.3).
      */
     async standingNotices(at: number): Promise<StandingNotice[]> {
+      this.serving();
       return standingNotices(this.ctx.storage.sql, at);
     }
 
@@ -151,6 +198,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      * is told the kind, never what was said.
      */
     async notifyDevices(context: string, kind: ClockKind, at: number): Promise<void> {
+      this.serving();
       await notifyDevices(this.ctx.storage.sql, this.#push, { context, kind, at });
     }
 
@@ -161,6 +209,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      * unit goes back. A failure is thrown to the asking Context, which tries again later.
      */
     async carryMove(move: Move, to: string, by: MovedBy): Promise<"taken" | "gone"> {
+      this.serving();
       const outcome = await this.ctx.blockConcurrencyWhile(async () => {
         try {
           return await carryMove(this.ctx.storage.sql, this.env, move, to, by);
@@ -179,6 +228,7 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      * answered, not thrown: the standing Notice tells the person after three days of them.
      */
     async backUp(at: number): Promise<BackupOutcome> {
+      this.serving();
       return backUp(this.ctx.storage.sql, this.env, at);
     }
 

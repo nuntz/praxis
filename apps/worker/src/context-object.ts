@@ -60,6 +60,7 @@ import {
 import { contextFile } from "./context-file.ts";
 import { heldWaiting } from "./held-change-rows.ts";
 import { forgetOldKeys, holdsKeys, rememberKey, repeatedKey } from "./keys.ts";
+import { climb, releaseOf, type StuckUpgrade, stuckWords } from "./ladder.ts";
 import { logCall } from "./log.ts";
 import {
   embeddingCost,
@@ -116,7 +117,13 @@ import {
 } from "./settings.ts";
 import type { SpendReport } from "./spend-rows.ts";
 import { standingEntries } from "./standing-rows.ts";
-import { createTables, queueToEmbedAgain, queueWholeJournal } from "./tables.ts";
+import { CONTEXT_LADDER, type Step } from "./steps/index.ts";
+import {
+  keepMeaningModel,
+  queueToEmbedAgain,
+  queueWholeJournal,
+  untouchedByAnyStep,
+} from "./tables.ts";
 import { attentionTools } from "./tools/attention.ts";
 import { changeTools } from "./tools/changes.ts";
 import { entryTools, NO_SUCH_ENTRY } from "./tools/entries.ts";
@@ -168,6 +175,15 @@ const NO_AGENT: Record<NoAgent, string> = {
     "There is no Agent in this Deployment: its configuration names a model Praxis ships no price for, so no Run could be counted. Naming another is a change to the configuration and a deploy.",
 };
 
+// #69's `clear_conversation` will let the person start the Conversation afresh, which mends this
+// too; until it lands, only waiting for a release that mends it does.
+/**
+ * Why a Message is refused when the runtime cannot open this Conversation's tables under this
+ * release (section 11): the person can only wait, so the refusal says so.
+ */
+const CONVERSATION_UNOPENED =
+  "This Context's Conversation cannot be opened under this release, so the Agent answers nothing here until a release that mends it is deployed: the Journal and Connections work as before.";
+
 /** A Message `note_shown` names that is no Brief or Review shown in this Conversation. */
 function noSuchBrief(): ToolResult<never> {
   return failure("not_found", "There is no such Brief or Review in this Context's Conversation.");
@@ -212,13 +228,30 @@ function capRefusal(cap: number): ToolResult<never> {
 }
 
 /**
+ * What a Context's object answers while it is stuck on its upgrade (section 11): it serves nothing,
+ * reads included, and only a release that mends it changes that, which the person can only wait
+ * for. Its tables are not read, since new code would be reading old ones.
+ */
+function stuckRefusal(stuck: StuckUpgrade): ToolResult<never> {
+  return refusal(
+    `This Context shows and changes nothing until a release that mends its upgrade is deployed: ${stuckWords(stuck)}. Nothing in it was changed or lost, and the other Contexts work as before.`,
+    [],
+  );
+}
+
+/** The ContextFile a Context's object answers for an Export, or that it is stuck on its upgrade. */
+export type ExportAnswer = { file: ContextFile } | { stuck: StuckUpgrade };
+
+/**
  * The Context object, given where its Agent's model comes from: the Deployment's configuration, or
  * a scripted model in tests (section 13). Without a model, `modelOf` says why there is no Agent.
- * Its meaning index is the Deployment's bindings, or the fake in tests, or none.
+ * Its meaning index is the Deployment's bindings, or the fake in tests, or none. Its ladder is the
+ * release's, or one a test gives an object to make a step fail (test/upgrade-faults.ts).
  */
 export function contextObject(
   modelOf: (env: Env) => AgentModel | NoAgent,
   meaningOf: (env: Env) => MeaningIndex | null,
+  ladderFor: (id: string) => readonly Step[] = () => CONTEXT_LADDER,
 ) {
   /**
    * One Context: its Journal and everything else it holds, on its own SQLite (ADR 0006). Each
@@ -245,10 +278,62 @@ export function contextObject(
     #deleting = false;
     /** Set once its storage is gone, so being asked again, as after an answer lost, succeeds. */
     #deleted = false;
+    /**
+     * Why it serves nothing, while it is stuck on its upgrade (section 11): until it wakes under
+     * another release, nothing reads or writes its tables and its clock stops.
+     */
+    #stuck: StuckUpgrade | null = null;
+    /** Set when it woke no longer stuck: its clock starts again on the first thing to reach it. */
+    #clockStopped = false;
 
     constructor(ctx: DurableObjectState, env: Env) {
       super(ctx, env);
-      ctx.blockConcurrencyWhile(async () => createTables(ctx.storage.sql));
+      ctx.blockConcurrencyWhile(async () => {
+        const climbed = await climb(ctx.storage, {
+          object: "context",
+          ladder: ladderFor(ctx.id.toString()),
+          release: releaseOf(env),
+          untouched: untouchedByAnyStep,
+        });
+        this.#stuck = climbed.stuck;
+        if (climbed.stuck === null) keepMeaningModel(ctx.storage.sql);
+        this.#clockStopped = climbed.cameBack;
+        if (climbed.stuck !== null || climbed.cameBack) void this.tellUpgrade(climbed.stuck);
+      });
+    }
+
+    /**
+     * Tell the Deployment object this Context is stuck on its upgrade, or no longer, so every other
+     * Context names it in a standing Notice while it is (section 11). Its Deployment object is read
+     * from its settings, the one row it reads while stuck, to know whom to tell. Not told, the daily
+     * Backup finds it out.
+     */
+    private async tellUpgrade(stuck: StuckUpgrade | null): Promise<void> {
+      try {
+        let deployment: ReturnType<typeof deploymentOf>;
+        try {
+          deployment = this.deployment();
+        } catch {
+          deployment = deploymentOf(this.env);
+        }
+        await deployment.noteUpgrade(this.contextId(), stuck);
+      } catch {
+        console.error(JSON.stringify({ upgrade: "untold", stuck: stuck !== null }));
+      }
+    }
+
+    /**
+     * Start the clock again once the object is no longer stuck, as at `at`: while it was stuck its
+     * alarm came and did nothing, so nothing is armed. It wakes at once, so what fell due meanwhile
+     * is done, the Trash past its 30 days from each delete removed among it, and its wake keeps the
+     * alarm from there. Armed, not run here, since the Deployment object may be waiting on this
+     * call and a wake asks it things.
+     */
+    private async restartClock(at: number): Promise<void> {
+      if (!this.#clockStopped) return;
+      this.#clockStopped = false;
+      this.#clockSkew = at - arrivalTime();
+      await this.ctx.storage.setAlarm(arrivalTime());
     }
 
     /**
@@ -256,20 +341,24 @@ export function contextObject(
      * `create_context`, before it lists the Context, so no request reaches a Context not yet
      * made. The Context's id is its object's, and it keeps the id of the Deployment object.
      */
-    async make(made: ContextMade, deployment: string, at: number): Promise<void> {
+    async make(made: ContextMade, deployment: string, at: number): Promise<ToolResult<null>> {
+      if (this.#stuck !== null) return stuckRefusal(this.#stuck);
       const sql = this.ctx.storage.sql;
       this.#clockSkew = at - arrivalTime();
       makeContext(sql, this.ctx.id.toString(), made, deployment);
       // Its first Brief and Review are the first to come after it was made.
       startSchedule(sql, at);
       await this.keepAlarm();
+      return success(null);
     }
 
     /**
      * Give this Context the name the Deployment object lists it by, on `rename_context`. A change
      * to its settings is an Effect on it, so the rename goes in its change log with the caller.
      */
-    async rename(name: string, by: { caller: Caller; at: number }): Promise<void> {
+    async rename(name: string, by: { caller: Caller; at: number }): Promise<ToolResult<null>> {
+      if (this.#stuck !== null) return stuckRefusal(this.#stuck);
+      await this.restartClock(by.at);
       const sql = this.ctx.storage.sql;
       const before = lastChange(sql);
       this.ctx.storage.transactionSync(() => {
@@ -282,15 +371,18 @@ export function contextObject(
         });
       });
       await this.afterWrite(before);
+      return success(null);
     }
 
     /**
      * This Context's file of an Export, as at `at`, which the Deployment object asks for on
      * `make_export` (section 10.1). Each Context's object writes its own, so the files of one
-     * Export are not one instant (ADR 0018).
+     * Export are not one instant (ADR 0018). One stuck on its upgrade writes none, and says so.
      */
-    async exportFile(at: number): Promise<ContextFile> {
-      return contextFile(this.ctx.storage.sql, at);
+    async exportFile(at: number): Promise<ExportAnswer> {
+      if (this.#stuck !== null) return { stuck: this.#stuck };
+      await this.restartClock(at);
+      return { file: contextFile(this.ctx.storage.sql, at) };
     }
 
     /**
@@ -299,13 +391,16 @@ export function contextObject(
      * Effect, the unit's records go from every view, and the move holds them until the Context
      * it goes to has taken them, the alarm carrying it there should the move be interrupted.
      * Refused, with nothing changed, when what would move is not the unit the person was shown,
-     * or while a Task from an Entry that would move is in the Trash. Asked again for a record it
+     * or while a Task from an Entry that would move is in the Trash, or while it is stuck on its
+     * upgrade. Asked again for a record it
      * holds on its way out, as when its answer was lost, it answers as it did, with the same move.
      */
     async beginMove(
       asked: { id: string; record: MoveSeed; unit: string[]; to: string },
       by: MovedBy,
     ): Promise<ToolResult<MoveBegun>> {
+      if (this.#stuck !== null) return stuckRefusal(this.#stuck);
+      await this.restartClock(by.at);
       const sql = this.ctx.storage.sql;
       const before = lastChange(sql);
       const result = this.ctx.storage.transactionSync((): ToolResult<MoveBegun> => {
@@ -352,11 +447,11 @@ export function contextObject(
     /**
      * Whether this Context's object can take a unit moved into it, which the Deployment object
      * asks before a move takes anything out of the Context it leaves (section 3.9). One being
-     * deleted cannot, and one that does not answer is taken to be unable. An object stuck on an
-     * upgrade (section 11) serves nothing, so the upgrade ladder (#76) has it say no here too.
+     * deleted cannot, nor one stuck on its upgrade, which serves nothing (section 11), and one
+     * that does not answer is taken to be unable.
      */
     async canTakeMove(): Promise<boolean> {
-      return !this.#deleting;
+      return !this.#deleting && this.#stuck === null;
     }
 
     /**
@@ -366,6 +461,8 @@ export function contextObject(
      * adds nothing and answers as it did.
      */
     async takeMove(move: Move, by: MovedBy): Promise<Effect[]> {
+      if (this.#stuck !== null) throw new Error("A Context stuck on its upgrade takes nothing");
+      await this.restartClock(by.at);
       const sql = this.ctx.storage.sql;
       const before = lastChange(sql);
       const effects = this.ctx.storage.transactionSync(() => {
@@ -382,6 +479,8 @@ export function contextObject(
 
     /** The Context a unit was moved to has taken it: this one lets it go (section 3.9). */
     async moveArrived(move: string): Promise<void> {
+      // Stuck, it holds the unit until it comes back and its alarm hears it was taken.
+      if (this.#stuck !== null) throw new Error("A Context stuck on its upgrade lets nothing go");
       letGo(this.ctx.storage.sql, move);
     }
 
@@ -423,10 +522,12 @@ export function contextObject(
      * then its alarm and its whole storage go, Journal, Run records and Conversation alike, and its
      * live channels close. Nothing new starts meanwhile, and what is going is waited for, so
      * nothing writes once the storage is gone. Refused, with nothing deleted, while a Run is going
-     * or when the meaning index does not answer: only waiting mends either.
+     * or when the meaning index does not answer, or while it is stuck on its upgrade: only waiting
+     * mends any of these.
      */
     async deleteForGood(): Promise<ToolResult<null>> {
       if (this.#deleted) return success(null);
+      if (this.#stuck !== null) return stuckRefusal(this.#stuck);
       this.#deleting = true;
       try {
         await this.#clocking;
@@ -489,6 +590,12 @@ export function contextObject(
      * call reached the Worker.
      */
     async call(request: ToolRequest): Promise<ToolResult<unknown>> {
+      if (this.#stuck !== null) {
+        const refused = stuckRefusal(this.#stuck);
+        logCall({ tool: isToolName(request.tool) ? request.tool : null, write: false }, refused, 0);
+        return refused;
+      }
+      await this.restartClock(request.arrivedAt);
       // The object's clock runs from when this request arrived, which a test sets.
       this.#clockSkew = request.arrivedAt - arrivalTime();
       if (isConversationToolName(request.tool)) return this.converse(request.tool, request);
@@ -744,7 +851,7 @@ export function contextObject(
     ): Promise<ToolResult<unknown>> {
       const parsed = parseConversationToolInput(tool, request.input);
       if (!parsed.ok) return parsed;
-      const agent = this.agent();
+      const agent = await this.conversation();
       if (tool === "list_messages") {
         const { cursor } = parsed.input as ConversationToolInput<"list_messages">;
         if (typeof agent === "string") return success({ items: [], next_cursor: null, agent });
@@ -754,7 +861,9 @@ export function contextObject(
         "send_message" | "retry_run" | "note_shown"
       >;
       if (typeof agent === "string") {
-        return "message" in input ? noSuchBrief() : refusal(NO_AGENT[agent], []);
+        return "message" in input
+          ? noSuchBrief()
+          : refusal(agent === "unavailable" ? CONVERSATION_UNOPENED : NO_AGENT[agent], []);
       }
       const sql = this.ctx.storage.sql;
       const { caller, arrivedAt } = request;
@@ -913,6 +1022,16 @@ export function contextObject(
       return typeof agent !== "string";
     }
 
+    /**
+     * The Agent of this Context with its Conversation open, or why there is none: the Deployment
+     * has no Agent, or the runtime cannot open this Conversation's tables (section 11).
+     */
+    private async conversation(): Promise<ContextAgent | NoAgent | "unavailable"> {
+      const agent = this.agent();
+      if (typeof agent === "string") return agent;
+      return (await agent.opens(this.ctx.storage)) ? agent : "unavailable";
+    }
+
     /** The Agent of this Context, or why the Deployment has none. */
     private agent(): ContextAgent | NoAgent {
       if (this.#agent !== undefined) return this.#agent;
@@ -1001,6 +1120,13 @@ export function contextObject(
      * and the Agent's answer as it is written.
      */
     async fetch(request: Request): Promise<Response> {
+      if (this.#stuck !== null) {
+        // No live channel opens: the screen reads why from any tool it calls.
+        return new Response(`This Context is stuck on its upgrade: ${stuckWords(this.#stuck)}.`, {
+          status: 503,
+          headers: { "cache-control": "no-store" },
+        });
+      }
       if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
         return new Response("The live channel is a WebSocket.", {
           status: 426,
@@ -1032,11 +1158,12 @@ export function contextObject(
      * from where the last request set it: the same when deployed. Tests call `wake` themselves.
      */
     async alarm(): Promise<void> {
-      if (this.#deleting) return;
+      // Stuck, everything on its clock stops, and nothing arms it again until it comes back.
+      if (this.#deleting || this.#stuck !== null) return;
       await this.wake(arrivalTime() + this.#clockSkew);
       this.keepMeaning();
       // A Run a lost instance left going, or one the runtime is waiting to retry, is taken up.
-      const agent = this.agent();
+      const agent = await this.conversation();
       if (
         typeof agent !== "string" &&
         (this.#agentWake.active || runsNotEnded(this.ctx.storage.sql).length > 0)
@@ -1052,6 +1179,8 @@ export function contextObject(
      * interrupted, and starting a Brief or a Review that is due.
      */
     async wake(at: number): Promise<void> {
+      if (this.#stuck !== null) return;
+      this.#clockStopped = false;
       const sql = this.ctx.storage.sql;
       this.#clockSkew = at - arrivalTime();
       this.ctx.storage.transactionSync(() => {
@@ -1076,8 +1205,10 @@ export function contextObject(
     private startClockRuns(at: number): Promise<void> {
       this.#clocking = this.#clocking.then(async () => {
         if (this.#deleting) return;
-        const agent = this.agent();
+        const agent = await this.conversation();
         const sql = this.ctx.storage.sql;
+        // A Conversation the runtime cannot open takes no Brief or Review until it can.
+        if (agent === "unavailable") return;
         if (typeof agent === "string") return noClockWithoutAgent(sql, at);
         startSchedule(sql, at);
         const going = new Set(runsNotEnded(sql).map((run) => run.started_by));
@@ -1131,7 +1262,7 @@ export function contextObject(
      * cannot see a Run end otherwise but on the live channel.
      */
     async runsEnded(): Promise<void> {
-      const agent = this.agent();
+      const agent = await this.conversation();
       if (typeof agent !== "string") await agent.runsEnded(this.ctx.storage);
     }
 

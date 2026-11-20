@@ -121,6 +121,36 @@ jobs:
           pulumi config --show-secrets --json | jq -r '.. | strings | select(length >= 4)' |
             while IFS= read -r value; do echo "::add-mask::$value"; done
 
+      # A deploy is a one-way door once any object wakes under it (ADR 0019): it stops before
+      # anything changes when the Backup the daily trigger was last due to make is not in the
+      # bucket, unless the head commit's message has the line `Deploy-Without-Backup: yes`. A first
+      # deploy, before the hostname is bound, has nothing to back up yet (scripts/backup-check.ts).
+      - name: Check a Backup from the last day exists
+        env:
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          # Read whole, so a stack with no outputs yet is a first deploy and a failure stops here.
+          outputs="$(pulumi stack output --cwd infra --json)"
+          if [ "$(jq -r '.hostnameBound // false' <<< "$outputs")" != "true" ]; then
+            echo "A first deploy: no Backup to look for yet."
+            exit 0
+          fi
+          due="$(bun scripts/backup-check.ts due)"
+          account="$(pulumi stack output --cwd infra cloudflareAccountId --show-secrets)"
+          jurisdiction="$(pulumi stack output --cwd infra workerVars --show-secrets --json | jq -r '.JURISDICTION')"
+          found="$RUNNER_TEMP/backup.zip"
+          trap 'rm -f "$found"' EXIT
+          if (cd apps/worker && CLOUDFLARE_ACCOUNT_ID="$account" bunx wrangler r2 object get \
+            "praxis-backups/$due" --remote ${jurisdiction:+--jurisdiction "$jurisdiction"} \
+            --file "$found" > /dev/null 2>&1); then
+            echo "The Backup $due is in the bucket."
+          elif bun scripts/backup-check.ts overridden <<< "$HEAD_COMMIT_MESSAGE"; then
+            echo "::warning::No Backup $due in the bucket: deploying without it, as the commit says."
+          else
+            echo "::error::No Backup $due in the bucket, and a deploy cannot be undone once an object wakes under it. Find out why the daily Backup failed (Settings shows the last one made) or make an Export, then push a commit whose message has the line 'Deploy-Without-Backup: yes' to deploy anyway (docs/deployment.md)."
+            exit 1
+          fi
+
       # A model with no price shipped with Praxis fails the deploy before anything changes (ADR 0017).
       - name: Check the model has a price
         run: |
@@ -147,8 +177,9 @@ jobs:
           given="$(pulumi stack output --cwd ../../infra workerVars --show-secrets --json)"
           jq -r '.[] | select(length >= 4)' <<< "$given" |
             while IFS= read -r value; do echo "::add-mask::$value"; done
-          # An empty var keeps wrangler.jsonc's, which is empty too.
-          vars=()
+          # An empty var keeps wrangler.jsonc's, which is empty too. RELEASE names this commit, the
+          # release an object stuck on its upgrade says it failed under (section 11).
+          vars=(--var "RELEASE:${GITHUB_SHA::12}")
           while IFS= read -r pair; do vars+=(--var "$pair"); done < <(
             jq -r 'to_entries[] | select(.value != "") | "\(.key):\(.value)"' <<< "$given"
           )

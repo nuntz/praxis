@@ -6,6 +6,7 @@
     "dev": "bun scripts/access-stand-in.ts",
     "test": "vitest run",
     "test:meaning": "vitest run -c vitest.meaning.config.ts",
+    "fixture": "vitest run -c vitest.fixture.config.ts",
     "typecheck": "wrangler types --check >/dev/null 2>&1 || wrangler types && tsc -p . && tsc -p test && tsc -p scripts"
   },
   "dependencies": {
