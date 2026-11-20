@@ -191,7 +191,7 @@ A delete sends to the Trash the record and only what cannot exist without it. It
 - A trashed record is left out of every view, list and search. It cannot be changed or linked to. The only calls on it are restore and, by the person's hand, removal for good.
 - **Removal for good** happens 30 days after the delete, or when the person empties the Trash. It takes the record, everything deleted with it, all its Versions and every dormant link to it, and leaves no marker. A Follow-up of it becomes an ordinary Entry, and a Task once Delegated to a Person removed keeps no trace of it. A Task deleted on its own goes with its Origin Entry's removal, since no Task is left without one. Its summaries in the change log are blanked. It leaves both search indexes.
 - A removal's Effects are each record removed, `deleted` with an empty summary, and each record not in the Trash that lost a link to one, `changed` by rule. Removal at 30 days is the Context's alarm, not a call, so it goes in no change log; a reader learns of it by reading.
-- A record removed for good is gone from everything Praxis holds within 30 days of its removal, not at once, because a Backup lives 30 days (section 10). The screens for emptying the Trash and deleting a Context say that Praxis cannot reach a file the person downloaded.
+- A record removed for good is gone from everything Praxis holds within 30 days of its removal, not at once, because a Backup lives 30 days (section 10). What the Agent quoted of it stays in the Conversation until the person clears that Conversation (section 5.8): the Conversation is the record of what the Agent heard, said and called, dropped whole and never edited. The screens for emptying the Trash and deleting a Context say that Praxis cannot reach a file the person downloaded, and the Trash's says that the Conversation keeps what the Agent quoted until it is cleared.
 
 ### 3.9 Moving a record between Contexts
 
@@ -516,7 +516,7 @@ ADR 0010, 0017.
 
 ADR 0010. There is no agent log.
 
-- **The runtime's record**: what the Agent heard, said and called is the runtime's record of the Conversation, in the Context's object. It is kept until the person clears that Conversation, which drops all of it at once and leaves the Journal, the change log and the Run records as they were.
+- **The runtime's record**: what the Agent heard, said and called is the runtime's record of the Conversation, in the Context's object. It is kept until the person clears that Conversation, which drops all of it at once and leaves the Journal, the change log and the Run records as they were. It keeps what the Agent quoted of a record since removed for good, and is never edited to take that out (section 3.8).
 - **The change log**: what changed, with the caller.
 - **A Run record**, which holds no words: what started the Run, when, the model, tokens, cost, how it ended and which changes it made. Kept for good. A Run that failed, or was not started because of the cap, still leaves one.
 - **A Run Transcript** is a file the person saves of one Run, by hand: the prompt, the Messages, the tool calls and their results. It is the only way Conversation text leaves for debugging. It is not an Export.
