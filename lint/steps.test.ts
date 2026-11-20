@@ -10,6 +10,10 @@ import { join } from "node:path";
 // the numbers leave a gap, or when a step imports anything, which could change what it does
 // without its text changing. A new step goes in with its hash in the same change: every push to
 // master is a release (ADR 0026), so a step that passes CI is released.
+//
+// Since an edit can change a step and its hash together, the hashes are held to the last release's
+// too: `released.json` as it stood at STEPS_RELEASED_AT, the commit before the push or the pull
+// request's base in CI (.github/workflows/ci.yml), and origin/master here.
 
 const root = join(import.meta.dir, "..");
 const steps = "apps/worker/src/steps";
@@ -54,6 +58,39 @@ export function stepProblems(
   return problems;
 }
 
+/** What changed in `released.json` since the last release: a hash there may only be added to. */
+export function releasedSince(
+  before: Record<string, string>,
+  now: Record<string, string>,
+): string[] {
+  return Object.entries(before).flatMap(([file, hash]) => {
+    if (now[file] === undefined) return [`${file} was released and its hash is gone`];
+    if (now[file] !== hash) return [`${file} was released with another hash: a fix is a new step`];
+    return [];
+  });
+}
+
+/**
+ * `released.json` as the last release had it, or none when that release came before the ladder.
+ * A commit named in CI must be there, since the guard would pass on nothing; here, a clone with
+ * no origin/master has no release to hold to.
+ */
+function lastReleased(): Record<string, string> | undefined {
+  const named = process.env.STEPS_RELEASED_AT;
+  // A push that makes the branch names no commit before it.
+  if (named !== undefined && /^0+$/.test(named)) return undefined;
+  const at = named ?? "origin/master";
+  const git = (...args: string[]) => Bun.spawnSync(["git", ...args], { cwd: root });
+  if (git("rev-parse", "--verify", "--quiet", `${at}^{commit}`).exitCode !== 0) {
+    if (named !== undefined)
+      throw new Error(`STEPS_RELEASED_AT names ${at}, which was not fetched`);
+    return undefined;
+  }
+  const path = `${at}:${steps}/released.json`;
+  if (git("cat-file", "-e", path).exitCode !== 0) return undefined;
+  return JSON.parse(git("show", path).stdout.toString());
+}
+
 /** Each step file in the repo, by name, with its text. */
 function stepFiles(): Map<string, string> {
   return new Map(
@@ -70,6 +107,21 @@ function released(): Record<string, string> {
 describe("the upgrade ladders' guard", () => {
   test("every step is as it was released, none gone, none imports anything", () => {
     expect(stepProblems(stepFiles(), released())).toEqual([]);
+  });
+
+  test("every hash the last release had is still there, unchanged", () => {
+    expect(releasedSince(lastReleased() ?? {}, released())).toEqual([]);
+  });
+
+  test("fails a released hash changed or gone, and lets a new one in", () => {
+    const before = { "context-0001.ts": "a" };
+    expect(releasedSince(before, { "context-0001.ts": "a", "context-0002.ts": "b" })).toEqual([]);
+    expect(releasedSince(before, { "context-0001.ts": "b" })).toEqual([
+      "context-0001.ts was released with another hash: a fix is a new step",
+    ]);
+    expect(releasedSince(before, {})).toEqual([
+      "context-0001.ts was released and its hash is gone",
+    ]);
   });
 
   test("each ladder runs its step files in order, and only them", async () => {

@@ -7,8 +7,11 @@ import { join } from "node:path";
 
 const repo = join(import.meta.dir, "..");
 
-/** What the workflow runs to set up, which a local run already has. */
-const SETUP = [/^bun install\b/, /^bunx playwright install\b/];
+/**
+ * What the workflow runs to set up, which a local run already has: the last release, which
+ * lint/steps.test.ts reads as origin/master here, comes in by `git fetch`.
+ */
+const SETUP = [/^bun install\b/, /^bunx playwright install\b/, /^git fetch\b/];
 
 /** A check by what it runs: a script's name, or a tool's, whatever its flags. */
 function checkOf(command: string): string {

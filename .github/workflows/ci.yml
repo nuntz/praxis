@@ -12,6 +12,9 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      # The last release, which lint/steps.test.ts holds the upgrade steps' hashes to.
+      STEPS_RELEASED_AT: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -22,7 +25,10 @@ jobs:
         run: bunx biome ci .
       - name: Typecheck
         run: bun run typecheck
-      - name: Guards still fire (lint rules, the registry guard)
+      - name: Fetch the last release
+        if: ${{ !startsWith(env.STEPS_RELEASED_AT, '0000000') }}
+        run: git fetch --no-tags --depth=1 origin "$STEPS_RELEASED_AT"
+      - name: Guards still fire (lint rules, the registry guard, the upgrade steps)
         run: bun run test:lint
       - name: The deploy's own code (infra, the wizard's scripts)
         run: bun run test:deploy

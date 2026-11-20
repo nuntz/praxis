@@ -51,7 +51,9 @@ async function main(): Promise<void> {
   const found: Placeholder[] = [];
   // The tests of this check name tickets as samples, not as placeholders.
   for (const file of files.filter((each) => each && each !== "lint/tickets.test.ts")) {
-    found.push(...placeholdersIn(file, await Bun.file(file).text()));
+    // git still lists a file deleted and not yet staged.
+    const text = Bun.file(file);
+    if (await text.exists()) found.push(...placeholdersIn(file, await text.text()));
   }
 
   const closed = new Set(ticketsClosing(Bun.argv.slice(2)));

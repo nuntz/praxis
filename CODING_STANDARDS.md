@@ -41,6 +41,14 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 - A Deployment write that has a Context's object do something it cannot undo, before writing its own rows, holds when the answer is lost: asked again, the object answers as done, as `deleteForGood` does once its storage is gone. A test has the object do it unheard first, as `deleteObjectUnheard()` in `apps/worker/test/seam.ts` does.
 - An operation with an inverse, such as delete and restore, has a seam test that runs it over orderings drawn from a seeded source (`seeded()` in `packages/domain/test/seeded.ts`) and checks that undoing every step reads back what was there, as following an anchor through an edit is tested over edits drawn from one.
 
+## Upgrades
+
+- A step that adds a column fills it for the rows already there, as the code that writes it would have, from what the object holds: an object made before the step is live, and a null where the new code expects a value is a behaviour no release had. `deploymentStep1` in `apps/worker/src/steps/deployment-0001.ts` fills `backed_up` from the last Backup made.
+
+## The deploy job
+
+- A check in the deploy job stops on any failure it cannot tell from a "no": a command that fails, an output it cannot read. The Backup check reads `pulumi stack output --json` and stops when that fails, rather than taking the failure as a first deploy with nothing to check.
+
 ## Decisions
 
 - A change follows the ADRs in [`docs/adr/`](docs/adr/) that touch its area. Where it departs from one, the same change amends the ADR and the spec beside it, or the departure goes to the person as a question.
