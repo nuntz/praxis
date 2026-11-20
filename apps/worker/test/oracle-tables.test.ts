@@ -41,15 +41,15 @@ describe("the oracle, on what a Context's object forgets", () => {
       }),
     );
     const context = deployment.context(made.record.id);
-    // Long enough that its summary is cut before the marker, so only the summary is left to find.
+    // Long enough that its summary is cut short: the summary is kept, not the words.
     const words = marked(
       "Repaint the hallway, the stairs and the landing, then every door, before the family comes in spring",
     );
     const recorded = value(await context.call(hand, "record_entry", { words }));
     const summary = recorded.effects[0]?.summary ?? "";
-    // The fixture is as meant: the summary is the words cut short, with none of the marker.
+    // The fixture is as meant: the summary is the words cut short.
     expect(words.startsWith(summary.slice(0, -1))).toBe(true);
-    expect(summary).not.toContain("MARKER");
+    expect(summary.length).toBeLessThan(words.length);
     value(await context.call(hand, "delete_entry", { id: recorded.record.id }));
     value(await context.call(hand, "remove_for_good", { id: recorded.record.id }));
     // A note of a move taken, quoting the Entry's summary as an Effect, dated so that no

@@ -41,6 +41,10 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 - A Deployment write that has a Context's object do something it cannot undo, before writing its own rows, holds when the answer is lost: asked again, the object answers as done, as `deleteForGood` does once its storage is gone. A test has the object do it unheard first, as `deleteObjectUnheard()` in `apps/worker/test/seam.ts` does.
 - An operation with an inverse, such as delete and restore, has a seam test that runs it over orderings drawn from a seeded source (`seeded()` in `packages/domain/test/seeded.ts`) and checks that undoing every step reads back what was there, as following an anchor through an edit is tested over edits drawn from one.
 
+## The oracle
+
+- A new check in the oracle has a seam test that reaches the state it checks through the tools, and goes red when the code it guards is switched off: the check that a gone record's words are forgotten has `trash.test.ts` and `moving.test.ts` empty the Trash and move a unit with keys whose results held the words, and they go red when the alarm stops forgetting keys. A harness test on rows no code writes shows the check can fail, not that any test reaches it: every test passed the forgetting check vacuously until those were written (#89).
+
 ## Upgrades
 
 - A step that adds a column fills it for the rows already there, as the code that writes it would have, from what the object holds: an object made before the step is live, and a null where the new code expects a value is a behaviour no release had. `deploymentStep1` in `apps/worker/src/steps/deployment-0001.ts` fills `backed_up` from the last Backup made.

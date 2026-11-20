@@ -165,10 +165,11 @@ describe("view_attention", () => {
 
   test("Projects holds every open Project by name with its count of actionable Tasks and its Tasks, flagged when it has no open Task, and one in Due is still there", async () => {
     const context = newContext("2026-11-15T09:00:00.000Z");
-    const kitchen = await aProject(context, marked("Kitchen"), "2026-11-15");
-    const bathroom = await aProject(context, marked("bathroom"));
-    const attic = await aProject(context, marked("Attic"));
-    const closed = await aProject(context, marked("Cellar"));
+    // Names with no marker, which would lead them and decide the order.
+    const kitchen = await aProject(context, "Kitchen", "2026-11-15");
+    const bathroom = await aProject(context, "bathroom");
+    const attic = await aProject(context, "Attic");
+    const closed = await aProject(context, "Cellar");
     value(await context.call(hand, "finish_project", { id: closed.id }));
     const inKitchen = async (dates: { due_date?: string; defer_date?: string } = {}) => {
       const task = await aTask(context, dates);

@@ -6,6 +6,12 @@ import { agent, atOnce, connection, DAY, everyCaller, hand, newContext, value } 
 type Context = ReturnType<typeof newContext>;
 
 /** What a search found, each hit as its kind and id, best first. */
+/** Where a word stands in some text, as a match: wherever its marker put it. */
+function matched(text: string, word: string) {
+  const start = text.indexOf(word);
+  return { start, end: start + word.length };
+}
+
 async function found(context: Context, input: Record<string, unknown>) {
   const results = value(await context.call(hand, "search", input));
   return results.items.map(({ kind, id }) => `${kind}:${id}`);
@@ -34,7 +40,7 @@ describe("search", () => {
       summary: words,
       at: "2026-11-15T09:00:00.000Z",
       author: { kind: "person" },
-      excerpt: { text: words, matches: [{ start: 2, end: 8 }] },
+      excerpt: { text: words, matches: [matched(words, "budget")] },
     };
     for (const answer of answers)
       expect(answer).toEqual({ items: [hit], next_cursor: null, words_only: null });
@@ -70,7 +76,7 @@ describe("search", () => {
       id: project.id,
       summary: project.name,
       at: project.at,
-      excerpt: { text: project.name, matches: [{ start: 0, end: 5 }] },
+      excerpt: { text: project.name, matches: [matched(project.name, "Hedge")] },
     });
     expect(results.find((hit) => hit.kind === "task")).toEqual({
       kind: "task",
@@ -79,7 +85,7 @@ describe("search", () => {
       at: task?.at,
       author: { kind: "person" },
       origin_entry: entry.id,
-      excerpt: { text: task?.title, matches: [{ start: 9, end: 14 }] },
+      excerpt: { text: task?.title, matches: [matched(task?.title ?? "", "hedge")] },
     });
   });
 

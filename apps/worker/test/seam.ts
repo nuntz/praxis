@@ -200,7 +200,9 @@ function contextHandle(time: { now: number }, reach: () => ReturnType<typeof rea
     },
     /**
      * Run the alarm the platform has scheduled, as the platform would, by the real clock.
-     * False when none is scheduled.
+     * False when none is scheduled. It runs at the object's own time, which the oracle cannot
+     * know, so it holds nothing to forgetting what left the Context: a test of that fires the
+     * alarm with `fireAlarm`.
      */
     async runScheduledAlarm() {
       return runDurableObjectAlarm(await stub());

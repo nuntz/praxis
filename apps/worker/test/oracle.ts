@@ -12,7 +12,6 @@ import {
   isWrite,
   keysForgottenBy,
   SPEND_CAP_ID,
-  summarizeWords,
   type ToolResult,
 } from "@praxis/domain";
 import { expect } from "vitest";
@@ -539,15 +538,16 @@ function saidIn(sql: SqlStorage): Map<string, string> {
 // record's words as it saw them, every one the record has had, and the time it first saw the
 // record gone, or, while a unit on its way out still holds it, the time the move finished. Once
 // the object has woken 30 days after, every text in every table it holds is read for the record's
-// markers and its summary, so a table added later is held to it without being named. The
+// markers, which lead its words and so its summary too (test/markers.ts), so a table added later
+// is held to it without being named. The
 // runtime's tables are not: they hold the Conversation, kept until the person clears it (section
 // 5.8). Words a record still there has too, as an Inline Task's title is in its Entry, are its own.
 
 /** Within how long of going nothing of a record is left (section 3.8). */
 const FORGOTTEN_WITHIN = 30 * 24 * 60 * 60 * 1000;
 
-/** A record seen gone: what of it a table could keep, and since when it is gone. */
-type Gone = { record: string; traces: string[]; since: number };
+/** A record seen gone: the markers in every words it had, and since when it is gone. */
+type Gone = { record: string; markers: string[]; since: number };
 
 /**
  * By object id, what the oracle has seen of a Context's object: each record still there with
@@ -559,21 +559,6 @@ function seenOf(id: string) {
   const seen = forgetting.get(id) ?? { had: new Map(), gone: [] };
   forgetting.set(id, seen);
   return seen;
-}
-
-/**
- * What of a record's words a table could keep: each marker in them, and their summary when it is
- * cut short of a marker, which nothing else would find.
- */
-function tracesOf(words: string): string[] {
-  const summary = summarizeWords(words);
-  const cut = summary.endsWith("…") && markersIn(summary).length < markersIn(words).length;
-  return [...markersIn(words), ...(cut ? [summary] : [])];
-}
-
-/** Whether some text holds a trace, as it is or escaped inside JSON. */
-function holdsTrace(text: string, trace: string): boolean {
-  return text.includes(trace) || text.includes(JSON.stringify(trace).slice(1, -1));
 }
 
 /** Every text these tables hold, with where. */
@@ -601,13 +586,13 @@ function noteGone(sql: SqlStorage, id: string, at: number, said: Map<string, str
   // A unit on its way out still holds its records, so their 30 days start once it has arrived.
   const leaving = textsIn(sql, ["moves_out"]).map(({ text }) => text);
   for (const gone of seen.gone) {
-    if (gone.traces.some((trace) => leaving.some((text) => holdsTrace(text, trace)))) {
+    if (gone.markers.some((marker) => leaving.some((text) => text.includes(marker)))) {
       gone.since = at;
     }
   }
   for (const [record, ever] of seen.had) {
     if (said.has(record)) continue;
-    seen.gone.push({ record, traces: [...ever].flatMap(tracesOf), since: at });
+    seen.gone.push({ record, markers: [...ever].flatMap(markersIn), since: at });
     seen.had.delete(record);
   }
   for (const [record, words] of said) {
@@ -623,19 +608,16 @@ function checkForgotten(sql: SqlStorage, id: string, at: number): void {
   const seen = seenOf(id);
   const due = seen.gone.filter(({ since }) => since + FORGOTTEN_WITHIN <= at);
   seen.gone = seen.gone.filter((gone) => !due.includes(gone));
-  const stillThere = [...seen.had.values()].flatMap((ever) => [
-    ...ever,
-    ...[...ever].map(summarizeWords),
-  ]);
+  const stillThere = [...seen.had.values()].flatMap((ever) => [...ever]);
   const texts = textsIn(
     sql,
     tablesIn(sql).filter((name) => !name.startsWith(RUNTIME_TABLES)),
   );
   const left = new Set(
-    due.flatMap(({ record, traces, since }) =>
-      traces
-        .filter((trace) => !stillThere.some((words) => words.includes(trace)))
-        .flatMap((trace) => texts.filter(({ text }) => holdsTrace(text, trace)))
+    due.flatMap(({ record, markers, since }) =>
+      markers
+        .filter((marker) => !stillThere.some((words) => words.includes(marker)))
+        .flatMap((marker) => texts.filter(({ text }) => text.includes(marker)))
         .map(({ where }) => `${where} holds words of ${record}, gone since ${instantToIso(since)}`),
     ),
   );
