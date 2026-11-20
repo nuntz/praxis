@@ -15,6 +15,7 @@ import {
 } from "@praxis/domain";
 import { expect } from "vitest";
 import { RUNTIME_TABLES } from "../src/agent.ts";
+import { WORDS_INDEX } from "../src/tables.ts";
 import { REFERENCES_CLEARED } from "../src/trash-rows.ts";
 import { markersIn } from "./markers.ts";
 
@@ -437,6 +438,13 @@ const SAID = `
   UNION ALL SELECT 'project:' || id, name FROM projects
   UNION ALL SELECT 'person:' || id, name FROM persons`;
 
+/** The words of each record not in the Trash, which the words index holds, by `kind:id`. */
+const SEARCHED = `
+  SELECT 'entry:' || id AS record, words AS text FROM untrashed_entries
+  UNION ALL SELECT 'task:' || id, title FROM untrashed_tasks
+  UNION ALL SELECT 'project:' || id, name FROM untrashed_projects
+  UNION ALL SELECT 'person:' || id, name FROM untrashed_persons`;
+
 function snapshot(stub: Stub): Promise<{
   records: Records;
   lastChange: number;
@@ -452,13 +460,28 @@ function snapshot(stub: Stub): Promise<{
           name in domainTables ||
           trashTables.includes(name) ||
           otherTables.includes(name) ||
-          name.startsWith(RUNTIME_TABLES)
+          name.startsWith(RUNTIME_TABLES) ||
+          // The words index and the tables SQLite keeps it in, held to SEARCHED below.
+          name.startsWith(WORDS_INDEX)
         ),
     );
     expect(
       unknown,
       "Every table is known to the oracle: add it to domainTables in apps/worker/test/oracle.ts if its rows are records, else to otherTables",
     ).toEqual([]);
+    // The words index is derived (section 9.4): whatever a call did, it holds the words of each
+    // record not in the Trash and nothing else, so a record is found from the moment it is made
+    // and never once it is in the Trash or removed for good.
+    const byRecord = (query: string) =>
+      sql
+        .exec<{ record: string; text: string }>(query)
+        .toArray()
+        .map(({ record, text }) => `${record} ${text}`)
+        .sort();
+    expect(
+      byRecord(`SELECT kind || ':' || record_id AS record, text FROM ${WORDS_INDEX}`),
+      "The words index holds the words of each record not in the Trash, and nothing else",
+    ).toEqual(byRecord(SEARCHED));
     // A record removed for good leaves no reference to it behind, which the foreign keys refuse.
     const uncleared = tables.flatMap((table) =>
       sql

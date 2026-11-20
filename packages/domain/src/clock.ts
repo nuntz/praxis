@@ -36,6 +36,27 @@ export function instantAt(day: Day, time: ClockTime, zone: string): number {
   return instant;
 }
 
+const MINUTE = 60 * 1000;
+
+/**
+ * The first instant of a day in a time zone: its midnight, or where summer time skips midnight,
+ * the first minute its clock reads on that day. Every instant from it until the next day's is on
+ * that day.
+ */
+export function dayStart(day: Day, zone: string): number {
+  const midnight = instantAt(day, "00:00", zone);
+  if (dayIn(midnight, zone) >= day) return midnight;
+  // Read as the hour before, on the day before: the day starts within the hours skipped.
+  let before = midnight;
+  let on = midnight + 3 * 60 * MINUTE;
+  while (on - before > MINUTE) {
+    const between = before + Math.floor((on - before) / MINUTE / 2) * MINUTE;
+    if (dayIn(between, zone) >= day) on = between;
+    else before = between;
+  }
+  return on;
+}
+
 /** How far a zone's wall clock stands ahead of UTC at an instant, in milliseconds. */
 function offsetAt(instant: number, zone: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {

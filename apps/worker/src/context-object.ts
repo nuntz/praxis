@@ -84,6 +84,7 @@ import { heldChangeTools } from "./tools/held-changes.ts";
 import { personTools } from "./tools/persons.ts";
 import { projectTools } from "./tools/projects.ts";
 import { recurrenceTools } from "./tools/recurrences.ts";
+import { searchTools } from "./tools/search.ts";
 import { settingsTools } from "./tools/settings.ts";
 import { taskTools } from "./tools/tasks.ts";
 import { trashTools } from "./tools/trash.ts";
@@ -105,6 +106,7 @@ const handlers: Handlers = {
   ...settingsTools,
   ...changeTools,
   ...attentionTools,
+  ...searchTools,
   ...trashTools,
   ...heldChangeTools,
 };

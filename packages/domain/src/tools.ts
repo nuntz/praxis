@@ -10,6 +10,7 @@ import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
 import { newRecurrence } from "./recurrence.ts";
 import { failure, type ToolResult } from "./results.ts";
+import type { SearchResults } from "./search.ts";
 import { clockTime, type Settings, weekday } from "./settings.ts";
 import type { Task } from "./task.ts";
 import type { Removal, TrashItem } from "./trash.ts";
@@ -546,6 +547,33 @@ export const tools = {
     input: z.strictObject({}),
     offered: toEveryCaller,
   },
+  search: {
+    kind: "read",
+    description:
+      "Search this Context by words: one ranked list of the Entries, Tasks, Projects and Persons whose words, title or name hold every word given, best match first, 50 to a page. Case and accents are set aside, and the last word, with nothing after it, also finds the words it begins, as while it is typed. Nothing in the Trash and no earlier Version of an Entry is searched. Each hit gives the record's kind, id and summary, when it was made, and an excerpt with the spans that matched; read the record by its id. Narrow it with any of: `from` and `to`, days in the Context's time zone, both included, by when a record was made; `project_id`, to the Tasks in that Project and the Entries that Reference it or hold a Task in it; `person_id`, to the Entries that Mention that Person and the Tasks ever Delegated to them; `author`, to the Entries and Tasks whose Author that is, a Connection by its name if given. Narrowed by a Project, a Person or an Author, no Project or Person is listed.",
+    input: z
+      .strictObject({
+        words: z
+          .string()
+          .refine((value) => value.trim().length > 0, { message: "A search needs words." }),
+        from: day.optional(),
+        to: day.optional(),
+        project_id: id.optional(),
+        person_id: id.optional(),
+        author: z
+          .discriminatedUnion("kind", [
+            z.strictObject({ kind: z.literal("person") }),
+            z.strictObject({ kind: z.literal("agent") }),
+            z.strictObject({ kind: z.literal("connection"), name: z.string().min(1).optional() }),
+          ])
+          .optional(),
+        cursor,
+      })
+      .refine((input) => !(input.from && input.to && input.from > input.to), {
+        message: "`from` is a day on or before `to`.",
+      }),
+    offered: toEveryCaller,
+  },
   restore: {
     kind: "write",
     destructive: false,
@@ -694,6 +722,7 @@ export type ToolOutput = {
   set_review_time: Written<Settings>;
   set_notifications: Written<Settings>;
   view_attention: Attention;
+  search: SearchResults;
   restore: Written<TrashItem>;
   remove_for_good: Written<Removal>;
   empty_trash: Written<Removal>;

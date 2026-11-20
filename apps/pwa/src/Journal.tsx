@@ -13,6 +13,7 @@ import { Composer } from "./Composer.tsx";
 import { EntryEditor } from "./EntryEditor.tsx";
 import { heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { useLive } from "./live-context.ts";
+import { createSearch } from "./Search.tsx";
 import { TaskItem } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 import { Versions } from "./Versions.tsx";
@@ -136,6 +137,26 @@ export function Journal(props: {
     setEntries((shown) => shown.toSpliced(after === -1 ? shown.length : after, 0, entry));
   }
 
+  /**
+   * Bring a record into view: an Entry, or a Task on the Entry it hangs off, reading earlier pages
+   * until that Entry is shown. One gone meanwhile is never shown, and nothing is brought.
+   */
+  async function bringIntoView(entry: string, anchor: string) {
+    for (;;) {
+      if (entries.some((shown) => shown.id === entry)) break;
+      const cursor = earlierCursor();
+      if (cursor === null) return;
+      await loadPage(cursor);
+      // A page refused or not reached leaves the cursor where it was: the problem is shown.
+      if (earlierCursor() === cursor) return;
+    }
+    requestAnimationFrame(() => {
+      const shown = document.getElementById(anchor);
+      shown?.scrollIntoView({ block: "center" });
+      shown?.focus();
+    });
+  }
+
   /** Show a Task as it now is, on the Entry it hangs off, or gone from it if it is. */
   async function refreshTask(id: string) {
     const result = await callTool("get_task", { id });
@@ -191,17 +212,26 @@ export function Journal(props: {
     else setEntries(onEntry, "tasks", (tasks) => [...tasks, task]);
   }
 
+  // What a search found is shown in place of the Entries, which stay as they were under it.
+  const search = createSearch({
+    formatTime: (at) => timeFormat.format(new Date(at)),
+    onShowInJournal: (entry, anchor) => void bringIntoView(entry, anchor),
+  });
+  const searching = search.shown;
+
   return (
     <>
+      <search.Field />
       <div class="peer-body">
-        <Show when={earlierCursor()}>
+        <search.Found />
+        <Show when={!searching() && earlierCursor()}>
           {(cursor) => (
             <button type="button" class="quiet" onClick={() => loadPage(cursor())}>
               Show earlier Entries
             </button>
           )}
         </Show>
-        <ol class="entry-list" aria-label="Entries">
+        <ol class="entry-list" aria-label="Entries" hidden={searching()}>
           <For each={entries}>
             {(entry) => (
               <EntryItem

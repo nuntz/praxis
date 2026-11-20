@@ -17,7 +17,7 @@ export function newestFirst<R extends { seq: number }>(
 ): ToolResult<RowPage<R>> {
   let before = Number.MAX_SAFE_INTEGER;
   if (cursor !== undefined) {
-    const position = decodeCursor(list, cursor);
+    const position = listPosition(list, cursor);
     if (position === null) return failure("invalid_input", "The cursor is not one this list gave.");
     before = position;
   }
@@ -33,16 +33,18 @@ export function newestFirst<R extends { seq: number }>(
     ok: true,
     value: {
       rows,
-      next_cursor: kept.length > PAGE_SIZE && last ? encodeCursor(list, last.seq) : null,
+      next_cursor: kept.length > PAGE_SIZE && last ? listCursor(list, last.seq) : null,
     },
   };
 }
 
-function encodeCursor(list: string, seq: number): string {
+/** A cursor to a position in a list, which `listPosition` reads back for that list alone. */
+export function listCursor(list: string, seq: number): string {
   return btoa(JSON.stringify([list, seq]));
 }
 
-function decodeCursor(list: string, cursor: string): number | null {
+/** The position a cursor this list gave stands at, or null for any other string. */
+export function listPosition(list: string, cursor: string): number | null {
   try {
     const value: unknown = JSON.parse(atob(cursor));
     if (

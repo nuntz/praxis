@@ -626,7 +626,7 @@ The column is composed by the screen from four sources, in this order:
 ### 8.4 The Journal
 
 - Entries in time order, each with its Tasks, its links, an edited mark where its words have changed, and its Follow-ups.
-- Search sits in the Journal column (section 9.4).
+- Search sits in the Journal column (section 9.4), its field above the Entries. While it holds words, what is found shows in their place, and follows each change as the Journal does. An Entry or a Task found opens in the Journal, and Escape or opening one ends the search.
 - A link to a trashed record shows as deleted. A Follow-up of a trashed Entry shows that it continues a deleted Entry.
 - A Held Change shows as a marker on its Entry that leads to Attention.
 
@@ -790,8 +790,15 @@ ADR 0023. From [Recall](https://github.com/nuntz/praxis/issues/21).
 
 - One `search` tool returns one ranked list. No caller picks a mode. It is the same tool for the hand, the Agent and a Connection.
 - It covers Entries, Tasks, Projects and Persons in the current Context by words. Meaning applies to Entries only. The Trash and Versions are never searched.
-- It can be narrowed by date range, Project, Person and Author.
-- The words index is inside the Context's object. The meaning index is outside it. Its embeddings come from `@cf/baai/bge-m3` on Workers AI, chosen because it handles Entries in more than one language. The model is fixed in code and is not configuration: a release that changes it marks every meaning index stale. Nothing goes to a third party, and embedding spend counts toward the cap.
+- It can be narrowed by date range, Project, Person and Author, together or alone:
+  - a date range by when a record was made, an Entry by its time, on days in the Context's time zone, both ends included;
+  - a Project to the Tasks in it and the Entries that Reference it or hold a Task in it;
+  - a Person to the Entries that Mention them and the Tasks ever Delegated to them, a Task finished since among them;
+  - an Author to the Entries and Tasks whose Author they are, a Connection by its name or any Connection.
+  - Narrowed by a Project, a Person or an Author, no Project or Person is listed, since none is in a Project, Mentioned or made by an Author.
+- By words, a record holds every word given, its case and accents set aside. The last word, with nothing typed after it, also finds the words it begins, so a list follows what is being typed. Nothing typed is read as a query language. The best match comes first, and the newest among equals.
+- Each result gives the record's kind, id, summary and time, an Entry's and a Task's Author, a Task's Entry, and an excerpt: one line of the words, title or name, an Entry's cut around what matched, with the spans that matched. The record itself is read by its id.
+- The words index is inside the Context's object, kept by SQLite as the records and the Trash change, so no write can leave it behind. The meaning index is outside it. Its embeddings come from `@cf/baai/bge-m3` on Workers AI, chosen because it handles Entries in more than one language. The model is fixed in code and is not configuration: a release that changes it marks every meaning index stale. Nothing goes to a third party, and embedding spend counts toward the cap.
 - If the meaning index is missing or stale, search still answers from words, and tells every caller that it did.
 - A saved Entry is findable by words at once and by meaning shortly after. A deleted Entry leaves both indexes at once and returns on restore.
 - The person can start a full rebuild from settings.

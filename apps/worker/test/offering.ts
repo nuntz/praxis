@@ -68,6 +68,7 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   set_notifications: [
                    "yes", "no",  "no",  "no",       "no"  ],
   view_attention: ["yes", "yes", "yes", "yes",      "yes" ],
+  search: [        "yes", "yes", "yes", "yes",      "yes" ],
   restore: [       "yes", "yes", "no",  "no",       "no"  ],
   remove_for_good: [
                    "yes", "no",  "no",  "no",       "no"  ],
@@ -171,6 +172,7 @@ export const runsWith: Record<string, () => unknown> = {
   set_review_time: () => ({ day: "friday", time: "16:00" }),
   set_notifications: () => ({ on: false }),
   view_attention: () => ({}),
+  search: () => ({ words: marked("Offered") }),
   restore: () => ({ id: "no-such-record" }),
   remove_for_good: () => ({ id: "no-such-record" }),
   empty_trash: () => ({}),

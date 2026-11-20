@@ -9,6 +9,7 @@
 export function createTables(sql: SqlStorage): void {
   createTablesAsMade(sql);
   addMissingColumns(sql);
+  createWordsIndex(sql);
 }
 
 /** Every table as a new object makes it. */
@@ -347,5 +348,90 @@ function addMissingColumns(sql: SqlStorage): void {
       .exec(`SELECT 1 FROM pragma_table_info(?) WHERE name = ?`, table, column)
       .toArray().length;
     if (has === 0) sql.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
+
+/**
+ * Each kind of record the words index holds: its table, the column searched, and its slot, which
+ * tells its rows apart from the other kinds' (see `createWordsIndex`).
+ */
+const INDEXED = [
+  { kind: "entry", table: "entries", column: "words", slot: 0 },
+  { kind: "task", table: "tasks", column: "title", slot: 1 },
+  { kind: "project", table: "projects", column: "name", slot: 2 },
+  { kind: "person", table: "persons", column: "name", slot: 3 },
+] as const;
+
+/** A record's row in the words index, as SQL: its `seq` times the kinds, plus its kind's slot. */
+function indexRow(seq: string, slot: number): string {
+  return `${seq} * ${INDEXED.length} + ${slot}`;
+}
+
+/** The table holding the words index, and the start of the name of each table SQLite keeps it in. */
+export const WORDS_INDEX = "words_index";
+
+/**
+ * The words index (section 9.4): the words of each Entry and the title or name of each Task,
+ * Project and Person not in the Trash, for `search`. It is derived, and kept by SQLite itself as
+ * each record table and the Trash change, so no write can leave it behind: a record is in it from
+ * the moment it is made, follows each change to its words, leaves it on going to the Trash or
+ * being removed for good, and returns on restore. Case and accents are set aside, as `named` sets
+ * them aside for a picker.
+ *
+ * Four kinds share one index, so each row's id is the record's `seq` times four plus its kind's
+ * slot, which reaches the row without a scan.
+ *
+ * Removal for good takes a record out of the Trash before it deletes the record's row, so the
+ * record is put back in the index and taken out again in the same transaction: the order of the
+ * deletes leaves the index right either way.
+ *
+ * An object made before it gets it as it wakes, filled from the records not in the Trash.
+ */
+function createWordsIndex(sql: SqlStorage): void {
+  const indexedBefore =
+    sql.exec(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`, WORDS_INDEX).toArray()
+      .length > 0;
+  sql.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS ${WORDS_INDEX} USING fts5 (
+      kind UNINDEXED, record_id UNINDEXED, text,
+      tokenize = 'unicode61 remove_diacritics 2'
+    )
+  `);
+  for (const { kind, table, column, slot } of INDEXED) {
+    sql.exec(`
+      CREATE TRIGGER IF NOT EXISTS ${WORDS_INDEX}_${kind}_made AFTER INSERT ON ${table} BEGIN
+        INSERT INTO ${WORDS_INDEX} (rowid, kind, record_id, text)
+          VALUES (${indexRow("NEW.seq", slot)}, '${kind}', NEW.id, NEW.${column});
+      END;
+      CREATE TRIGGER IF NOT EXISTS ${WORDS_INDEX}_${kind}_changed
+      AFTER UPDATE OF ${column} ON ${table} BEGIN
+        UPDATE ${WORDS_INDEX} SET text = NEW.${column} WHERE rowid = ${indexRow("NEW.seq", slot)};
+      END;
+      CREATE TRIGGER IF NOT EXISTS ${WORDS_INDEX}_${kind}_removed AFTER DELETE ON ${table} BEGIN
+        DELETE FROM ${WORDS_INDEX} WHERE rowid = ${indexRow("OLD.seq", slot)};
+      END;
+    `);
+  }
+  // The index's row for the record a row of `trashed` names, as SQL selecting it.
+  const trashedRecord = (row: "NEW" | "OLD") =>
+    INDEXED.map(
+      ({ kind, table, column, slot }) =>
+        `SELECT ${indexRow("seq", slot)} AS index_row, '${kind}' AS kind, id, ${column} AS text
+         FROM ${table} WHERE ${row}.kind = '${kind}' AND id = ${row}.record_id`,
+    ).join(" UNION ALL ");
+  sql.exec(`
+    CREATE TRIGGER IF NOT EXISTS ${WORDS_INDEX}_trashed AFTER INSERT ON trashed BEGIN
+      DELETE FROM ${WORDS_INDEX} WHERE rowid IN (SELECT index_row FROM (${trashedRecord("NEW")}));
+    END;
+    CREATE TRIGGER IF NOT EXISTS ${WORDS_INDEX}_restored AFTER DELETE ON trashed BEGIN
+      INSERT INTO ${WORDS_INDEX} (rowid, kind, record_id, text) ${trashedRecord("OLD")};
+    END;
+  `);
+  if (indexedBefore) return;
+  for (const { kind, table, column, slot } of INDEXED) {
+    sql.exec(`
+      INSERT INTO ${WORDS_INDEX} (rowid, kind, record_id, text)
+        SELECT ${indexRow("seq", slot)}, '${kind}', id, ${column} FROM untrashed_${table}
+    `);
   }
 }
