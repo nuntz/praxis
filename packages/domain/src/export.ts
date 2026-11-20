@@ -27,7 +27,7 @@ export const EXPORT_FORMAT = "praxis-export";
  * The format version this code writes. A release that changes what a file holds or how makes
  * the next one, and the restore's ladder brings every earlier one forward (section 11).
  */
-export const EXPORT_FORMAT_VERSION = 1;
+export const EXPORT_FORMAT_VERSION = 2;
 
 /** The path of the Deployment's file within an Export. */
 export const DEPLOYMENT_FILE = "deployment.json";
@@ -151,6 +151,26 @@ export type ContextFile = Stamped & {
   persons: ExportedPerson[];
   trash: ExportedTrashItem[];
   runs: ExportedRun[];
+  /**
+   * Each unit on its way out of this Context to another (section 3.9), which it holds until that
+   * one has said it took it. Its records are in no other list of this file. Format 1 has none.
+   */
+  moving: ExportedMove[];
+};
+
+/**
+ * A unit moving to another Context: the move's id, the Context it goes to, when it was asked
+ * for, and its records as they go, with whatever linked across the boundary already dropped. A
+ * restore settles it by id: found in the Context it goes to as well, that one keeps it; found
+ * nowhere else, it stays in this one.
+ */
+export type ExportedMove = {
+  id: string;
+  to: string;
+  at: string;
+  entries: ExportedEntry[];
+  tasks: ExportedTask[];
+  projects: ExportedProject[];
 };
 
 /** An Entry: its plain words exactly as typed, and its links as data beside them (ADR 0008). */

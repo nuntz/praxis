@@ -86,6 +86,11 @@ const otherTables = [
   "meaning_index",
   "meaning_queue",
   "meaning_spend",
+  // A unit on its way out of the Context, whose records are in no other table and no view, and
+  // the moves taken in. A record that leaves for another Context is deleted here, as a caller
+  // sees it, and made there.
+  "moves_out",
+  "moves_in",
 ];
 
 /** Each record's rows as JSON, by `kind:id`. */
@@ -230,8 +235,10 @@ function judgeConversation(changed: Pick<Effect, "kind" | "id" | "what">[], logg
 }
 
 // The same promise for a Deployment write, which can reach into a Context's object (to make it,
-// rename it or delete it): every Context listed is snapshotted before and after, and what changed in each must
-// be Effects the call returned, logged in that Context with the caller. A Context the call made
+// rename it, delete it or move a record between two): every Context listed is snapshotted before
+// and after, and what changed in each must be Effects the call returned, logged in that Context
+// with the caller. A record moved is deleted in one Context and made in the other, so each
+// Context's log holds the Effects of what happened in it. No record is ever in two Contexts. A Context the call made
 // holds its settings and nothing else, and its change log starts empty. The Connections, the
 // Devices and the spend cap the Deployment object keeps are held the same way: the ones changed
 // are exactly the ones its Effects name, and the Deployment object keeps no change log for them.
@@ -292,10 +299,25 @@ export async function throughDeploymentOracle(
       gone.includes(id) ? [] : [`The Context ${id} is deleted and still listed.`],
     ),
     ...(await Promise.all(gone.map((id) => leftBehind(contextOf(id))))).flat(),
+    ...inTwoContexts(contexts),
     ...judgeDeployment({ request, result, contexts, kept }),
   ];
   expect(problems, `The oracle, on ${request.tool} as ${request.caller.kind}`).toEqual([]);
   return result;
+}
+
+/** Each record found in more than one Context after the call: none is ever in two (ADR 0003). */
+function inTwoContexts(contexts: Map<string, SeenContext>): string[] {
+  const holding = new Map<string, string[]>();
+  for (const [id, { after }] of contexts) {
+    for (const record of after.keys()) {
+      if (record.startsWith("context:") || record.startsWith("held_change:")) continue;
+      holding.set(record, [...(holding.get(record) ?? []), id]);
+    }
+  }
+  return [...holding]
+    .filter(([, held]) => held.length > 1)
+    .map(([record, held]) => `The record ${record} is in two Contexts: ${held.join(" and ")}.`);
 }
 
 /** The Effects a call returned: none when it failed. */
@@ -345,7 +367,7 @@ export function judgeDeployment(seen: SeenDeployment): string[] {
       problems.push(`The Context ${id} changed with no Effect saying so: ${canonical(unreported)}`);
     }
     const inThisContext = effects.filter((e) =>
-      changed.some((c) => c.kind === e.kind && c.id === e.id),
+      changed.some((c) => c.kind === e.kind && c.id === e.id && c.what === e.what),
     );
     const expected: Change[] =
       inThisContext.length === 0

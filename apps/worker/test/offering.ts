@@ -84,6 +84,7 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   list_held_changes: [
                    "yes", "yes", "yes", "no",       "no"  ],
   list_notices: [  "yes", "no",  "no",  "no",       "no"  ],
+  get_move_unit: [ "yes", "no",  "no",  "no",       "no"  ],
   // The Conversation tools (section 4.12): the person's hand only.
   send_message: [  "yes", "no",  "no",  "no",       "no"  ],
   retry_run: [     "yes", "no",  "no",  "no",       "no"  ],
@@ -105,6 +106,7 @@ export const deploymentOffering: Record<string, [Offer, Offer, Offer, Offer, Off
   retire_context: [     "yes", "no",  "no",  "no",       "no"  ],
   bring_back_context: [ "yes", "no",  "no",  "no",       "no"  ],
   delete_context: [     "yes", "no",  "no",  "no",       "no"  ],
+  move_record: [        "yes", "no",  "no",  "no",       "no"  ],
   list_connections: [   "yes", "no",  "no",  "no",       "no"  ],
   create_connection: [  "yes", "no",  "no",  "no",       "no"  ],
   rename_connection: [  "yes", "no",  "no",  "no",       "no"  ],
@@ -186,6 +188,7 @@ export const runsWith: Record<string, () => unknown> = {
   cancel_held_change: () => ({ id: "no-such-held-change" }),
   list_held_changes: () => ({}),
   list_notices: () => ({}),
+  get_move_unit: () => ({ kind: "entry", id: "no-such-entry" }),
   send_message: () => ({ words: marked("Offered") }),
   retry_run: () => ({ run: "no-such-run" }),
   note_shown: () => ({ message: "no-such-message" }),
@@ -201,6 +204,12 @@ export const deploymentRunsWith: Record<string, (id: string) => unknown> = {
   retire_context: (id) => ({ id }),
   bring_back_context: (id) => ({ id }),
   delete_context: (id) => ({ id, name: "Side" }),
+  move_record: (id) => ({
+    from: id,
+    to: "no-such-context",
+    record: { kind: "entry", id: "no-such-entry" },
+    unit: ["no-such-entry"],
+  }),
   list_connections: () => ({}),
   create_connection: (id) => ({ name: "Claude Code", context_id: id, reading_only: false }),
   rename_connection: () => ({ id: "no-such-connection", name: "Laptop" }),

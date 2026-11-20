@@ -48,7 +48,7 @@ describe("make_export", () => {
 
     const made = value(await deployment.call(hand, "make_export", {}));
 
-    expect(made.format_version).toBe(1);
+    expect(made.format_version).toBe(2);
     expect(made.made_at).toBe("2026-11-15T09:00:00.000Z");
     expect(made.files.map((f) => f.path)).toEqual([
       "deployment.json",
@@ -58,7 +58,7 @@ describe("make_export", () => {
     for (const { content } of made.files) {
       expect(content).toMatchObject({
         format: "praxis-export",
-        format_version: 1,
+        format_version: 2,
         made_at: "2026-11-15T09:00:00.000Z",
       });
     }
@@ -112,7 +112,7 @@ describe("make_export", () => {
       { id: laptop.id, name: "Laptop", context_id: work },
       { id: phone.id, name: "Phone", context_id: work },
     ]);
-    // Deleting a Context (#78) leaves its spend here, with no name; until then there is none.
+    // A Context deleted leaves its spend here, with no name; none has been, so there is none.
     expect(file.deleted_contexts_spend).toEqual([]);
   });
 
@@ -377,6 +377,7 @@ describe("make_export", () => {
         "persons",
         "trash",
         "runs",
+        "moving",
       ].sort(),
     );
     const whole = JSON.stringify(made);

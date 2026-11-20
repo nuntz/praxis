@@ -1208,6 +1208,52 @@ button.quiet.entry-mark[aria-pressed="true"] {
   gap: var(--space-4);
 }
 
+/* Moving an Entry or a Project to another Context: the unit shown before the person confirms. */
+
+.move-record {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+}
+
+.move-record label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.move-record-note {
+  margin: 0;
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.move-record-unit {
+  margin: 0;
+  padding-left: var(--space-4);
+  overflow-wrap: anywhere;
+}
+
+.move-record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.move-record .problem,
+.moved {
+  margin: 0;
+}
+
+.moved {
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
 /* A Version compared against the current words, as typed: what is gone struck, what came underlined. */
 
 .versions {

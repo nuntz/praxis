@@ -199,23 +199,26 @@ ADR 0003, 0006.
 
 - Only the person's hand moves a record. It is a Deployment tool.
 - A move takes a whole unit, and the person is shown all of it before confirming:
-  - **An Entry's unit**: the Entry, its Follow-ups and the Tasks that came from it, with every Occurrence of a recurring one.
-  - **A Project's unit**: the Project, its Tasks, their Origin Entries, those Entries' Follow-ups, and any other Tasks those Entries made. It goes no further. A Task is never left without its Origin Entry.
+  - **An Entry's unit**: the Entry, its Follow-ups and theirs in turn, and the Tasks that came from them, with every Occurrence of a recurring one.
+  - **A Project's unit**: the Project, its Tasks, their Origin Entries, those Entries' Follow-ups and theirs in turn, and any other Tasks those Entries made. It goes no further. A Task is never left without its Origin Entry.
+- `get_move_unit`, a read offered to the hand only, shows the unit in the Context it would leave. `move_record` takes the ids shown, and is refused when what would move is no longer that.
 - **Dropped at the boundary**, with the text kept, each an Effect:
   - every Mention in a moved Entry;
   - a Reference between something moved and something that stays, in either direction;
   - a wait between something moved and something that stays, in either direction, so a Task left behind stops Waiting;
-  - a delegation, which is taken back;
+  - a delegation, which is taken back, and the moved Task's earlier delegations with it, since the Person stays;
   - a moved Task's place in a Project that stays;
   - the Follow-up link of a moved Entry to an Entry that stays;
   - a Standing mark.
-- **What goes with the unit**: every Version, each Recurrence, and each record's Author.
+- **What goes with the unit**: every Version, each Recurrence, each record's Author, and each Task's and Project's events. A Task taken back or whose wait stopped at the boundary arrives so, at the time of the move.
+- In the Context left, each record of the unit is an Effect, deleted with no summary, the one asked for by the call and the rest by rule; each record that stays and lost a link is changed by rule; and a Held Change on an Entry that goes lapses. Its change log's summaries of the unit's records are blanked, so none of their words stays there. In the Context moved to, each record of the unit is made. Each goes in that Context's change log under `move_record`, with the person's hand as caller and the time it arrived there, and `move_record` returns both; when the destination did not answer, only the source's, and says the unit has not arrived.
 - Nothing is made in the destination. No Person or Project there is matched by name.
-- A record in the Trash cannot be moved. A dormant link to a moved record is dropped.
+- A record in the Trash cannot be moved, and is in no unit: a Follow-up in the Trash stays where it is. While a Task in the Trash has its Origin Entry in the unit, the move is refused, since a Task never leaves its Origin Entry: restoring it or removing it for good mends that. A dormant link to a moved record is dropped.
 - Both Contexts' change logs record the move.
 - Ids are unique across the Deployment, and a record keeps its id when it moves.
-- The unit is never lost and never visible in both Contexts. The source hides it and marks it as moving; the destination takes it under a move id so a retry cannot add it twice; the source removes it only once the destination has confirmed. An interrupted move is finished from the source's alarm. For a moment the unit is in neither Context's view.
-- A move into a Context whose object is stuck on an upgrade is refused.
+- The unit is never lost and never visible in both Contexts. The source hides it and marks it as moving; the destination takes it under a move id so a retry cannot add it twice; the source removes it only once the destination has confirmed. An interrupted move is finished from the source's alarm, through the Deployment object. For a moment the unit is in neither Context's view.
+- A unit whose destination was deleted before it arrived comes back to the source, each record made by rule. A Context holding a unit on its way out cannot be deleted until it arrives.
+- A move into a Context whose object is stuck on an upgrade is refused, before anything leaves the source.
 
 ## 4. The tool seam
 
@@ -311,7 +314,7 @@ ADR 0005. Glossary: Held Change.
 
 ### 4.9 Reads
 
-- Two named views (`view_attention` and `view_ahead`), one filtered list per kind, get by id, one search, `list_changes`, `list_trash`, `list_held_changes`.
+- Two named views (`view_attention` and `view_ahead`), one filtered list per kind, get by id, one search, `list_changes`, `list_trash`, `list_held_changes`, and `get_move_unit`, what moving a record would take.
 - Lists are paged by cursor, 50 by default.
 - An Entry comes with its words in full, its links and its Tasks. A Task comes with its derived state and the reason.
 
@@ -334,6 +337,7 @@ Every **read** is offered to all five callers, except where noted:
 | Settings | `get_settings` (the Context's name, its time zone, today's date there, the Brief and Review times, the Notification switch) |
 | Runs | `list_runs`, `get_run` (hand only: a Run record, never its words) |
 | Connection calls | `list_connection_calls` (hand only) |
+| Moving | `get_move_unit` (hand only: what moving a record would take, section 3.9) |
 
 `get_settings` is offered to every caller because a Connection needs the time zone and today's date to resolve "next Friday".
 
@@ -766,7 +770,8 @@ ADR 0006, 0010, 0017, 0023, 0024.
   - whether a Run or a Call may start, or embedding go on, which is the cap;
   - what a Run, a Call or embedding cost;
   - notify the Devices that this Context has a Brief or a Review;
-  - a Call is starting here, or has ended.
+  - a Call is starting here, or has ended;
+  - carry a unit it holds on its way out to the Context it moves to, for a move interrupted (section 3.9).
 - The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to rename it, to delete it, for an Export or a Backup, a move, and ending a Call there when another starts elsewhere. For an Export or a Backup it carries the file the Context's object writes and reads none of it.
 - A Context's object keeps its own name, for its settings and the summary of an Effect on it. The Deployment object is its only writer, writes it before its own list, and runs its writes one at a time, so the two never disagree (ADR 0006).
 - Revoking a Connection or retiring a Context takes effect on the next request.
@@ -823,7 +828,7 @@ ADR 0018.
 
 - An **Export** is an archive in a documented JSON format of Praxis's own (`docs/export-format.md`), stamped with a format version: one file for the Deployment and one per Context. It is always the whole Deployment. Only the person's hand makes one.
 - A **Backup** is the same file, made by the system once a day into R2 and deleted after 30 days. Always on, with no switch.
-- **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; Run records, without which changes each made, since those are lines of the change log; each Context's time zone, its Brief and Review times and its Notification switch, in its own file. From the Deployment: the Contexts with their names and accent colours, whether each is retired; the spend cap; the monthly spend totals of deleted Contexts; Connections.
+- **In**: each Context's Entries, Tasks and their events, Projects, Persons, References, Mentions, Follow-up links, Recurrences and Standing marks; every Entry's Versions; the Trash with each item's clock; each unit on its way out of a Context, marked as moving; Run records, without which changes each made, since those are lines of the change log; each Context's time zone, its Brief and Review times and its Notification switch, in its own file. From the Deployment: the Contexts with their names and accent colours, whether each is retired; the spend cap; the monthly spend totals of deleted Contexts; Connections.
 - **Out**: every Conversation and the runtime's record of it, the change log, the record of a Connection's calls, Devices and push subscriptions, both provider keys.
 - An Entry in the file is its plain words plus its links as data.
 - The words go out as typed, with an image as its address only. There is no Export of the Journal as Markdown files, no per-Context Export and no encryption of Praxis's own.
@@ -850,7 +855,7 @@ Settings shows when the last Backup was made, from `get_last_backup`. When none 
 - Offered only for a retired Context, by the person's hand, after typing its name and being offered an Export. `delete_context` takes the name as typed, and refuses one that is not the Context's.
 - It removes the object's whole storage, its part of the meaning index and its Connections, each Connection an Effect by rule. No Trash, no way back.
 - Its Run records go. Its spend stays as monthly totals with no name attached.
-- It is refused, with nothing deleted, while a Run is going in the Context, and when the meaning index does not answer: only waiting mends either. An Entry already taken out of the index when it stopped answering is queued to go back in, so the index is whole again should the Context be brought back.
+- It is refused, with nothing deleted, while a Run is going in the Context, while it holds a record on its way out to another Context (section 3.9), and when the meaning index does not answer: only waiting mends any of these. An Entry already taken out of the index when it stopped answering is queued to go back in, so the index is whole again should the Context be brought back.
 - The screen says that Praxis cannot reach a file the person downloaded, and that its files in Backups go as those Backups age out.
 
 ### 10.5 How long things are kept

@@ -26,6 +26,7 @@ import { CurrentHeldChanges, followHeldChanges } from "./HeldChanges.tsx";
 import { Journal } from "./Journal.tsx";
 import { Live, socketOpener } from "./live.ts";
 import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
+import { CurrentMoveTargets } from "./Move.tsx";
 import { followNotices, hasNotices, StandingNotices } from "./Notices.tsx";
 import { focusCapField, followSpend, SpendSettings } from "./Spend.tsx";
 import { Standing } from "./Standing.tsx";
@@ -341,82 +342,90 @@ export function App() {
             <CurrentContextTools.Provider value={contextTools(id)}>
               <CurrentContextLive.Provider value={live}>
                 <CurrentHeldChanges.Provider value={heldChanges}>
-                  <Show when={showSettings()}>
-                    <div id="settings" class="settings-panel">
-                      <Show when={hasNotices()}>
-                        <section class="settings" aria-labelledby="notices-heading">
-                          <h2 id="notices-heading" class="column-heading">
-                            Notices
-                          </h2>
-                          <StandingNotices />
-                        </section>
-                      </Show>
-                      <Show when={settings()}>
-                        {(read) => (
-                          <>
-                            <ContextSettings settings={read()} onChanged={setSettings} />
-                            <Standing timeZone={read().time_zone} />
-                            <Trash timeZone={read().time_zone} />
-                          </>
-                        )}
-                      </Show>
-                      <Contexts
-                        contexts={contexts() ?? []}
-                        onChanged={showChangedContext}
-                        onMade={addContext}
-                        onDeleted={dropContext}
-                      />
-                      <Connections contexts={contexts() ?? []} />
-                      <Devices />
-                      <SpendSettings />
-                      <BackupSettings />
-                      <ExportSettings />
-                    </div>
-                  </Show>
-                  <main class="peers">
-                    <Peer
-                      id="attention"
-                      title="Attention"
-                      aside={<AttentionCount count={count()} />}
-                      onKeyDown={putAttentionAway}
-                    >
-                      <Show when={timeZone()} keyed>
-                        {(zone) => <Attention timeZone={zone} onDueCount={setDueCount} />}
-                      </Show>
-                    </Peer>
-                    {/* Today and the Entries' times follow the time zone, so a new one reads afresh,
+                  <CurrentMoveTargets.Provider
+                    value={{
+                      from: id,
+                      to: () =>
+                        (contexts() ?? []).filter((each) => each.id !== id && !each.retired),
+                    }}
+                  >
+                    <Show when={showSettings()}>
+                      <div id="settings" class="settings-panel">
+                        <Show when={hasNotices()}>
+                          <section class="settings" aria-labelledby="notices-heading">
+                            <h2 id="notices-heading" class="column-heading">
+                              Notices
+                            </h2>
+                            <StandingNotices />
+                          </section>
+                        </Show>
+                        <Show when={settings()}>
+                          {(read) => (
+                            <>
+                              <ContextSettings settings={read()} onChanged={setSettings} />
+                              <Standing timeZone={read().time_zone} />
+                              <Trash timeZone={read().time_zone} />
+                            </>
+                          )}
+                        </Show>
+                        <Contexts
+                          contexts={contexts() ?? []}
+                          onChanged={showChangedContext}
+                          onMade={addContext}
+                          onDeleted={dropContext}
+                        />
+                        <Connections contexts={contexts() ?? []} />
+                        <Devices />
+                        <SpendSettings />
+                        <BackupSettings />
+                        <ExportSettings />
+                      </div>
+                    </Show>
+                    <main class="peers">
+                      <Peer
+                        id="attention"
+                        title="Attention"
+                        aside={<AttentionCount count={count()} />}
+                        onKeyDown={putAttentionAway}
+                      >
+                        <Show when={timeZone()} keyed>
+                          {(zone) => <Attention timeZone={zone} onDueCount={setDueCount} />}
+                        </Show>
+                      </Peer>
+                      {/* Today and the Entries' times follow the time zone, so a new one reads afresh,
                       inside a column that stays: the region is the same one before the zone is read
                       and after. */}
-                    <Peer id="journal" title="Journal">
-                      <Show when={timeZone()} keyed>
-                        {(zone) => (
-                          <Journal
-                            timeZone={zone}
-                            contextName={current()?.name}
-                            onShowHeldChange={showHeldChange}
-                          />
-                        )}
-                      </Show>
-                    </Peer>
-                    <Conversation
-                      contextName={current()?.name}
-                      onShowRecord={showRecord}
-                      onShowCap={showCap}
-                    />
-                  </main>
-                  <nav class="tabs" aria-label="Columns">
-                    <TabButton tab="attention" shown={tab()} onShow={setTab}>
-                      Attention
-                      <AttentionCount count={count()} />
-                    </TabButton>
-                    <TabButton tab="journal" shown={tab()} onShow={setTab}>
-                      Journal
-                    </TabButton>
-                    <TabButton tab="conversation" shown={tab()} onShow={setTab}>
-                      Agent
-                      <Badge count={unreadBriefs()} label="unread" />
-                    </TabButton>
-                  </nav>
+                      <Peer id="journal" title="Journal">
+                        <Show when={timeZone()} keyed>
+                          {(zone) => (
+                            <Journal
+                              timeZone={zone}
+                              contextName={current()?.name}
+                              onShowHeldChange={showHeldChange}
+                            />
+                          )}
+                        </Show>
+                      </Peer>
+                      <Conversation
+                        contextName={current()?.name}
+                        onShowRecord={showRecord}
+                        onShowCap={showCap}
+                      />
+                    </main>
+                    <nav class="tabs" aria-label="Columns">
+                      <TabButton tab="attention" shown={tab()} onShow={setTab}>
+                        Attention
+                        <AttentionCount count={count()} />
+                      </TabButton>
+                      <TabButton tab="journal" shown={tab()} onShow={setTab}>
+                        Journal
+                      </TabButton>
+                      <TabButton tab="conversation" shown={tab()} onShow={setTab}>
+                        Agent
+                        <Badge count={unreadBriefs()} label="unread" />
+                      </TabButton>
+                    </nav>
+                  </CurrentMoveTargets.Provider>
                 </CurrentHeldChanges.Provider>
               </CurrentContextLive.Provider>
             </CurrentContextTools.Provider>

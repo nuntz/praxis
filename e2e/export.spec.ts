@@ -41,7 +41,7 @@ test("the person makes an Export in settings and keeps a zip of the whole Deploy
   expect(download.suggestedFilename()).toMatch(/^praxis-export-\d{4}-\d{2}-\d{2}\.zip$/);
   const files = readArchive(await readFile(await download.path()));
   const deployment = JSON.parse(files.get("deployment.json") ?? "null");
-  expect(deployment).toMatchObject({ format: "praxis-export", format_version: 1 });
+  expect(deployment).toMatchObject({ format: "praxis-export", format_version: 2 });
   expect(deployment.contexts).toContainEqual(
     expect.objectContaining({ id: work.id, name: work.name, file: `contexts/${work.id}.json` }),
   );

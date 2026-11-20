@@ -17,6 +17,7 @@ import { type BackupOutcome, backUp, backupHandlers } from "./backups.ts";
 import { createDeploymentTables } from "./deployment-tables.ts";
 import {
   callableConnection,
+  carryMove,
   type DeploymentCall,
   type DeploymentHandlers,
   deploymentHandlers,
@@ -26,6 +27,7 @@ import {
 import { deviceHandlers, noteSeen, notifyDevices } from "./devices.ts";
 import { rememberKey, repeatedKey } from "./keys.ts";
 import { logCall } from "./log.ts";
+import type { Move, MovedBy } from "./move-rows.ts";
 import { type KeyReport, standingNotices, takeKeyReport } from "./notice-rows.ts";
 import type { PushSender } from "./push.ts";
 import type { ToolRequest } from "./registry.ts";
@@ -150,6 +152,25 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
      */
     async notifyDevices(context: string, kind: ClockKind, at: number): Promise<void> {
       await notifyDevices(this.ctx.storage.sql, this.#push, { context, kind, at });
+    }
+
+    /**
+     * A Context's alarm asking for a unit it holds on its way out to be carried to the Context it
+     * moves to, when the move was interrupted (section 3.9). It runs one at a time with the
+     * writes, so the Context it goes to is not deleted while it is carried: deleted before, the
+     * unit goes back. A failure is thrown to the asking Context, which tries again later.
+     */
+    async carryMove(move: Move, to: string, by: MovedBy): Promise<"taken" | "gone"> {
+      const outcome = await this.ctx.blockConcurrencyWhile(async () => {
+        try {
+          return await carryMove(this.ctx.storage.sql, this.env, move, to, by);
+        } catch {
+          // Thrown outside, since a throw here would reset this object.
+          return "failed" as const;
+        }
+      });
+      if (outcome === "failed") throw new Error("The move could not be carried");
+      return outcome;
     }
 
     /**

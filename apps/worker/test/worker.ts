@@ -1,15 +1,18 @@
+import type { Effect } from "@praxis/domain";
 import { contextObject } from "../src/context-object.ts";
 import { deploymentObject } from "../src/deployment-object.ts";
+import type { Move, MovedBy } from "../src/move-rows.ts";
 import { refusableBucket } from "./bucket.ts";
 import { testMeaning } from "./meaning-fake.ts";
 import { testModel } from "./model-fake.ts";
+import { isStuck, nextMoveFault } from "./move-faults.ts";
 import { fakePush } from "./push-fake.ts";
 
 // The Worker the tests run against: Praxis as deployed, but with each Context's Agent on the
 // scripted model the test chose (test/model-fake.ts), so no test calls a real model, its meaning
 // index on the fake (test/meaning-fake.ts), its Notifications sent to the fake push service
-// (test/push-fake.ts), and its Backups kept in a bucket a test can make refuse them
-// (test/bucket.ts). The plugin runs it in the tests' own isolate, which is how a test scripts the
+// (test/push-fake.ts), its Backups kept in a bucket a test can make refuse them
+// (test/bucket.ts), and a move into a Context made to fail as a test says (test/move-faults.ts). The plugin runs it in the tests' own isolate, which is how a test scripts the
 // model and reads what was pushed.
 
 export { default } from "../src/index.ts";
@@ -45,5 +48,20 @@ export class ContextObject extends contextObject(testModel, testMeaning) {
       return setAlarm(time, options);
     };
     super(ctx, env);
+  }
+
+  /** It cannot take a move while the test has it stuck, as on an upgrade. */
+  override async canTakeMove(): Promise<boolean> {
+    if (isStuck(this.ctx.id.toString())) return false;
+    return super.canTakeMove();
+  }
+
+  /** Taking a move fails before or after it takes the unit, when the test says so. */
+  override async takeMove(move: Move, by: MovedBy): Promise<Effect[]> {
+    const fault = nextMoveFault(this.ctx.id.toString());
+    if (fault === "before") throw new Error("The move did not reach this Context");
+    const effects = await super.takeMove(move, by);
+    if (fault === "after") throw new Error("The answer to the move was lost");
+    return effects;
   }
 }

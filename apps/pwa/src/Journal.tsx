@@ -13,6 +13,7 @@ import { Composer } from "./Composer.tsx";
 import { EntryEditor } from "./EntryEditor.tsx";
 import { heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { useLive } from "./live-context.ts";
+import { MoveRecord } from "./Move.tsx";
 import { createSearch } from "./Search.tsx";
 import { TaskItem } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
@@ -47,6 +48,8 @@ export function Journal(props: {
   const [entries, setEntries] = createStore<Entry[]>([]);
   const [earlierCursor, setEarlierCursor] = createSignal<string | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
+  // What the last move said, once its Entry has left the Journal (section 3.9).
+  const [moved, setMoved] = createSignal<string | null>(null);
   // The Entry the composer's next Entry is a Follow-up to, if the person chose one.
   const [followingUp, setFollowingUp] = createSignal<EntryNamed | null>(null);
 
@@ -252,6 +255,10 @@ export function Journal(props: {
                   setProblem(null);
                   void patch(effects);
                 }}
+                onMoved={(said) => {
+                  setProblem(null);
+                  setMoved(said);
+                }}
                 onProblem={setProblem}
               />
             )}
@@ -259,6 +266,13 @@ export function Journal(props: {
         </ol>
       </div>
       <div class="peer-foot">
+        <Show when={moved()}>
+          {(said) => (
+            <p class="moved" role="status">
+              {said()}
+            </p>
+          )}
+        </Show>
         <Show when={problem()}>
           {(message) => (
             <p class="problem" role="alert">
@@ -298,6 +312,8 @@ function EntryItem(props: {
   onShowHeldChange: (anchor: string) => void;
   /** The Entry went to the Trash, with what went with it: what the delete changed. */
   onDeleted: (effects: Effect[]) => void;
+  /** The Entry moved to another Context, with its unit, as said. */
+  onMoved: (said: string) => void;
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();
@@ -308,6 +324,7 @@ function EntryItem(props: {
   const [showingVersions, setShowingVersions] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
   const [marking, setMarking] = createSignal(false);
+  const [moving, setMoving] = createSignal(false);
 
   /**
    * Mark the Entry standing, so the Agent keeps honouring it, or unmark it. A mark past the
@@ -393,12 +410,27 @@ function EntryItem(props: {
         <button
           type="button"
           class="quiet entry-mark"
+          aria-expanded={moving()}
+          onClick={() => setMoving((shown) => !shown)}
+        >
+          Move
+        </button>
+        <button
+          type="button"
+          class="quiet entry-mark"
           disabled={deleting()}
           onClick={() => void deleteEntry()}
         >
           Delete
         </button>
       </div>
+      <Show when={moving()}>
+        <MoveRecord
+          record={{ kind: "entry", id: props.entry.id }}
+          onMoved={props.onMoved}
+          onClose={() => setMoving(false)}
+        />
+      </Show>
       <Show when={props.entry.follow_up_to}>
         {(to) => (
           <Show

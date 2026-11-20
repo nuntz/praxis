@@ -4,6 +4,7 @@ import { timeZone } from "./day.ts";
 import { type Device, pushSubscription } from "./device.ts";
 import type { Written } from "./effects.ts";
 import type { Export, LastBackup } from "./export.ts";
+import type { Moved } from "./move.ts";
 import type { Spend, SpendCap } from "./spend.ts";
 import { type Parsed, parseInput, writeInput } from "./tools.ts";
 
@@ -124,8 +125,19 @@ export const deploymentTools = {
   delete_context: {
     kind: "write",
     description:
-      "Delete a retired Context for good, given its name as the person typed it: everything in it goes, with its Run records, its part of the meaning index and its Connections, and there is no Trash and no way back. Its spend stays in the month's count, with no name attached. A Context not retired is refused, as is a name that is not its own, and so is one where a Run is going.",
+      "Delete a retired Context for good, given its name as the person typed it: everything in it goes, with its Run records, its part of the meaning index and its Connections, and there is no Trash and no way back. Its spend stays in the month's count, with no name attached. A Context not retired is refused, as is a name that is not its own, and so is one where a Run is going or one holding a record on its way out to another Context.",
     input: writeInput({ id, name: z.string() }),
+  },
+  move_record: {
+    kind: "write",
+    description:
+      "Move an Entry or a Project, with its whole unit, from one Context to another, keeping every id, Version, Recurrence and Author. Give `unit` as the ids get_move_unit gave in the Context moved from, which the person saw: when what would move is no longer that, the move is refused, and so it is while a Task from an Entry that would move is in the Trash. What links across the boundary is dropped, the words kept: Mentions, References, waits and delegations, a place in a Project that stays, a Follow-up link to an Entry that stays, and a Standing mark. Nothing is made in the Context moved to and nothing there is matched by name. A move into a Context whose object does not answer, as one stuck on an upgrade, is refused with nothing moved.",
+    input: writeInput({
+      from: id,
+      to: id,
+      record: z.strictObject({ kind: z.enum(["entry", "project"]), id }),
+      unit: z.array(id).min(1),
+    }),
   },
   list_connections: {
     kind: "read",
@@ -240,6 +252,7 @@ export type DeploymentToolOutput = {
   bring_back_context: Written<ContextListing>;
   /** Null: the Context is gone. */
   delete_context: Written<null>;
+  move_record: Written<Moved>;
   list_connections: { items: Connection[] };
   create_connection: Written<Connection>;
   rename_connection: Written<Connection>;

@@ -86,7 +86,11 @@ test("opening a Project in Attention shows its Tasks, and one with no open Task 
   const projects = page
     .getByRole("region", { name: "Attention", exact: true })
     .getByRole("region", { name: "Projects", exact: true });
-  await expect(projects.getByRole("button")).toHaveText([/^Painting/, /^Roof/]);
+  // Each Project's toggle, which names its count of actionable Tasks, apart from its Move.
+  await expect(projects.getByRole("button", { name: /actionable$/ })).toHaveText([
+    /^Painting/,
+    /^Roof/,
+  ]);
   await expect(projects.getByRole("button", { name: /^Painting/ })).toContainText("1 actionable");
   await expect(projects.getByText("Needs a next Task or finishing")).toHaveCount(1);
 

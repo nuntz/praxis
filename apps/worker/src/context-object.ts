@@ -9,7 +9,9 @@ import {
   type ConversationToolInput,
   type ConversationToolName,
   capInTheWay,
+  dayIn,
   dollars,
+  type Effect,
   failure,
   isConversationToolName,
   isDerivedWrite,
@@ -76,6 +78,22 @@ import {
   takeOffQueue,
 } from "./meaning-rows.ts";
 import type { AgentModel } from "./model.ts";
+import {
+  type Begun,
+  forgetMovesTaken,
+  holdMove,
+  letGo,
+  type Move,
+  type MovedBy,
+  type MoveSeed,
+  moveHolding,
+  movesOut,
+  moveUnit,
+  noteTaken,
+  putIn,
+  takenAlready,
+  takeOut,
+} from "./move-rows.ts";
 import { admit, dispatch, type Handlers, isObjectTool, type ToolRequest } from "./registry.ts";
 import { deploymentOf } from "./routing.ts";
 import {
@@ -101,10 +119,11 @@ import { standingEntries } from "./standing-rows.ts";
 import { createTables, queueToEmbedAgain, queueWholeJournal } from "./tables.ts";
 import { attentionTools } from "./tools/attention.ts";
 import { changeTools } from "./tools/changes.ts";
-import { entryTools } from "./tools/entries.ts";
+import { entryTools, NO_SUCH_ENTRY } from "./tools/entries.ts";
 import { heldChangeTools } from "./tools/held-changes.ts";
+import { moveTools } from "./tools/moves.ts";
 import { personTools } from "./tools/persons.ts";
-import { projectTools } from "./tools/projects.ts";
+import { NO_SUCH_PROJECT, projectTools } from "./tools/projects.ts";
 import { recurrenceTools } from "./tools/recurrences.ts";
 import { settingsTools } from "./tools/settings.ts";
 import { taskTools } from "./tools/tasks.ts";
@@ -129,6 +148,7 @@ const handlers: Handlers = {
   ...attentionTools,
   ...trashTools,
   ...heldChangeTools,
+  ...moveTools,
 };
 
 /** How long the alarm sleeps between wakes while it has something to do. */
@@ -170,6 +190,18 @@ function meaningFailed(during: "search" | "embedding" | "deleting", error: unkno
   const name = error instanceof Error ? error.name : typeof error;
   console.error(JSON.stringify({ meaning: "failed", during, error: name }));
 }
+
+/**
+ * How soon the alarm comes back to carry a unit on its way out to the Context it goes to, once
+ * the move was interrupted (section 3.9).
+ */
+const MOVE_RETRY = 10 * 60 * 1000;
+
+/**
+ * What a Context's object answers when it has taken a unit out of itself for a move: the move,
+ * and the record asked for, its unit and the Effects in this Context, which its log holds.
+ */
+export type MoveBegun = Begun & { move: Move };
 
 /** A Run refused because the month's spend has reached the cap, with the cap in the way. */
 function capRefusal(cap: number): ToolResult<never> {
@@ -262,6 +294,130 @@ export function contextObject(
     }
 
     /**
+     * Take a unit out of this Context for a move to another, which the Deployment object asks on
+     * `move_record` (section 3.9), as one write: what links across is dropped, each change an
+     * Effect, the unit's records go from every view, and the move holds them until the Context
+     * it goes to has taken them, the alarm carrying it there should the move be interrupted.
+     * Refused, with nothing changed, when what would move is not the unit the person was shown,
+     * or while a Task from an Entry that would move is in the Trash. Asked again for a record it
+     * holds on its way out, as when its answer was lost, it answers as it did, with the same move.
+     */
+    async beginMove(
+      asked: { id: string; record: MoveSeed; unit: string[]; to: string },
+      by: MovedBy,
+    ): Promise<ToolResult<MoveBegun>> {
+      const sql = this.ctx.storage.sql;
+      const before = lastChange(sql);
+      const result = this.ctx.storage.transactionSync((): ToolResult<MoveBegun> => {
+        const holding = moveHolding(sql, asked.record);
+        if (holding !== null) return success({ move: holding.move, ...holding.begun });
+        const asItIs = moveUnit(sql, asked.record);
+        if (asItIs === null) {
+          return failure(
+            "not_found",
+            asked.record.kind === "entry" ? NO_SUCH_ENTRY : NO_SUCH_PROJECT,
+          );
+        }
+        if (asItIs.in_the_trash.length > 0) {
+          return refusal(
+            "A Task from an Entry that would move is in the Trash, and a Task never leaves its Origin Entry: restore it, or remove it for good, before moving.",
+            asItIs.in_the_trash,
+          );
+        }
+        const seen = new Set(asked.unit);
+        if (asItIs.unit.length !== seen.size || asItIs.unit.some(({ id }) => !seen.has(id))) {
+          return refusal(
+            "What would move with it has changed since it was shown: look at it again before moving it.",
+            [asItIs.record],
+          );
+        }
+        const today = dayIn(by.at, timeZoneOf(sql));
+        const out = takeOut(sql, asked.record, by.at, today);
+        if (out === null) throw new Error("A unit read a moment ago is gone");
+        const move: Move = { id: asked.id, record: asked.record, unit: out.unit };
+        const begun: Begun = { record: asItIs.record, unit: asItIs.unit, effects: out.effects };
+        holdMove(sql, { move, to: asked.to, by, begun });
+        appendChange(sql, {
+          at: by.at,
+          caller: by.caller,
+          tool: "move_record",
+          effects: out.effects,
+        });
+        return success({ move, ...begun });
+      });
+      await this.afterWrite(before);
+      return result;
+    }
+
+    /**
+     * Whether this Context's object can take a unit moved into it, which the Deployment object
+     * asks before a move takes anything out of the Context it leaves (section 3.9). One being
+     * deleted cannot, and one that does not answer is taken to be unable. An object stuck on an
+     * upgrade (section 11) serves nothing, so the upgrade ladder (#76) has it say no here too.
+     */
+    async canTakeMove(): Promise<boolean> {
+      return !this.#deleting;
+    }
+
+    /**
+     * Take a unit moved here from another Context, under its move id (section 3.9), as one write
+     * in this Context's change log at the time it arrived: every record as it came, the one asked
+     * for made by the call and the rest by rule. A move asked again, as when the answer was lost,
+     * adds nothing and answers as it did.
+     */
+    async takeMove(move: Move, by: MovedBy): Promise<Effect[]> {
+      const sql = this.ctx.storage.sql;
+      const before = lastChange(sql);
+      const effects = this.ctx.storage.transactionSync(() => {
+        const already = takenAlready(sql, move);
+        if (already !== null) return already;
+        const made = putIn(sql, move.record, move.unit);
+        noteTaken(sql, move.id, made, by.at);
+        appendChange(sql, { at: by.at, caller: by.caller, tool: "move_record", effects: made });
+        return made;
+      });
+      await this.afterWrite(before);
+      return effects;
+    }
+
+    /** The Context a unit was moved to has taken it: this one lets it go (section 3.9). */
+    async moveArrived(move: string): Promise<void> {
+      letGo(this.ctx.storage.sql, move);
+    }
+
+    /**
+     * Carry each unit on its way out to the Context it goes to, through the Deployment object, as
+     * the alarm does for a move interrupted (section 3.9). One whose Context was deleted meanwhile
+     * comes back here, so a unit is never lost. One that cannot be carried yet waits for the next.
+     */
+    private async finishMoves(at: number): Promise<void> {
+      const sql = this.ctx.storage.sql;
+      for (const out of movesOut(sql)) {
+        let carried: "taken" | "gone";
+        try {
+          // It arrives now, as the person's hand asked.
+          carried = await this.deployment().carryMove(out.move, out.to, { ...out.by, at });
+        } catch {
+          console.error(JSON.stringify({ move: "not_carried" }));
+          continue;
+        }
+        if (carried === "taken") {
+          letGo(sql, out.move.id);
+          continue;
+        }
+        const before = lastChange(sql);
+        // Another wake may have brought it back while this one waited for the answer.
+        this.ctx.storage.transactionSync(() => {
+          if (!movesOut(sql).some(({ move }) => move.id === out.move.id)) return;
+          const back = putIn(sql, null, out.move.unit);
+          letGo(sql, out.move.id);
+          appendChange(sql, { at, caller: out.by.caller, tool: "move_record", effects: back });
+        });
+        await this.afterWrite(before);
+      }
+    }
+
+    /**
      * Delete this Context for good, which the Deployment object asks on `delete_context` before it
      * takes the Context off its list (section 10.4): its part of the meaning index is taken out,
      * then its alarm and its whole storage go, Journal, Run records and Conversation alike, and its
@@ -279,6 +435,13 @@ export function contextObject(
         if (runsNotEnded(sql).length > 0) {
           return refusal(
             "A Run is going in this Context, so nothing was deleted: try again once it has ended.",
+            [],
+          );
+        }
+        // A unit on its way out is held only here until the other Context takes it.
+        if (movesOut(sql).length > 0) {
+          return refusal(
+            "Something moved from this Context has not yet reached the Context it was moved to, so nothing was deleted: try again in a while.",
             [],
           );
         }
@@ -885,17 +1048,19 @@ export function contextObject(
 
     /**
      * Everything the Context's clock does, as at `at`: forgetting keys past 30 days, removing for
-     * good what has been in the Trash 30 days, pruning the change log at 90, and starting a Brief
-     * or a Review that is due.
+     * good what has been in the Trash 30 days, pruning the change log at 90, finishing a move
+     * interrupted, and starting a Brief or a Review that is due.
      */
     async wake(at: number): Promise<void> {
       const sql = this.ctx.storage.sql;
       this.#clockSkew = at - arrivalTime();
       this.ctx.storage.transactionSync(() => {
         forgetOldKeys(sql, at);
+        forgetMovesTaken(sql, at);
         expireTrash(sql, at);
         pruneChanges(sql, at);
       });
+      await this.finishMoves(at);
       await this.startClockRuns(at);
       await this.keepAlarm();
     }
@@ -987,6 +1152,7 @@ export function contextObject(
       if (this.#agentWake.active) wanted.push(now + RUN_HEARTBEAT);
       if (this.#agentWake.at !== undefined) wanted.push(this.#agentWake.at + skew);
       if (this.#meaningStopped && anythingQueued(storage.sql)) wanted.push(now + MEANING_RETRY);
+      if (movesOut(storage.sql).length > 0) wanted.push(now + MOVE_RETRY);
       // Without the Agent's key, no Brief or Review is ever due.
       if (
         this.hasAgent() &&

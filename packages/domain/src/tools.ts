@@ -5,6 +5,7 @@ import { day, daysBefore, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
 import { type Entry, type Page, STANDING_CEILING, type Version } from "./entry.ts";
 import type { Held, HeldChange } from "./held-change.ts";
+import type { MoveUnit } from "./move.ts";
 import type { StandingNotice } from "./notice.ts";
 import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
@@ -650,6 +651,13 @@ export const tools = {
     input: z.strictObject({}),
     offered: toHandOnly,
   },
+  get_move_unit: {
+    kind: "read",
+    description:
+      "Get what moving an Entry or a Project to another Context would take, for the person to see before confirming: its whole unit, and any Task in the Trash that stops it moving. An Entry's unit is the Entry, its Follow-ups and theirs in turn, and the Tasks that came from them; a Project's is the Project, its Tasks, their Origin Entries, those Entries' Follow-ups and theirs in turn, and any other Tasks those Entries made. Nothing in the Trash is in it.",
+    input: z.strictObject({ kind: z.enum(["entry", "project"]), id }),
+    offered: toHandOnly,
+  },
   list_changes: {
     kind: "read",
     description:
@@ -757,6 +765,7 @@ export type ToolOutput = {
   cancel_held_change: Written<HeldChange>;
   list_held_changes: Page<HeldChange>;
   list_notices: { items: StandingNotice[] };
+  get_move_unit: MoveUnit;
 };
 
 /**

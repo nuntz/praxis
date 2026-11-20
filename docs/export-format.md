@@ -22,7 +22,7 @@ Every file starts with the same four fields, so a file read alone says what it i
 | Field | Value |
 |---|---|
 | `format` | `"praxis-export"` |
-| `format_version` | `1`. The format's own number, not the tables' (ADR 0019). Praxis reads a file of any earlier version and refuses a newer one. |
+| `format_version` | `2`. The format's own number, not the tables' (ADR 0019). Praxis reads a file of any earlier version and refuses a newer one. Version 2 added `moving` to a Context's file: a file of version 1 has none. |
 | `made_at` | The instant the person asked for the Export |
 | `kind` | `"deployment"` or `"context"` |
 
@@ -46,6 +46,7 @@ Every file starts with the same four fields, so a file read alone says what it i
 | `persons` | Every Person, including those in the Trash |
 | `trash` | What is in the Trash, one item per delete, in the order deleted |
 | `runs` | Every Run record, in the order started |
+| `moving` | Each unit on its way out of this Context to another, in the order the moves were asked for: its records are in no other list of the file |
 
 An **author** is `{ "kind": "person" }`, `{ "kind": "agent" }` or `{ "kind": "connection", "name": "…" }`. A record of another kind is named as `{ "kind": "entry" | "task" | "project" | "person", "id": "…" }`.
 
@@ -75,6 +76,8 @@ A **Recurrence** is only on the open Occurrence. It is a schedule counted from t
 **A Person** has `id`, `name` and `at`.
 
 **A Trash item** is what one delete sent there. `deleted` is the record deleted, `went_with` is what could not exist without it, in the order made, and `at` is the delete. The item is removed for good 30 days after `at`, a restore included. `dormant_links` are the links from Tasks not in the Trash to a record in the item, which the delete took away and a restore brings back. Each has `task`, the Task's id, `what` (`project`, `delegation` or `wait`) and `to`, the record it links to. The records themselves are in their own lists above.
+
+**A unit moving** is an Entry or a Project with its whole unit (SPEC section 3.9), taken out of this Context and not yet taken in by the one it moves to: `id`, the move's, under which that Context takes it once; `to`, that Context's id; `at`, when the person asked; and `entries`, `tasks` and `projects`, its records as they go, each as above and with whatever linked across the boundary already dropped. Since the files of one Export are not one instant, a restore settles a unit by its records' ids: found in the Context it moves to as well, that one keeps them; found nowhere else, they stay in this one.
 
 **A Run record** holds no words: `id`, `started_by` (`"message"`, or `"brief"` or `"review"` for one the clock started), `at`, `model`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `cost` in US dollars by the price table of the code that ran it, `ended` (`"answered"`, `"cut_short"` for one that reached the limit of model rounds, `"failed"`, `"cap_reached"`, or `null` for one still going) and `failure` (`"model_unavailable"`, `"key_refused"` or `null`). Which changes it made is not kept, since the file holds no change log.
 

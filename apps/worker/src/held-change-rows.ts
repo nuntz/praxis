@@ -178,6 +178,20 @@ export function lapseHeldChanges(sql: SqlStorage): Effect[] {
   return heldChangesFrom(sql, lapsed).map((held) => endHeldChange(sql, held, "rule"));
 }
 
+/**
+ * Lapse each Held Change on one of these Entries, as they leave the Context (section 3.9): each an
+ * Effect by rule of the move.
+ */
+export function lapseHeldChangesOn(sql: SqlStorage, entries: string[]): Effect[] {
+  const rows = sql
+    .exec<HeldRow>(
+      `SELECT * FROM held_changes WHERE entry IN (SELECT value FROM json_each(?)) ORDER BY seq`,
+      JSON.stringify(entries),
+    )
+    .toArray();
+  return heldChangesFrom(sql, rows).map((held) => endHeldChange(sql, held, "rule"));
+}
+
 /** The Effect on a Held Change, summarised by what the tap would do. */
 function heldEffect(held: HeldChange, what: Effect["what"], by: Effect["by"]): Effect {
   return { kind: "held_change", id: held.id, what, summary: held.summary, by };

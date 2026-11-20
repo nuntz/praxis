@@ -9,6 +9,7 @@ import {
   type DeploymentToolInput,
   type DeploymentToolName,
   type DeploymentToolOutput,
+  type Effect,
   EXPORT_FORMAT_VERSION,
   type Export,
   type ExportedConnection,
@@ -27,6 +28,7 @@ import {
 import { countBackupsFrom } from "./backup-rows.ts";
 import type { BackupToolName } from "./backups.ts";
 import type { DeviceToolName } from "./devices.ts";
+import type { Move, MovedBy } from "./move-rows.ts";
 import type { PushSender } from "./push.ts";
 import { newContextObject } from "./routing.ts";
 import { capChosen, deletedContextsSpend, readCap, readSpend, writeCap } from "./spend-rows.ts";
@@ -165,6 +167,44 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
     // goes down and an Export gives them with no name attached (section 5.7).
     sql.exec(`DELETE FROM contexts WHERE id = ?`, found.id);
     return success(written(null, [effectOnContext(found, "deleted"), ...connections]));
+  },
+
+  async move_record({ caller, input, arrivedAt, sql, env }) {
+    const from = listing(sql, input.from);
+    const to = listing(sql, input.to);
+    if (from === null || from.retired || to === null || to.retired) return noSuchContext();
+    if (from.id === to.id) {
+      return failure("invalid_input", "A record is moved to another Context than its own.");
+    }
+    const source = contextObjectOf(env, from.id);
+    const destination = contextObjectOf(env, to.id);
+    // Asked before anything leaves the source, so a move that cannot arrive takes nothing out.
+    if (!(await takesMoves(destination))) {
+      return refusal(
+        `${to.name} cannot take what is moved into it now, as when its object is stuck on an upgrade, so nothing was moved: try again once it is working.`,
+        [contextInTheWay(to)],
+      );
+    }
+    const by: MovedBy = { caller, at: arrivedAt };
+    const begun = await source.beginMove(
+      { id: crypto.randomUUID(), record: input.record, unit: input.unit, to: to.id },
+      by,
+    );
+    if (!begun.ok) return begun;
+    // The source lets the unit go only once the destination has said it took it. Until then the
+    // unit is in neither Context's view, and the source's alarm carries it.
+    const { move, record, unit, effects } = begun.value;
+    const taken = await carry(destination, move, by);
+    if (taken !== null) {
+      try {
+        await source.moveArrived(move.id);
+      } catch {
+        // Its alarm carries the move again, and is told it was taken.
+      }
+    }
+    return success(
+      written({ record, unit, from, to, arrived: taken !== null }, [...effects, ...(taken ?? [])]),
+    );
   },
 
   async list_connections({ sql }) {
@@ -354,6 +394,60 @@ function opaqueId(): string {
 
 function noSuchConnection(): ToolResult<never> {
   return failure("not_found", "There is no such Connection, or it has ended.");
+}
+
+/**
+ * Carry a unit on its way out of a Context, which that Context's alarm asks of this object for a
+ * move interrupted (section 3.9): to the Context it goes to, which takes it under the move's id,
+ * once. When that Context has been deleted since, it is gone, and the unit goes back.
+ */
+export async function carryMove(
+  sql: SqlStorage,
+  env: Env,
+  move: Move,
+  to: string,
+  by: MovedBy,
+): Promise<"taken" | "gone"> {
+  if (listing(sql, to) === null) return "gone";
+  await contextObjectOf(env, to).takeMove(move, by);
+  return "taken";
+}
+
+/**
+ * Whether a Context's object can take a unit moved into it: it answers, and is not stuck on an
+ * upgrade. One that does not answer cannot.
+ */
+async function takesMoves(object: ReturnType<typeof contextObjectOf>): Promise<boolean> {
+  try {
+    return await object.canTakeMove();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hand a unit to the Context it moves to, which takes it under the move's id, and its Effects
+ * there; or null when it did not answer twice. Asked again after an answer lost, it takes nothing
+ * twice and answers as it did.
+ */
+async function carry(
+  object: ReturnType<typeof contextObjectOf>,
+  move: Move,
+  by: MovedBy,
+): Promise<Effect[] | null> {
+  for (let tries = 0; tries < 2; tries += 1) {
+    try {
+      return await object.takeMove(move, by);
+    } catch {
+      // Not taken, or taken and the answer lost: asked once more, then left to the alarm.
+    }
+  }
+  return null;
+}
+
+/** The object of the Context with this id. */
+function contextObjectOf(env: Env, id: string) {
+  return env.CONTEXT.get(env.CONTEXT.idFromString(id));
 }
 
 /** Whether the Context with this id was made and is not retired, so requests may reach it. */

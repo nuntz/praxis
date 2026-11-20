@@ -2,6 +2,7 @@ import {
   type ContextFile,
   type ExportedEntry,
   type ExportedLink,
+  type ExportedMove,
   type ExportedPerson,
   type ExportedProject,
   type ExportedRun,
@@ -17,6 +18,7 @@ import {
   type WaitTarget,
 } from "@praxis/domain";
 import { type AuthorColumns, toAuthor } from "./author.ts";
+import { movesOut } from "./move-rows.ts";
 import type { RunRow } from "./run-rows.ts";
 
 /**
@@ -42,7 +44,24 @@ export function contextFile(sql: SqlStorage, at: number): ContextFile {
     persons: persons(sql),
     trash: trash(sql),
     runs: runs(sql),
+    moving: moving(sql),
   };
+}
+
+/**
+ * Only the records with these ids, as a unit moving out of the Context is read (section 3.9), or
+ * every record for null, as an Export reads them.
+ */
+type Only = string[] | null;
+
+/** SQL narrowing rows to those whose `column` is among `only`, and what it is given, if any. */
+function among(only: Only, column: string): { where: string; given: string[] } {
+  return only === null
+    ? { where: "", given: [] }
+    : {
+        where: `WHERE ${column} IN (SELECT value FROM json_each(?))`,
+        given: [JSON.stringify(only)],
+      };
 }
 
 /** Group rows by a key, keeping each group in the order the rows came. */
@@ -76,9 +95,13 @@ type LinkRow = {
 
 type VersionRow = AuthorColumns & { entry: string; version: number; words: string; at: number };
 
-function entries(sql: SqlStorage): ExportedEntry[] {
+/** The Entries, every one or only these, each with its links, its Standing mark and its Versions. */
+export function entries(sql: SqlStorage, only: Only = null): ExportedEntry[] {
+  const byEntry = among(only, "entry");
   const links = groupBy(
-    sql.exec<LinkRow>(`SELECT * FROM entry_links ORDER BY seq`).toArray(),
+    sql
+      .exec<LinkRow>(`SELECT * FROM entry_links ${byEntry.where} ORDER BY seq`, ...byEntry.given)
+      .toArray(),
     (row) => row.entry,
     (row): ExportedLink => ({
       to: { kind: row.to_kind, id: row.to_id },
@@ -90,7 +113,12 @@ function entries(sql: SqlStorage): ExportedEntry[] {
     }),
   );
   const versions = groupBy(
-    sql.exec<VersionRow>(`SELECT * FROM entry_versions ORDER BY entry, version`).toArray(),
+    sql
+      .exec<VersionRow>(
+        `SELECT * FROM entry_versions ${byEntry.where} ORDER BY entry, version`,
+        ...byEntry.given,
+      )
+      .toArray(),
     (row) => row.entry,
     (row): Version => ({
       version: row.version,
@@ -98,10 +126,12 @@ function entries(sql: SqlStorage): ExportedEntry[] {
       changed: { by: toAuthor(row), at: instantToIso(row.at) },
     }),
   );
+  const byId = among(only, "e.id");
   return sql
     .exec<EntryRow>(
       `SELECT e.*, EXISTS (SELECT 1 FROM standing_marks m WHERE m.entry = e.id) AS standing
-       FROM entries e ORDER BY seq`,
+       FROM entries e ${byId.where} ORDER BY seq`,
+      ...byId.given,
     )
     .toArray()
     .map((row) => ({
@@ -137,14 +167,19 @@ type TaskEventRow = {
   on_id: string | null;
 };
 
-function tasks(sql: SqlStorage): ExportedTask[] {
+/** The Tasks, every one or only these, each with its events. */
+export function tasks(sql: SqlStorage, only: Only = null): ExportedTask[] {
+  const byTask = among(only, "task");
   const events = groupBy(
-    sql.exec<TaskEventRow>(`SELECT * FROM task_events ORDER BY seq`).toArray(),
+    sql
+      .exec<TaskEventRow>(`SELECT * FROM task_events ${byTask.where} ORDER BY seq`, ...byTask.given)
+      .toArray(),
     (row) => row.task,
     taskEvent,
   );
+  const byId = among(only, "id");
   return sql
-    .exec<TaskRow>(`SELECT * FROM tasks ORDER BY seq`)
+    .exec<TaskRow>(`SELECT * FROM tasks ${byId.where} ORDER BY seq`, ...byId.given)
     .toArray()
     .map((row) => ({
       id: row.id,
@@ -191,14 +226,25 @@ type ProjectEventRow = {
   at: number;
 };
 
-function projects(sql: SqlStorage): ExportedProject[] {
+/** The Projects, every one or only these, each with what was declared of it. */
+export function projects(sql: SqlStorage, only: Only = null): ExportedProject[] {
+  const byProject = among(only, "project");
   const events = groupBy(
-    sql.exec<ProjectEventRow>(`SELECT * FROM project_events ORDER BY seq`).toArray(),
+    sql
+      .exec<ProjectEventRow>(
+        `SELECT * FROM project_events ${byProject.where} ORDER BY seq`,
+        ...byProject.given,
+      )
+      .toArray(),
     (row) => row.project,
     (row) => ({ what: row.what, at: instantToIso(row.at) }),
   );
+  const byId = among(only, "id");
   return sql
-    .exec<ProjectRow>(`SELECT id, name, at, due_date FROM projects ORDER BY seq`)
+    .exec<ProjectRow>(
+      `SELECT id, name, at, due_date FROM projects ${byId.where} ORDER BY seq`,
+      ...byId.given,
+    )
     .toArray()
     .map((row) => ({
       id: row.id,
@@ -279,4 +325,14 @@ function runs(sql: SqlStorage): ExportedRun[] {
       ended: row.ended,
       failure: row.failure,
     }));
+}
+
+/** Each unit on its way out of this Context, in the order the moves were asked for. */
+function moving(sql: SqlStorage): ExportedMove[] {
+  return movesOut(sql).map(({ move, to, by }) => ({
+    id: move.id,
+    to,
+    at: instantToIso(by.at),
+    ...move.unit,
+  }));
 }

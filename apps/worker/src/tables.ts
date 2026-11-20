@@ -317,6 +317,26 @@ function createTablesAsMade(sql: SqlStorage): void {
       -- The time it came for which a Run not started at the cap has been recorded.
       capped INTEGER
     );
+    -- Each unit on its way out of this Context to another (section 3.9): the move's id, the
+    -- Context it goes to, when the person asked and as whom, and, as JSON, the record asked for
+    -- and the unit's records as they go, in the shapes an Export holds them in. Its records are
+    -- gone from every other table, so it is in no view; the row is removed once the other Context
+    -- has said it took it.
+    CREATE TABLE IF NOT EXISTS moves_out (
+      seq INTEGER PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      to_context TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      caller TEXT NOT NULL,
+      move TEXT NOT NULL
+    );
+    -- Each move this Context has taken a unit under, with the Effects taking it had, as JSON, and
+    -- when, so a move asked again adds nothing twice and answers as it did. Forgotten at 30 days.
+    CREATE TABLE IF NOT EXISTS moves_in (
+      id TEXT PRIMARY KEY,
+      effects TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
     -- The changes a Run made, as the change log numbers them. One may point at a line pruned since.
     CREATE TABLE IF NOT EXISTS run_changes (
       run TEXT NOT NULL REFERENCES runs (id),

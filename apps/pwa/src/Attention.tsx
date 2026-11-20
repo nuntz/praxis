@@ -10,6 +10,7 @@ import { createSignal, For, type JSX, onCleanup, onMount, Show } from "solid-js"
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
+import { MoveRecord } from "./Move.tsx";
 import { StandingNotices } from "./Notices.tsx";
 import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
@@ -31,6 +32,8 @@ export function Attention(props: {
   const heldChanges = useHeldChanges();
   const [view, setView] = createSignal<AttentionView | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
+  // What the last move of a Project said, once it has left Attention (section 3.9).
+  const [moved, setMoved] = createSignal<string | null>(null);
   // The last read wins: an answer a later read overtook is dropped.
   const { read } = latestRead(async (current) => {
     try {
@@ -100,6 +103,13 @@ export function Attention(props: {
           </p>
         )}
       </Show>
+      <Show when={moved()}>
+        {(said) => (
+          <p class="moved" role="status">
+            {said()}
+          </p>
+        )}
+      </Show>
       <Section id="held-changes" title="Held Changes" items={heldChanges.all()}>
         {(held) => (
           <li>
@@ -134,7 +144,7 @@ export function Attention(props: {
               {(task) => taskItem(task)}
             </Section>
             <Section id="projects" title="Projects" items={shown().projects}>
-              {(item) => <ProjectItem item={item} taskItem={taskItem} />}
+              {(item) => <ProjectItem item={item} taskItem={taskItem} onMoved={setMoved} />}
             </Section>
             <Section id="loose" title="Loose" items={shown().loose}>
               {(task) => taskItem(task)}
@@ -193,8 +203,14 @@ function ProjectDue(props: { project: Project }) {
  * An open Project, with its count of actionable Tasks and a flag when it has no open Task.
  * Expanding it shows its Tasks, those listed in another section and those at an end among them.
  */
-function ProjectItem(props: { item: ProjectInAttention; taskItem: (task: Task) => JSX.Element }) {
+function ProjectItem(props: {
+  item: ProjectInAttention;
+  taskItem: (task: Task) => JSX.Element;
+  /** The Project moved to another Context, with its unit, as said. */
+  onMoved: (said: string) => void;
+}) {
   const [expanded, setExpanded] = createSignal(false);
+  const [moving, setMoving] = createSignal(false);
   const project = () => props.item.project;
   const tasksId = () => `attention-project-${project().id}`;
   return (
@@ -212,6 +228,22 @@ function ProjectItem(props: { item: ProjectInAttention; taskItem: (task: Task) =
       <ProjectDue project={project()} />
       <Show when={props.item.no_open_task}>
         <span class="task-mark flag">Needs a next Task or finishing</span>
+      </Show>
+      <button
+        type="button"
+        class="quiet entry-mark"
+        aria-expanded={moving()}
+        aria-label={`Move ${project().name}`}
+        onClick={() => setMoving((shown) => !shown)}
+      >
+        Move
+      </button>
+      <Show when={moving()}>
+        <MoveRecord
+          record={{ kind: "project", id: project().id }}
+          onMoved={props.onMoved}
+          onClose={() => setMoving(false)}
+        />
       </Show>
       <ul
         id={tasksId()}

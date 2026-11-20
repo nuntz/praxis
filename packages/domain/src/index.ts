@@ -13,6 +13,7 @@ export * from "./follow-edit.ts";
 export * from "./held-change.ts";
 export * from "./link.ts";
 export * from "./live.ts";
+export * from "./move.ts";
 export * from "./notice.ts";
 export * from "./person.ts";
 export * from "./project.ts";
