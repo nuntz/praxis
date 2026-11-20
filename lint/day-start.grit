@@ -1,0 +1,6 @@
+language js
+
+`instantAt($day, "00:00", $zone)` as $asked where {
+  $asked <: not within `function dayStart($params): $returns { $body }`,
+  register_diagnostic(span=$asked, message="A day's first instant is dayStart(day, zone): summer time can skip midnight, and the midnight asked for then falls on the day before.")
+}

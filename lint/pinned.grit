@@ -1,0 +1,8 @@
+language css
+
+or {
+  `position: sticky`,
+  `position: fixed`
+} as $pinned where {
+  register_diagnostic(span=$pinned, message="Keep a control in view by placing it outside the column's scrolling body, as the Journal's search field is: what scrolls under a pinned one fails the accessibility check's target size.")
+}

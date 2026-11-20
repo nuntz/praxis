@@ -26,6 +26,14 @@
       "plugins": ["./lint/outside-jurisdiction.grit"]
     },
     {
+      "includes": ["packages/domain/src/**", "apps/worker/src/**", "apps/pwa/src/**"],
+      "plugins": ["./lint/day-start.grit"]
+    },
+    {
+      "includes": ["apps/pwa/src/**/*.css"],
+      "plugins": ["./lint/pinned.grit"]
+    },
+    {
       "includes": ["e2e/**"],
       "plugins": ["./lint/exact-label.grit"]
     },

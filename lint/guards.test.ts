@@ -71,6 +71,27 @@ const fixtures: Record<string, string> = {
     "declare const env: Env;",
     'export const named = env.DEPLOYMENT.idFromName("deployment");',
   ].join("\n"),
+  // A day's first instant is dayStart(), which alone may ask for its midnight: summer time can
+  // skip midnight, so the instant asked for falls on the day before.
+  "apps/worker/src/day-bounds.ts": [
+    "declare function instantAt(day: string, time: string, zone: string): number;",
+    'export const from = instantAt("2026-09-06", "00:00", "America/Santiago");',
+    'export const brief = instantAt("2026-09-06", "07:00", "America/Santiago");',
+  ].join("\n"),
+  "packages/domain/src/day-start.ts": [
+    "declare function instantAt(day: string, time: string, zone: string): number;",
+    "export function dayStart(day: string, zone: string): number {",
+    '  return instantAt(day, "00:00", zone);',
+    "}",
+    'export const elsewhere = instantAt("2026-09-06", "00:00", "UTC");',
+  ].join("\n"),
+  // A control is kept in view outside a column's scrolling body, never pinned over it: what
+  // scrolls under it fails the accessibility check's target size.
+  "apps/pwa/src/pinned.css": [
+    ".a { position: sticky; top: 0; }",
+    ".b { position: fixed; }",
+    ".c { position: relative; }",
+  ].join("\n"),
   // The recommended rules are on.
   "apps/pwa/src/recommended.ts": "export function f(a: number) {\n  debugger;\n  return a;\n}",
 };
@@ -106,6 +127,8 @@ const clockRead = "plugin";
 const inexactLabel = "plugin";
 const computedOn = "plugin";
 const outsideJurisdiction = "plugin";
+const midnightAsked = "plugin";
+const pinned = "plugin";
 
 describe("the lint guards", () => {
   test("the domain package cannot import Cloudflare or Bun", () => {
@@ -159,6 +182,15 @@ describe("the lint guards", () => {
       outsideJurisdiction,
     ]);
     expect(rulesAt("apps/worker/src/routing.ts")).toEqual([]);
+  });
+
+  test("a day's first instant comes from dayStart(), never from asking for its midnight", () => {
+    expect(rulesAt("apps/worker/src/day-bounds.ts")).toEqual([midnightAsked]);
+    expect(rulesAt("packages/domain/src/day-start.ts")).toEqual([midnightAsked]);
+  });
+
+  test("the screen pins no control over what scrolls", () => {
+    expect(rulesAt("apps/pwa/src/pinned.css")).toEqual([pinned, pinned]);
   });
 
   test("the recommended rules are on", () => {
