@@ -19,7 +19,7 @@ import { RUNTIME_TABLES } from "../src/agent.ts";
 import { WORDS_INDEX } from "../src/tables.ts";
 import { REFERENCES_CLEARED } from "../src/trash-rows.ts";
 import { markersIn } from "./markers.ts";
-import { fakeEmbedding, heldEmbeddings } from "./meaning-fake.ts";
+import { embeds, heldEmbeddings } from "./meaning-fake.ts";
 
 // The oracle (ADR 0015), the one place tests read tables. It snapshots the Context's domain
 // tables before and after each call, and fails unless the difference is exactly the Effects the
@@ -509,7 +509,7 @@ function snapshot(stub: Stub): Promise<{
       held.delete(id);
       if (queuedFor.get(id) === "embed") continue;
       if (embedding === undefined) behind.push(`entry:${id} is neither queued nor in the index`);
-      else if (!same(embedding, fakeEmbedding(words))) {
+      else if (!embeds(embedding, words)) {
         behind.push(`entry:${id} is in the index with words it no longer has`);
       }
     }

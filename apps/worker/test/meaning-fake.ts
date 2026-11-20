@@ -35,15 +35,35 @@ export function meanAlike(...words: string[]): void {
   }
 }
 
-/** The fake's embedding of a text: the meanings its words carry, as a unit vector. */
-export function fakeEmbedding(text: string): number[] {
-  const embedding = new Array<number>(MEANING_DIMENSIONS).fill(0);
+/** The meanings a text's words carry, as the slots of its embedding, in order. */
+function meaningsOf(text: string): string {
+  const slots = new Set<number>();
   for (const word of text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []) {
     const slot = meanings.get(word);
-    if (slot !== undefined) embedding[slot] = 1;
+    if (slot !== undefined) slots.add(slot);
   }
-  const length = Math.hypot(...embedding);
-  return length === 0 ? embedding : embedding.map((value) => value / length);
+  return [...slots].sort((a, b) => a - b).join(",");
+}
+
+/**
+ * The meanings each embedding the fake gave carries, so the oracle checks an Entry's embedding
+ * against its words without embedding them again on every call.
+ */
+const carried = new WeakMap<number[], string>();
+
+/** The fake's embedding of a text: the meanings its words carry, as a unit vector. */
+function fakeEmbedding(text: string): number[] {
+  const embedding = new Array<number>(MEANING_DIMENSIONS).fill(0);
+  const slots = meaningsOf(text);
+  const held = slots === "" ? [] : slots.split(",").map(Number);
+  for (const slot of held) embedding[slot] = 1 / Math.sqrt(held.length);
+  carried.set(embedding, slots);
+  return embedding;
+}
+
+/** Whether an embedding the fake gave is the one it gives these words now. */
+export function embeds(embedding: number[], text: string): boolean {
+  return carried.get(embedding) === meaningsOf(text);
 }
 
 function likeness(a: number[], b: number[]): number {
