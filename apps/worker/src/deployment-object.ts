@@ -99,8 +99,8 @@ export function deploymentObject(pushOf: (env: Env) => PushSender) {
     /**
      * What a Context's object asks at the start of every Run (section 5.2): the names of the
      * Contexts shown other than this one, and nothing else of them, and the month's spend against
-     * the cap, which says whether a Run may start. Embedding a newly saved Entry (#58) will ask
-     * the same before it spends, and stop at the cap.
+     * the cap, which says whether a Run may start. Embedding asks the same of `beforeEmbedding`
+     * before it spends, and stops at the cap.
      */
     async beforeRun(id: string, at: number): Promise<{ otherContexts: string[]; spend: Spend }> {
       const sql = this.ctx.storage.sql;
