@@ -59,7 +59,13 @@ import { contextFile } from "./context-file.ts";
 import { heldWaiting } from "./held-change-rows.ts";
 import { forgetOldKeys, holdsKeys, rememberKey, repeatedKey } from "./keys.ts";
 import { logCall } from "./log.ts";
-import { embeddingCost, LIKE_ENOUGH, type MeaningIndex, NEAREST } from "./meaning.ts";
+import {
+  embeddingCost,
+  LIKE_ENOUGH,
+  MEANING_REMOVAL_BATCH,
+  type MeaningIndex,
+  NEAREST,
+} from "./meaning.ts";
 import {
   anythingQueued,
   entriesInIndex,
@@ -151,12 +157,6 @@ function noSuchBrief(): ToolResult<never> {
 const MEANING_BATCH = 20;
 
 /**
- * How many Entries are taken out of the meaning index at once when the Context is deleted, well
- * within what Vectorize takes in one call.
- */
-const MEANING_REMOVAL_BATCH = 100;
-
-/**
  * How soon the alarm comes back to try the meaning index's queue again, once embedding stopped at
  * a failure or at the cap: a write or a search tries sooner.
  */
@@ -188,7 +188,11 @@ export function contextObject(
   modelOf: (env: Env) => AgentModel | NoAgent,
   meaningOf: (env: Env) => MeaningIndex | null,
 ) {
-  /** One Context: its Journal and everything else it holds, on its own SQLite (ADR 0006). */
+  /**
+   * One Context: its Journal and everything else it holds, on its own SQLite (ADR 0006). Each
+   * method the Deployment object calls on it is on the closed list of ADR 0006 and SPEC section
+   * 9.2: a new one amends both.
+   */
   return class ContextObject extends DurableObject<Env> {
     /** The Agent, opened on first use: most requests never need it. */
     #agent: ContextAgent | NoAgent | undefined;

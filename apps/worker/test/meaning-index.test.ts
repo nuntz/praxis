@@ -4,6 +4,7 @@ import {
   embeddingId,
   LIKE_ENOUGH,
   MEANING_DIMENSIONS,
+  MEANING_REMOVAL_BATCH,
   type MeaningBindings,
   type MeaningIndex,
   workersAiMeaning,
@@ -88,6 +89,33 @@ function contract(name: string, service: () => Service) {
       );
       expect(nearest.map((found) => found.entry)).toEqual([entry]);
       await index.remove(context, [entry]);
+    });
+
+    test("takes out as many Entries at once as deleting a Context does, some never put in", async () => {
+      const { index, eventually } = service();
+      const context = contextId();
+      const [garden, teeth] = await index.embed([ABOUT_GARDEN, ABOUT_TEETH]);
+      const put = [crypto.randomUUID(), crypto.randomUUID()];
+      await index.put(context, [
+        { entry: put[0] as string, embedding: garden ?? [] },
+        { entry: put[1] as string, embedding: teeth ?? [] },
+      ]);
+      await eventually(
+        () => index.nearest(context, garden ?? [], 10),
+        (found) => found.length === 2,
+      );
+      const neverPut = Array.from({ length: MEANING_REMOVAL_BATCH - put.length }, () =>
+        crypto.randomUUID(),
+      );
+
+      await index.remove(context, [...neverPut, ...put]);
+
+      expect(
+        await eventually(
+          () => index.nearest(context, garden ?? [], 10),
+          (found) => found.length === 0,
+        ),
+      ).toEqual([]);
     });
 
     test("keeps each Context's part to itself", async () => {

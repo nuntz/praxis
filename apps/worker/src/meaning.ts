@@ -50,6 +50,12 @@ export const LIKE_ENOUGH = 0.5;
 export const NEAREST = 50;
 
 /**
+ * How many Entries are taken out of the meaning index in one call when the Context is deleted, some
+ * of them never put in. The contract suite run by hand checks Vectorize takes that many at once.
+ */
+export const MEANING_REMOVAL_BATCH = 100;
+
+/**
  * The tokens embedding these texts is reckoned to take: one for every three UTF-16 code units,
  * which overcounts English and is near for the other languages the model reads.
  */
