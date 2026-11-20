@@ -21,32 +21,29 @@ const CLOCK_STARTED = /^The clock started this Run/;
 /** How often each Message the model is to fail once has been asked, by its words. */
 const asks = new Map<string, number>();
 
-scriptModel(
-  (context) => {
-    if (context.messages.at(-1)?.role === "toolResult") return fauxAssistantMessage("Recorded.");
-    const words = lastWords(context).trim();
-    if (CLOCK_STARTED.test(words)) return fauxAssistantMessage(NOTHING_TO_RAISE);
-    if (UNREACHABLE_ONCE.test(words)) {
-      const times = (asks.get(words) ?? 0) + 1;
-      asks.set(words, times);
-      // The first Run asks once and again as often as its retries allow; each one fails.
-      if (times <= 1 + SCRIPTED_RETRY.maxRetries) {
-        return fauxAssistantMessage([], { stopReason: "error", errorMessage: UNAVAILABLE });
-      }
-      return fauxAssistantMessage("Back again.");
+scriptModel((context) => {
+  if (context.messages.at(-1)?.role === "toolResult") return fauxAssistantMessage("Recorded.");
+  const words = lastWords(context).trim();
+  if (CLOCK_STARTED.test(words)) return fauxAssistantMessage(NOTHING_TO_RAISE);
+  if (UNREACHABLE_ONCE.test(words)) {
+    const times = (asks.get(words) ?? 0) + 1;
+    asks.set(words, times);
+    // The first Run asks once and again as often as its retries allow; each one fails.
+    if (times <= 1 + SCRIPTED_RETRY.maxRetries) {
+      return fauxAssistantMessage([], { stopReason: "error", errorMessage: UNAVAILABLE });
     }
-    const edit = EDIT.exec(words);
-    if (edit?.[1] && edit[2] && edit[3]) {
-      const input = { id: edit[1], version: Number(edit[2]), words: edit[3] };
-      return fauxAssistantMessage(fauxToolCall("edit_entry", input), { stopReason: "toolUse" });
-    }
-    const asked = RECORD.exec(words);
-    if (!asked?.[1]) return fauxAssistantMessage("Noted.");
-    return fauxAssistantMessage(fauxToolCall("record_entry", { words: asked[1] }), {
-      stopReason: "toolUse",
-    });
-  },
-  { wordsPerSecond: 20 },
-);
+    return fauxAssistantMessage("Back again.");
+  }
+  const edit = EDIT.exec(words);
+  if (edit?.[1] && edit[2] && edit[3]) {
+    const input = { id: edit[1], version: Number(edit[2]), words: edit[3] };
+    return fauxAssistantMessage(fauxToolCall("edit_entry", input), { stopReason: "toolUse" });
+  }
+  const asked = RECORD.exec(words);
+  if (!asked?.[1]) return fauxAssistantMessage("Noted.");
+  return fauxAssistantMessage(fauxToolCall("record_entry", { words: asked[1] }), {
+    stopReason: "toolUse",
+  });
+});
 
 export const ContextObject = contextObject(testModel);
