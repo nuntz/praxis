@@ -266,7 +266,7 @@ A result is a success or an error from a closed set of codes:
 - An Effect carries the record's id and a one-line summary, the same summary reads use.
 - A Context is not a record, but a change to its settings, such as its time zone, is an Effect on the Context, carrying its id and its name as the summary. A time zone change changes no Task: its dates are days, and what today makes of them is derived when read.
 - A Deployment tool that changes a Context returns its Effect on the Context to its caller. Only a rename goes in that Context's change log, since it is the one such change a reader of the Context sees: the accent shows only on the person's screen, a retired Context cannot be read, and a new Context's log starts empty. The Deployment object keeps no change log.
-- A Connection is not a record either. A Deployment tool that makes or changes one returns an Effect on it, carrying its id and its name as the summary. Retiring a Context ends its Connections, each an Effect by rule. None of these goes in a change log.
+- A Connection is not a record either. A Deployment tool that makes or changes one returns an Effect on it, carrying its id and its name as the summary. Retiring a Context ends its Connections, and deleting one deletes them, each an Effect by rule. None of these goes in a change log.
 - Nor is a Held Change (section 4.7). Leaving one is an Effect on it, made, and making, cancelling or lapsing one an Effect on it, deleted, carrying its id and its summary. These go in the change log, so the screen hears them, but `list_changes` gives a Connection none of them, and no change whose Effects were all on Held Changes. The person's tap still shows to it as the change it made to the Entry, under `make_held_change`.
 - Nor is a Device. A Device tool returns an Effect on it, carrying its id and its name as the summary: made when something is first switched on there, changed when it is renamed or switched, and deleted when it leaves the list. None goes in a change log. When it was last seen changes with no Effect.
 - Neither is the spend cap. `set_spend_cap` returns an Effect on it, carrying its fixed id and its new amount as the summary, and it goes in no change log.
@@ -767,7 +767,7 @@ ADR 0006, 0010, 0017, 0023, 0024.
   - what a Run, a Call or embedding cost;
   - notify the Devices that this Context has a Brief or a Review;
   - a Call is starting here, or has ended.
-- The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to rename it, for an Export or a Backup, a move, and ending a Call there when another starts elsewhere. For an Export or a Backup it carries the file the Context's object writes and reads none of it.
+- The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to rename it, to delete it, for an Export or a Backup, a move, and ending a Call there when another starts elsewhere. For an Export or a Backup it carries the file the Context's object writes and reads none of it.
 - A Context's object keeps its own name, for its settings and the summary of an Effect on it. The Deployment object is its only writer, writes it before its own list, and runs its writes one at a time, so the two never disagree (ADR 0006).
 - Revoking a Connection or retiring a Context takes effect on the next request.
 - Each Context has its own alarm, which schedules its Brief and Review, expires its Trash, prunes its change log and finishes an interrupted move.
@@ -847,10 +847,11 @@ Settings shows when the last Backup was made, from `get_last_backup`. When none 
 
 ### 10.4 Deleting a Context
 
-- Offered only for a retired Context, by the person's hand, after typing its name and being offered an Export.
-- It removes the object's whole storage, its part of the meaning index and its Connections. No Trash, no way back.
+- Offered only for a retired Context, by the person's hand, after typing its name and being offered an Export. `delete_context` takes the name as typed, and refuses one that is not the Context's.
+- It removes the object's whole storage, its part of the meaning index and its Connections, each Connection an Effect by rule. No Trash, no way back.
 - Its Run records go. Its spend stays as monthly totals with no name attached.
-- Its files in Backups go as those Backups age out.
+- It is refused, with nothing deleted, while a Run is going in the Context, and when the meaning index does not answer: only waiting mends either. An Entry already taken out of the index when it stopped answering is queued to go back in, so the index is whole again should the Context be brought back.
+- The screen says that Praxis cannot reach a file the person downloaded, and that its files in Backups go as those Backups age out.
 
 ### 10.5 How long things are kept
 

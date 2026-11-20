@@ -229,13 +229,15 @@ function judgeConversation(changed: Pick<Effect, "kind" | "id" | "what">[], logg
   return problems;
 }
 
-// The same promise for a Deployment write, which can reach into a Context's object (to make it or
-// rename it): every Context listed is snapshotted before and after, and what changed in each must
+// The same promise for a Deployment write, which can reach into a Context's object (to make it,
+// rename it or delete it): every Context listed is snapshotted before and after, and what changed in each must
 // be Effects the call returned, logged in that Context with the caller. A Context the call made
 // holds its settings and nothing else, and its change log starts empty. The Connections, the
 // Devices and the spend cap the Deployment object keeps are held the same way: the ones changed
 // are exactly the ones its Effects name, and the Deployment object keeps no change log for them.
-// When a Device was last seen is a sighting, not a change, and is left out.
+// When a Device was last seen is a sighting, not a change, and is left out. A Context leaves the
+// list only when the call says it deleted it, and then its object holds nothing: no table, no
+// alarm, and no part of the meaning index.
 
 type DeploymentStub = ReturnType<typeof env.DEPLOYMENT.get>;
 
@@ -276,19 +278,35 @@ export async function throughDeploymentOracle(
     contexts.set(id, { before: was?.records ?? null, after: after.records, logged });
   }
   const gone = listedBefore.filter((id) => !listedAfter.includes(id));
+  const deleted = new Set(
+    effectsOf(result as ToolResult<unknown>)
+      .filter((e) => e.kind === "context" && e.what === "deleted")
+      .map((e) => e.id),
+  );
 
   const problems = [
-    ...gone.map((id) => `The Context ${id} left the list.`),
+    ...gone.flatMap((id) =>
+      deleted.has(id) ? [] : [`The Context ${id} left the list with no Effect saying so.`],
+    ),
+    ...[...deleted].flatMap((id) =>
+      gone.includes(id) ? [] : [`The Context ${id} is deleted and still listed.`],
+    ),
+    ...(await Promise.all(gone.map((id) => leftBehind(contextOf(id))))).flat(),
     ...judgeDeployment({ request, result, contexts, kept }),
   ];
   expect(problems, `The oracle, on ${request.tool} as ${request.caller.kind}`).toEqual([]);
   return result;
 }
 
+/** The Effects a call returned: none when it failed. */
+function effectsOf(result: ToolResult<unknown>): Effect[] {
+  return result.ok ? ((result.value as { effects?: Effect[] }).effects ?? []) : [];
+}
+
 /** What is wrong with one Deployment call as the oracle saw each Context. */
 export function judgeDeployment(seen: SeenDeployment): string[] {
   const { request, result } = seen;
-  const effects = result.ok ? ((result.value as { effects?: Effect[] }).effects ?? []) : [];
+  const effects = effectsOf(result);
   const problems: string[] = [];
 
   const keptChanged = differences(seen.kept.before, seen.kept.after);
@@ -347,6 +365,23 @@ export function judgeDeployment(seen: SeenDeployment): string[] {
     }
   }
   return problems;
+}
+
+/** What a deleted Context's object still holds, each a problem: it should hold nothing. */
+function leftBehind(stub: Stub): Promise<string[]> {
+  return runInDurableObject(stub, async (_, state) => {
+    const id = state.id.toString();
+    const problems: string[] = [];
+    const tables = tablesIn(state.storage.sql);
+    if (tables.length > 0) problems.push(`The Context ${id} is deleted and holds ${tables}.`);
+    if ((await state.storage.getAlarm()) !== null) {
+      problems.push(`The Context ${id} is deleted and its alarm is set.`);
+    }
+    if (heldEmbeddings(id).size > 0) {
+      problems.push(`The Context ${id} is deleted and its part of the meaning index is not.`);
+    }
+    return problems;
+  });
 }
 
 /** The ids of the Contexts the Deployment object lists, read from its table. */
@@ -462,6 +497,10 @@ function snapshot(stub: Stub): Promise<{
   return runInDurableObject(stub, (_, state) => {
     const sql = state.storage.sql;
     const tables = tablesIn(sql);
+    // Only a Context deleted whose Deployment object never heard holds no table: it holds nothing.
+    if (tables.length === 0) {
+      return { records: new Map(), lastChange: 0, words: new Map(), summaries: [] };
+    }
     const unknown = tables.filter(
       (name) =>
         !(

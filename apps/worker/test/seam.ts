@@ -69,6 +69,13 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z") {
     backUp() {
       return stub.backUp(time.now);
     },
+    /**
+     * Delete a Context's object for good as `delete_context` asks it to, with the Deployment object
+     * never hearing it was done, as when the answer is lost on the way back.
+     */
+    deleteObjectUnheard(id: string) {
+      return contextOf(id).deleteForGood();
+    },
     /** The Context with this id, reached through the Deployment object as the Worker does. */
     context(id: string) {
       return contextHandle(time, () => reachContext(env, stub, id));

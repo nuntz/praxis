@@ -13,7 +13,7 @@ const KIND: Record<RecordKind, string> = {
 };
 
 /** Said wherever something is removed for good: a file the person downloaded is out of reach. */
-const DOWNLOADED =
+export const DOWNLOADED =
   "Praxis cannot reach a file you downloaded, such as an Export: what is removed here stays in it.";
 
 /**

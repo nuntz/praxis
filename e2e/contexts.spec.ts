@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import {
   callContextTool,
+  callDeploymentTool,
   expect,
   lastShown,
   makeContext,
@@ -128,4 +129,39 @@ test("the Deployment's settings list the Contexts with their accents, and make, 
   await expect(row(`Side ${tag}`).getByText("Retired")).toHaveCount(0);
   await switchTo(page, `Side ${tag}`);
   await expect(switcher(page)).toHaveCSS("background-color", MOSS);
+});
+
+test("a retired Context is deleted for good from the settings once its name is typed, with an Export offered first", async ({
+  page,
+}) => {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const old = await makeContext(page, { name: `Old ${tag}`, time_zone: "UTC", accent: "slate" });
+  await callContextTool(page, old.id, "record_entry", { words: `Old plan ${tag}` });
+  await callDeploymentTool(page, "retire_context", { id: old.id });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const contexts = page.getByRole("region", { name: "Contexts" });
+  const row = contexts.getByTestId("context-row").filter({
+    has: page.getByRole("textbox", { name: `Name of ${old.name}` }),
+  });
+
+  await row.getByRole("button", { name: `Delete ${old.name}…` }).click();
+  const form = row.getByRole("form", { name: `Delete ${old.name}` });
+  await expect(form.getByRole("button", { name: "Make an Export" })).toBeVisible();
+  await expect(form.getByText("Praxis cannot reach a file you downloaded")).toBeVisible();
+  await expect(form.getByText("Its files in Backups go as those Backups age out")).toBeVisible();
+  const remove = form.getByRole("button", { name: `Delete ${old.name} for good` });
+  const typed = form.getByRole("textbox", { name: `Type ${old.name} to delete it` });
+  await expect(remove).toBeDisabled();
+  await typed.fill(`old ${tag}`);
+  await expect(remove).toBeDisabled();
+  await typed.fill(old.name);
+
+  const answered = page.waitForResponse("**/api/deployment/tools/delete_context");
+  await remove.click();
+  expect((await answered).ok()).toBe(true);
+
+  await expect(row).toHaveCount(0);
+  const listed = await callDeploymentTool(page, "list_contexts", {});
+  expect(listed.items.map((context: { id: string }) => context.id)).not.toContain(old.id);
 });

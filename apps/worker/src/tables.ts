@@ -512,12 +512,31 @@ function createMeaningQueue(sql: SqlStorage): void {
  * with no Entry has nothing to build. Returns how many Entries it queued.
  */
 export function queueWholeJournal(sql: SqlStorage): number {
-  sql.exec(`
-    INSERT OR REPLACE INTO meaning_queue (entry, what, queued)
+  return queueToEmbed(sql, null);
+}
+
+/**
+ * Queue these Entries to be embedded again, those still in the Journal, and mark the meaning index
+ * stale until they are: they were taken out of it when deleting the Context stopped part-way.
+ */
+export function queueToEmbedAgain(sql: SqlStorage, entries: string[]): number {
+  return queueToEmbed(sql, entries);
+}
+
+/** Queue these Entries to be embedded, or every Entry for null. Returns how many it queued. */
+function queueToEmbed(sql: SqlStorage, only: string[] | null): number {
+  const among = only === null ? "" : `WHERE id IN (SELECT value FROM json_each(?))`;
+  const given = only === null ? [] : [JSON.stringify(only)];
+  const { count } = sql
+    .exec<{ count: number }>(`SELECT count(*) AS count FROM entries ${among}`, ...given)
+    .one();
+  sql.exec(
+    `INSERT OR REPLACE INTO meaning_queue (entry, what, queued)
       SELECT id, 'embed', (SELECT queued FROM meaning_index) + row_number() OVER (ORDER BY seq)
-      FROM entries
-  `);
-  const { count } = sql.exec<{ count: number }>(`SELECT count(*) AS count FROM entries`).one();
-  sql.exec(`UPDATE meaning_index SET queued = queued + ?, built = ?`, count, count === 0 ? 1 : 0);
+      FROM entries ${among}`,
+    ...given,
+  );
+  if (count > 0) sql.exec(`UPDATE meaning_index SET queued = queued + ?, built = 0`, count);
+  else if (only === null) sql.exec(`UPDATE meaning_index SET built = 1`);
   return count;
 }

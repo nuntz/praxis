@@ -280,3 +280,29 @@ describe("retiring a Context", () => {
     ).toMatchObject({ ok: false, error: { code: "not_found" } });
   });
 });
+
+describe("deleting a Context", () => {
+  test("deletes its Connections, ended when it was retired, each an Effect by rule: an Export holds them no more", async () => {
+    const deployment = newDeployment();
+    const work = await makeContext(deployment, "Work");
+    const home = await makeContext(deployment, "Home");
+    const first = await connect(deployment, work, "Claude Code");
+    const second = await connect(deployment, work, "ChatGPT");
+    const atHome = await connect(deployment, home, "Laptop");
+    value(await deployment.call(hand, "retire_context", { id: work }));
+
+    const deleted = value(
+      await deployment.call(hand, "delete_context", { id: work, name: "Work" }),
+    );
+
+    expect(deleted.effects).toEqual([
+      { kind: "context", id: work, what: "deleted", summary: "Work", by: "call" },
+      { kind: "connection", id: first.id, what: "deleted", summary: "Claude Code", by: "rule" },
+      { kind: "connection", id: second.id, what: "deleted", summary: "ChatGPT", by: "rule" },
+    ]);
+    const exported = value(await deployment.call(hand, "make_export", {}));
+    const file = exported.files[0]?.content as { connections: { id: string }[] };
+    expect(file.connections.map((made) => made.id)).toEqual([atHome.id]);
+    expect(await listed(deployment)).toEqual([atHome]);
+  });
+});

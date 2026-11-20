@@ -202,3 +202,25 @@ describe("get_spend past 80% of the cap", () => {
     expect(value(await deployment.call(hand, "get_spend", {})).notice).toBe("nearing_cap");
   });
 });
+
+describe("deleting a Context", () => {
+  test("its spend stays in the month's count, and an Export gives it with no name attached", async () => {
+    const deployment = newDeployment("2026-11-15T09:00:00.000Z");
+    scriptModel(answeringAtCost(0.5));
+    const work = await makeContext(deployment, "Work");
+    const home = await makeContext(deployment, "Home");
+    const cost = await runCosting(work);
+    await runCosting(home);
+    const before = value(await deployment.call(hand, "get_spend", {}));
+    const workId = value(await deployment.call(hand, "list_contexts", {})).items[0]?.id as string;
+    value(await deployment.call(hand, "retire_context", { id: workId }));
+
+    value(await deployment.call(hand, "delete_context", { id: workId, name: "Work" }));
+
+    expect(value(await deployment.call(hand, "get_spend", {}))).toEqual(before);
+    const exported = value(await deployment.call(hand, "make_export", {}));
+    const file = exported.files[0]?.content as { deleted_contexts_spend: unknown };
+    expect(file.deleted_contexts_spend).toEqual([{ month: "2026-11", dollars: cost }]);
+    expect(JSON.stringify(file)).not.toContain("Work");
+  });
+});

@@ -121,6 +121,12 @@ export const deploymentTools = {
       "Bring a retired Context back, as it was. Bringing back one that is not retired changes nothing.",
     input: writeInput({ id }),
   },
+  delete_context: {
+    kind: "write",
+    description:
+      "Delete a retired Context for good, given its name as the person typed it: everything in it goes, with its Run records, its part of the meaning index and its Connections, and there is no Trash and no way back. Its spend stays in the month's count, with no name attached. A Context not retired is refused, as is a name that is not its own, and so is one where a Run is going.",
+    input: writeInput({ id, name: z.string() }),
+  },
   list_connections: {
     kind: "read",
     description:
@@ -232,6 +238,8 @@ export type DeploymentToolOutput = {
   set_context_accent: Written<ContextListing>;
   retire_context: Written<ContextListing>;
   bring_back_context: Written<ContextListing>;
+  /** Null: the Context is gone. */
+  delete_context: Written<null>;
   list_connections: { items: Connection[] };
   create_connection: Written<Connection>;
   rename_connection: Written<Connection>;

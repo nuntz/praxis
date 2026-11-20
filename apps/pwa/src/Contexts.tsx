@@ -7,7 +7,9 @@ import {
 } from "@praxis/domain";
 import { createSignal, For, Show } from "solid-js";
 import { deviceTimeZone } from "./ContextSettings.tsx";
-import { writeToDeployment } from "./tools.ts";
+import { MakeExport } from "./Export.tsx";
+import { DOWNLOADED } from "./Trash.tsx";
+import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
 
 /** An accent as the person reads it. */
 function accentName(accent: Accent): string {
@@ -27,12 +29,13 @@ type ContextChange = Extract<
 /**
  * The Deployment's Contexts, in its settings (section 8.6): each with its accent, renamed, given
  * another accent, retired or brought back here, and a new one made. Retiring hides a Context and
- * deletes nothing.
+ * deletes nothing; a retired one can then be deleted for good (section 10.4).
  */
 export function Contexts(props: {
   contexts: ContextListing[];
   onChanged: (context: ContextListing) => void;
   onMade: (context: ContextListing) => void;
+  onDeleted: (id: string) => void;
 }) {
   const [problem, setProblem] = createSignal<string | null>(null);
 
@@ -44,7 +47,12 @@ export function Contexts(props: {
       <ul class="context-rows">
         <For each={props.contexts}>
           {(context) => (
-            <ContextRow context={context} onChanged={props.onChanged} onProblem={setProblem} />
+            <ContextRow
+              context={context}
+              onChanged={props.onChanged}
+              onDeleted={props.onDeleted}
+              onProblem={setProblem}
+            />
           )}
         </For>
       </ul>
@@ -63,9 +71,11 @@ export function Contexts(props: {
 function ContextRow(props: {
   context: ContextListing;
   onChanged: (context: ContextListing) => void;
+  onDeleted: (id: string) => void;
   onProblem: (message: string | null) => void;
 }) {
   const [sending, setSending] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
   let nameField!: HTMLInputElement;
 
   async function send<N extends ContextChange>(tool: N, input: DeploymentToolInput<N>) {
@@ -143,8 +153,104 @@ function ContextRow(props: {
         >
           Bring back {props.context.name}
         </button>
+        <button
+          type="button"
+          class="quiet"
+          disabled={sending()}
+          aria-expanded={deleting()}
+          onClick={() => setDeleting((open) => !open)}
+        >
+          Delete {props.context.name}…
+        </button>
+        <Show when={deleting()}>
+          <DeleteContext
+            context={props.context}
+            onDeleted={props.onDeleted}
+            onKept={() => setDeleting(false)}
+          />
+        </Show>
       </Show>
     </li>
+  );
+}
+
+/**
+ * Deleting a retired Context for good (section 10.4): the person is offered an Export first, told
+ * what cannot be reached, and deletes it only once they have typed its name, which the tool checks
+ * too.
+ */
+function DeleteContext(props: {
+  context: ContextListing;
+  onDeleted: (id: string) => void;
+  onKept: () => void;
+}) {
+  const [typed, setTyped] = createSignal("");
+  const [problem, setProblem] = createSignal<string | null>(null);
+  const [sending, setSending] = createSignal(false);
+
+  async function remove(event: SubmitEvent) {
+    event.preventDefault();
+    setSending(true);
+    try {
+      const result = await callDeploymentTool("delete_context", {
+        id: props.context.id,
+        name: typed(),
+      });
+      if (!result.ok) {
+        setProblem(result.error.message);
+        return;
+      }
+      props.onDeleted(props.context.id);
+    } catch (error) {
+      setProblem(unreachableMessage(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <form
+      class="delete-context"
+      aria-label={`Delete ${props.context.name}`}
+      onSubmit={(event) => void remove(event)}
+    >
+      <p class="settings-note">
+        Deleting {props.context.name} removes everything in it for good: its Journal and its Trash,
+        its Run records and its Conversation, what search holds of it, and its Connections. There is
+        no Trash for it and no way back. An Export keeps a copy.
+      </p>
+      <div>
+        <MakeExport />
+      </div>
+      <p class="settings-note">
+        {DOWNLOADED} Its files in Backups go as those Backups age out, within 30 days.
+      </p>
+      <label>
+        Type {props.context.name} to delete it
+        <input
+          type="text"
+          autocomplete="off"
+          spellcheck={false}
+          value={typed()}
+          onInput={(event) => setTyped(event.currentTarget.value)}
+        />
+      </label>
+      <div class="delete-context-actions">
+        <button type="submit" disabled={sending() || typed() !== props.context.name}>
+          Delete {props.context.name} for good
+        </button>
+        <button type="button" class="quiet" disabled={sending()} onClick={() => props.onKept()}>
+          Keep it
+        </button>
+      </div>
+      <Show when={problem()}>
+        {(message) => (
+          <p class="problem" role="alert">
+            {message()}
+          </p>
+        )}
+      </Show>
+    </form>
   );
 }
 

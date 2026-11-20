@@ -62,6 +62,7 @@ import { logCall } from "./log.ts";
 import { embeddingCost, LIKE_ENOUGH, type MeaningIndex, NEAREST } from "./meaning.ts";
 import {
   anythingQueued,
+  entriesInIndex,
   entriesToEmbed,
   meaningBuilt,
   queued,
@@ -91,7 +92,7 @@ import {
 } from "./settings.ts";
 import type { SpendReport } from "./spend-rows.ts";
 import { standingEntries } from "./standing-rows.ts";
-import { createTables, queueWholeJournal } from "./tables.ts";
+import { createTables, queueToEmbedAgain, queueWholeJournal } from "./tables.ts";
 import { attentionTools } from "./tools/attention.ts";
 import { changeTools } from "./tools/changes.ts";
 import { entryTools } from "./tools/entries.ts";
@@ -150,6 +151,12 @@ function noSuchBrief(): ToolResult<never> {
 const MEANING_BATCH = 20;
 
 /**
+ * How many Entries are taken out of the meaning index at once when the Context is deleted, well
+ * within what Vectorize takes in one call.
+ */
+const MEANING_REMOVAL_BATCH = 100;
+
+/**
  * How soon the alarm comes back to try the meaning index's queue again, once embedding stopped at
  * a failure or at the cap: a write or a search tries sooner.
  */
@@ -159,7 +166,7 @@ const MEANING_RETRY = 10 * 60 * 1000;
  * Log that the meaning index failed, by the name of what was thrown alone: its message may carry
  * what was sent, and no words are logged (section 13).
  */
-function meaningFailed(during: "search" | "embedding", error: unknown): void {
+function meaningFailed(during: "search" | "embedding" | "deleting", error: unknown): void {
   const name = error instanceof Error ? error.name : typeof error;
   console.error(JSON.stringify({ meaning: "failed", during, error: name }));
 }
@@ -198,6 +205,10 @@ export function contextObject(
     #embedding = false;
     /** Whether the last pass stopped at a failure or at the cap, leaving the queue for the alarm. */
     #meaningStopped = false;
+    /** Set while the Context is being deleted for good, and kept once it is: nothing new starts. */
+    #deleting = false;
+    /** Set once its storage is gone, so being asked again, as after an answer lost, succeeds. */
+    #deleted = false;
 
     constructor(ctx: DurableObjectState, env: Env) {
       super(ctx, env);
@@ -244,6 +255,66 @@ export function contextObject(
      */
     async exportFile(at: number): Promise<ContextFile> {
       return contextFile(this.ctx.storage.sql, at);
+    }
+
+    /**
+     * Delete this Context for good, which the Deployment object asks on `delete_context` before it
+     * takes the Context off its list (section 10.4): its part of the meaning index is taken out,
+     * then its alarm and its whole storage go, Journal, Run records and Conversation alike, and its
+     * live channels close. Nothing new starts meanwhile, and what is going is waited for, so
+     * nothing writes once the storage is gone. Refused, with nothing deleted, while a Run is going
+     * or when the meaning index does not answer: only waiting mends either.
+     */
+    async deleteForGood(): Promise<ToolResult<null>> {
+      if (this.#deleted) return success(null);
+      this.#deleting = true;
+      try {
+        await this.#clocking;
+        await this.meaningSettled();
+        const sql = this.ctx.storage.sql;
+        if (runsNotEnded(sql).length > 0) {
+          return refusal(
+            "A Run is going in this Context, so nothing was deleted: try again once it has ended.",
+            [],
+          );
+        }
+        const index = meaningOf(this.env);
+        if (index !== null) {
+          const entries = entriesInIndex(sql);
+          let takenOut = 0;
+          try {
+            while (takenOut < entries.length) {
+              const batch = entries.slice(takenOut, takenOut + MEANING_REMOVAL_BATCH);
+              await index.remove(this.contextId(), batch);
+              takenOut += batch.length;
+            }
+          } catch (error) {
+            meaningFailed("deleting", error);
+            // Those already out are put back in, so the index is whole again should the Context
+            // be brought back, and is stale till then.
+            const out = entries.slice(0, takenOut);
+            if (out.length > 0) this.ctx.storage.transactionSync(() => queueToEmbedAgain(sql, out));
+            return refusal(
+              "The meaning index did not answer, so nothing was deleted: try again in a while.",
+              [],
+            );
+          }
+        }
+        for (const channel of this.ctx.getWebSockets()) {
+          try {
+            channel.close(1000, "The Context was deleted");
+          } catch {
+            // Closing already.
+          }
+        }
+        await this.ctx.storage.deleteAlarm();
+        await this.ctx.storage.deleteAll();
+        this.#deleted = true;
+        return success(null);
+      } finally {
+        // Once deleted, it stays so: the object starts nothing again until it is evicted.
+        if (!this.#deleted) this.#deleting = false;
+      }
     }
 
     /**
@@ -401,7 +472,7 @@ export function contextObject(
      * pass takes up what was queued while it ran, so nothing waits for the next write.
      */
     private keepMeaning(): void {
-      if (this.#embedding || meaningOf(this.env) === null) return;
+      if (this.#embedding || this.#deleting || meaningOf(this.env) === null) return;
       if (!anythingQueued(this.ctx.storage.sql)) return;
       this.#embedding = true;
       this.#meaning = this.embedQueued().then(async (finished) => {
@@ -794,6 +865,7 @@ export function contextObject(
      * from where the last request set it: the same when deployed. Tests call `wake` themselves.
      */
     async alarm(): Promise<void> {
+      if (this.#deleting) return;
       await this.wake(arrivalTime() + this.#clockSkew);
       this.keepMeaning();
       // A Run a lost instance left going, or one the runtime is waiting to retry, is taken up.
@@ -834,6 +906,7 @@ export function contextObject(
      */
     private startClockRuns(at: number): Promise<void> {
       this.#clocking = this.#clocking.then(async () => {
+        if (this.#deleting) return;
         const agent = this.agent();
         const sql = this.ctx.storage.sql;
         if (typeof agent === "string") return noClockWithoutAgent(sql, at);
@@ -898,6 +971,7 @@ export function contextObject(
      * while it works or sleeps, and the daily pruning while there is something to prune.
      */
     private async keepAlarm(): Promise<void> {
+      if (this.#deleting) return;
       const storage = this.ctx.storage;
       // The object's time, which a test sets; the platform's alarm is set by the real clock.
       const skew = this.#clockSkew;

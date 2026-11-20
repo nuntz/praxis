@@ -291,6 +291,30 @@ button.quiet {
   font: var(--type-label);
 }
 
+/* Deleting a retired Context: under its row, across the full width. */
+.delete-context {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.delete-context label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.delete-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.delete-context .problem {
+  margin: 0;
+}
+
 .settings-note {
   margin: 0;
   color: var(--muted);

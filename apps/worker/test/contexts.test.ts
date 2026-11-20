@@ -1,7 +1,9 @@
 import type { Entry, Task } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
-import { agent, everyCaller, hand, newDeployment, value } from "./seam.ts";
+import { failMeaningAfter, heldEmbeddings, setMeaningFailing } from "./meaning-fake.ts";
+import { answering, type Script, scriptModel } from "./model-fake.ts";
+import { agent, atOnce, everyCaller, hand, newDeployment, value } from "./seam.ts";
 
 // The Deployment object holds the list of Contexts, with their names and accents and nothing from
 // any Journal (section 9.2, ADR 0006). Its tools are offered to the person's hand only (4.11), and
@@ -275,6 +277,204 @@ describe("bring_back_context", () => {
     expect(
       await deployment.call(hand, "bring_back_context", { id: "no-such-context" }),
     ).toMatchObject({ ok: false, error: { code: "not_found" } });
+  });
+});
+
+describe("delete_context", () => {
+  test("deletes a retired Context for good: it leaves the list, and no request reaches it", async () => {
+    const deployment = newDeployment();
+    const work = await make(deployment, "Work");
+    const home = await make(deployment, "Home");
+    value(
+      await deployment
+        .context(work)
+        .call(hand, "record_entry", { words: marked("Budget"), tasks: [] }),
+    );
+    value(await deployment.call(hand, "retire_context", { id: work }));
+
+    const deleted = value(
+      await deployment.call(hand, "delete_context", { id: work, name: "Work" }),
+    );
+
+    expect(deleted).toEqual({
+      record: null,
+      effects: [{ kind: "context", id: work, what: "deleted", summary: "Work", by: "call" }],
+      changed: true,
+    });
+    expect((await listed(deployment)).map((context) => context.id)).toEqual([home]);
+    for (const caller of everyCaller) {
+      expect(await deployment.context(work).call(caller, "get_settings", {})).toMatchObject({
+        ok: false,
+        error: { code: "not_found" },
+      });
+    }
+    // There is no way back: it cannot be brought back, and deleting it again finds nothing.
+    for (const [tool, input] of [
+      ["bring_back_context", { id: work }],
+      ["delete_context", { id: work, name: "Work" }],
+    ] as const) {
+      expect(await deployment.call(hand, tool, input), tool).toMatchObject({
+        ok: false,
+        error: { code: "not_found" },
+      });
+    }
+  });
+
+  test("only a retired Context, and only given its name as it is listed", async () => {
+    const deployment = newDeployment();
+    const work = await make(deployment, "Work");
+    await make(deployment, "Home");
+    const inTheWay = [{ kind: "context", id: work, summary: "Work" }];
+
+    expect(await deployment.call(hand, "delete_context", { id: work, name: "Work" })).toMatchObject(
+      { ok: false, error: { code: "refused", in_the_way: inTheWay } },
+    );
+    value(await deployment.call(hand, "retire_context", { id: work }));
+    for (const name of ["work", "Work ", "Home", ""]) {
+      expect(await deployment.call(hand, "delete_context", { id: work, name }), name).toMatchObject(
+        { ok: false, error: { code: "refused", in_the_way: inTheWay } },
+      );
+    }
+    expect(await deployment.call(hand, "delete_context", { id: work })).toMatchObject({
+      ok: false,
+      error: { code: "invalid_input" },
+    });
+    expect(
+      await deployment.call(hand, "delete_context", { id: "no-such-context", name: "Work" }),
+    ).toMatchObject({ ok: false, error: { code: "not_found" } });
+
+    // Refused, it is as it was, and brought back with everything in it.
+    value(await deployment.call(hand, "bring_back_context", { id: work }));
+    expect(value(await deployment.context(work).call(hand, "get_settings", {})).name).toBe("Work");
+  });
+
+  test("takes its part of the meaning index out, an Entry in the Trash among them, and leaves every other Context's", async () => {
+    const deployment = newDeployment();
+    const work = await make(deployment, "Work");
+    const home = await make(deployment, "Home");
+    const there = deployment.context(work);
+    const kept = atOnce(
+      await there.call(hand, "record_entry", { words: marked("Budget review") }),
+    ).record;
+    const trashed = atOnce(
+      await there.call(hand, "record_entry", { words: marked("Old plan") }),
+    ).record;
+    atOnce(await there.call(hand, "delete_entry", { id: trashed.id }));
+    const elsewhere = deployment.context(home);
+    const theirs = atOnce(
+      await elsewhere.call(hand, "record_entry", { words: marked("Fix the bike") }),
+    ).record;
+    await there.meaningSettled();
+    await elsewhere.meaningSettled();
+    expect([...heldEmbeddings(work).keys()].sort()).toEqual([kept.id, trashed.id].sort());
+    value(await deployment.call(hand, "retire_context", { id: work }));
+
+    value(await deployment.call(hand, "delete_context", { id: work, name: "Work" }));
+
+    expect(heldEmbeddings(work).size).toBe(0);
+    expect([...heldEmbeddings(home).keys()]).toEqual([theirs.id]);
+  });
+
+  test("while the meaning index does not answer, it is refused and nothing is deleted", async () => {
+    const deployment = newDeployment();
+    const work = await make(deployment, "Work");
+    await make(deployment, "Home");
+    const there = deployment.context(work);
+    const entry = atOnce(
+      await there.call(hand, "record_entry", { words: marked("Budget") }),
+    ).record;
+    await there.meaningSettled();
+    value(await deployment.call(hand, "retire_context", { id: work }));
+    setMeaningFailing(true);
+
+    expect(await deployment.call(hand, "delete_context", { id: work, name: "Work" })).toMatchObject(
+      { ok: false, error: { code: "refused", in_the_way: [] } },
+    );
+
+    expect((await listed(deployment)).find((context) => context.id === work)?.retired).toBe(true);
+    setMeaningFailing(false);
+    value(await deployment.call(hand, "bring_back_context", { id: work }));
+    expect(value(await there.call(hand, "get_entry", { id: entry.id }))).toEqual(entry);
+    expect([...heldEmbeddings(work).keys()]).toEqual([entry.id]);
+  });
+
+  test("an Entry taken out before the meaning index stopped answering goes back in once the Context is brought back", async () => {
+    const deployment = newDeployment();
+    const work = await make(deployment, "Work");
+    await make(deployment, "Home");
+    const there = deployment.context(work);
+    // More than are taken out at once, so the outage begins part-way.
+    for (let n = 0; n < 101; n += 1) {
+      atOnce(await there.call(hand, "record_entry", { words: marked(`Note ${n}`) }));
+    }
+    await there.meaningSettled();
+    const before = heldEmbeddings(work);
+    const embedded = [...before.keys()].sort();
+    expect(embedded).toHaveLength(101);
+    value(await deployment.call(hand, "retire_context", { id: work }));
+    failMeaningAfter(1);
+
+    expect(await deployment.call(hand, "delete_context", { id: work, name: "Work" })).toMatchObject(
+      { ok: false, error: { code: "refused" } },
+    );
+
+    expect(heldEmbeddings(work).size).toBeLessThan(101);
+    setMeaningFailing(false);
+    value(await deployment.call(hand, "bring_back_context", { id: work }));
+    expect(value(await there.call(hand, "search", { words: "Note" })).words_only).toBe("stale");
+    await there.meaningSettled();
+    const after = heldEmbeddings(work);
+    expect([...after.keys()].sort()).toEqual(embedded);
+    // Only those taken out were embedded again: the one left in keeps the embedding it had.
+    expect(embedded.filter((id) => after.get(id) === before.get(id))).toHaveLength(1);
+    expect(value(await there.call(hand, "search", { words: "Note" })).words_only).toBeNull();
+  });
+});
+
+describe("delete_context after its object was deleted and the answer lost", () => {
+  test("deleting it again finishes, taking it off the list", async () => {
+    const deployment = newDeployment();
+    const work = await make(deployment, "Work");
+    const home = await make(deployment, "Home");
+    value(await deployment.call(hand, "retire_context", { id: work }));
+    // The object deleted its storage, and the Deployment object never heard.
+    value(await deployment.deleteObjectUnheard(work));
+
+    value(await deployment.call(hand, "delete_context", { id: work, name: "Work" }));
+
+    expect((await listed(deployment)).map((context) => context.id)).toEqual([home]);
+  });
+});
+
+describe("delete_context while a Run is going", () => {
+  test("is refused, with nothing deleted, until the Run has ended", async () => {
+    let answer = () => {};
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const done = answering("Done.");
+    const held: Script = async (...args) => {
+      await answered;
+      return done(...args);
+    };
+    scriptModel(held);
+    const deployment = newDeployment();
+    const work = await make(deployment, "Work");
+    await make(deployment, "Home");
+    const there = deployment.context(work);
+    value(await there.callAny(hand, "send_message", { words: "Hello" }));
+    value(await deployment.call(hand, "retire_context", { id: work }));
+
+    expect(await deployment.call(hand, "delete_context", { id: work, name: "Work" })).toMatchObject(
+      { ok: false, error: { code: "refused", in_the_way: [] } },
+    );
+    expect((await listed(deployment)).map((context) => context.id)).toContain(work);
+
+    answer();
+    value(await deployment.call(hand, "bring_back_context", { id: work }));
+    await there.runsEnded();
+    value(await deployment.call(hand, "retire_context", { id: work }));
+    value(await deployment.call(hand, "delete_context", { id: work, name: "Work" }));
   });
 });
 

@@ -120,7 +120,7 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
       .toArray();
     if (others.length === 0) {
       return refusal("There is always one Context not retired, and this is the last.", [
-        { kind: "context", id: found.id, summary: found.name },
+        contextInTheWay(found),
       ]);
     }
     const retired = setRetired(sql, found, true);
@@ -135,6 +135,36 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
     if (!found.retired) return success(written(found, []));
     const back = setRetired(sql, found, false);
     return success(written(back, [effectOnContext(back, "changed")]));
+  },
+
+  async delete_context({ input, sql, env }) {
+    const found = listing(sql, input.id);
+    if (found === null) return noSuchContext();
+    const inTheWay = [contextInTheWay(found)];
+    if (!found.retired) {
+      return refusal("Only a retired Context can be deleted: retire it first.", inTheWay);
+    }
+    if (input.name !== found.name) {
+      return refusal(
+        "The name typed is not this Context's: type it as it is listed to delete it.",
+        inTheWay,
+      );
+    }
+    // Its object goes first, so the list never leaves out a Context whose storage is still there:
+    // one refused or failed is still listed, retired, and can be deleted again.
+    const deleted = await env.CONTEXT.get(env.CONTEXT.idFromString(found.id)).deleteForGood();
+    if (!deleted.ok) return deleted;
+    const connections = connectionsByRule(
+      sql.exec<ConnectionByRule>(
+        `DELETE FROM connections WHERE context_id = ? RETURNING seq, id, name`,
+        found.id,
+      ),
+      "deleted",
+    );
+    // Its rows of spend stay, keyed by an id no Context is listed by, so the month's count never
+    // goes down and an Export gives them with no name attached (section 5.7).
+    sql.exec(`DELETE FROM contexts WHERE id = ?`, found.id);
+    return success(written(null, [effectOnContext(found, "deleted"), ...connections]));
   },
 
   async list_connections({ sql }) {
@@ -264,15 +294,26 @@ export function callableConnection(sql: SqlStorage, id: string): Connection | nu
  * ends them with it.
  */
 function endConnectionsTo(sql: SqlStorage, contextId: string) {
-  const ending = sql
-    .exec<{ seq: number; id: string; name: string }>(
+  return connectionsByRule(
+    sql.exec<ConnectionByRule>(
       `UPDATE connections SET ended = 1 WHERE context_id = ? AND ended = 0 RETURNING seq, id, name`,
       contextId,
-    )
-    .toArray();
-  return ending
+    ),
+    "changed",
+  );
+}
+
+/** A Connection as a statement changing it by rule returns it. */
+type ConnectionByRule = { seq: number; id: string; name: string };
+
+/**
+ * The Connections a rule changed or deleted with their Context, as the rows its statement
+ * returned, each an Effect of that rule, in the order they were made.
+ */
+function connectionsByRule(rows: Iterable<ConnectionByRule>, what: "changed" | "deleted") {
+  return [...rows]
     .toSorted((a, b) => a.seq - b.seq)
-    .map((row) => effectOnConnection(row, "changed", "rule"));
+    .map((row) => effectOnConnection(row, what, "rule"));
 }
 
 function connection(sql: SqlStorage, id: string): Connection | null {
@@ -353,6 +394,11 @@ function listing(sql: SqlStorage, id: string): ContextListing | null {
 
 function toListing(row: ContextRow): ContextListing {
   return { id: row.id, name: row.name, accent: row.accent, retired: row.retired === 1 };
+}
+
+/** A Context named as what stands in the way of a refused call. */
+function contextInTheWay(context: ContextListing) {
+  return { kind: "context" as const, id: context.id, summary: context.name };
 }
 
 function noSuchContext(): ToolResult<never> {

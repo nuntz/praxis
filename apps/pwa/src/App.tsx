@@ -156,6 +156,11 @@ export function App() {
     }
   }
 
+  /** A Context deleted for good leaves the list: only a retired one can be, never the current. */
+  function dropContext(id: string) {
+    setContexts((shown) => (shown ?? []).filter((context) => context.id !== id));
+  }
+
   function addContext(made: ContextListing) {
     setContexts((shown) => [...(shown ?? []), made]);
     switchTo(made.id);
@@ -359,6 +364,7 @@ export function App() {
                         contexts={contexts() ?? []}
                         onChanged={showChangedContext}
                         onMade={addContext}
+                        onDeleted={dropContext}
                       />
                       <Connections contexts={contexts() ?? []} />
                       <Devices />

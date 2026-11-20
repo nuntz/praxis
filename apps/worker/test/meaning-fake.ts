@@ -18,6 +18,8 @@ const parts = new Map<string, Map<string, number[]>>();
 
 let present = true;
 let failing = false;
+/** How many calls the fake answers before it fails every one, or null to go on answering. */
+let answersLeft: number | null = null;
 /** While held, embedding waits until the test lets it go. */
 let held: Promise<void> | null = null;
 
@@ -80,7 +82,9 @@ function partOf(context: string): Map<string, number[]> {
 }
 
 function check(): void {
+  if (answersLeft === 0) failing = true;
   if (failing) throw new Error("The fake meaning index is unreachable, as the test asked");
+  if (answersLeft !== null) answersLeft -= 1;
 }
 
 export const fakeMeaning: MeaningIndex = {
@@ -127,6 +131,12 @@ export function setMeaningPresent(to: boolean): void {
 /** Make the meaning index fail every call, as an outage would, or answer again. */
 export function setMeaningFailing(to: boolean): void {
   failing = to;
+  answersLeft = null;
+}
+
+/** Answer this many more calls, then fail every one, as an outage begun part-way would. */
+export function failMeaningAfter(calls: number): void {
+  answersLeft = calls;
 }
 
 /**

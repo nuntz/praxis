@@ -78,3 +78,16 @@ export function embeddedInMonth(sql: SqlStorage, at: number): number {
       .toArray()[0]?.dollars ?? 0
   );
 }
+
+/**
+ * Every Entry that may have an embedding in the Context's part of the index: each Entry, in the
+ * Trash or not, and each queued to be taken out. Deleting the Context takes them all out.
+ */
+export function entriesInIndex(sql: SqlStorage): string[] {
+  return sql
+    .exec<{ entry: string }>(
+      `SELECT id AS entry FROM entries UNION SELECT entry FROM meaning_queue ORDER BY entry`,
+    )
+    .toArray()
+    .map((row) => row.entry);
+}

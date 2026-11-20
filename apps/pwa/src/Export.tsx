@@ -19,6 +19,26 @@ function download(blob: Blob, name: string): void {
  * Context in it, as a zip of Praxis's own JSON files the person keeps. Only their hand makes one.
  */
 export function ExportSettings() {
+  return (
+    <section id="export" class="settings" aria-labelledby="export-heading">
+      <h2 id="export-heading" class="column-heading">
+        Export
+      </h2>
+      <MakeExport />
+      <p class="settings-note">
+        The whole Deployment, every Context in it, retired ones too: the Journal with its Versions,
+        the Trash and the Run records. Never a Conversation or a key. It is not encrypted, and once
+        downloaded it is yours: Praxis cannot reach it.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The button that makes an Export and hands it to the person as a download, with what stood in
+ * the way if it could not. Offered in the settings, and before a Context is deleted.
+ */
+export function MakeExport() {
   const [problem, setProblem] = createSignal<string | null>(null);
   const [making, setMaking] = createSignal(false);
 
@@ -43,10 +63,7 @@ export function ExportSettings() {
   }
 
   return (
-    <section id="export" class="settings" aria-labelledby="export-heading">
-      <h2 id="export-heading" class="column-heading">
-        Export
-      </h2>
+    <>
       <button type="button" disabled={making()} onClick={() => void make()}>
         {making() ? "Making the Export…" : "Make an Export"}
       </button>
@@ -57,11 +74,6 @@ export function ExportSettings() {
           </p>
         )}
       </Show>
-      <p class="settings-note">
-        The whole Deployment, every Context in it, retired ones too: the Journal with its Versions,
-        the Trash and the Run records. Never a Conversation or a key. It is not encrypted, and once
-        downloaded it is yours: Praxis cannot reach it.
-      </p>
-    </section>
+    </>
   );
 }

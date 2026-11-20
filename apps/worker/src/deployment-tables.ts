@@ -22,7 +22,8 @@ export function createDeploymentTables(sql: SqlStorage): void {
     );
 
     -- One row per Connection, in the order they were made (section 7.2). Its id is opaque and is
-    -- the one in its address. An ended one is kept, so its id is never reached again.
+    -- the one in its address. An ended one is kept, so its id is never reached again, until its
+    -- Context is deleted, which deletes it.
     CREATE TABLE IF NOT EXISTS connections (
       seq INTEGER PRIMARY KEY,
       id TEXT NOT NULL UNIQUE,

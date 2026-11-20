@@ -80,7 +80,8 @@ export function changesPrunedBy(at: number): number {
 
 /**
  * An Effect on a Connection: made, renamed, switched to or from reading only, or ended, by the
- * call or, when its Context is retired, by rule. Summarised by its name.
+ * call; or by rule, ended when its Context is retired and deleted when it is deleted. Summarised
+ * by its name.
  */
 export function effectOnConnection(
   connection: { id: string; name: string },
@@ -100,7 +101,7 @@ export function effectOnDevice(device: { id: string; name: string }, what: Effec
 
 /**
  * An Effect on a Context: a change to its settings, or, from the Deployment object, the Context
- * made, renamed, given another accent, retired or brought back. Summarised by its name.
+ * made, renamed, given another accent, retired, brought back or deleted. Summarised by its name.
  */
 export function effectOnContext(
   context: { id: string; name: string },
