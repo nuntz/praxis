@@ -12,6 +12,7 @@ import {
   dollars,
   failure,
   isConversationToolName,
+  isDerivedWrite,
   isToolName,
   isWrite,
   type LiveMessage,
@@ -263,8 +264,9 @@ export function contextObject(
             : request.tool === "search"
               ? await this.search(request)
               : this.rebuildSearchIndex(request);
-        // None of them returns Effects: what `rebuild_search_index` changes is derived.
-        logCall({ tool: request.tool, write: false }, result, elapsed());
+        // None of them returns Effects: a write among them changes only what is derived.
+        const write = isWrite(request.tool) && !isDerivedWrite(request.tool);
+        logCall({ tool: request.tool, write }, result, elapsed());
         return result;
       }
       const elapsed = startTimer();

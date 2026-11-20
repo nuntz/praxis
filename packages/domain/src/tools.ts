@@ -32,6 +32,12 @@ type ToolDefinition = {
        * away is put back by ordinary means.
        */
       destructive: boolean;
+      /**
+       * True for a write that changes only what is derived, as rebuilding the meaning index does:
+       * no record, no Effect and nothing in the change log, so it returns what it set going in
+       * place of `Written` (ADR 0007).
+       */
+      derived?: true;
     }
 );
 
@@ -577,6 +583,7 @@ export const tools = {
   rebuild_search_index: {
     kind: "write",
     destructive: false,
+    derived: true,
     description:
       "Rebuild this Context's meaning index from its Journal: every Entry is embedded afresh, which costs a little and counts toward the spend cap. Until it is done, search answers from words alone and says so. No record changes.",
     input: writeInput({}),
@@ -678,6 +685,15 @@ export function isWrite(name: string): name is WriteName {
   return isToolName(name) && tools[name].kind === "write";
 }
 
+/** The writes that change only what is derived, and return no Effects (ADR 0007). */
+export type DerivedWriteName = {
+  [N in WriteName]: (typeof tools)[N] extends { derived: true } ? N : never;
+}[WriteName];
+
+export function isDerivedWrite(name: string): name is DerivedWriteName {
+  return isWrite(name) && "derived" in tools[name];
+}
+
 export type ToolInput<N extends ToolName> = z.infer<(typeof tools)[N]["input"]>;
 
 /** What each tool returns on success. */
@@ -742,6 +758,17 @@ export type ToolOutput = {
   list_held_changes: Page<HeldChange>;
   list_notices: { items: StandingNotice[] };
 };
+
+/**
+ * Every write but a derived one returns `Written`, or `Held` for a held call (ADR 0007): a write
+ * whose output is anything else fails the typecheck here until its definition says `derived`.
+ */
+type NotWritten = {
+  [N in Exclude<WriteName, DerivedWriteName>]: ToolOutput[N] extends Written<unknown> | Held
+    ? never
+    : N;
+}[Exclude<WriteName, DerivedWriteName>];
+export const everyWriteReportsEffects: [NotWritten] extends [never] ? true : NotWritten = true;
 
 /** A tool's input checked against its schema, or the `invalid_input` saying what is wrong. */
 export type Parsed<I> = { ok: true; input: I } | Extract<ToolResult<never>, { ok: false }>;

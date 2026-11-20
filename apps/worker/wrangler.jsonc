@@ -34,6 +34,8 @@
   // Where the Backups are kept, on the person's account, which the setup wizard's Pulumi program
   // makes (infra/index.ts). A Deployment that chose a jurisdiction keeps its bucket there too, and
   // the deploy adds it to this binding (scripts/deploy-config.ts).
+  // Workers AI and the meaning index's Vectorize index are bound by the deploy alone
+  // (scripts/deploy-config.ts): a binding to either here reaches the account in every test.
   "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "praxis-backups" }],
   "durable_objects": {
     "bindings": [

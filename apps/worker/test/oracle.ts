@@ -7,6 +7,7 @@ import {
   type Effect,
   instantToIso,
   isConversationToolName,
+  isDerivedWrite,
   isHeld,
   isWrite,
   keysForgottenBy,
@@ -127,12 +128,6 @@ export async function throughOracle(stub: Stub, request: Request): Promise<ToolR
   return result;
 }
 
-/**
- * The writes that change no record and leave no Effect, judged as a read is: rebuilding the
- * meaning index, which is derived (section 9.4).
- */
-const CHANGING_NO_RECORD = ["rebuild_search_index"];
-
 /** What is wrong with one call as the oracle saw it. Nothing, when the call kept its word. */
 export function judge(seen: Seen): string[] {
   const { request, result, logged, firstWithKey } = seen;
@@ -144,7 +139,8 @@ export function judge(seen: Seen): string[] {
   }
   problems.push(...wordsLeftBehind(seen));
   if (isConversationToolName(request.tool)) return judgeConversation(changed, logged);
-  const write = isWrite(request.tool) && !CHANGING_NO_RECORD.includes(request.tool);
+  // A derived write, such as rebuilding the meaning index, changes no record: judged as a read.
+  const write = isWrite(request.tool) && !isDerivedWrite(request.tool);
   if (!write || !result.ok || firstWithKey !== null) {
     const why = !write ? "A read" : !result.ok ? "A call that failed" : "A repeated key";
     if (changed.length > 0) problems.push(`${why} changed records: ${canonical(changed)}`);

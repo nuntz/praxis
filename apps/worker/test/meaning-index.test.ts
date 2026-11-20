@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, test } from "vitest";
 import {
+  embeddingId,
   LIKE_ENOUGH,
   MEANING_DIMENSIONS,
   type MeaningBindings,
@@ -71,6 +72,22 @@ function contract(name: string, service: () => Service) {
       expect(nearest[0]?.likeness).toBeGreaterThanOrEqual(LIKE_ENOUGH);
       expect(nearest[1]?.likeness).toBeLessThan(LIKE_ENOUGH);
       await index.remove(context, ["teeth", "garden"]);
+    });
+
+    test("takes an embedding's id and its Context's part at their longest: a Context's 64-digit id and an Entry's UUID", async () => {
+      const { index, eventually } = service();
+      const context = contextId();
+      const entry = crypto.randomUUID();
+      expect(new TextEncoder().encode(embeddingId(context, entry)).length).toBeLessThanOrEqual(64);
+      const [embedding] = await index.embed([ABOUT_GARDEN]);
+      await index.put(context, [{ entry, embedding: embedding ?? [] }]);
+
+      const nearest = await eventually(
+        () => index.nearest(context, embedding ?? [], 10),
+        (found) => found.length === 1,
+      );
+      expect(nearest.map((found) => found.entry)).toEqual([entry]);
+      await index.remove(context, [entry]);
     });
 
     test("keeps each Context's part to itself", async () => {
