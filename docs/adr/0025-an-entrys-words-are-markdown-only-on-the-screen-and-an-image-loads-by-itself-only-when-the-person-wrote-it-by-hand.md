@@ -13,7 +13,7 @@ An Entry's words are stored exactly as typed and the server never reads them. Th
 
 ## Consequences
 
-- Search, Versions, a Held Change, the Export and a Connection all see the words as typed. Only an Entry in the Journal and a Message from the Agent are rendered.
+- Search, Versions, a Held Change, the Export and a Connection all see the words as typed. Only an Entry, wherever the screen shows it, the Journal and the Standing Entries alike, and a Message from the Agent are rendered.
 - Editing an Entry makes it the person's, so its images then load by themselves. That is how the person vouches for an Entry they did not write.
 - A tap loads one image for one showing and is not remembered.
 - Offline, an image shows its description. The Offline Copy and the service worker hold no image.
