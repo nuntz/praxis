@@ -390,8 +390,12 @@ export const tools = {
   list_tasks: {
     kind: "read",
     description:
-      "List the Context's Tasks, newest first, 50 to a page, open or closed, each with its derived state. Give `named` to list only those whose title holds it, whatever its case and accents.",
-    input: z.strictObject({ cursor, named }),
+      "List the Context's Tasks, newest first, 50 to a page, open or closed, each with its derived state. Give a state to list only the open, Finished or Dropped ones, and `named` to list only those whose title holds it, whatever its case and accents.",
+    input: z.strictObject({
+      cursor,
+      state: z.enum(["open", "finished", "dropped"]).optional(),
+      named,
+    }),
     offered: toEveryCaller,
   },
   move_task: {

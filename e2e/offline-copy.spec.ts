@@ -72,6 +72,56 @@ async function keepCopyHere(page: Page, contexts: string[]) {
   return devices;
 }
 
+/** What this browser's Offline Copy holds of a Context, as stored, or null for nothing. */
+async function partOf(page: Page, context: string) {
+  const kept = JSON.parse((await keptCopy(page)) ?? "null") as {
+    contexts: { id: string; fetched_at: string; opened: string[]; entries: { id: string }[] }[];
+  } | null;
+  return kept?.contexts.find((each) => each.id === context) ?? null;
+}
+
+/**
+ * Hold the answer to the next call at this address, such as one Context's `list_tasks`, which the
+ * copy reads it by, so a journey changes what the copy holds while its fetch is out
+ * (CODING_STANDARDS.md, Reads and changes). Every other call is answered as ever.
+ */
+async function holdNext(page: Page, address: RegExp) {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let asked!: () => void;
+  const wasAsked = new Promise<void>((resolve) => {
+    asked = resolve;
+  });
+  let answered!: () => void;
+  const wasAnswered = new Promise<void>((resolve) => {
+    answered = resolve;
+  });
+  await page.route(address, async (route) => {
+    asked();
+    const answer = await route.fetch();
+    await released;
+    await route.fulfill({ response: answer });
+    answered();
+  });
+  return {
+    asked: () => wasAsked,
+    /** Let the held answer through, and wait until the screen has it. */
+    async release() {
+      release();
+      await wasAnswered;
+      await page.unroute(address);
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+    },
+  };
+}
+
+/** Where the copy reads a Context's Tasks. */
+function tasksOf(context: string): RegExp {
+  return new RegExp(`/api/contexts/${context}/tools/list_tasks$`);
+}
+
 /** Switch to another Context from the top bar. */
 async function switchTo(page: Page, name: string) {
   const switcher = page.getByRole("banner").getByRole("button", { name: /^Context: / });
@@ -337,4 +387,93 @@ test("a Device removed from elsewhere clears its Offline Copy on its next contac
   const shown = await openJournal(page, testInfo);
   await expect(shown.journal.getByTestId("unsent-entry")).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: /Unsent/ })).toHaveCount(0);
+});
+
+test("an older Entry opened while the copy is being fetched stays in it once the fetch is in", async ({
+  page,
+}, testInfo) => {
+  const context = await contextOfOwn(page, testInfo, "Attic");
+  const tag = context.name.slice(-8);
+  const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+  const older = (
+    await callContextTool(page, context.id, "record_entry", {
+      words: `Kept from the summer ${tag}`,
+      made_at: fortyDaysAgo,
+    })
+  ).record as { id: string };
+  await lastShown(page, context.id);
+  await page.goto("/");
+  await keepCopyHere(page, [context.id]);
+  const first = await partOf(page, context.id);
+  if (first === null) throw new Error("The copy holds nothing of the Context");
+  // Older than 30 days and never opened here, it is not held.
+  expect(first.entries.map((entry) => entry.id)).not.toContain(older.id);
+
+  // Opened anew, the screen fetches the copy again: its read of the Tasks is held.
+  const held = await holdNext(page, tasksOf(context.id));
+  await page.reload();
+  await held.asked();
+  const { journal } = await openJournal(page, testInfo);
+  await journal.getByRole("searchbox", { name: "Search this Context", exact: true }).fill(tag);
+  await journal.getByTestId("search-hit").filter({ hasText: tag }).getByRole("link").click();
+  await expect(
+    journal.getByTestId("entry").filter({ hasText: `Kept from the summer ${tag}` }),
+  ).toBeFocused();
+  await expect.poll(async () => (await partOf(page, context.id))?.opened).toEqual([older.id]);
+
+  await held.release();
+  await expect
+    .poll(async () => (await partOf(page, context.id))?.fetched_at)
+    .not.toBe(first.fetched_at);
+  const fetched = await partOf(page, context.id);
+  expect(fetched?.opened).toEqual([older.id]);
+  expect(fetched?.entries.map((entry) => entry.id)).toContain(older.id);
+});
+
+test("a copy switched off while it is being fetched stays cleared once the fetch is in", async ({
+  page,
+}, testInfo) => {
+  const context = await contextOfOwn(page, testInfo, "Drawer");
+  await lastShown(page, context.id);
+  await page.goto("/");
+  const held = await holdNext(page, tasksOf(context.id));
+  const devices = await openDevices(page);
+  await devices.getByRole("button", { name: "Keep an Offline Copy here", exact: true }).click();
+  await held.asked();
+
+  const switched = page.waitForResponse(/\/tools\/set_device_offline_copy$/);
+  await devices
+    .getByRole("button", { name: "Switch off the Offline Copy here", exact: true })
+    .click();
+  expect((await (await switched).json()).ok).toBe(true);
+  await expect.poll(() => keptCopy(page)).toBeNull();
+
+  await held.release();
+  expect(await keptCopy(page)).toBeNull();
+});
+
+test("a fetch that read the switch on before it was switched off here does not bring the copy back", async ({
+  page,
+}, testInfo) => {
+  const context = await contextOfOwn(page, testInfo, "Cellar");
+  await lastShown(page, context.id);
+  await page.goto("/");
+  const devices = await openDevices(page);
+  await expect(
+    devices.getByRole("button", { name: "Keep an Offline Copy here", exact: true }),
+  ).toBeVisible();
+  // The fetch switching on starts asks whether the switch is on: it is, and that answer is held.
+  const held = await holdNext(page, /\/api\/deployment\/tools\/list_devices$/);
+  await devices.getByRole("button", { name: "Keep an Offline Copy here", exact: true }).click();
+  await held.asked();
+
+  const switched = page.waitForResponse(/\/tools\/set_device_offline_copy$/);
+  await devices
+    .getByRole("button", { name: "Switch off the Offline Copy here", exact: true })
+    .click();
+  expect((await (await switched).json()).ok).toBe(true);
+  await expect.poll(() => keptCopy(page)).toBeNull();
+
+  await held.release();
+  expect(await keptCopy(page)).toBeNull();
 });

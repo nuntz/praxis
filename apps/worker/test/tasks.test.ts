@@ -623,6 +623,36 @@ describe("list_tasks", () => {
     expect(items).toEqual([sendResume, resume]);
   });
 
+  test("can be narrowed to the open, Finished or Dropped ones, by the end each last reached", async () => {
+    const context = newContext();
+    const entry = value(
+      await context.call(hand, "record_entry", {
+        words: marked("Week"),
+        tasks: [
+          { title: "Open" },
+          { title: "Finished" },
+          { title: "Dropped" },
+          { title: "Reopened" },
+        ],
+      }),
+    ).record;
+    const [open, finished, dropped, reopened] = entry.tasks;
+    if (!open || !finished || !dropped || !reopened) throw new Error("Expected four Tasks");
+    value(await context.call(hand, "finish_task", { id: finished.id }));
+    value(await context.call(hand, "drop_task", { id: dropped.id }));
+    value(await context.call(hand, "finish_task", { id: reopened.id }));
+    value(await context.call(hand, "reopen_task", { id: reopened.id }));
+
+    const titles = async (state: "open" | "finished" | "dropped") =>
+      value(await context.call(agent, "list_tasks", { state })).items.map(({ title }) => title);
+
+    expect({
+      open: await titles("open"),
+      finished: await titles("finished"),
+      dropped: await titles("dropped"),
+    }).toEqual({ open: ["Reopened", "Open"], finished: ["Finished"], dropped: ["Dropped"] });
+  });
+
   test("pages by cursor, 50 to a page, and refuses a cursor it did not give", async () => {
     const context = newContext();
     const titles = Array.from({ length: 51 }, (_, i) => ({ title: `Task ${i}` }));

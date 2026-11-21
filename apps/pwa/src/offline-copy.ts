@@ -114,8 +114,15 @@ export async function startCopy(): Promise<void> {
   await refreshCopy();
 }
 
+/**
+ * How many times the copy was cleared here while Praxis is open: a fetch that began before a
+ * clear writes nothing after it, since what it read, such as the switch on, is from before.
+ */
+let clears = 0;
+
 /** Clear the copy here, as the person asked or answered. The Unsent writes are theirs to keep. */
 export function clearCopy(): void {
+  clears += 1;
   setClearing(null);
   setFromCopy(null);
   keep(null);
@@ -179,9 +186,11 @@ async function fetchWhole(): Promise<void> {
   const here = thisDevice();
   if (here === null || !online()) return;
   lastRefreshed = Date.now();
+  const clearsBefore = clears;
+  const clearedSince = () => clears !== clearsBefore;
   try {
     const devices = await callDeploymentTool("list_devices", {});
-    if (!devices.ok) return;
+    if (!devices.ok || clearedSince()) return;
     const on = devices.value.items.some((device) => device.id === here && device.offline_copy);
     if (!on) {
       if (copy() !== null) clearSwitchedOff();
@@ -191,7 +200,7 @@ async function fetchWhole(): Promise<void> {
     // On, with nothing kept here, as after the browser cleared its storage: a copy is started.
     if (copy() === null) keep({ contexts: [] });
     const listed = await callDeploymentTool("list_contexts", {});
-    if (!listed.ok) return;
+    if (!listed.ok || clearedSince()) return;
     const reachable = listed.value.items.filter((context) => !context.retired);
     // A Context retired or deleted since leaves the copy.
     const kept = copy();
@@ -206,7 +215,8 @@ async function fetchWhole(): Promise<void> {
     const next = () => order.shift();
     await Promise.all(
       Array.from({ length: AT_ONCE }, async () => {
-        for (let id = next(); id !== undefined; id = next()) await fetchInto(id);
+        // Cleared meanwhile, the rest are not fetched.
+        for (let id = next(); id !== undefined && !clearedSince(); id = next()) await fetchInto(id);
       }),
     );
   } catch (error) {
@@ -259,10 +269,11 @@ const beingFetched = new Set<string>();
 async function fetchInto(id: string): Promise<void> {
   if (beingFetched.has(id)) return;
   beingFetched.add(id);
+  const clearsBefore = clears;
   try {
     const fetched = await fetchContext(id, contextCopy(id)?.opened ?? []);
     const kept = copy();
-    if (fetched === null || kept === null) return;
+    if (fetched === null || kept === null || clears !== clearsBefore) return;
     const now = kept.contexts.find((each) => each.id === id);
     if (now && now.fetched_at > fetched.fetched_at) return;
     // Opened while the fetch was out, an older Entry stays, as noteOpened kept it.
@@ -303,7 +314,9 @@ async function fetchContext(id: string, opened: string[]): Promise<ContextCopy |
   const [settings, attention, tasks, projects, persons, standing, listed] = await Promise.all([
     tools("get_settings", {}),
     tools("view_attention", {}),
-    everyPage<Task>((cursor) => tools("list_tasks", cursor ? { cursor } : {})),
+    everyPage<Task>((cursor) =>
+      tools("list_tasks", { state: "open", ...(cursor ? { cursor } : {}) }),
+    ),
     everyPage<Project>((cursor) =>
       tools("list_projects", { state: "open", ...(cursor ? { cursor } : {}) }),
     ),
@@ -335,7 +348,7 @@ async function fetchContext(id: string, opened: string[]): Promise<ContextCopy |
     fetched_at,
     time_zone: settings.value.time_zone,
     attention: attention.value,
-    tasks: tasks.filter((task) => task.state.is === "open"),
+    tasks,
     projects,
     persons,
     standing,

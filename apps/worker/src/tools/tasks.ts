@@ -136,11 +136,24 @@ export const taskTools: Pick<
 
   list_tasks({ input, today, sql }) {
     const { named } = input;
+    // Newest first, narrowed by the end it last reached, if it was not reopened since.
     const page = newestFirst(
       "tasks",
       input.cursor,
       (before) =>
-        sql.exec<TaskRow>(`SELECT * FROM untrashed_tasks WHERE seq < ? ORDER BY seq DESC`, before),
+        sql.exec<TaskRow>(
+          `SELECT t.* FROM untrashed_tasks t
+           WHERE t.seq < ?
+             AND (? IS NULL OR ? = coalesce(
+               nullif((SELECT what FROM task_events e
+                       WHERE e.task = t.id AND e.what IN ('finished', 'dropped', 'reopened')
+                       ORDER BY e.seq DESC LIMIT 1), 'reopened'),
+               'open'))
+           ORDER BY t.seq DESC`,
+          before,
+          input.state ?? null,
+          input.state ?? null,
+        ),
       named === undefined ? undefined : (row) => nameHolds(row.title, named),
     );
     if (!page.ok) return page;
