@@ -32,12 +32,15 @@ import { focusCapField, followSpend, SpendSettings } from "./Spend.tsx";
 import { Standing } from "./Standing.tsx";
 import { Trash } from "./Trash.tsx";
 import {
+  CurrentContextId,
   CurrentContextTools,
   callDeploymentTool,
   contextTools,
   signInLapsed,
   unreachableMessage,
 } from "./tools.ts";
+import { knowShownContexts, refusedIn, UnsentStatus } from "./Unsent.tsx";
+import { keepSending } from "./unsent.ts";
 
 /**
  * How long the screen waits for the live channel before reading anyway, as behind a proxy that
@@ -100,11 +103,15 @@ export function App() {
   const timeZone = createMemo(
     () => settings()?.time_zone ?? (unread() ? deviceTimeZone() : undefined),
   );
-  // The count is the Held Changes and the Due section (section 8.3); the Unsent writes the server
-  // refused join it when the screen has them.
+  // The count is the Unsent writes the server refused, the Held Changes and the Due section
+  // (section 8.3).
   const [dueCount, setDueCount] = createSignal(0);
   const [heldCount, setHeldCount] = createSignal(0);
-  const count = () => dueCount() + heldCount();
+  const refusedCount = () => {
+    const id = currentId();
+    return id === null ? 0 : refusedIn(id).length;
+  };
+  const count = () => refusedCount() + dueCount() + heldCount();
   let attentionButton!: HTMLButtonElement;
 
   /** Opened from the top bar in between, Attention is put away with Escape, from it or its button. */
@@ -174,6 +181,13 @@ export function App() {
   }
 
   onMount(() => onCleanup(followSpend()));
+  // A refused Unsent write for a Context no longer shown is put to the person in the one that is.
+  createEffect(() => {
+    const listed = contexts();
+    if (listed) knowShownContexts(listed.filter((each) => !each.retired).map((each) => each.id));
+  });
+  // Unsent writes are sent while Praxis is open, whichever Context is shown (section 8.8).
+  onMount(() => onCleanup(keepSending()));
 
   // A tap on a Notification while Praxis is open here brings its Conversation into view.
   onMount(() => {
@@ -314,6 +328,7 @@ export function App() {
           </button>
         </Show>
       </header>
+      <UnsentStatus />
       <Show when={signInLapsed()}>
         <p class="problem" role="alert">
           Your sign-in has lapsed. <a href="/">Sign in again</a> to carry on.
@@ -339,97 +354,99 @@ export function App() {
           onCleanup(followNotices(contextTools(id)));
           createEffect(() => setHeldCount(heldChanges.all().length));
           return (
-            <CurrentContextTools.Provider value={contextTools(id)}>
-              <CurrentContextLive.Provider value={live}>
-                <CurrentHeldChanges.Provider value={heldChanges}>
-                  <CurrentMoveTargets.Provider
-                    value={{
-                      from: id,
-                      to: () =>
-                        (contexts() ?? []).filter((each) => each.id !== id && !each.retired),
-                    }}
-                  >
-                    <Show when={showSettings()}>
-                      <div id="settings" class="settings-panel">
-                        <Show when={hasNotices()}>
-                          <section class="settings" aria-labelledby="notices-heading">
-                            <h2 id="notices-heading" class="column-heading">
-                              Notices
-                            </h2>
-                            <StandingNotices />
-                          </section>
-                        </Show>
-                        <Show when={settings()}>
-                          {(read) => (
-                            <>
-                              <ContextSettings settings={read()} onChanged={setSettings} />
-                              <Standing timeZone={read().time_zone} />
-                              <Trash timeZone={read().time_zone} />
-                            </>
-                          )}
-                        </Show>
-                        <Contexts
-                          contexts={contexts() ?? []}
-                          onChanged={showChangedContext}
-                          onMade={addContext}
-                          onDeleted={dropContext}
-                        />
-                        <Connections contexts={contexts() ?? []} />
-                        <Devices />
-                        <SpendSettings />
-                        <BackupSettings />
-                        <ExportSettings />
-                      </div>
-                    </Show>
-                    <main class="peers">
-                      <Peer
-                        id="attention"
-                        title="Attention"
-                        aside={<AttentionCount count={count()} />}
-                        onKeyDown={putAttentionAway}
-                      >
-                        <Show when={timeZone()} keyed>
-                          {(zone) => <Attention timeZone={zone} onDueCount={setDueCount} />}
-                        </Show>
-                      </Peer>
-                      {/* Today and the Entries' times follow the time zone, so a new one reads afresh,
+            <CurrentContextId.Provider value={id}>
+              <CurrentContextTools.Provider value={contextTools(id)}>
+                <CurrentContextLive.Provider value={live}>
+                  <CurrentHeldChanges.Provider value={heldChanges}>
+                    <CurrentMoveTargets.Provider
+                      value={{
+                        from: id,
+                        to: () =>
+                          (contexts() ?? []).filter((each) => each.id !== id && !each.retired),
+                      }}
+                    >
+                      <Show when={showSettings()}>
+                        <div id="settings" class="settings-panel">
+                          <Show when={hasNotices()}>
+                            <section class="settings" aria-labelledby="notices-heading">
+                              <h2 id="notices-heading" class="column-heading">
+                                Notices
+                              </h2>
+                              <StandingNotices />
+                            </section>
+                          </Show>
+                          <Show when={settings()}>
+                            {(read) => (
+                              <>
+                                <ContextSettings settings={read()} onChanged={setSettings} />
+                                <Standing timeZone={read().time_zone} />
+                                <Trash timeZone={read().time_zone} />
+                              </>
+                            )}
+                          </Show>
+                          <Contexts
+                            contexts={contexts() ?? []}
+                            onChanged={showChangedContext}
+                            onMade={addContext}
+                            onDeleted={dropContext}
+                          />
+                          <Connections contexts={contexts() ?? []} />
+                          <Devices />
+                          <SpendSettings />
+                          <BackupSettings />
+                          <ExportSettings />
+                        </div>
+                      </Show>
+                      <main class="peers">
+                        <Peer
+                          id="attention"
+                          title="Attention"
+                          aside={<AttentionCount count={count()} />}
+                          onKeyDown={putAttentionAway}
+                        >
+                          <Show when={timeZone()} keyed>
+                            {(zone) => <Attention timeZone={zone} onDueCount={setDueCount} />}
+                          </Show>
+                        </Peer>
+                        {/* Today and the Entries' times follow the time zone, so a new one reads afresh,
                       inside a column that stays: the region is the same one before the zone is read
                       and after. */}
-                      <Peer id="journal" title="Journal">
-                        <Show when={timeZone()} keyed>
-                          {(zone) => (
-                            <Journal
-                              timeZone={zone}
-                              contextName={current()?.name}
-                              onShowHeldChange={showHeldChange}
-                            />
-                          )}
-                        </Show>
-                      </Peer>
-                      <Conversation
-                        contextId={currentId() ?? ""}
-                        contextName={current()?.name}
-                        onShowRecord={showRecord}
-                        onShowCap={showCap}
-                      />
-                    </main>
-                    <nav class="tabs" aria-label="Columns">
-                      <TabButton tab="attention" shown={tab()} onShow={setTab}>
-                        Attention
-                        <AttentionCount count={count()} />
-                      </TabButton>
-                      <TabButton tab="journal" shown={tab()} onShow={setTab}>
-                        Journal
-                      </TabButton>
-                      <TabButton tab="conversation" shown={tab()} onShow={setTab}>
-                        Agent
-                        <Badge count={unreadBriefs()} label="unread" />
-                      </TabButton>
-                    </nav>
-                  </CurrentMoveTargets.Provider>
-                </CurrentHeldChanges.Provider>
-              </CurrentContextLive.Provider>
-            </CurrentContextTools.Provider>
+                        <Peer id="journal" title="Journal">
+                          <Show when={timeZone()} keyed>
+                            {(zone) => (
+                              <Journal
+                                timeZone={zone}
+                                contextName={current()?.name}
+                                onShowHeldChange={showHeldChange}
+                              />
+                            )}
+                          </Show>
+                        </Peer>
+                        <Conversation
+                          contextId={currentId() ?? ""}
+                          contextName={current()?.name}
+                          onShowRecord={showRecord}
+                          onShowCap={showCap}
+                        />
+                      </main>
+                      <nav class="tabs" aria-label="Columns">
+                        <TabButton tab="attention" shown={tab()} onShow={setTab}>
+                          Attention
+                          <AttentionCount count={count()} />
+                        </TabButton>
+                        <TabButton tab="journal" shown={tab()} onShow={setTab}>
+                          Journal
+                        </TabButton>
+                        <TabButton tab="conversation" shown={tab()} onShow={setTab}>
+                          Agent
+                          <Badge count={unreadBriefs()} label="unread" />
+                        </TabButton>
+                      </nav>
+                    </CurrentMoveTargets.Provider>
+                  </CurrentHeldChanges.Provider>
+                </CurrentContextLive.Provider>
+              </CurrentContextTools.Provider>
+            </CurrentContextId.Provider>
           );
         }}
       </Show>

@@ -22,13 +22,16 @@ describe("record_entry's words", () => {
   ];
 
   test.each(asTyped)("are kept exactly as typed: %#", (words) => {
-    expect(parseToolInput("record_entry", { words })).toEqual({ ok: true, input: { words } });
+    expect(parseToolInput("record_entry", { words }, "hand")).toEqual({
+      ok: true,
+      input: { words },
+    });
   });
 
   const blank = ["", " ", "\n", "\r\n\t ", " ", "　", " ", "﻿"];
 
   test.each(blank)("are needed: whitespace alone is invalid input: %#", (words) => {
-    expect(parseToolInput("record_entry", { words })).toMatchObject({
+    expect(parseToolInput("record_entry", { words }, "hand")).toMatchObject({
       ok: false,
       error: { code: "invalid_input" },
     });

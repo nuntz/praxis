@@ -710,13 +710,13 @@ Capture never fails, and Praxis is not local-first. The server stays the only pl
 - An Unsent Entry may be a Follow-up to an Entry the Device holds, carries its Inline Tasks, and links only to records the Device holds. It makes no new Person or Project. With no Offline Copy it is words and Inline Tasks only.
 - It sits in the Journal where it will go, marked Unsent, its Inline Tasks shown as part of its words. A Task finished Unsent is marked so and leaves Attention. Nothing that would follow is shown. A count of Unsent writes is visible whenever there is one.
 - It is the person's to change: an Entry can be edited or discarded and a finish undone, with no trace. Nothing can point at an Unsent record.
-- It carries its made-at time and a key.
+- It carries its made-at time and a key. A write made while the Device has the network and nothing Unsent waits ahead of it is sent at once with its key and no made-at, so the Device's clock is never set against the server's; only one that waited, or whose answer was lost, is sent with its made-at.
 - Sent only while Praxis is open, in the order made. The Device then catches up from the change log. If the Access sign-in has lapsed, it waits until the person signs in again.
 - It never expires and lives on that one Device. Praxis asks the browser to keep its storage for good and says so beside the count where the browser will not promise it.
 
 **On arrival** there is no merge logic. Finishing a Task already Finished succeeds with no Effects and runs no Recurrence again. Finishing one that is Dropped, deleted or moved is refused. An Entry linking to a record since deleted is recorded with that link dormant.
 
-**A refused write** stays on the Device, marked as not accepted with the server's reason, at the top of Attention. A refused Entry can be edited and sent again, copied or discarded. A refused finish can only be dismissed. Nothing is dropped silently, and nothing is sent again by itself after a refusal. A network failure is not a refusal and is retried. An Unsent write older than 30 days is put to the person like a refused one.
+**A refused write** stays on the Device, marked as not accepted with the server's reason, at the top of Attention. A refused Entry can be edited and sent again, copied or discarded. A refused finish can only be dismissed. Nothing is dropped silently, and nothing is sent again by itself after a refusal. A network failure is not a refusal and is retried, a little later each time. An Unsent write whose key is older than 30 days is put to the person like a refused one. Sending a refused Entry again gives it a new key, since the server remembers the refusal under the old one, and it keeps its made-at time.
 
 **Everything else** needs the network and says so: every other Context write, tapping a Held Change, every Deployment tool, and the whole Conversation, an unread Brief or Review included. No Conversation text is ever stored on a Device, and a Message is never queued.
 

@@ -14,25 +14,40 @@ test("a network failure is not a lapsed sign-in, and a lapsed sign-in asks the p
   await page.goto("/");
   const { journal, composer } = await openJournal(page, testInfo);
   const signInAgain = page.getByRole("link", { name: "Sign in again" });
+  const unsent = (words: string) => journal.getByTestId("unsent-entry").filter({ hasText: words });
+  const recorded = (words: string) => journal.getByTestId("entry").filter({ hasText: words });
 
-  // The network fails: the Entry is not recorded, and signing in again would not mend it.
+  // The network fails: the Entry is kept Unsent, and signing in again would not mend it.
   await page.route("**/api/**", (route) => route.abort("internetdisconnected"));
-  await composer.fill(`Written with no network ${tag}`);
+  const offline = `Written with no network ${tag}`;
+  await composer.fill(offline);
   await journal.getByRole("button", { name: "Record" }).click();
-  await expect(journal.getByText("Praxis could not be reached.")).toBeVisible();
+  await expect(unsent(offline)).toBeVisible();
   await expect(signInAgain).toHaveCount(0);
+  // It is tried again once the network is back, and sent.
+  const sent = page.waitForResponse(/\/tools\/record_entry$/);
   await page.unroute("**/api/**");
+  expect((await (await sent).json()).ok).toBe(true);
+  await expect(recorded(offline)).toBeVisible();
+  await expect(unsent(offline)).toHaveCount(0);
 
-  // The sign-in lapses: the same Entry is not recorded, and the screen asks the person to sign in.
+  // The sign-in lapses: the Entry waits Unsent, and the screen asks the person to sign in.
   await page.context().addCookies([{ name: LAPSED, value: "yes", url: page.url() }]);
+  const signedOut = `Written while signed out ${tag}`;
+  await composer.fill(signedOut);
   await journal.getByRole("button", { name: "Record" }).click();
-  await expect(journal.getByText("Your sign-in has lapsed.")).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: /^Your sign-in has lapsed\. Sign in again/ }),
+  ).toBeVisible();
   await expect(signInAgain).toBeVisible();
+  await expect(unsent(signedOut)).toBeVisible();
 
-  // Signing in again goes through Access's login page and back to the screen, signed in.
+  // Signing in again goes through Access's login page and back to the screen, signed in, and what
+  // waited is sent.
   await signInAgain.click();
   await page.getByRole("link", { name: "Sign in as the person" }).click();
   const after = await openJournal(page, testInfo);
+  await expect(after.journal.getByTestId("entry").filter({ hasText: signedOut })).toBeVisible();
   await after.composer.fill(`Written once signed in again ${tag}`);
   await after.journal.getByRole("button", { name: "Record" }).click();
   await expect(
@@ -55,6 +70,9 @@ test("a request the Worker itself refuses as signed out asks the person to sign 
   await composer.fill(`Written once the Worker refuses ${testInfo.project.name}`);
   await journal.getByRole("button", { name: "Record" }).click();
 
-  await expect(journal.getByText("Your sign-in has lapsed.")).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: /^Your sign-in has lapsed\. Sign in again/ }),
+  ).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in again" })).toBeVisible();
+  await expect(journal.getByTestId("unsent-entry")).toHaveCount(1);
 });

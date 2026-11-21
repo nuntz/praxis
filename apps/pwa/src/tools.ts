@@ -45,7 +45,7 @@ async function post<T>(
       redirect: "manual",
     });
   } catch {
-    throw new Unreachable("Praxis could not be reached.");
+    throw new Unreachable("Praxis could not be reached: this needs the network.");
   }
   // The Worker itself refuses a request Access did not sign in.
   if (response.type === "opaqueredirect" || response.status === 401) {
@@ -133,6 +133,16 @@ export function contextTools(contextId: string): CallTool {
 
 /** The current Context's tools, for whatever is shown inside it. */
 export const CurrentContextTools = createContext<CallTool>();
+
+/** The current Context's id, for what is shown inside it and kept on the Device for it. */
+export const CurrentContextId = createContext<string>();
+
+/** The current Context's id, read once when a component is made, as `useCallTool` is. */
+export function useContextId(): string {
+  const id = useContext(CurrentContextId);
+  if (id === undefined) throw new Error("Shown outside any Context");
+  return id;
+}
 
 /**
  * The caller of the current Context's tools. Read once when a component is made, so a call it

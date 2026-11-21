@@ -1586,3 +1586,57 @@ a.entry-mark.held-mark {
   font: var(--type-meta);
   font-weight: 600;
 }
+
+/*
+ * Unsent writes (section 8.8): the count under the top bar, an Unsent Entry in the Journal and a
+ * Task finished Unsent, each marked in words, and those not accepted at the top of Attention.
+ */
+.screen-status {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0 var(--space-3);
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.unsent-count {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.unsent-unkept {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.entry.unsent {
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-sm);
+}
+
+.entry-mark.unsent-mark,
+.task-mark.unsent-mark {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.not-accepted {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+}
+
+.not-accepted-title {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.not-accepted-reason {
+  margin: 0;
+  color: var(--warn);
+}

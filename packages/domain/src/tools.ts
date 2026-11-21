@@ -81,6 +81,15 @@ export function writeInput<S extends z.ZodRawShape>(shape: S) {
   return z.strictObject({ ...shape, key });
 }
 
+/**
+ * When an Unsent write was made, as an ISO 8601 instant (section 4.6): it sets the Entry's time and
+ * the Task's closing day. Offered to the hand only, and refused if in the future.
+ */
+const madeAt = z.iso.datetime().optional();
+
+/** Input fields offered to the person's hand alone: no other caller is given them, or may send them. */
+const HAND_ONLY_FIELDS = { made_at: true } as const;
+
 /** Days a caller's key for a write is remembered. */
 export const KEY_DAYS = 30;
 
@@ -183,6 +192,7 @@ export const tools = {
       tasks: newTasks,
       links: z.array(newLink).optional(),
       follow_up_to: id.optional(),
+      made_at: madeAt,
     }),
     offered: toEveryWriter,
   },
@@ -274,7 +284,7 @@ export const tools = {
     destructive: true,
     description:
       "Finish a Task: it was done. Finishing a Finished Task changes nothing, and a Dropped one is refused until it is reopened.",
-    input: writeInput({ id: z.string().min(1) }),
+    input: writeInput({ id: z.string().min(1), made_at: madeAt }),
     offered: toEveryWriter,
   },
   drop_task: {
@@ -821,11 +831,30 @@ export function parseInput<I>(schema: z.ZodType, input: unknown): Parsed<I> {
   return result as Extract<ToolResult<never>, { ok: false }>;
 }
 
-/** A tool's input schema as JSON Schema, as MCP lists it (section 7.3): what a caller may send. */
-export function inputJsonSchema(name: ToolName): Record<string, unknown> {
-  return z.toJSONSchema(tools[name].input, { io: "input" });
+/**
+ * A tool's input schema as this caller may send it: without the fields offered to the hand alone,
+ * for any other caller.
+ */
+function inputFor(name: ToolName, caller: CallerKind): z.ZodType {
+  const schema: z.ZodType = tools[name].input;
+  if (caller === "hand" || !(schema instanceof z.ZodObject)) return schema;
+  const handOnly = Object.keys(HAND_ONLY_FIELDS).some((field) => field in schema.shape);
+  return handOnly ? schema.omit(HAND_ONLY_FIELDS) : schema;
 }
 
-export function parseToolInput<N extends ToolName>(name: N, input: unknown): Parsed<ToolInput<N>> {
-  return parseInput(tools[name].input, input);
+/**
+ * A tool's input schema as JSON Schema, as MCP lists it (section 7.3) and the Agent is given it:
+ * what a caller other than the hand may send.
+ */
+export function inputJsonSchema(name: ToolName): Record<string, unknown> {
+  return z.toJSONSchema(inputFor(name, "connection"), { io: "input" });
+}
+
+/** A tool's input checked against its schema as this caller may send it. */
+export function parseToolInput<N extends ToolName>(
+  name: N,
+  input: unknown,
+  caller: CallerKind,
+): Parsed<ToolInput<N>> {
+  return parseInput(inputFor(name, caller), input);
 }

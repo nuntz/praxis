@@ -2,8 +2,9 @@ import { addDays, type Day, daysBetween, nextDueDate, type Task } from "@praxis/
 import { insertTask, insertTaskEvent, readTask, setRecurrence } from "./task-rows.ts";
 
 /**
- * An open Task is being closed today: if it is recurring, its rule moves on to the next
- * Occurrence, made here, and this one becomes a plain Task. The next carries the title, the
+ * An open Task is being closed on `closedOn`: if it is recurring, its rule moves on to the next
+ * Occurrence, made here at `at`, and this one becomes a plain Task. The day it was closed is today,
+ * unless it was finished Unsent on an earlier day (section 4.6). The next carries the title, the
  * Project, the rule, the delegation, the Origin Entry and the gap in days from its Defer Date to
  * its Due Date; its waits and the References to it stay behind. Returns the next Occurrence, or
  * null when the Task was not recurring.
@@ -11,12 +12,11 @@ import { insertTask, insertTaskEvent, readTask, setRecurrence } from "./task-row
 export function makeNextOccurrence(
   sql: SqlStorage,
   closing: Task,
-  at: number,
-  today: Day,
+  { at, today, closedOn }: { at: number; today: Day; closedOn: Day },
 ): Task | null {
   const { recurrence, due_date: due, defer_date: defer } = closing;
   if (recurrence === null || due === null) return null;
-  const nextDue = nextDueDate(recurrence, due, today);
+  const nextDue = nextDueDate(recurrence, due, closedOn);
   setRecurrence(sql, closing.id, null);
   const id = insertTask(sql, {
     title: closing.title,

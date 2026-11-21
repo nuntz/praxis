@@ -6,14 +6,25 @@ import type {
   ProjectInAttention,
   Task,
 } from "@praxis/domain";
-import { createSignal, For, type JSX, onCleanup, onMount, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js";
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { MoveRecord } from "./Move.tsx";
 import { StandingNotices } from "./Notices.tsx";
 import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
-import { unreachableMessage, useCallTool } from "./tools.ts";
+import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import { RefusedWrites, refusedIn } from "./Unsent.tsx";
+import { onSent, toSend, unsent, unsentFinishOf } from "./unsent.ts";
 
 /**
  * What the Attention column holds: the standing Notices, the Held Changes left for the
@@ -28,9 +39,19 @@ export function Attention(props: {
   onDueCount: (count: number) => void;
 }) {
   const callTool = useCallTool();
+  const contextId = useContextId();
   const live = useLive();
   const heldChanges = useHeldChanges();
-  const [view, setView] = createSignal<AttentionView | null>(null);
+  const [answered, setView] = createSignal<AttentionView | null>(null);
+  // A Task finished Unsent leaves Attention at once, before the server has heard (section 8.8).
+  const view = createMemo(() => {
+    const shown = answered();
+    return shown && withoutUnsentFinishes(shown);
+  });
+  createEffect(() => {
+    const shown = view();
+    if (shown) props.onDueCount(shown.due.length);
+  });
   const [problem, setProblem] = createSignal<string | null>(null);
   // What the last move of a Project said, once it has left Attention (section 3.9).
   const [moved, setMoved] = createSignal<string | null>(null);
@@ -45,7 +66,6 @@ export function Attention(props: {
       }
       setProblem(null);
       setView(result.value);
-      props.onDueCount(result.value.due.length);
     } catch (error) {
       if (current()) setProblem(unreachableMessage(error));
     }
@@ -67,6 +87,12 @@ export function Attention(props: {
     await read();
   });
   onCleanup(live.listen({ changed, readAfresh: read }));
+  // A finish sent from this Device moves Attention as any change to a Task does.
+  onCleanup(
+    onSent((sent) => {
+      if (sent.context === contextId && sent.kind === "finish") void read();
+    }),
+  );
 
   const dayOf = (at: string) =>
     new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: props.timeZone }).format(
@@ -94,6 +120,8 @@ export function Attention(props: {
 
   return (
     <div class="peer-body attention-body">
+      {/* What this Device sent and the server did not accept comes first (section 8.3). */}
+      <RefusedWrites context={contextId} />
       {/* Standing Notices sit above the sections of the view, and are not counted (section 8.3). */}
       <StandingNotices />
       <Show when={problem()}>
@@ -152,6 +180,7 @@ export function Attention(props: {
             <Show
               when={
                 heldChanges.all().length === 0 &&
+                refusedIn(contextId).length === 0 &&
                 Object.values(shown()).every((items) => items.length === 0)
               }
             >
@@ -162,6 +191,29 @@ export function Attention(props: {
       </Show>
     </div>
   );
+}
+
+/** Whether a Task is finished Unsent on this Device, to be sent. */
+function finishedUnsent(task: Task): boolean {
+  return unsentFinishOf(task.id) !== null;
+}
+
+/** Attention as read, without the Tasks finished Unsent on this Device. */
+function withoutUnsentFinishes(view: AttentionView): AttentionView {
+  // Left as read when there is none, so nothing shown in it is made afresh.
+  if (!unsent().some((write) => write.kind === "finish" && toSend(write))) return view;
+  const open = (task: Task) => !finishedUnsent(task);
+  return {
+    ...view,
+    due: view.due.filter((item) => item.kind !== "task" || open(item.task)),
+    newly_actionable: view.newly_actionable.filter((item) => open(item.task)),
+    delegated: view.delegated.filter(open),
+    projects: view.projects.map((item) => ({
+      ...item,
+      project: { ...item.project, tasks: item.project.tasks.filter(open) },
+    })),
+    loose: view.loose.filter(open),
+  };
 }
 
 /** One of Attention's sections, shown only when it holds something, in the order given. */

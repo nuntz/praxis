@@ -4,7 +4,6 @@ import {
   type Entry,
   type EntryNamed,
   followEdit,
-  inlineTasks,
   type LinkQuery,
   linkQueryAt,
   type NewLink,
@@ -15,7 +14,8 @@ import {
 } from "@praxis/domain";
 import { createSignal, For, Show } from "solid-js";
 import { latestRead } from "./latest-read.ts";
-import { unreachableMessage, useCallTool } from "./tools.ts";
+import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import { recordEntry } from "./unsent.ts";
 
 /** A link picked in the draft, followed through what is typed after it. */
 type Pick = { to: NewLink["to"]; anchor: Anchor };
@@ -41,9 +41,15 @@ export function Composer(props: {
   followingUp: EntryNamed | null;
   onStopFollowingUp: () => void;
   onRecorded: (entry: Entry) => void;
+  /**
+   * The Entry was kept Unsent on this Device, to be sent once Praxis can be reached, and whether
+   * its links or the Entry it followed up were left off for that.
+   */
+  onUnsent: (leftOff: boolean) => void;
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();
+  const contextId = useContextId();
   let field!: HTMLTextAreaElement;
   const [words, setWords] = createSignal("");
   const [picks, setPicks] = createSignal<Pick[]>([]);
@@ -147,14 +153,15 @@ export function Composer(props: {
     setSending(true);
     try {
       // The editor finds the Inline Tasks and keeps the links; the server never reads words for them.
-      const result = await callTool("record_entry", {
+      // With no network the Entry is kept Unsent, and capture never fails (section 8.8).
+      const outcome = await recordEntry(contextId, {
         words: words(),
-        tasks: inlineTasks(words()),
         links: picks(),
-        ...(props.followingUp ? { follow_up_to: props.followingUp.id } : {}),
+        follow_up_to: props.followingUp?.id ?? null,
       });
-      if (!result.ok) return props.onProblem(result.error.message);
-      props.onRecorded(result.value.record);
+      if (outcome.kind === "refused") return props.onProblem(outcome.message);
+      if (outcome.kind === "made") props.onRecorded(outcome.value);
+      else props.onUnsent(outcome.leftOff);
       setWords("");
       setPicks([]);
       shutPicker();

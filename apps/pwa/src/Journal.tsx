@@ -7,7 +7,7 @@ import {
   type Task,
 } from "@praxis/domain";
 import { imageLoadingIn } from "@praxis/domain/markdown";
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
@@ -17,7 +17,9 @@ import { useLive } from "./live-context.ts";
 import { MoveRecord } from "./Move.tsx";
 import { createSearch } from "./Search.tsx";
 import { TaskItem } from "./TaskItem.tsx";
-import { unreachableMessage, useCallTool } from "./tools.ts";
+import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import { UnsentEntryItem, unsentEntriesIn } from "./Unsent.tsx";
+import { onSent, type UnsentEntry } from "./unsent.ts";
 import { Versions } from "./Versions.tsx";
 import { Words } from "./Words.tsx";
 
@@ -38,6 +40,7 @@ export function Journal(props: {
   onShowHeldChange: (anchor: string) => void;
 }) {
   const callTool = useCallTool();
+  const contextId = useContextId();
   const live = useLive();
   const timeFormat = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
@@ -49,8 +52,9 @@ export function Journal(props: {
   const [entries, setEntries] = createStore<Entry[]>([]);
   const [earlierCursor, setEarlierCursor] = createSignal<string | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
-  // What the last move said, once its Entry has left the Journal (section 3.9).
-  const [moved, setMoved] = createSignal<string | null>(null);
+  // What the screen last told the person under the Journal: what a move did, once its Entry has
+  // left the Journal (section 3.9), or what an Entry kept Unsent left off (section 8.8).
+  const [told, setTold] = createSignal<string | null>(null);
   // The Entry the composer's next Entry is a Follow-up to, if the person chose one.
   const [followingUp, setFollowingUp] = createSignal<EntryNamed | null>(null);
 
@@ -75,6 +79,34 @@ export function Journal(props: {
     await loadPage();
   });
   onCleanup(live.listen({ changed: (change) => patch(change.effects), readAfresh }));
+  // An Unsent write accepted is shown as the server keeps it, as its Unsent copy leaves.
+  onCleanup(
+    onSent((sent) => {
+      if (sent.context !== contextId) return;
+      setProblem(null);
+      // Read as it now is: the live channel may have brought something newer than the answer.
+      if (sent.kind === "finish") void refreshTask(sent.task.id);
+      else void refreshAround(sent.entry.id);
+    }),
+  );
+
+  /**
+   * The Entries shown with the Unsent ones on this Device, each where it will go by the
+   * time it was made (section 8.8). Each keeps its identity, so what is open on it stays open.
+   */
+  const withUnsent = createMemo((): (Entry | UnsentEntry)[] => {
+    const unsentHere = unsentEntriesIn(contextId);
+    const shown: (Entry | UnsentEntry)[] = [];
+    let next = 0;
+    for (const entry of entries) {
+      while (next < unsentHere.length && (unsentHere[next] as UnsentEntry).made_at < entry.at) {
+        shown.push(unsentHere[next] as UnsentEntry);
+        next++;
+      }
+      shown.push(entry);
+    }
+    return [...shown, ...unsentHere.slice(next)];
+  });
 
   /** Show what a change did, by reading each record its Effects name as it now is. */
   async function patch(effects: Effect[]) {
@@ -236,38 +268,45 @@ export function Journal(props: {
           )}
         </Show>
         <ol class="entry-list" aria-label="Entries" hidden={searching()}>
-          <For each={entries}>
-            {(entry) => (
-              <EntryItem
-                entry={entry}
-                formatTime={(at) => timeFormat.format(new Date(at))}
-                timeZone={props.timeZone}
-                onEntry={(changed) => {
-                  setProblem(null);
-                  showEntry(changed);
-                }}
-                onFollowUp={() => {
-                  setFollowingUp({ id: entry.id, summary: summarizeWords(entry.words) });
-                  document.getElementById("new-entry")?.focus();
-                }}
-                onTask={showTask}
-                onShowHeldChange={props.onShowHeldChange}
-                onDeleted={(effects) => {
-                  setProblem(null);
-                  void patch(effects);
-                }}
-                onMoved={(said) => {
-                  setProblem(null);
-                  setMoved(said);
-                }}
-                onProblem={setProblem}
-              />
-            )}
+          <For each={withUnsent()}>
+            {(entry) =>
+              isUnsent(entry) ? (
+                <UnsentEntryItem
+                  write={entry}
+                  formatTime={(at) => timeFormat.format(new Date(at))}
+                />
+              ) : (
+                <EntryItem
+                  entry={entry}
+                  formatTime={(at) => timeFormat.format(new Date(at))}
+                  timeZone={props.timeZone}
+                  onEntry={(changed) => {
+                    setProblem(null);
+                    showEntry(changed);
+                  }}
+                  onFollowUp={() => {
+                    setFollowingUp({ id: entry.id, summary: summarizeWords(entry.words) });
+                    document.getElementById("new-entry")?.focus();
+                  }}
+                  onTask={showTask}
+                  onShowHeldChange={props.onShowHeldChange}
+                  onDeleted={(effects) => {
+                    setProblem(null);
+                    void patch(effects);
+                  }}
+                  onMoved={(said) => {
+                    setProblem(null);
+                    setTold(said);
+                  }}
+                  onProblem={setProblem}
+                />
+              )
+            }
           </For>
         </ol>
       </div>
       <div class="peer-foot">
-        <Show when={moved()}>
+        <Show when={told()}>
           {(said) => (
             <p class="moved" role="status">
               {said()}
@@ -285,6 +324,12 @@ export function Journal(props: {
           contextName={props.contextName}
           followingUp={followingUp()}
           onStopFollowingUp={() => setFollowingUp(null)}
+          onUnsent={(leftOff) => {
+            setProblem(null);
+            setFollowingUp(null);
+            // Nothing is dropped silently (section 8.8).
+            if (leftOff) setTold(LEFT_OFF);
+          }}
           onRecorded={(entry) => {
             setProblem(null);
             setFollowingUp(null);
@@ -296,6 +341,15 @@ export function Journal(props: {
       </div>
     </>
   );
+}
+
+/** Said when an Entry kept Unsent leaves off what it cannot take with no Offline Copy. */
+const LEFT_OFF =
+  "Kept Unsent with its words and Inline Tasks only: its links and the Entry it followed up need the network, so add them once it is sent.";
+
+/** Whether what the Journal shows is an Entry still Unsent on this Device. */
+function isUnsent(item: Entry | UnsentEntry): item is UnsentEntry {
+  return "made_at" in item;
 }
 
 function EntryItem(props: {

@@ -37,6 +37,23 @@ export type ToolCall<N extends ToolName> = {
 };
 
 /**
+ * When a write was made: the time the hand gives for an Unsent write, `made_at`, or else when the
+ * call arrived (section 4.6). A time after the call arrived is refused, since it is not yet.
+ */
+export function madeAt(given: string | undefined, arrivedAt: number): ToolResult<number> {
+  if (given === undefined) return success(arrivedAt);
+  const made = Date.parse(given);
+  if (made > arrivedAt) {
+    // Only the hand gives one, from the Device's own clock, so the person is told how to mend it.
+    return failure(
+      "invalid_input",
+      "This was dated later than it reached Praxis, so the Device's clock is ahead: set it right, and send it again once that time has passed.",
+    );
+  }
+  return success(made);
+}
+
+/**
  * The Context tools the Context's object runs itself, after the same checks, since they cannot run
  * inside one transaction of its SQL: `list_notices` asks the Deployment object what it answers,
  * `search` asks the meaning index, `rebuild_search_index` sets the index to be built afresh, and
@@ -90,7 +107,7 @@ export function admit(request: ToolRequest): ToolResult<Admitted> {
   if (!isToolName(tool) || !isOffered(tool, caller.kind)) {
     return failure("not_offered", `The tool ${tool} is not offered to this caller.`);
   }
-  const parsed = parseToolInput(tool, request.input);
+  const parsed = parseToolInput(tool, request.input, caller.kind);
   if (!parsed.ok) return parsed;
   return success({ tool, input: parsed.input } as Admitted);
 }

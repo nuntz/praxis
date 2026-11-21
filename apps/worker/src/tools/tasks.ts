@@ -1,6 +1,7 @@
 import {
   authorOf,
   type Day,
+  dayIn,
   type End,
   failure,
   nameHolds,
@@ -17,7 +18,8 @@ import { authorColumns } from "../author.ts";
 import { newestFirst } from "../newest-first.ts";
 import { makeNextOccurrence } from "../occurrence-rows.ts";
 import { readPerson } from "../person-rows.ts";
-import type { Handlers, ToolCall } from "../registry.ts";
+import { type Handlers, madeAt, type ToolCall } from "../registry.ts";
+import { timeZoneOf } from "../settings.ts";
 import {
   insertTask,
   insertTaskEvent,
@@ -157,13 +159,18 @@ function reach(
   end: End,
   { input, arrivedAt, today, sql }: ToolCall<"finish_task" | "drop_task">,
 ): ToolResult<Written<Task>> {
+  // A Task finished Unsent was closed when it was made, on that day (section 4.6).
+  const made = madeAt("made_at" in input ? input.made_at : undefined, arrivedAt);
+  if (!made.ok) return made;
   const task = readTask(sql, input.id, today);
   if (!task) return failure("not_found", NO_SUCH_TASK);
   if (task.state.is === end) return success(written(task, []));
   if (task.state.is !== "open") return closedRefusal(task, task.state.is);
-  insertTaskEvent(sql, task.id, { what: end, at: arrivedAt });
-  // A recurring Task's rule makes its next Occurrence, whichever end it reached.
-  const next = makeNextOccurrence(sql, task, arrivedAt, today);
+  insertTaskEvent(sql, task.id, { what: end, at: made.value });
+  // A recurring Task's rule makes its next Occurrence, whichever end it reached, counting from the
+  // day it was closed. What a rule makes, it makes as the call arrives.
+  const closedOn = dayIn(made.value, timeZoneOf(sql));
+  const next = makeNextOccurrence(sql, task, { at: arrivedAt, today, closedOn });
   // Its own waits end with it; each Task waiting on it is released, by rule.
   const released = releaseWaitsOn(sql, [{ kind: "task", id: task.id }], arrivedAt, today);
   const closed = readTask(sql, task.id, today) as Task;

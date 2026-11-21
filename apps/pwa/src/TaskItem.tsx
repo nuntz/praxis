@@ -1,6 +1,7 @@
 import { type Day, type Task, type TaskDates, utcMidnight, waitedOnName } from "@praxis/domain";
 import { createMemo, createSignal, type JSX, Show } from "solid-js";
-import { unreachableMessage, useCallTool } from "./tools.ts";
+import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import { discardUnsent, finishTask, unsentFinishOf } from "./unsent.ts";
 
 /** A day as the Device's locale writes it. A day has no time zone of its own. */
 const dayFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" });
@@ -26,9 +27,13 @@ export function TaskItem(props: {
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();
+  const contextId = useContextId();
   const [sending, setSending] = createSignal(false);
   const [editingDates, setEditingDates] = createSignal(false);
   const finished = () => props.task.state.is === "finished";
+  // Finished on this Device and not yet sent; one the server refused is shown in Attention instead.
+  const unsentFinish = () => unsentFinishOf(props.task.id);
+  const shownFinished = () => finished() || unsentFinish() !== null;
   const dropped = () => props.task.state.is === "dropped";
   const open = () => (props.task.state.is === "open" ? props.task.state : null);
   const sinceFormat = createMemo(
@@ -36,10 +41,23 @@ export function TaskItem(props: {
   );
 
   async function toggle(box: HTMLInputElement) {
+    // A finish still Unsent is undone on the Device, with no trace (section 8.8).
+    const finish = unsentFinish();
+    if (finish) {
+      discardUnsent(finish.id);
+      box.checked = finished();
+      return;
+    }
     setSending(true);
     try {
-      const tool = box.checked ? "finish_task" : "reopen_task";
-      const result = await callTool(tool, { id: props.task.id });
+      if (box.checked) {
+        // With no network the finish is kept Unsent, and the Task shows it.
+        const outcome = await finishTask(contextId, props.task);
+        if (outcome.kind === "refused") return props.onProblem(outcome.message);
+        if (outcome.kind === "made") props.onTask(outcome.value);
+        return;
+      }
+      const result = await callTool("reopen_task", { id: props.task.id });
       if (!result.ok) return props.onProblem(result.error.message);
       // What a rule did besides, releasing a Task waiting on it or making the next Occurrence,
       // comes over the live channel.
@@ -47,8 +65,9 @@ export function TaskItem(props: {
     } catch (error) {
       props.onProblem(unreachableMessage(error));
     } finally {
-      // Whatever the answer, the box shows the Task as the server last said it is.
-      box.checked = finished();
+      // Whatever the answer, the box shows the Task as the server last said it is, or finished
+      // Unsent on this Device.
+      box.checked = shownFinished();
       setSending(false);
     }
   }
@@ -58,17 +77,20 @@ export function TaskItem(props: {
       class="task"
       id={props.anchor}
       tabIndex={props.anchor === undefined ? undefined : -1}
-      classList={{ closed: props.task.state.is !== "open" }}
+      classList={{ closed: props.task.state.is !== "open" || unsentFinish() !== null }}
     >
       <label>
         <input
           type="checkbox"
-          checked={finished()}
+          checked={shownFinished()}
           disabled={sending() || dropped()}
           onChange={(event) => void toggle(event.currentTarget)}
         />
         <span class="task-title">{props.task.title}</span>
       </label>
+      <Show when={unsentFinish()}>
+        <span class="task-mark unsent-mark">Finished, Unsent</span>
+      </Show>
       {props.mark}
       <Show when={dropped()}>
         <span class="task-mark">Dropped</span>

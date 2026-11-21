@@ -33,7 +33,7 @@ import {
   linksOf,
 } from "../link-rows.ts";
 import { newestFirst } from "../newest-first.ts";
-import type { Handlers } from "../registry.ts";
+import { type Handlers, madeAt } from "../registry.ts";
 import { pastTheCeiling } from "../standing-rows.ts";
 import { insertTask, taskEffect, tasksOf } from "../task-rows.ts";
 
@@ -101,6 +101,10 @@ export const entryTools: Pick<
   | "unmark_standing"
 > = {
   record_entry({ caller, input, arrivedAt, today, sql, wordsAnswered }) {
+    // An Unsent Entry belongs where it was made in the Journal, with its Tasks and links.
+    const made = madeAt(input.made_at, arrivedAt);
+    if (!made.ok) return made;
+    const at = made.value;
     const links = keepableLinks(sql, input.words, input.links ?? []);
     // Like a link, a Follow-up naming no Entry here is not kept: the words are never refused. One
     // naming an Entry in the Trash is kept dormant, as a link is.
@@ -122,7 +126,7 @@ export const entryTools: Pick<
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       id,
       input.words,
-      arrivedAt,
+      at,
       ...authorColumns(author),
       throughConversation ? 1 : 0,
       followUpTo,
@@ -130,16 +134,16 @@ export const entryTools: Pick<
     // The Tasks come as a list beside the words. The words are never read to find them.
     // A Task is its maker's, whoever's words its Entry holds.
     for (const { title } of input.tasks ?? []) {
-      insertTask(sql, { title, originEntry: id, at: arrivedAt, author: authorOf(caller) });
+      insertTask(sql, { title, originEntry: id, at, author: authorOf(caller) });
     }
     // So do the links, and the words are never read to find them either.
-    const made = insertLinks(sql, { id, words: input.words }, links, arrivedAt);
+    const linked = insertLinks(sql, { id, words: input.words }, links, at);
     const entry = readEntry(sql, id, today) as Entry;
     return success(
       written(entry, [
         entryEffect(entry, "made"),
         ...entry.tasks.map((task) => taskEffect(task, "made")),
-        ...made,
+        ...linked,
       ]),
     );
   },
