@@ -31,6 +31,7 @@ import { CurrentMoveTargets } from "./Move.tsx";
 import { followNotices, hasNotices, StandingNotices } from "./Notices.tsx";
 import { focusCapField, followSpend, SpendSettings } from "./Spend.tsx";
 import { Standing } from "./Standing.tsx";
+import { readStored, store } from "./stored.ts";
 import { Trash } from "./Trash.tsx";
 import {
   CurrentContextId,
@@ -52,60 +53,11 @@ const READY_WITHIN = 3000;
 
 const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** Where this browser keeps the Context it last showed. It needs no record on the server. */
+// Where this browser keeps the Context it last showed, and the Contexts it last read, so Praxis
+// opens on one with no network (stored.ts). Without storage the screen opens on the first Context
+// with the network, and says so where it cannot reach it.
 const LAST_SHOWN = "praxis.context";
-
-function lastShown(): string | null {
-  try {
-    return localStorage.getItem(LAST_SHOWN);
-  } catch {
-    return null;
-  }
-}
-
-function rememberShown(id: string): void {
-  try {
-    localStorage.setItem(LAST_SHOWN, id);
-  } catch {
-    // Without storage the screen opens on the first Context next time, which is no fault.
-  }
-}
-
-/**
- * Where this browser keeps the Contexts it last read, so Praxis opens on one with no network
- * (section 8.8): each one's id, name, accent and whether it is retired, and nothing of its Journal.
- * Every later release reads it as stored here, since it opens on what an earlier one kept.
- */
 const CONTEXTS_LAST_READ = "praxis.contexts";
-
-/** A Context as this browser kept it, or null for anything else found there. */
-function keptListing(kept: unknown): ContextListing | null {
-  if (typeof kept !== "object" || kept === null) return null;
-  const { id, name, accent, retired } = kept as Record<string, unknown>;
-  if (typeof id !== "string" || typeof name !== "string" || typeof accent !== "string") return null;
-  if (typeof retired !== "boolean") return null;
-  return { id, name, accent: accent as ContextListing["accent"], retired };
-}
-
-function contextsLastRead(): ContextListing[] | null {
-  try {
-    const stored: unknown = JSON.parse(localStorage.getItem(CONTEXTS_LAST_READ) ?? "null");
-    if (!Array.isArray(stored)) return null;
-    const kept = stored.map(keptListing);
-    return kept.every((each) => each !== null) ? (kept as ContextListing[]) : null;
-  } catch {
-    return null;
-  }
-}
-
-function rememberContextsRead(contexts: ContextListing[]): void {
-  const kept = contexts.map(({ id, name, accent, retired }) => ({ id, name, accent, retired }));
-  try {
-    localStorage.setItem(CONTEXTS_LAST_READ, JSON.stringify(kept));
-  } catch {
-    // Without storage Praxis opens only with the network, as it says when it cannot.
-  }
-}
 
 /**
  * The main screen of the current Context: Attention, the Journal and the Conversation as three
@@ -121,10 +73,10 @@ export function App() {
   // A Notification's tap opens Praxis on its Context's Conversation (section 8.7).
   const opened = conversationOpened(location.search);
   if (opened !== null) {
-    rememberShown(opened);
+    store(LAST_SHOWN, opened);
     history.replaceState(null, "", "/");
   }
-  const [chosen, setChosen] = createSignal<string | null>(opened ?? lastShown());
+  const [chosen, setChosen] = createSignal<string | null>(opened ?? readStored(LAST_SHOWN));
   const current = createMemo(() => {
     const shown = (contexts() ?? []).filter((context) => !context.retired);
     return shown.find((context) => context.id === chosen()) ?? shown[0] ?? null;
@@ -188,7 +140,7 @@ export function App() {
 
   function switchTo(id: string) {
     setChosen(id);
-    rememberShown(id);
+    store(LAST_SHOWN, id);
   }
 
   /** Show a Context as a Deployment tool that changed it returned it. */
@@ -262,7 +214,7 @@ export function App() {
       setContexts(result.value.items);
     } catch (error) {
       if (!current()) return;
-      const kept = error instanceof Unreachable ? contextsLastRead() : null;
+      const kept = error instanceof Unreachable ? readStored(CONTEXTS_LAST_READ) : null;
       if (contexts() === null && kept?.some((context) => !context.retired)) {
         shownAsLastRead = true;
         return setContexts(kept);
@@ -286,7 +238,7 @@ export function App() {
   // What the browser keeps is the list as last shown, as read or as changed since.
   createEffect(() => {
     const listed = contexts();
-    if (listed && !shownAsLastRead) rememberContextsRead(listed);
+    if (listed && !shownAsLastRead) store(CONTEXTS_LAST_READ, listed);
   });
 
   /** Read a Context's settings, while it is still current. */

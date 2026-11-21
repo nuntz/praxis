@@ -2,20 +2,17 @@
 // it is asked for, and what it takes to switch Notifications on here. Praxis keeps a record of it
 // only while something is switched on.
 
+import { readStored, store } from "./stored.ts";
+
 /** Where this browser keeps its id as a Device. */
 const DEVICE_ID = "praxis.device";
 
 /** This browser's id as a Device, made and kept the first time; null without storage. */
 export function thisDevice(): string | null {
-  try {
-    const kept = localStorage.getItem(DEVICE_ID);
-    if (kept) return kept;
-    const made = crypto.randomUUID();
-    localStorage.setItem(DEVICE_ID, made);
-    return made;
-  } catch {
-    return null;
-  }
+  const kept = readStored(DEVICE_ID);
+  if (kept) return kept;
+  const made = crypto.randomUUID();
+  return store(DEVICE_ID, made) ? made : null;
 }
 
 /** Whether this browser can receive a Notification by Web Push at all. */

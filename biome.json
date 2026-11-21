@@ -55,6 +55,24 @@
       "plugins": ["./lint/numbered-read.grit"]
     },
     {
+      "includes": ["apps/pwa/src/**", "!apps/pwa/src/stored.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "localStorage": "What the screen stores for a later load goes through stored.ts, whose readers every shape a release stored is checked against (apps/pwa/test/stored.test.ts).",
+                  "indexedDB": "What the screen stores for a later load goes through stored.ts, whose readers every shape a release stored is checked against (apps/pwa/test/stored.test.ts)."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["packages/domain/src/**"],
       "linter": {
         "rules": {

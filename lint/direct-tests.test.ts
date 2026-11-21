@@ -40,6 +40,7 @@ const directTests: Record<string, { namedAt: NamedAt[]; files: Record<string, st
     files: {
       "tokens.test.ts": "every text pairing the design system names is at least 4.5:1",
       "live.test.ts": "the screen's end of the live channel",
+      "stored.test.ts": "what the screen stores for a later load",
     },
   },
 };

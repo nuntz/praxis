@@ -115,6 +115,12 @@ const fixtures: Record<string, string> = {
     'import { expect } from "@playwright/test";',
     "export const shown = expect(Promise.resolve()).resolves.not.toThrow();",
   ].join("\n"),
+  // What the screen stores for a later load goes through stored.ts alone.
+  "apps/pwa/src/stores-elsewhere.ts": [
+    'export const kept = localStorage.getItem("praxis.other");',
+    'export const opened = indexedDB.open("praxis");',
+  ].join("\n"),
+  "apps/pwa/src/stored.ts": 'export const kept = localStorage.getItem("praxis.unsent");',
   // The recommended rules are on.
   "apps/pwa/src/recommended.ts": "export function f(a: number) {\n  debugger;\n  return a;\n}",
 };
@@ -146,6 +152,7 @@ function rulesAt(path: string): string[] {
 }
 
 const restrictedImport = "lint/style/noRestrictedImports";
+const restrictedGlobal = "lint/style/noRestrictedGlobals";
 const clockRead = "plugin";
 const inexactLabel = "plugin";
 const computedOn = "plugin";
@@ -225,6 +232,14 @@ describe("the lint guards", () => {
   test("a test cannot rest on a call not throwing, in a seam or domain test or a journey", () => {
     expect(rulesAt("packages/domain/test/unthrown.test.ts")).toEqual([unthrown, unthrown]);
     expect(rulesAt("e2e/unthrown.spec.ts")).toEqual([unthrown]);
+  });
+
+  test("the screen touches the browser's storage only in stored.ts", () => {
+    expect(rulesAt("apps/pwa/src/stores-elsewhere.ts")).toEqual([
+      restrictedGlobal,
+      restrictedGlobal,
+    ]);
+    expect(rulesAt("apps/pwa/src/stored.ts")).toEqual([]);
   });
 
   test("the recommended rules are on", () => {

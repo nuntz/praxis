@@ -1,5 +1,6 @@
 import { createSignal, For, Show } from "solid-js";
 import { online } from "./online.ts";
+import type { Unsent, UnsentEntry } from "./stored.ts";
 import {
   beingSent,
   discardUnsent,
@@ -7,8 +8,6 @@ import {
   sendAgain,
   storagePromised,
   toSend,
-  type Unsent,
-  type UnsentEntry,
   unsent,
 } from "./unsent.ts";
 import { Words } from "./Words.tsx";

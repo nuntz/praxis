@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
 import {
   callContextTool,
@@ -12,6 +14,9 @@ import {
 // Praxis opens with no network (section 8.8): the service worker keeps the built screen, and the
 // browser the Contexts it last read, so a Device that showed a Context before opens on it and takes
 // an Entry Unsent. Each journey makes a Context of its own, so what it counts is its own.
+
+/** The first shape of Unsent writes a release stored, as stored. */
+const FIRST_UNSENT = join(import.meta.dirname, "../apps/pwa/test/stored/praxis.unsent-0001.txt");
 
 /** A Context of this journey's own, shown on opening, in a zone that is not the Device's. */
 async function contextOfOwn(page: Page, testInfo: TestInfo) {
@@ -128,24 +133,20 @@ test("a screen kept from an earlier release is shown only with no network, and t
   await page.context().setOffline(true);
   await page.reload();
   await expect(page.getByRole("heading", { name: "An earlier release" })).toBeVisible();
-  // An Entry it left Unsent, as this release stores one: a later release reads it as written.
-  const madeAt = "2026-11-20T08:15:00.000Z";
+  // An Entry it left Unsent, in the first shape a release stored (apps/pwa/test/stored/), for
+  // this journey's Context, with a key of its own made now: a later release reads it as written.
+  const [released] = JSON.parse(readFileSync(FIRST_UNSENT, "utf8"));
+  const write = {
+    ...released,
+    context: id,
+    key: crypto.randomUUID(),
+    keyed_at: new Date().toISOString(),
+  };
+  const { words, made_at: madeAt } = write;
+  expect(words).toMatch(/\n\[\] Post the form$/);
   await page.evaluate(
-    ([context, at]) => {
-      const write = {
-        id: crypto.randomUUID(),
-        context,
-        key: crypto.randomUUID(),
-        keyed_at: new Date().toISOString(),
-        made_at: at,
-        refused: null,
-        kind: "entry",
-        words: "Left under the earlier release\n[] Post the form",
-        tasks: [{ title: "Post the form" }],
-      };
-      localStorage.setItem("praxis.unsent", JSON.stringify([write]));
-    },
-    [id, madeAt] as const,
+    (stored) => localStorage.setItem("praxis.unsent", JSON.stringify([stored])),
+    write,
   );
 
   // With the network the current screen is the one opened, and it sends what was left.
@@ -154,10 +155,7 @@ test("a screen kept from an earlier release is shown only with no network, and t
   await page.reload();
   const sent = await answered;
   expect((await sent.json()).ok).toBe(true);
-  expect(sent.request().postDataJSON()).toMatchObject({
-    words: "Left under the earlier release\n[] Post the form",
-    made_at: madeAt,
-  });
+  expect(sent.request().postDataJSON()).toMatchObject({ words, made_at: madeAt });
   await expect(page.getByRole("heading", { name: "An earlier release" })).toHaveCount(0);
   const { journal } = await openJournal(page, testInfo);
   const recorded = journal.getByTestId("entry");
@@ -166,10 +164,5 @@ test("a screen kept from an earlier release is shown only with no network, and t
     recorded.getByRole("checkbox", { name: "Post the form", exact: true }),
   ).toBeVisible();
   const { items } = await callContextTool(page, id, "list_entries", {});
-  expect(items).toEqual([
-    expect.objectContaining({
-      words: "Left under the earlier release\n[] Post the form",
-      at: madeAt,
-    }),
-  ]);
+  expect(items).toEqual([expect.objectContaining({ words, at: madeAt })]);
 });

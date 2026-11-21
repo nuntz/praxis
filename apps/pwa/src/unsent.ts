@@ -3,71 +3,32 @@ import {
   inlineTasks,
   KEY_DAYS,
   type NewLink,
-  type NewTask,
   type Task,
   type ToolResult,
 } from "@praxis/domain";
 import { createSignal } from "solid-js";
 import { online } from "./online.ts";
+import {
+  readStored,
+  store,
+  type Unsent,
+  type UnsentEntry,
+  type UnsentFields,
+  type UnsentFinish,
+} from "./stored.ts";
 import { contextTools, SignInLapsed, signInLapsed, Unreachable } from "./tools.ts";
 
 // The two writes the Device takes with no network (section 8.8, ADR 0020): recording an Entry and
 // finishing a Task. Each stays Unsent on this Device, in its storage, until Praxis receives it.
 // The server judges it on arrival under the ordinary rules: the Device works out no Effect.
 
-/** What every Unsent write carries: the Context it is for, a key, and when it was made. */
-type UnsentFields = {
-  /** The Device's own id for it, by which the screen changes or discards it. */
-  id: string;
-  /** The Context it is for: the one shown when it was made. */
-  context: string;
-  /** The write's key, so one sent twice is made once (section 4.5). */
-  key: string;
-  /**
-   * When the key was made, as an ISO 8601 instant: the server remembers it for 30 days, after which
-   * a write sent with it could be made twice. Sending a refused write again makes a new key.
-   */
-  keyed_at: string;
-  /** When it was made, as an ISO 8601 instant: the Entry's time, the Task's closing day. */
-  made_at: string;
-  /**
-   * The server's reason, once it refused the write, or the Device's, once its key was too old to
-   * send it by itself. It is then never sent again by itself (section 8.8).
-   */
-  refused: string | null;
-};
-
 /**
- * An Entry recorded Unsent. With no Offline Copy it is its words and Inline Tasks only (section
- * 8.8): the Device holds no record to link to or follow up.
+ * Where this browser keeps its Unsent writes, in the order made. Every later release reads them as
+ * stored there, since the screen that stored one may be replaced before it is sent (section 8.8).
  */
-export type UnsentEntry = UnsentFields & { kind: "entry"; words: string; tasks: NewTask[] };
+const UNSENT = "praxis.unsent";
 
-/** A Task finished Unsent, with what the screen shows of it until it is sent. */
-export type UnsentFinish = UnsentFields & {
-  kind: "finish";
-  task: { id: string; title: string };
-};
-
-export type Unsent = UnsentEntry | UnsentFinish;
-
-/**
- * Where this browser keeps its Unsent writes, in the order made. They need no record. Every later
- * release reads them as stored here, since the screen that stored one may be replaced before it is
- * sent (section 8.8).
- */
-const STORAGE_KEY = "praxis.unsent";
-
-function load(): Unsent[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? (JSON.parse(stored) as Unsent[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-const [all, setAll] = createSignal<Unsent[]>(load());
+const [all, setAll] = createSignal<Unsent[]>(readStored(UNSENT));
 
 /** Every Unsent write on this Device, in the order made, refused ones among them. */
 export { all as unsent };
@@ -78,11 +39,7 @@ export { all as unsent };
  */
 function save(writes: Unsent[]): void {
   setAll(writes);
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(writes));
-  } catch {
-    setStoragePromised(false);
-  }
+  if (!store(UNSENT, writes)) setStoragePromised(false);
 }
 
 function update(id: string, change: (write: Unsent) => Unsent | null): void {
@@ -98,7 +55,7 @@ function update(id: string, change: (write: Unsent) => Unsent | null): void {
 // Another window of Praxis on this Device changed them.
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
-    if (event.key === STORAGE_KEY) setAll(load());
+    if (event.key === UNSENT) setAll(readStored(UNSENT));
   });
 }
 

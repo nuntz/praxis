@@ -9,7 +9,7 @@ const repo = join(import.meta.dir, "..");
 
 /**
  * What the workflow runs to set up, which a local run already has: the last release, which
- * lint/steps.test.ts reads as origin/master here, comes in by `git fetch`.
+ * lint/released.ts reads as origin/master here, comes in by `git fetch`.
  */
 const SETUP = [/^bun install\b/, /^bunx playwright install\b/, /^git fetch\b/];
 

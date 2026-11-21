@@ -1,7 +1,8 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
+    "lib": ["ES2024", "DOM"],
     "types": ["bun"]
   },
-  "include": [".", "../src/design/tokens.ts", "../src/live.ts", "../scripts"]
+  "include": [".", "../src/design/tokens.ts", "../src/live.ts", "../src/stored.ts", "../scripts"]
 }

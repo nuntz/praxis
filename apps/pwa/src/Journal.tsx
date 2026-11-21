@@ -16,10 +16,11 @@ import { heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { useLive } from "./live-context.ts";
 import { MoveRecord } from "./Move.tsx";
 import { createSearch } from "./Search.tsx";
+import type { UnsentEntry } from "./stored.ts";
 import { TaskItem } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { UnsentEntryItem, unsentEntriesIn } from "./Unsent.tsx";
-import { onSent, type UnsentEntry } from "./unsent.ts";
+import { onSent } from "./unsent.ts";
 import { Versions } from "./Versions.tsx";
 import { Words } from "./Words.tsx";
 
