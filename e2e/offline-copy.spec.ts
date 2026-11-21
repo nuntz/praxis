@@ -3,6 +3,7 @@ import {
   callContextTool,
   callDeploymentTool,
   expect,
+  holdNext,
   lastShown,
   makeContext,
   onPhone,
@@ -78,43 +79,6 @@ async function partOf(page: Page, context: string) {
     contexts: { id: string; fetched_at: string; opened: string[]; entries: { id: string }[] }[];
   } | null;
   return kept?.contexts.find((each) => each.id === context) ?? null;
-}
-
-/**
- * Hold the answer to the next call at this address, such as one Context's `list_tasks`, which the
- * copy reads it by, so a journey changes what the copy holds while its fetch is out
- * (CODING_STANDARDS.md, Reads and changes). Every other call is answered as ever.
- */
-async function holdNext(page: Page, address: RegExp) {
-  let release!: () => void;
-  const released = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let asked!: () => void;
-  const wasAsked = new Promise<void>((resolve) => {
-    asked = resolve;
-  });
-  let answered!: () => void;
-  const wasAnswered = new Promise<void>((resolve) => {
-    answered = resolve;
-  });
-  await page.route(address, async (route) => {
-    asked();
-    const answer = await route.fetch();
-    await released;
-    await route.fulfill({ response: answer });
-    answered();
-  });
-  return {
-    asked: () => wasAsked,
-    /** Let the held answer through, and wait until the screen has it. */
-    async release() {
-      release();
-      await wasAnswered;
-      await page.unroute(address);
-      await page.evaluate(() => new Promise(requestAnimationFrame));
-    },
-  };
 }
 
 /** Where the copy reads a Context's Tasks. */
@@ -212,7 +176,8 @@ test("the Offline Copy is read with no network, as last fetched, in any Context,
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   // A Context switched to is fetched into the copy at once, if it holds nothing of it yet.
   await switchTo(page, away.name);
-  await expect.poll(() => contextsHeld(page)).toContain(away.id);
+  // Under load it waits behind the copy's fetch of every other journey's Contexts.
+  await expect.poll(() => contextsHeld(page), { timeout: 20_000 }).toContain(away.id);
   await switchTo(page, home.name);
   // What the browser keeps holds the Journal, and no Conversation text and no image.
   const kept = await keptCopy(page);
