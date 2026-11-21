@@ -1,4 +1,5 @@
 import { type Entry, STANDING_CEILING, standingSize } from "@praxis/domain";
+import { imageLoadingIn } from "@praxis/domain/markdown";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
@@ -96,7 +97,7 @@ export function Standing(props: { timeZone: string }) {
                     <time class="standing-day" datetime={entry.at}>
                       {dateFormat.format(new Date(entry.at))}
                     </time>
-                    <Words words={entry.words} />
+                    <Words words={entry.words} images={imageLoadingIn(entry)} />
                     <div class="standing-actions">
                       <button
                         type="button"

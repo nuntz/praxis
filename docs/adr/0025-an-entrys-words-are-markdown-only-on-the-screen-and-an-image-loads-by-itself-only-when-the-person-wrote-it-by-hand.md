@@ -1,6 +1,6 @@
 # An Entry's words are Markdown only on the screen, and an image loads by itself only when the person wrote it by hand
 
-An Entry's words are stored exactly as typed and the server never reads them. The screen shows them as Markdown, from a fixed set with CommonMark's syntax: emphasis, code, links, lists, quotes, headings, tables and images. Raw HTML is shown as typed. An image is given by its `https` address and Praxis keeps none of its bytes. It loads by itself only in an Entry whose Author is the person and which did not come through the Conversation. In any other Entry it shows its description and waits for a tap, and in a Message it never loads. We decided this because showing an image makes the person's browser call a third party, which is the one place the screen does so, and an address can carry words out. A Connection that writes could record an Entry telling the Agent to put Journal text into an image's address, and the browser would send it when the Entry or the Message was shown.
+An Entry's words are stored exactly as typed and the server never reads them. The screen shows them as Markdown, from a fixed set with CommonMark's syntax: emphasis, code, links, lists, quotes, headings, tables and images. Raw HTML is shown as typed. An image is given by its `https` address and Praxis keeps none of its bytes. It loads by itself only in an Entry whose Author is the person and which did not come through the Conversation, and whose words the Agent has not changed since. In any other Entry it shows its description and waits for a tap, and in a Message it never loads. We decided this because showing an image makes the person's browser call a third party, which is the one place the screen does so, and an address can carry words out. A Connection that writes could record an Entry telling the Agent to put Journal text into an image's address, and the browser would send it when the Entry or the Message was shown.
 
 ## Considered Options
 
@@ -15,9 +15,11 @@ An Entry's words are stored exactly as typed and the server never reads them. Th
 
 - Search, Versions, a Held Change, the Export and a Connection all see the words as typed. Only an Entry, wherever the screen shows it, the Journal and the Standing Entries alike, and a Message from the Agent are rendered.
 - Editing an Entry makes it the person's, so its images then load by themselves. That is how the person vouches for an Entry they did not write.
+- The last change to an Entry's words says whose hand they are from. A Held Change the person tapped leaves them the Author with the Agent's words in it, so its images wait for a tap until the person's own edit.
 - A tap loads one image for one showing and is not remembered.
 - Offline, an image shows its description. The Offline Copy and the service worker hold no image.
-- The content security policy allows images from any `https` host. Nothing else new is allowed.
+- The Worker puts a content security policy on the screen and its files, where there was none: the Deployment's own address for everything, and images from any `https` host. Nothing else new is allowed.
+- An image sends no referrer, as a link does, so its host learns nothing of the Deployment's address.
 - A leading `- ` is a list item and no longer an Inline Task. `- [ ]` is accepted in its place.
 - A line typed within a paragraph stays a line, where CommonMark would run it into the one before: the person's lines are theirs, as they were when the words were plain text.
 - A bare address is one typed with its `https://`. `www.` and a mail address are words, since a link takes only an `https` address.

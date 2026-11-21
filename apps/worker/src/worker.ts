@@ -84,7 +84,7 @@ async function route(request: Request, env: Env, arrivedAt: number): Promise<Res
       const stuck = await deploymentOf(env).upgradeStuck();
       if (stuck !== null) return stuckPage(stuck);
     }
-    return env.ASSETS.fetch(request);
+    return withPolicy(await env.ASSETS.fetch(request));
   }
   const live = LIVE_PATH.exec(pathname);
   if (live) return openLive(request, env, live[1] ?? "");
@@ -118,6 +118,21 @@ async function route(request: Request, env: Env, arrivedAt: number): Promise<Res
   return Response.json(
     await callContext(env, deployment, contextId, { caller: HAND, tool, input, arrivedAt }),
   );
+}
+
+/**
+ * The content security policy of the screen and its files: everything from the screen's own
+ * address, and images from any https host, since an image in an Entry is given by its address and
+ * Praxis keeps none of its bytes (section 8.4, ADR 0025). Nothing else from elsewhere.
+ */
+const SCREEN_POLICY =
+  "default-src 'self'; img-src 'self' https:; base-uri 'none'; frame-ancestors 'none'";
+
+/** One of the screen's files, served under the screen's content security policy. */
+function withPolicy(served: Response): Response {
+  const response = new Response(served.body, served);
+  response.headers.set("content-security-policy", SCREEN_POLICY);
+  return response;
 }
 
 /**

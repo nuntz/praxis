@@ -6,6 +6,7 @@ import {
   summarizeWords,
   type Task,
 } from "@praxis/domain";
+import { imageLoadingIn } from "@praxis/domain/markdown";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { authorName } from "./authors.ts";
@@ -443,7 +444,12 @@ function EntryItem(props: {
           </Show>
         )}
       </Show>
-      <Show when={editing()} fallback={<Words words={props.entry.words} testId="words" />}>
+      <Show
+        when={editing()}
+        fallback={
+          <Words words={props.entry.words} images={imageLoadingIn(props.entry)} testId="words" />
+        }
+      >
         <EntryEditor
           entry={props.entry}
           onSaved={(entry) => {

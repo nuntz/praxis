@@ -63,8 +63,14 @@ test("a Message from the Agent is rendered as Markdown, and the person's own is 
       .click();
   }
   const conversation = page.getByRole("region", { name: "Conversation" });
+  // An image's host, which counts what the browser asks it for.
+  const images: string[] = [];
+  await page.route("https://images.example/**", (route) => {
+    images.push(route.request().url());
+    return route.abort();
+  });
 
-  const asked = `Say: **The boathouse** is cheaper ${tag}\n- under the ceiling\n- see https://forms.example.com/offsite`;
+  const asked = `Say: **The boathouse** is cheaper ${tag}\n- under the ceiling\n- see https://forms.example.com/offsite\n\n![Floor plan ${tag}](https://images.example/floor-plan.png)`;
   await conversation
     .getByRole("textbox", { name: `Message the Agent in Markdown ${tag}`, exact: true })
     .fill(asked);
@@ -80,6 +86,11 @@ test("a Message from the Agent is rendered as Markdown, and the person's own is 
   await expect(
     answer.getByRole("link", { name: "https://forms.example.com/offsite", exact: true }),
   ).toHaveAttribute("rel", "noreferrer");
+  // An image in a Message never loads: it is its description, with nothing to tap.
+  await expect(answer.getByText(`Floor plan ${tag}`, { exact: true })).toBeVisible();
+  await expect(answer.getByRole("img")).toHaveCount(0);
+  await expect(answer.getByRole("button")).toHaveCount(0);
+  expect(images).toEqual([]);
   await expect(conversation.getByText(asked, { exact: true })).toBeVisible();
 });
 

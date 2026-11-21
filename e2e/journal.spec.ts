@@ -1,4 +1,4 @@
-import { expect, openJournal, test } from "./fixtures.ts";
+import { callContextTool, expect, lastShown, makeContext, openJournal, test } from "./fixtures.ts";
 
 test("the person records Entries in the Journal's composer and sees them in time order", async ({
   page,
@@ -134,4 +134,91 @@ test("the person sees an Entry's words rendered as Markdown, and edits them as t
   await expect(entry.getByRole("textbox", { name: "The Entry's words", exact: true })).toHaveValue(
     words,
   );
+});
+
+/** A one-pixel PNG, served for an image's address so no journey reaches beyond the Worker. */
+const PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  "base64",
+);
+
+test("an image loads by itself only in an Entry the person wrote by hand, and waits for a tap in any other", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const context = await makeContext(page, {
+    name: `Images ${tag}`,
+    time_zone: "UTC",
+    accent: "rust",
+  });
+  await lastShown(page, context.id);
+  // Every image's host is this stand-in, which counts what the browser asks it for. The content
+  // security policy still applies: it is the browser's, ahead of the request.
+  const asked: string[] = [];
+  await page.route("https://images.example/**", (route) => {
+    const address = route.request().url();
+    asked.push(address);
+    if (address.endsWith("/missing.png")) return route.abort();
+    return route.fulfill({ contentType: "image/png", body: PIXEL });
+  });
+  await page.goto("/");
+  const { journal, composer } = await openJournal(page, testInfo);
+
+  // The person's own Entry, written by hand: its images load by themselves, with no frame, and
+  // one that fails says so, with its address as a link.
+  await composer.fill(
+    [
+      `Venue ${tag}`,
+      "",
+      `![The boathouse ${tag}](https://images.example/boathouse.png)`,
+      "",
+      `![Seating chart ${tag}](https://images.example/missing.png)`,
+    ].join("\n"),
+  );
+  await journal.getByRole("button", { name: "Record" }).click();
+  const mine = journal.getByTestId("entry").filter({ hasText: `Venue ${tag}` });
+  const boathouse = mine.getByRole("img", { name: `The boathouse ${tag}`, exact: true });
+  await expect(boathouse).toBeVisible();
+  await expect
+    .poll(() => boathouse.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBeGreaterThan(0);
+  await expect(boathouse).toHaveCSS("border-style", "none");
+  const failed = mine.getByTestId("image-line");
+  await expect(failed).toContainText(`Seating chart ${tag}`);
+  await expect(failed).toContainText("did not load");
+  await expect(
+    failed.getByRole("link", { name: "images.example/missing.png", exact: true }),
+  ).toHaveAttribute("href", "https://images.example/missing.png");
+
+  // The Agent's Entry, recorded from the Conversation: its image waits for a tap, and nothing is
+  // asked of its address until then.
+  const floorPlan = "https://images.example/floor-plan.png";
+  await callContextTool(page, context.id, "send_message", {
+    words: `Record: Floor ${tag}\n\n![Floor plan ${tag}](${floorPlan})`,
+  });
+  const recorded = journal.getByTestId("entry").filter({ hasText: `Floor ${tag}` });
+  await expect(recorded).toHaveCount(1);
+  // Found by its id from here on, since editing it hides its words.
+  const agents = journal.locator(`[id="${await recorded.getAttribute("id")}"]`);
+  const show = agents.getByRole("button", { name: `Show image Floor plan ${tag}`, exact: true });
+  await expect(show).toBeVisible();
+  await expect(agents.getByRole("img")).toHaveCount(0);
+  expect(asked).not.toContain(floorPlan);
+
+  // A tap loads it for this showing only.
+  await show.click();
+  await expect(agents.getByRole("img", { name: `Floor plan ${tag}`, exact: true })).toBeVisible();
+  await expect.poll(() => asked).toContain(floorPlan);
+  await page.reload();
+  await openJournal(page, testInfo);
+  await expect(show).toBeVisible();
+  await expect(agents.getByRole("img")).toHaveCount(0);
+
+  // The person's edit makes the Entry theirs, and its image then loads by itself.
+  await agents.getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = agents.getByRole("textbox", { name: "The Entry's words", exact: true });
+  await editor.fill(`Floor ${tag}, checked\n\n![Floor plan ${tag}](${floorPlan})`);
+  await agents.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(agents.getByRole("img", { name: `Floor plan ${tag}`, exact: true })).toBeVisible();
+  await expect(show).toHaveCount(0);
 });

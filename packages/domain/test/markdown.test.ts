@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { type MarkdownBlock, type MarkdownInline, renderMarkdown } from "../src/markdown.ts";
+import type { Author } from "../src/callers.ts";
+import type { Entry } from "../src/entry.ts";
+import {
+  imageLoadingIn,
+  type MarkdownBlock,
+  type MarkdownInline,
+  renderMarkdown,
+} from "../src/markdown.ts";
 
 // What the Markdown renderer lets through is one of the few places with direct tests (section
 // 13): words can take any shape, and the screen shows only the fixed set of section 8.4, with
@@ -391,5 +398,59 @@ describe("an image", () => {
     ["a path", "![Plan](/plan.png)"],
   ])("to %s is shown as typed", (_, words) => {
     expect(renderMarkdown(words)).toEqual(paragraph(words));
+  });
+});
+
+describe("when an image loads", () => {
+  const person: Author = { kind: "person" };
+  const agent: Author = { kind: "agent" };
+  const connection: Author = { kind: "connection", name: "Calendar sync" };
+  const at = "2026-11-20T09:12:00.000Z";
+
+  /** An Entry's facts that say whose hand it is from. */
+  function entry(
+    author: Author,
+    throughConversation: boolean,
+    lastChangedBy: Author | null = null,
+  ): Pick<Entry, "author" | "through_conversation" | "edited"> {
+    return {
+      author,
+      through_conversation: throughConversation,
+      edited: lastChangedBy && { by: lastChangedBy, at },
+    };
+  }
+
+  test.each([
+    ["the person wrote by hand", entry(person, false)],
+    ["the person wrote by hand and last changed by hand", entry(person, false, person)],
+  ])("by itself in an Entry %s", (_, written) => {
+    expect(imageLoadingIn(written)).toBe("by_itself");
+  });
+
+  test.each([
+    ["the Agent wrote", entry(agent, true)],
+    ["a Connection wrote", entry(connection, false)],
+    ["of the person's words that came through the Conversation", entry(person, true)],
+    // A Held Change the person tapped leaves them the Author, with the Agent's words in it.
+    [
+      "the person wrote by hand, which the Agent last changed on their tap",
+      entry(person, false, agent),
+    ],
+    [
+      "of the person's words that came through the Conversation, which the Agent last changed",
+      entry(person, true, agent),
+    ],
+  ])("on a tap in an Entry %s", (_, written) => {
+    expect(imageLoadingIn(written)).toBe("on_tap");
+  });
+
+  // The person's edit makes an Entry theirs: its Author is then the person, and the last change
+  // to its words is their own.
+  test.each([
+    // The Agent's Entries all come through the Conversation, so it is one row with those.
+    ["the Agent wrote, or whose words came through the Conversation", entry(person, true, person)],
+    ["a Connection wrote", entry(person, false, person)],
+  ])("by itself in an Entry %s, once the person's edit makes it theirs", (_, edited) => {
+    expect(imageLoadingIn(edited)).toBe("by_itself");
   });
 });

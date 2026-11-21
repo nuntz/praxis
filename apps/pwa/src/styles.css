@@ -852,12 +852,25 @@ button.quiet {
   white-space: pre-wrap;
 }
 
-/* An image is its description, with the image icon in the muted colour. */
+/*
+ * An image that has loaded has no frame, and is no wider than the words. One waiting for a tap,
+ * or one that did not load, is one line: its icon in the muted colour, its description in ink,
+ * then "Show image" underlined, or "did not load" and its address as a link.
+ */
+.words-image-loaded {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
 .words-image {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 6px 10px;
   color: var(--muted);
+  font: var(--type-body);
   vertical-align: middle;
 }
 
@@ -867,6 +880,18 @@ button.quiet {
 
 .words-image-description {
   color: var(--ink);
+}
+
+.words .words-image-show {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 /* The three kinds of link are told apart by shape: a Mention is a tinted pill, a Reference an inset one. */

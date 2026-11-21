@@ -132,6 +132,18 @@ describe("the Access sign-in every request needs", () => {
   });
 });
 
+describe("the screen and its files", () => {
+  test("carry the content security policy: the screen's own address, and images from any https host", async () => {
+    for (const path of ["/", "/index.html", "/manifest.webmanifest", "/a/path/the/screen/routes"]) {
+      const served = await send(path);
+      expect(served.status, path).toBe(200);
+      expect(served.headers.get("content-security-policy"), path).toBe(
+        "default-src 'self'; img-src 'self' https:; base-uri 'none'; frame-ancestors 'none'",
+      );
+    }
+  });
+});
+
 describe("the screen's tool endpoint", () => {
   test("the screen calls Deployment tools as the person's hand", async () => {
     const id = await makeContext("Home");

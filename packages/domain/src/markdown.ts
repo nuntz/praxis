@@ -1,4 +1,5 @@
 import MarkdownIt, { type StateBlock, type Token } from "markdown-it";
+import type { Entry } from "./entry.ts";
 import { inlineTaskTitle } from "./task.ts";
 
 /**
@@ -141,6 +142,29 @@ parser.block.ruler.at(
  */
 function isHttps(address: string): boolean {
   return /^https:\/\/[^/?#\\]/i.test(address);
+}
+
+/**
+ * How an image in words the screen shows loads (section 8.4, ADR 0025): by itself, on the
+ * person's tap for that showing, or never, as in a Message from the Agent (section 8.5).
+ */
+export type ImageLoading = "by_itself" | "on_tap" | "never";
+
+/**
+ * How an Entry's images load. Showing one makes the person's browser call the address, which can
+ * carry words out, so one loads by itself only in an Entry the person wrote by hand: its Author is
+ * the person and it did not come through the Conversation, and the Agent's words have not been put
+ * in it since. The last change to its words says which hand they are from: the person's edit makes
+ * an Entry theirs and vouches for it, so its images then load by themselves, while a Held Change
+ * the person tapped leaves them the Author with the Agent's words in it (section 5.3), which wait
+ * for a tap. A Connection cannot change the person's words at all.
+ */
+export function imageLoadingIn(
+  entry: Pick<Entry, "author" | "through_conversation" | "edited">,
+): Exclude<ImageLoading, "never"> {
+  if (entry.author.kind !== "person") return "on_tap";
+  const byHand = entry.edited ? entry.edited.by.kind === "person" : !entry.through_conversation;
+  return byHand ? "by_itself" : "on_tap";
 }
 
 /** The words as the screen shows them: the blocks of the fixed set, in the order typed. */
