@@ -1,4 +1,13 @@
-import { ACCENTS, type ContextListing, type NewTask } from "@praxis/domain";
+import {
+  ACCENTS,
+  type Anchor,
+  type ContextListing,
+  type LinkTarget,
+  type NewTask,
+} from "@praxis/domain";
+import { type OfflineCopy, readOfflineCopy } from "./stored-records.ts";
+
+export type { ContextCopy, OfflineCopy } from "./stored-records.ts";
 
 // What the screen stores on this Device for a later load, in the browser's storage, and the only
 // module that touches it (biome.json). Every later release reads it as stored here, since the
@@ -29,11 +38,26 @@ export type UnsentFields = {
   refused: string | null;
 };
 
+/** A record an Unsent Entry links to, held on the Device, with what the link shows of it. */
+export type UnsentLink = { to: LinkTarget & { summary: string }; anchor: Anchor | null };
+
+/** An Entry an Unsent Entry is a Follow-up to, held on the Device, by its summary. */
+export type UnsentFollowed = { id: string; summary: string };
+
 /**
- * An Entry recorded Unsent. With no Offline Copy it is its words and Inline Tasks only (section
- * 8.8): the Device holds no record to link to or follow up.
+ * An Entry recorded Unsent. With an Offline Copy it may link to records the Device holds and be a
+ * Follow-up to an Entry it holds, and it makes no new Person or Project; with none it is its words
+ * and Inline Tasks only (section 8.8).
  */
-export type UnsentEntry = UnsentFields & { kind: "entry"; words: string; tasks: NewTask[] };
+export type UnsentEntry = UnsentFields & {
+  kind: "entry";
+  words: string;
+  tasks: NewTask[];
+  /** Its links, each to a record the Device held when it was made. */
+  links: UnsentLink[];
+  /** The Entry it continues or corrects, if the Device held it when it was made. */
+  follow_up_to: UnsentFollowed | null;
+};
 
 /** A Task finished Unsent, with what the screen shows of it until it is sent. */
 export type UnsentFinish = UnsentFields & {
@@ -56,6 +80,12 @@ type Stored = {
   "praxis.context": string | null;
   /** This browser's id as a Device (section 8.10). */
   "praxis.device": string | null;
+  /**
+   * The Offline Copy, while it is switched on here (section 8.8): null while it is not. Unlike an
+   * Unsent write, one this screen cannot read loses nothing, since the server holds all it holds:
+   * it is fetched again on the next contact.
+   */
+  "praxis.offline": OfflineCopy | null;
 };
 
 export type StoredKey = keyof Stored;
@@ -100,6 +130,10 @@ const SHAPES: { [K in StoredKey]: Shape<Stored[K]> } = {
   },
   "praxis.context": TEXT,
   "praxis.device": TEXT,
+  "praxis.offline": {
+    read: (text) => readOfflineCopy(parsed(text)),
+    write: (copy) => JSON.stringify(copy),
+  },
 };
 
 /** Every key the screen stores under. */
@@ -117,6 +151,15 @@ export function store<K extends StoredKey>(key: K, value: NonNullable<Stored[K]>
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Clear what is stored under a key, as the Offline Copy is once switched off (section 8.8). */
+export function forget(key: StoredKey): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // No storage: nothing is stored.
   }
 }
 
@@ -169,7 +212,18 @@ function unsentWrite(value: unknown): Unsent | null {
     const titles = tasks.map((task) => asObject(task)?.title);
     if (!titles.every(isText)) return null;
     const read = titles.map((title) => ({ title }) satisfies Required<NewTask>);
-    return { ...fields, kind: "entry", words, tasks: read } satisfies Required<UnsentEntry>;
+    // The first shape stored had neither: an Entry kept with no Offline Copy.
+    const links = kept.links === undefined ? [] : unsentLinks(kept.links);
+    const follow_up_to = kept.follow_up_to === undefined ? null : followed(kept.follow_up_to);
+    if (links === null || follow_up_to === undefined) return null;
+    return {
+      ...fields,
+      kind: "entry",
+      words,
+      tasks: read,
+      links,
+      follow_up_to,
+    } satisfies Required<UnsentEntry>;
   }
   if (kept.kind === "finish") {
     const task = asObject(kept.task);
@@ -178,6 +232,40 @@ function unsentWrite(value: unknown): Unsent | null {
     return { ...fields, kind: "finish", task: read } satisfies Required<UnsentFinish>;
   }
   return null;
+}
+
+/** An Unsent Entry's links as stored, or null for anything else. */
+function unsentLinks(value: unknown): UnsentLink[] | null {
+  if (!Array.isArray(value)) return null;
+  const read = value.map((each): UnsentLink | null => {
+    const kept = asObject(each);
+    const to = asObject(kept?.to);
+    if (!kept || !to || !isText(to.id) || !isText(to.summary)) return null;
+    const kind = (["task", "project", "person"] as const).find((one) => one === to.kind);
+    if (!kind) return null;
+    const anchor = kept.anchor === null ? null : anchorOf(kept.anchor);
+    if (anchor === undefined) return null;
+    return {
+      to: { kind, id: to.id, summary: to.summary },
+      anchor,
+    } satisfies Required<UnsentLink>;
+  });
+  return read.every((each) => each !== null) ? (read as UnsentLink[]) : null;
+}
+
+/** An anchor as stored, or undefined for anything else. */
+function anchorOf(value: unknown): Anchor | undefined {
+  const kept = asObject(value);
+  if (!kept || !Number.isInteger(kept.start) || !Number.isInteger(kept.end)) return undefined;
+  return { start: kept.start as number, end: kept.end as number } satisfies Required<Anchor>;
+}
+
+/** The Entry an Unsent Entry follows up as stored, null for none, or undefined for anything else. */
+function followed(value: unknown): UnsentFollowed | null | undefined {
+  if (value === null) return null;
+  const kept = asObject(value);
+  if (!kept || !isText(kept.id) || !isText(kept.summary)) return undefined;
+  return { id: kept.id, summary: kept.summary } satisfies Required<UnsentFollowed>;
 }
 
 /** A Context as stored, or null for anything else. */

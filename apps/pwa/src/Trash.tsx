@@ -2,7 +2,7 @@ import type { RecordKind, RecordNamed, ToolResult, TrashItem } from "@praxis/dom
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
-import { unreachableMessage, useCallTool } from "./tools.ts";
+import { needsNetwork, unreachableMessage, useCallTool } from "./tools.ts";
 
 /** What each kind of record is called, in the glossary's words. */
 const KIND: Record<RecordKind, string> = {
@@ -51,7 +51,7 @@ export function Trash(props: { timeZone: string }) {
       setItems(result.value.items);
     } catch (error) {
       if (!current()) return;
-      setProblem(unreachableMessage(error));
+      setProblem(needsNetwork(error, "The Trash needs the network."));
     }
   });
 

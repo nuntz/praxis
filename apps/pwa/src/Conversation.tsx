@@ -211,9 +211,10 @@ export function Conversation(props: {
    * network, the cap reached, or the composer, when a Message can be sent and a Run tried again.
    */
   const foot = (): MessagesPage["agent"] | "offline" | "cap_reached" | "composer" | null => {
+    // With no network the Conversation says only that it needs one, read or not (section 8.8).
+    if (!online()) return "offline";
     const there = agent();
     if (there !== "available") return there;
-    if (!online()) return "offline";
     return capReached() ? "cap_reached" : "composer";
   };
 
@@ -314,14 +315,15 @@ export function Conversation(props: {
       aside={<span class="peer-note">with the Agent, in {props.contextName}</span>}
     >
       <div class="peer-body">
-        <Show when={earlierCursor()}>
+        <Show when={online() && earlierCursor()}>
           {(cursor) => (
             <button type="button" class="quiet" onClick={() => loadPage(cursor())}>
               Show earlier Messages
             </button>
           )}
         </Show>
-        <ol class="message-list" aria-label="Messages">
+        {/* With no network nothing of the Conversation is shown, an unread Brief included. */}
+        <ol class="message-list" aria-label="Messages" hidden={!online()}>
           <For each={messages}>
             {(message) => (
               <Show
@@ -357,7 +359,8 @@ export function Conversation(props: {
         </ol>
       </div>
       <div class="peer-foot">
-        <Show when={problem()}>
+        {/* With no network the notice below says what a call that could not be made would. */}
+        <Show when={foot() !== "offline" && problem()}>
           {(message) => (
             <p class="problem" role="alert">
               {message()}

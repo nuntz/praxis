@@ -1,9 +1,11 @@
 import { createSignal, For, Show } from "solid-js";
+import { clearCopy, clearing, copyFetchedAt } from "./offline-copy.ts";
 import { online } from "./online.ts";
 import type { Unsent, UnsentEntry } from "./stored.ts";
 import {
   beingSent,
   discardUnsent,
+  discardUnsentWrites,
   editUnsent,
   sendAgain,
   storagePromised,
@@ -60,6 +62,14 @@ export function UnsentStatus() {
           back. Everything else needs the network.
         </p>
       </Show>
+      <Show when={copyFetchedAt()}>
+        {(fetched) => (
+          <p class="screen-status" role="status">
+            Shown from the Offline Copy, as fetched{" "}
+            <time datetime={fetched()}>{fetchedAt(fetched())}</time>.
+          </p>
+        )}
+      </Show>
       <Show when={count() > 0}>
         <p class="screen-status unsent-count" role="status">
           {count()} Unsent
@@ -71,6 +81,52 @@ export function UnsentStatus() {
         </p>
       </Show>
     </>
+  );
+}
+
+/** When the Offline Copy was fetched, in the Device's own zone and locale. */
+function fetchedAt(at: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
+    new Date(at),
+  );
+}
+
+/** What the person is asked about the Unsent writes kept beside an Offline Copy to be cleared. */
+export function unsentKeptQuestion(count: number): string {
+  const [are, them] = count === 1 ? ["write is", "it"] : ["writes are", "them"];
+  return `${count} Unsent ${are} kept here too: keep ${them} to be sent, or discard ${them} with the copy?`;
+}
+
+/**
+ * The Offline Copy is to be cleared, as it was switched off for this Device elsewhere or the Device
+ * removed, and this Device holds Unsent writes: the person is asked first whether they are kept, to
+ * be sent, or discarded with it (section 8.8). Either way the copy is cleared.
+ */
+export function ClearingCopy() {
+  return (
+    <Show when={clearing() === "elsewhere"}>
+      <section class="screen-status clearing-copy" aria-labelledby="clearing-copy-heading">
+        <h2 id="clearing-copy-heading" class="not-accepted-title">
+          The Offline Copy was switched off for this Device
+        </h2>
+        <p>It is cleared from this browser. {unsentKeptQuestion(unsent().length)}</p>
+        <div class="held-change-actions">
+          <button type="button" onClick={() => clearCopy()}>
+            Keep Unsent writes
+          </button>
+          <button
+            type="button"
+            class="quiet"
+            onClick={() => {
+              discardUnsentWrites(unsent().map((write) => write.id));
+              clearCopy();
+            }}
+          >
+            Discard them too
+          </button>
+        </div>
+      </section>
+    </Show>
   );
 }
 
@@ -108,9 +164,18 @@ export function UnsentEntryItem(props: { write: UnsentEntry; formatTime: (at: st
           Discard
         </button>
       </div>
+      <Show when={props.write.follow_up_to}>
+        {(to) => <p class="entry-follows">Follows up “{to().summary}”</p>}
+      </Show>
       <Show
         when={editing()}
-        fallback={<Words words={props.write.words} images="by_itself" testId="words" />}
+        fallback={
+          <Words
+            words={props.write.words}
+            images={online() ? "by_itself" : "never"}
+            testId="words"
+          />
+        }
       >
         <UnsentEditor
           id={`unsent-${props.write.id}`}
@@ -123,6 +188,18 @@ export function UnsentEntryItem(props: { write: UnsentEntry; formatTime: (at: st
           }}
           onCancel={() => setEditing(false)}
         />
+      </Show>
+      <Show when={props.write.links.length > 0}>
+        <ul class="link-list" aria-label="Mentions and References">
+          <For each={props.write.links}>
+            {(link) => (
+              <li class={`link ${link.to.kind === "person" ? "mention" : "reference"}`}>
+                {link.to.kind === "person" ? "@" : "#"}
+                {link.to.summary}
+              </li>
+            )}
+          </For>
+        </ul>
       </Show>
     </li>
   );

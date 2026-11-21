@@ -194,10 +194,22 @@ export const deploymentTools = {
       message: "Switching Notifications on takes the browser's push subscription and user agent.",
     }),
   },
+  set_device_offline_copy: {
+    kind: "write",
+    description:
+      "Switch the Offline Copy on or off for a Device, by the id its browser keeps: a fixed set of each Context's Journal that the Device keeps to read with no network. Switched on, it is listed, named from its browser and system by the user agent. Switched off, the Device clears its copy on its next contact, and with nothing else on there it leaves the list. Giving it what it has changes nothing.",
+    input: writeInput({
+      id: deviceId,
+      on: z.boolean(),
+      user_agent: z.string().optional(),
+    }).refine((input) => !input.on || input.user_agent !== undefined, {
+      message: "Switching the Offline Copy on takes the browser's user agent.",
+    }),
+  },
   remove_device: {
     kind: "write",
     description:
-      "Remove a Device, from any Device: everything switched on there is switched off, and it leaves the list. It is not signed out, since the sign-in is Access's.",
+      "Remove a Device, from any Device: everything switched on there is switched off, and it leaves the list, so it clears its Offline Copy on its next contact. It is not signed out, since the sign-in is Access's.",
     input: writeInput({ id: deviceId }),
   },
   get_spend: {
@@ -269,6 +281,8 @@ export type DeploymentToolOutput = {
   rename_device: Written<Device>;
   /** The Device as it now is, or null once it has left the list. */
   set_device_notifications: Written<Device | null>;
+  /** The Device as it now is, or null once it has left the list. */
+  set_device_offline_copy: Written<Device | null>;
   /** Null: the Device has left the list. */
   remove_device: Written<null>;
   get_spend: Spend;

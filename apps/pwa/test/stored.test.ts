@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readStored, STORED_KEYS, type StoredKey, store } from "../src/stored.ts";
+import { offline0001, unsent0002 } from "./stored-reads.ts";
 
 // What the screen stores on a Device for a later load is read by every later release as it was
 // stored (section 8.8, CODING_STANDARDS.md, Upgrades). Each shape a release stored under a key is
@@ -28,6 +29,9 @@ const READS_AS: Record<string, unknown> = {
       kind: "entry",
       words: "Written in the tunnel\n[] Post the form",
       tasks: [{ title: "Post the form" }],
+      // Kept with no Offline Copy, before an Unsent Entry could take either.
+      links: [],
+      follow_up_to: null,
     },
     {
       id: "9c4e1f7a-2b6d-4e83-8f15-0a3c7d9e2b42",
@@ -49,14 +53,18 @@ const READS_AS: Record<string, unknown> = {
       kind: "entry",
       words: "Call back about the lease",
       tasks: [],
+      links: [],
+      follow_up_to: null,
     },
   ],
+  "praxis.unsent-0002.txt": unsent0002,
   "praxis.contexts-0001.txt": [
     { id: "ctx-home", name: "Home", accent: "teal", retired: false },
     { id: "ctx-work", name: "Work", accent: "rust", retired: true },
   ],
   "praxis.context-0001.txt": "ctx-home",
   "praxis.device-0001.txt": "4a9e2c7b-3d1f-4b85-a6e0-9f2c8d5b7e13",
+  "praxis.offline-0001.txt": offline0001,
 };
 
 /** Each fixture, by name, with its key and the text stored. */
@@ -77,6 +85,7 @@ beforeEach(() => {
   globalThis.localStorage = {
     getItem: (key: string) => kept.get(key) ?? null,
     setItem: (key: string, value: string) => void kept.set(key, value),
+    removeItem: (key: string) => void kept.delete(key),
   } as Storage;
 });
 
@@ -130,6 +139,58 @@ describe("what the screen stores for a later load", () => {
 
     expect(store("praxis.unsent", [])).toBe(true);
     expect(JSON.parse(kept.get("praxis.unsent") ?? "null")).toEqual([later]);
+  });
+});
+
+describe("an Unsent Entry as stored", () => {
+  test("one whose links or Follow-up the screen cannot read is not shown, and is kept", () => {
+    const [entry] = unsent0002;
+    const unreadable = [
+      { ...entry, links: [{ to: { kind: "new_person", name: "Ana" }, anchor: null }] },
+      {
+        ...entry,
+        links: [{ to: { kind: "person", id: "p", summary: "P" }, anchor: { start: 1 } }],
+      },
+      { ...entry, follow_up_to: { id: "entry-passport" } },
+      { ...entry, links: "none" },
+    ];
+    kept.set("praxis.unsent", JSON.stringify(unreadable));
+    expect(readStored("praxis.unsent")).toEqual([]);
+
+    expect(store("praxis.unsent", [])).toBe(true);
+    expect(JSON.parse(kept.get("praxis.unsent") ?? "null")).toEqual(unreadable);
+  });
+});
+
+describe("the Offline Copy as stored", () => {
+  test("one the screen cannot read is read as none, to be fetched again", () => {
+    const [context] = offline0001.contexts;
+    for (const stored of [
+      { ...offline0001, contexts: [{ ...context, fetched_at: 7 }] },
+      { ...offline0001, contexts: [{ ...context, entries: [{ id: "e" }] }] },
+      {
+        ...offline0001,
+        contexts: [{ ...context, tasks: [{ ...context?.tasks[0], state: { is: "lost" } }] }],
+      },
+      "not a copy",
+    ]) {
+      kept.set("praxis.offline", JSON.stringify(stored));
+      expect({ stored, read: readStored("praxis.offline") }).toEqual({ stored, read: null });
+    }
+  });
+
+  test("what it holds besides a record's own fields is not read, and not stored again", () => {
+    const [context] = offline0001.contexts;
+    if (!context) throw new Error("The fixture holds a Context");
+    const conversation = { id: "msg-1", words: "Said to the Agent" };
+    const stored = {
+      ...offline0001,
+      messages: [conversation],
+      contexts: [{ ...context, messages: [conversation] }],
+    };
+    kept.set("praxis.offline", JSON.stringify(stored));
+
+    expect(readStored("praxis.offline")).toEqual(offline0001 as never);
   });
 });
 

@@ -698,22 +698,24 @@ Capture never fails, and Praxis is not local-first. The server stays the only pl
 **Opening with no network.**
 
 - The service worker keeps the built screen: the files the Worker serves at the Deployment's own address, and nothing else: never anything under `/api/`, and no image but the screen's own icons, never one an Entry shows. It asks the network first and shows what it kept only when the network cannot be reached, so whatever the network answers is shown: a lapsed Access sign-in sends the browser to Access's login page, and nothing kept is shown in its place.
-- The browser keeps the Contexts it last read: each one's id, name, accent and whether it is retired, and nothing of its Journal. With no network Praxis opens on the Context the Device last showed, from that list, and reads it again once the network is back. The Journal's composer names that Context in its accent, and its times are in the Device's time zone until the Context's settings are read. A Device that has read no list opens on none, and says it needs the network.
+- The browser keeps the Contexts it last read: each one's id, name, accent and whether it is retired, and nothing of its Journal. With no network Praxis opens on the Context the Device last showed, from that list, and reads it again once the network is back. The Journal's composer names that Context in its accent, and its times are in the Device's time zone until the Context's settings are read, or in the Context's own where the Offline Copy holds it. A Device that has read no list opens on none, and says it needs the network.
 - Each release keeps its own screen, and replaces the last once the browser has its service worker, which it fetches with the network. Until then the Device opens the earlier screen with no network, and the first load with the network is the current one. Unsent writes are kept in the browser's storage, apart from the screen: an earlier screen still open sends its own to the current Worker once the network is back, and the current screen sends whatever is left. So a release reads the Unsent writes an earlier one stored, as stored, and keeps any it cannot read, such as one a later release's screen open beside it stored, and the tools take what an earlier screen sends.
 
 **Reading: the Offline Copy.**
 
-- Switched on per Device, off until then.
-- Holds, for every Context that is not retired: the result of `view_attention`, every open Task and Project, every Person, the Standing Entries, the last 30 days of Entries, and any older Entry that Device has opened.
-- Shown as last fetched, with the time. The person can switch Context.
-- Search, older Entries, the Trash, Versions and the change log need the network.
+- Switched on per Device, off until then, with `set_device_offline_copy`. Praxis holds only the switch; the Device holds the copy.
+- Holds, for every Context that is not retired: the result of `view_attention`, every open Task and Project, every Person, the Standing Entries, the last 30 days of Entries, and any older Entry that Device has opened from search. It holds each Context's time zone too, so today and the Entries' times are that Context's.
+- Fetched while Praxis is open: on opening, when the network is back, on coming into view and every ten minutes, at most once a minute. First it reads whether its switch is still on. Each Context's part is kept as it arrives, the one last shown first, and a Context switched to that the copy does not hold yet is fetched at once.
+- Shown, when the network cannot be reached, as last fetched, with the time that Context's part was. The person can switch Context.
+- Search, older Entries, the Trash, Versions and the change log need the network, and say so.
 - It holds no image an Entry shows, and the service worker keeps none. Without the network an image shows its description.
-- Its text sits in the browser's storage unencrypted. Turning it off or removing the Device clears it, on that Device's next contact if it is away, and the person is asked first about any Unsent writes.
+- Its text sits in the browser's storage unencrypted. Turning it off or removing the Device clears it, on that Device's next contact if it is away, and the person is asked first about any Unsent writes: kept, to be sent, or discarded with the copy. Turned off here, nothing is switched off until they answer; switched off elsewhere, the copy is cleared whichever they choose.
+- A copy a later release cannot read is read as none and fetched again on the next contact, since the server holds all it holds.
 
 **Writing: two Unsent writes.**
 
 - On every Device, with or without an Offline Copy: recording an Entry and finishing a Task.
-- An Unsent Entry may be a Follow-up to an Entry the Device holds, carries its Inline Tasks, and links only to records the Device holds. It makes no new Person or Project. With no Offline Copy it is words and Inline Tasks only.
+- An Unsent Entry may be a Follow-up to an Entry the Device holds, carries its Inline Tasks, and links only to records the Device holds. It makes no new Person or Project: with no network the composer's pickers offer only what the copy holds. With no Offline Copy it is words and Inline Tasks only. What it leaves off, it says.
 - It sits in the Journal where it will go, marked Unsent, its Inline Tasks shown as part of its words. A Task finished Unsent is marked so and leaves Attention. Nothing that would follow is shown. A count of Unsent writes is visible whenever there is one.
 - It is the person's to change: an Entry can be edited or discarded and a finish undone, with no trace. Nothing can point at an Unsent record.
 - It carries its made-at time and a key. A write made while the Device has the network and nothing Unsent waits ahead of it is sent at once with its key and no made-at, so the Device's clock is never set against the server's; only one that waited, or whose answer was lost, is sent with its made-at.

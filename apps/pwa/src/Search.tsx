@@ -3,8 +3,10 @@ import { createSignal, For, Index, onCleanup, Show } from "solid-js";
 import { recordAnchor } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
-import { unreachableMessage, useCallTool } from "./tools.ts";
+import { needsNetwork, useCallTool } from "./tools.ts";
 
+/** Search runs on the server, over the whole Journal, so it needs the network (section 8.8). */
+const SEARCH_NEEDS_NETWORK = "Search needs the network.";
 /** What each kind of record a search finds is called. */
 const KIND: Record<SearchHit["kind"], string> = {
   entry: "Entry",
@@ -55,7 +57,7 @@ export function createSearch(props: {
       setNextCursor(result.value.next_cursor);
       setWordsOnly(result.value.words_only);
     } catch (error) {
-      if (current() && words() === asked) setProblem(unreachableMessage(error));
+      if (current() && words() === asked) setProblem(needsNetwork(error, SEARCH_NEEDS_NETWORK));
     }
   });
 
@@ -95,7 +97,7 @@ export function createSearch(props: {
       setHits((shown) => [...(shown ?? []), ...result.value.items]);
       setNextCursor(result.value.next_cursor);
     } catch (error) {
-      if (stillAsked()) setProblem(unreachableMessage(error));
+      if (stillAsked()) setProblem(needsNetwork(error, SEARCH_NEEDS_NETWORK));
     }
   }
 

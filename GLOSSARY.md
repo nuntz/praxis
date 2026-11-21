@@ -201,5 +201,5 @@ The state of an Entry recorded or a Task finished on a Device that Praxis has no
 _Avoid_: Pending, queued, draft, outbox
 
 **Offline Copy**:
-What a Device keeps of the Journal so it can be read with no network, shown as it was when last fetched. The person turns it on for each Device. It never holds any of a Conversation.
+What a Device keeps of the Journal so it can be read with no network, shown as it was when last fetched. The person turns it on for each Device. It never holds any of a Conversation, nor any image.
 _Avoid_: Cache, replica, sync

@@ -1,5 +1,6 @@
 import {
   type Entry,
+  followEdit,
   inlineTasks,
   KEY_DAYS,
   type NewLink,
@@ -7,6 +8,7 @@ import {
   type ToolResult,
 } from "@praxis/domain";
 import { createSignal } from "solid-js";
+import { heldForUnsent, knowUnsent } from "./offline-copy.ts";
 import { online } from "./online.ts";
 import {
   readStored,
@@ -29,6 +31,9 @@ import { contextTools, SignInLapsed, signInLapsed, Unreachable } from "./tools.t
 const UNSENT = "praxis.unsent";
 
 const [all, setAll] = createSignal<Unsent[]>(readStored(UNSENT));
+
+// Clearing the Offline Copy asks first about these (section 8.8).
+knowUnsent(() => all().length > 0);
 
 /** Every Unsent write on this Device, in the order made, refused ones among them. */
 export { all as unsent };
@@ -161,15 +166,23 @@ function newUnsent(context: string): UnsentFields {
 
 /**
  * Record an Entry in a Context, Unsent if need be. Sent at once it takes its links and the Entry it
- * follows up; kept Unsent it is its words and Inline Tasks only, and says when it left any off.
+ * follows up. Kept Unsent it takes only the links to records the Offline Copy holds and a Follow-up
+ * to an Entry it holds, none with no copy, and says when it left any off (section 8.8).
  */
 export function recordEntry(
   context: string,
   entry: { words: string; links: NewLink[]; follow_up_to: string | null },
 ): Promise<Outcome<Entry>> {
   const tasks = inlineTasks(entry.words);
-  const write: UnsentEntry = { ...newUnsent(context), kind: "entry", words: entry.words, tasks };
-  const leftOff = entry.links.length > 0 || entry.follow_up_to !== null;
+  const { links, follow_up_to, leftOff } = heldForUnsent(context, entry);
+  const write: UnsentEntry = {
+    ...newUnsent(context),
+    kind: "entry",
+    words: entry.words,
+    tasks,
+    links,
+    follow_up_to,
+  };
   return make(
     write,
     (key) =>
@@ -197,9 +210,21 @@ export function finishTask(
   return make(write, (key) => contextTools(context)("finish_task", { id: task.id, key }), false);
 }
 
-/** An Unsent Entry with these words, and the Inline Tasks they hold. */
+/**
+ * An Unsent Entry with these words, the Inline Tasks they hold, and its links followed through the
+ * change, as the composer follows a pick: a link whose span the change typed into is lost.
+ */
 function withWords(write: Unsent, words: string): Unsent {
-  return write.kind === "entry" ? { ...write, words, tasks: inlineTasks(words) } : write;
+  if (write.kind !== "entry") return write;
+  const anchored = write.links.flatMap((link) => (link.anchor ? [link.anchor] : []));
+  const followed = followEdit(write.words, words, anchored);
+  let next = 0;
+  const links = write.links.flatMap((link) => {
+    if (!link.anchor) return [link];
+    const anchor = followed[next++];
+    return anchor ? [{ ...link, anchor }] : [];
+  });
+  return { ...write, words, tasks: inlineTasks(words), links };
 }
 
 /** Change an Unsent Entry's words, and its Inline Tasks with them, leaving no trace. */
@@ -210,6 +235,16 @@ export function editUnsent(id: string, words: string): void {
 /** Discard an Unsent write, or undo an Unsent finish, or dismiss a refused one: no trace is left. */
 export function discardUnsent(id: string): void {
   update(id, () => null);
+}
+
+/**
+ * Discard the Unsent writes the person was asked about, as they chose to with the Offline Copy
+ * cleared: never one made since, and never the one out to the server, whose answer is still to
+ * come and is dealt with as any other's.
+ */
+export function discardUnsentWrites(ids: string[]): void {
+  const out = beingSent();
+  save(all().filter((write) => write.id === out || !ids.includes(write.id)));
 }
 
 /**
@@ -299,7 +334,18 @@ function sendOne(write: Unsent): Promise<ToolResult<{ record: Entry | Task }>> {
   const tools = contextTools(write.context);
   const { key, made_at } = write;
   if (write.kind === "finish") return tools("finish_task", { id: write.task.id, key, made_at });
-  return tools("record_entry", { words: write.words, tasks: write.tasks, key, made_at });
+  const links = write.links.map(({ to, anchor }) => ({
+    to: { kind: to.kind, id: to.id },
+    ...(anchor ? { anchor } : {}),
+  }));
+  return tools("record_entry", {
+    words: write.words,
+    tasks: write.tasks,
+    ...(links.length > 0 ? { links } : {}),
+    ...(write.follow_up_to ? { follow_up_to: write.follow_up_to.id } : {}),
+    key,
+    made_at,
+  });
 }
 
 /** How long after a network failure what is to be sent is tried again: it doubles each time. */

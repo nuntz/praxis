@@ -1,7 +1,7 @@
 import { compareWords, type Entry, isHeld, type Version } from "@praxis/domain";
 import { createEffect, createSignal, For, on, Show } from "solid-js";
 import { authorName } from "./authors.ts";
-import { unreachableMessage, useCallTool } from "./tools.ts";
+import { needsNetwork, unreachableMessage, useCallTool } from "./tools.ts";
 
 /**
  * An Entry's Versions, newest first, each compared against the current words and shown as typed,
@@ -29,7 +29,8 @@ export function Versions(props: {
       setVersions((shown) => [...(from === undefined ? [] : shown), ...result.value.items]);
       setCursor(result.value.next_cursor);
     } catch (error) {
-      props.onProblem(unreachableMessage(error));
+      // An Entry's Versions are not in the Offline Copy (section 8.8).
+      props.onProblem(needsNetwork(error, "Versions need the network."));
     }
   }
 

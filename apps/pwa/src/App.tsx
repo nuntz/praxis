@@ -29,6 +29,8 @@ import { Live, socketOpener } from "./live.ts";
 import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
 import { CurrentMoveTargets } from "./Move.tsx";
 import { followNotices, hasNotices, StandingNotices } from "./Notices.tsx";
+import { contextCopy, copyFetchedAt, fetchIfMissing, keepCopyFresh } from "./offline-copy.ts";
+import { online } from "./online.ts";
 import { focusCapField, followSpend, SpendSettings } from "./Spend.tsx";
 import { Standing } from "./Standing.tsx";
 import { readStored, store } from "./stored.ts";
@@ -42,7 +44,7 @@ import {
   Unreachable,
   unreachableMessage,
 } from "./tools.ts";
-import { knowShownContexts, refusedIn, UnsentStatus } from "./Unsent.tsx";
+import { ClearingCopy, knowShownContexts, refusedIn, UnsentStatus } from "./Unsent.tsx";
 import { keepSending } from "./unsent.ts";
 
 /**
@@ -88,11 +90,15 @@ export function App() {
   const [problem, setProblem] = createSignal<string | null>(null);
   const [tab, setTab] = createSignal<PeerId>(opened === null ? "attention" : "conversation");
   const [attentionOpen, setAttentionOpen] = createSignal(false);
-  // Without the settings the Journal is still shown, its times in the Device's zone.
+  // Without the settings the Journal is still shown, its times in the Context's zone as the
+  // Offline Copy holds it, or with no copy in the Device's zone.
   const [unread, setUnread] = createSignal(false);
-  const timeZone = createMemo(
-    () => settings()?.time_zone ?? (unread() ? deviceTimeZone() : undefined),
-  );
+  const timeZone = createMemo(() => {
+    const read = settings()?.time_zone;
+    if (read !== undefined || !unread()) return read;
+    const id = currentId();
+    return (id === null ? null : contextCopy(id))?.time_zone ?? deviceTimeZone();
+  });
   // The count is the Unsent writes the server refused, the Held Changes and the Due section
   // (section 8.3).
   const [dueCount, setDueCount] = createSignal(0);
@@ -181,6 +187,13 @@ export function App() {
   });
   // Unsent writes are sent while Praxis is open, whichever Context is shown (section 8.8).
   onMount(() => onCleanup(keepSending()));
+  // The Offline Copy, where it is switched on, is fetched again while Praxis is open, and holds
+  // the Context shown as soon as it can.
+  onMount(() => onCleanup(keepCopyFresh()));
+  createEffect(() => {
+    const id = currentId();
+    if (id !== null) fetchIfMissing(id);
+  });
 
   // A tap on a Notification while Praxis is open here brings its Conversation into view.
   onMount(() => {
@@ -360,6 +373,7 @@ export function App() {
         </Show>
       </header>
       <UnsentStatus />
+      <ClearingCopy />
       <Show when={signInLapsed()}>
         <p class="problem" role="alert">
           Your sign-in has lapsed. <a href="/">Sign in again</a> to carry on.
@@ -406,7 +420,22 @@ export function App() {
                               <StandingNotices />
                             </section>
                           </Show>
-                          <Show when={settings()}>
+                          <Show
+                            when={settings()}
+                            fallback={
+                              // With no network the Standing Entries are the Offline Copy's.
+                              <Show when={(!online() || copyFetchedAt() !== null) && timeZone()}>
+                                {(zone) => (
+                                  <>
+                                    <p class="settings-note">
+                                      This Context's settings and its Trash need the network.
+                                    </p>
+                                    <Standing timeZone={zone()} />
+                                  </>
+                                )}
+                              </Show>
+                            }
+                          >
                             {(read) => (
                               <>
                                 <ContextSettings settings={read()} onChanged={setSettings} />

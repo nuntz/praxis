@@ -14,7 +14,8 @@ import {
 } from "@praxis/domain";
 import { createSignal, For, Show } from "solid-js";
 import { latestRead } from "./latest-read.ts";
-import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import { personsHeld, referencesHeld } from "./offline-copy.ts";
+import { Unreachable, unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { recordEntry } from "./unsent.ts";
 
 /** A link picked in the draft, followed through what is typed after it. */
@@ -127,7 +128,13 @@ export function Composer(props: {
       setChoices([...records, ...made]);
       setHighlight(records.length > 0 ? 0 : -1);
     } catch (error) {
-      props.onProblem(unreachableMessage(error));
+      if (!(error instanceof Unreachable)) return props.onProblem(unreachableMessage(error));
+      if (!current() || query() !== found) return;
+      // With no network the picker offers what the Offline Copy holds, and makes no new Person or
+      // Project, since the Device cannot tell whether one of that name exists (section 8.8).
+      const held = heldChoices(contextId, found.kind, typed);
+      setChoices(held);
+      setHighlight(held.length > 0 ? 0 : -1);
     }
   });
 
@@ -287,6 +294,13 @@ export function Composer(props: {
       </form>
     </div>
   );
+}
+
+/** The records the Offline Copy holds of a Context that a picker offers for what was typed. */
+function heldChoices(context: string, kind: LinkQuery["kind"], typed: string): Choice[] {
+  if (kind === "mention") return personChoices(personsHeld(context, typed)).slice(0, OFFERED);
+  const { projects, tasks } = referencesHeld(context, typed);
+  return [...projects.map(projectChoice), ...tasks.map(taskChoice)].slice(0, OFFERED);
 }
 
 function ChoiceLabel(props: { choice: Choice }) {

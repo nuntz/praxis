@@ -12,6 +12,12 @@ export type Device = {
   name: string;
   /** Whether it is sent a Notification when the Agent leaves a Brief or a Review (section 8.7). */
   notifications: boolean;
+  /**
+   * Whether it keeps an Offline Copy, a fixed set of each Context's Journal to read with no network
+   * (section 8.8). The Device holds the copy itself; Praxis holds only the switch, so a Device
+   * switched off or removed from elsewhere clears its copy on its next contact.
+   */
+  offline_copy: boolean;
   /** When it was last seen, as an ISO 8601 instant: when it last called a Deployment tool. */
   seen: string;
 };

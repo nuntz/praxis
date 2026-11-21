@@ -1599,6 +1599,19 @@ a.entry-mark.held-mark {
   font: var(--type-meta);
 }
 
+/* Asked before the Offline Copy is cleared, about the Unsent writes kept beside it. */
+.clearing-copy {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  color: var(--ink);
+  font: var(--type-meta);
+}
+
+.clearing-copy p {
+  margin: var(--space-1) 0 0;
+}
+
 .unsent-count {
   color: var(--ink);
   font-weight: 600;

@@ -21,8 +21,9 @@ import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { MoveRecord } from "./Move.tsx";
 import { StandingNotices } from "./Notices.tsx";
+import { contextCopy, readingCopy } from "./offline-copy.ts";
 import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
-import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import { Unreachable, unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { RefusedWrites, refusedIn } from "./Unsent.tsx";
 import { onSent, toSend, unsent, unsentFinishOf } from "./unsent.ts";
 
@@ -65,9 +66,16 @@ export function Attention(props: {
         return;
       }
       setProblem(null);
+      readingCopy(contextId, false);
       setView(result.value);
     } catch (error) {
-      if (current()) setProblem(unreachableMessage(error));
+      if (!current()) return;
+      // With no network, Attention is shown as the Offline Copy last fetched it (section 8.8).
+      const held = error instanceof Unreachable ? contextCopy(contextId) : null;
+      if (held === null) return setProblem(unreachableMessage(error));
+      setProblem(null);
+      readingCopy(contextId, true);
+      setView(held.attention);
     }
   });
 

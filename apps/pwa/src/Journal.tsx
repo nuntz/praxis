@@ -8,17 +8,25 @@ import {
 } from "@praxis/domain";
 import { imageLoadingIn } from "@praxis/domain/markdown";
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { createStore, reconcile } from "solid-js/store";
+import { createStore, reconcile, unwrap } from "solid-js/store";
 import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
 import { EntryEditor } from "./EntryEditor.tsx";
 import { heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { useLive } from "./live-context.ts";
 import { MoveRecord } from "./Move.tsx";
+import { contextCopy, noteOpened, readFromCopy, readingCopy } from "./offline-copy.ts";
+import { online } from "./online.ts";
 import { createSearch } from "./Search.tsx";
 import type { UnsentEntry } from "./stored.ts";
 import { TaskItem } from "./TaskItem.tsx";
-import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import {
+  needsNetwork,
+  Unreachable,
+  unreachableMessage,
+  useCallTool,
+  useContextId,
+} from "./tools.ts";
 import { UnsentEntryItem, unsentEntriesIn } from "./Unsent.tsx";
 import { onSent } from "./unsent.ts";
 import { Versions } from "./Versions.tsx";
@@ -58,6 +66,8 @@ export function Journal(props: {
   const [told, setTold] = createSignal<string | null>(null);
   // The Entry the composer's next Entry is a Follow-up to, if the person chose one.
   const [followingUp, setFollowingUp] = createSignal<EntryNamed | null>(null);
+  // Whether the Entries shown are the Offline Copy's, as no network let them be read.
+  const [fromCopy, setFromCopy] = createSignal(false);
 
   async function loadPage(cursor?: string) {
     try {
@@ -70,9 +80,31 @@ export function Journal(props: {
       });
       setEarlierCursor(result.value.next_cursor);
     } catch (error) {
-      setProblem(unreachableMessage(error));
+      // With no network the Journal is the Offline Copy's, as last fetched (section 8.8): the
+      // last 30 days and the older Entries this Device opened. Older ones need the network.
+      const held = error instanceof Unreachable && cursor === undefined && contextCopy(contextId);
+      if (!held) {
+        return setProblem(
+          cursor === undefined
+            ? unreachableMessage(error)
+            : needsNetwork(error, "Older Entries need the network."),
+        );
+      }
+      setEntries(held.entries.toReversed());
+      setEarlierCursor(null);
+      setFromCopy(true);
+      readingCopy(contextId, true);
     }
   }
+
+  // Shown from the copy, the Journal is read again once the network is back.
+  onMount(() => {
+    const onOnline = () => {
+      if (fromCopy()) void readAfresh();
+    };
+    window.addEventListener("online", onOnline);
+    onCleanup(() => window.removeEventListener("online", onOnline));
+  });
 
   // Read once the live channel is open, so a change made meanwhile is either read or brought.
   onMount(async () => {
@@ -123,9 +155,13 @@ export function Journal(props: {
 
   /** Some changes are gone from the log, so the Journal is read again from its newest page. */
   async function readAfresh() {
+    const wasFromCopy = fromCopy();
     setEntries([]);
     setEarlierCursor(null);
+    setFromCopy(false);
     await loadPage();
+    // Read from Praxis again, the Journal is no longer the copy's.
+    if (wasFromCopy && !fromCopy()) readingCopy(contextId, false);
   }
 
   /**
@@ -187,6 +223,9 @@ export function Journal(props: {
       // A page refused or not reached leaves the cursor where it was: the problem is shown.
       if (earlierCursor() === cursor) return;
     }
+    // Opened here, an older Entry stays in the Offline Copy, readable with no network.
+    const opened = entries.find((shown) => shown.id === entry);
+    if (opened) noteOpened(contextId, structuredClone(unwrap(opened)));
     requestAnimationFrame(() => {
       const shown = document.getElementById(anchor);
       shown?.scrollIntoView({ block: "center" });
@@ -268,6 +307,9 @@ export function Journal(props: {
             </button>
           )}
         </Show>
+        <Show when={!searching() && fromCopy()}>
+          <p class="peer-note">Older Entries need the network.</p>
+        </Show>
         <ol class="entry-list" aria-label="Entries" hidden={searching()}>
           <For each={withUnsent()}>
             {(entry) =>
@@ -329,7 +371,7 @@ export function Journal(props: {
             setProblem(null);
             setFollowingUp(null);
             // Nothing is dropped silently (section 8.8).
-            if (leftOff) setTold(LEFT_OFF);
+            if (leftOff) setTold(contextCopy(contextId) ? LEFT_OFF_WITH_COPY : LEFT_OFF);
           }}
           onRecorded={(entry) => {
             setProblem(null);
@@ -347,6 +389,10 @@ export function Journal(props: {
 /** Said when an Entry kept Unsent leaves off what it cannot take with no Offline Copy. */
 const LEFT_OFF =
   "Kept Unsent with its words and Inline Tasks only: its links and the Entry it followed up need the network, so add them once it is sent.";
+
+/** Said when an Entry kept Unsent leaves off what the Offline Copy does not hold. */
+const LEFT_OFF_WITH_COPY =
+  "Kept Unsent without what this Device does not hold: a new Person or Project, or a link or Follow-up to a record not in its Offline Copy, needs the network, so add it once it is sent.";
 
 /** Whether what the Journal shows is an Entry still Unsent on this Device. */
 function isUnsent(item: Entry | UnsentEntry): item is UnsentEntry {
@@ -373,6 +419,7 @@ function EntryItem(props: {
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();
+  const contextId = useContextId();
   const heldChanges = useHeldChanges();
   // The newest Held Change left on it, which its marker leads to in Attention.
   const held = () => heldChanges.all().find((each) => each.entry.id === props.entry.id);
@@ -502,7 +549,12 @@ function EntryItem(props: {
       <Show
         when={editing()}
         fallback={
-          <Words words={props.entry.words} images={imageLoadingIn(props.entry)} testId="words" />
+          <Words
+            words={props.entry.words}
+            // Read with no network, as from the copy, an image shows its description (section 8.8).
+            images={online() && !readFromCopy(contextId) ? imageLoadingIn(props.entry) : "never"}
+            testId="words"
+          />
         }
       >
         <EntryEditor

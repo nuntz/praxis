@@ -1,0 +1,1747 @@
+{
+ "ids": {
+  "deployment": "fff01a08b1501d4be452d3e6811518205e5083e9ddd38941297f609f17302f00",
+  "context": "398be5bc9609036f2fc4de445df5c85298355434aec84ea6b1170b2a36880839",
+  "connection": {
+   "id": "OkLocNbtivgGFzeFC_9dbg",
+   "name": "Claude"
+  },
+  "device": "bfe1911a-28ba-4543-a0f8-2e7bec9c5b28",
+  "at": "2026-11-22T10:02:15.000Z"
+ },
+ "context": {
+  "made": [
+   {
+    "type": "table",
+    "name": "ladder",
+    "sql": "CREATE TABLE ladder (\n    one INTEGER PRIMARY KEY CHECK (one = 1),\n    step INTEGER NOT NULL,\n    stuck_under TEXT,\n    stuck_step INTEGER,\n    stuck_cause TEXT,\n    bookmark TEXT,\n    bookmark_step INTEGER\n  )"
+   },
+   {
+    "type": "table",
+    "name": "entries",
+    "sql": "CREATE TABLE entries (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      words TEXT NOT NULL,\n      at INTEGER NOT NULL,\n      author_kind TEXT NOT NULL,\n      author_name TEXT,\n      through_conversation INTEGER NOT NULL,\n      -- The one earlier Entry it is a Follow-up to, if any.\n      follow_up_to TEXT REFERENCES entries (id)\n    )"
+   },
+   {
+    "type": "index",
+    "name": "entries_by_time",
+    "sql": "CREATE INDEX entries_by_time ON entries (at, seq)"
+   },
+   {
+    "type": "index",
+    "name": "entries_by_follow_up_to",
+    "sql": "CREATE INDEX entries_by_follow_up_to ON entries (follow_up_to)"
+   },
+   {
+    "type": "table",
+    "name": "entry_versions",
+    "sql": "CREATE TABLE entry_versions (\n      seq INTEGER PRIMARY KEY,\n      entry TEXT NOT NULL REFERENCES entries (id),\n      version INTEGER NOT NULL,\n      words TEXT NOT NULL,\n      at INTEGER NOT NULL,\n      author_kind TEXT NOT NULL,\n      author_name TEXT,\n      UNIQUE (entry, version)\n    )"
+   },
+   {
+    "type": "table",
+    "name": "standing_marks",
+    "sql": "CREATE TABLE standing_marks (\n      entry TEXT PRIMARY KEY REFERENCES entries (id)\n    )"
+   },
+   {
+    "type": "table",
+    "name": "held_changes",
+    "sql": "CREATE TABLE held_changes (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      entry TEXT NOT NULL REFERENCES entries (id),\n      tool TEXT NOT NULL,\n      -- The words the tap gives the Entry, or null for a delete.\n      words TEXT,\n      -- The Tasks the tap makes with them, as JSON: the titles of the Inline Tasks an edit added.\n      new_tasks TEXT NOT NULL,\n      version INTEGER NOT NULL,\n      -- The ids of the Tasks a delete would take, as JSON, in the order made.\n      goes_with TEXT NOT NULL,\n      at INTEGER NOT NULL\n    )"
+   },
+   {
+    "type": "index",
+    "name": "held_changes_by_entry",
+    "sql": "CREATE INDEX held_changes_by_entry ON held_changes (entry)"
+   },
+   {
+    "type": "table",
+    "name": "projects",
+    "sql": "CREATE TABLE projects (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      name TEXT NOT NULL,\n      at INTEGER NOT NULL,\n      due_date TEXT\n    )"
+   },
+   {
+    "type": "table",
+    "name": "project_events",
+    "sql": "CREATE TABLE project_events (\n      seq INTEGER PRIMARY KEY,\n      project TEXT NOT NULL REFERENCES projects (id),\n      what TEXT NOT NULL,\n      at INTEGER NOT NULL\n    )"
+   },
+   {
+    "type": "index",
+    "name": "project_events_by_project",
+    "sql": "CREATE INDEX project_events_by_project ON project_events (project, seq)"
+   },
+   {
+    "type": "table",
+    "name": "persons",
+    "sql": "CREATE TABLE persons (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      name TEXT NOT NULL,\n      at INTEGER NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "tasks",
+    "sql": "CREATE TABLE tasks (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      title TEXT NOT NULL,\n      origin_entry TEXT NOT NULL REFERENCES entries (id),\n      at INTEGER NOT NULL,\n      author_kind TEXT NOT NULL,\n      author_name TEXT,\n      -- The Project it is in, if any. Membership is the Task's, so a Task joining or leaving one\n      -- changes the Task alone.\n      project TEXT REFERENCES projects (id),\n      -- Days as YYYY-MM-DD, with no time of day, so no time zone moves them.\n      due_date TEXT,\n      defer_date TEXT,\n      -- Its Recurrence as JSON, held by the open Occurrence only: closing it moves the rule on.\n      recurrence TEXT\n    )"
+   },
+   {
+    "type": "index",
+    "name": "tasks_by_entry",
+    "sql": "CREATE INDEX tasks_by_entry ON tasks (origin_entry, seq)"
+   },
+   {
+    "type": "index",
+    "name": "tasks_by_project",
+    "sql": "CREATE INDEX tasks_by_project ON tasks (project, seq)"
+   },
+   {
+    "type": "table",
+    "name": "task_events",
+    "sql": "CREATE TABLE task_events (\n      seq INTEGER PRIMARY KEY,\n      task TEXT NOT NULL REFERENCES tasks (id),\n      what TEXT NOT NULL,\n      at INTEGER NOT NULL,\n      -- The Person it was Delegated to, for a delegation only.\n      person TEXT REFERENCES persons (id),\n      -- The Task or Project waited on, for a wait, its stopping or its release only.\n      on_kind TEXT,\n      on_id TEXT\n    )"
+   },
+   {
+    "type": "index",
+    "name": "task_events_by_task",
+    "sql": "CREATE INDEX task_events_by_task ON task_events (task, seq)"
+   },
+   {
+    "type": "index",
+    "name": "task_events_by_waited_on",
+    "sql": "CREATE INDEX task_events_by_waited_on ON task_events (on_id)"
+   },
+   {
+    "type": "table",
+    "name": "entry_links",
+    "sql": "CREATE TABLE entry_links (\n      seq INTEGER PRIMARY KEY,\n      entry TEXT NOT NULL REFERENCES entries (id),\n      to_kind TEXT NOT NULL,\n      to_id TEXT NOT NULL,\n      anchor_start INTEGER,\n      anchor_end INTEGER,\n      anchor_text TEXT\n    )"
+   },
+   {
+    "type": "index",
+    "name": "entry_links_by_entry",
+    "sql": "CREATE INDEX entry_links_by_entry ON entry_links (entry, seq)"
+   },
+   {
+    "type": "index",
+    "name": "entry_links_by_target",
+    "sql": "CREATE INDEX entry_links_by_target ON entry_links (to_id)"
+   },
+   {
+    "type": "table",
+    "name": "trash_items",
+    "sql": "CREATE TABLE trash_items (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      kind TEXT NOT NULL,\n      record_id TEXT NOT NULL,\n      at INTEGER NOT NULL\n    )"
+   },
+   {
+    "type": "index",
+    "name": "trash_items_by_time",
+    "sql": "CREATE INDEX trash_items_by_time ON trash_items (at)"
+   },
+   {
+    "type": "table",
+    "name": "trashed",
+    "sql": "CREATE TABLE trashed (\n      seq INTEGER PRIMARY KEY,\n      kind TEXT NOT NULL,\n      record_id TEXT NOT NULL,\n      item TEXT NOT NULL REFERENCES trash_items (id),\n      UNIQUE (kind, record_id)\n    )"
+   },
+   {
+    "type": "index",
+    "name": "trashed_by_item",
+    "sql": "CREATE INDEX trashed_by_item ON trashed (item, seq)"
+   },
+   {
+    "type": "table",
+    "name": "dormant_links",
+    "sql": "CREATE TABLE dormant_links (\n      seq INTEGER PRIMARY KEY,\n      item TEXT NOT NULL REFERENCES trash_items (id),\n      task TEXT NOT NULL REFERENCES tasks (id),\n      what TEXT NOT NULL,\n      to_kind TEXT NOT NULL,\n      to_id TEXT NOT NULL\n    )"
+   },
+   {
+    "type": "index",
+    "name": "dormant_links_by_item",
+    "sql": "CREATE INDEX dormant_links_by_item ON dormant_links (item)"
+   },
+   {
+    "type": "view",
+    "name": "untrashed_entries",
+    "sql": "CREATE VIEW untrashed_entries AS\n      SELECT * FROM entries\n      WHERE id NOT IN (SELECT record_id FROM trashed WHERE kind = 'entry')"
+   },
+   {
+    "type": "view",
+    "name": "standing_entries",
+    "sql": "CREATE VIEW standing_entries AS\n      SELECT * FROM untrashed_entries WHERE id IN (SELECT entry FROM standing_marks)"
+   },
+   {
+    "type": "view",
+    "name": "untrashed_tasks",
+    "sql": "CREATE VIEW untrashed_tasks AS\n      SELECT * FROM tasks\n      WHERE id NOT IN (SELECT record_id FROM trashed WHERE kind = 'task')"
+   },
+   {
+    "type": "view",
+    "name": "untrashed_projects",
+    "sql": "CREATE VIEW untrashed_projects AS\n      SELECT * FROM projects\n      WHERE id NOT IN (SELECT record_id FROM trashed WHERE kind = 'project')"
+   },
+   {
+    "type": "view",
+    "name": "untrashed_persons",
+    "sql": "CREATE VIEW untrashed_persons AS\n      SELECT * FROM persons\n      WHERE id NOT IN (SELECT record_id FROM trashed WHERE kind = 'person')"
+   },
+   {
+    "type": "table",
+    "name": "context_settings",
+    "sql": "CREATE TABLE context_settings (\n      id TEXT PRIMARY KEY,\n      name TEXT NOT NULL,\n      time_zone TEXT NOT NULL,\n      -- The Deployment object that made it, which it asks for the other Contexts' names.\n      deployment TEXT,\n      -- When the Brief and the Review come, in its time zone: a time is null while it is off.\n      brief_time TEXT DEFAULT '07:00',\n      review_day TEXT NOT NULL DEFAULT 'sunday',\n      review_time TEXT DEFAULT '17:00',\n      -- Its one Notification switch, covering the Brief and the Review (section 8.7).\n      notifications INTEGER NOT NULL DEFAULT 1\n    )"
+   },
+   {
+    "type": "table",
+    "name": "change_calls",
+    "sql": "CREATE TABLE change_calls (\n      seq INTEGER PRIMARY KEY AUTOINCREMENT,\n      at INTEGER NOT NULL,\n      caller_kind TEXT NOT NULL,\n      -- A Connection's id, and the name it had when it called, which is kept after it ends.\n      caller_id TEXT,\n      caller_name TEXT,\n      tool TEXT NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "changes",
+    "sql": "CREATE TABLE changes (\n      call INTEGER NOT NULL REFERENCES change_calls (seq),\n      ord INTEGER NOT NULL,\n      kind TEXT NOT NULL,\n      record_id TEXT NOT NULL,\n      what TEXT NOT NULL,\n      summary TEXT NOT NULL,\n      by TEXT NOT NULL,\n      PRIMARY KEY (call, ord)\n    )"
+   },
+   {
+    "type": "table",
+    "name": "change_log_pruned",
+    "sql": "CREATE TABLE change_log_pruned (\n      id INTEGER PRIMARY KEY CHECK (id = 1),\n      through INTEGER NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "write_keys",
+    "sql": "CREATE TABLE write_keys (\n      caller TEXT NOT NULL,\n      key TEXT NOT NULL,\n      tool TEXT NOT NULL,\n      at INTEGER NOT NULL,\n      result TEXT NOT NULL,\n      PRIMARY KEY (caller, key)\n    )"
+   },
+   {
+    "type": "index",
+    "name": "write_keys_by_time",
+    "sql": "CREATE INDEX write_keys_by_time ON write_keys (at)"
+   },
+   {
+    "type": "table",
+    "name": "runs",
+    "sql": "CREATE TABLE runs (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      -- What started it: a Message from the person, sent or tried again, or the clock, for a Brief\n      -- or a Review.\n      started_by TEXT NOT NULL,\n      -- The id of the person's Message it answers, never its words; for the clock's, the id of the\n      -- record that started it in the Conversation.\n      message TEXT,\n      -- The runtime's handle on the Message it answers, to learn how it ended after a restart.\n      -- None for a Run never started, because the month's spend had reached the cap.\n      submission INTEGER,\n      at INTEGER NOT NULL,\n      model TEXT NOT NULL,\n      input_tokens INTEGER NOT NULL DEFAULT 0,\n      output_tokens INTEGER NOT NULL DEFAULT 0,\n      cache_read_tokens INTEGER NOT NULL DEFAULT 0,\n      cache_write_tokens INTEGER NOT NULL DEFAULT 0,\n      -- In US dollars, by the price table shipped with the code.\n      cost REAL NOT NULL DEFAULT 0,\n      -- How it ended, null while it is going.\n      ended TEXT,\n      -- Why it failed, for a Run that did: the model not reached, or the key refused.\n      failure TEXT,\n      -- For a Run trying a failed one again, the runtime's first record that may be its own: the\n      -- records before it are the Runs' before it, and their spend counted with them.\n      from_record INTEGER,\n      -- For a Run answering a new Message, the number of the change the log stood at when the\n      -- Agent was told what changed since the last Message it answered: the next is told from there.\n      told_through INTEGER,\n      -- For a Brief or a Review once it has ended: whether it left a Message (a Brief with nothing\n      -- to raise leaves none), whether a newer one of its kind replaced it unread, when Praxis first\n      -- showed it, and the ids of the Tasks it names, as JSON.\n      raised INTEGER,\n      replaced INTEGER NOT NULL DEFAULT 0,\n      read_at INTEGER,\n      tasks_named TEXT\n    )"
+   },
+   {
+    "type": "table",
+    "name": "clock_schedule",
+    "sql": "CREATE TABLE clock_schedule (\n      kind TEXT PRIMARY KEY,\n      -- The newest time it came whose Run has been answered, or that came before the Context was\n      -- made or its time was set: nothing at or before it is due.\n      through INTEGER NOT NULL,\n      -- The time it came that the Run going, or the last tried, is for.\n      trying INTEGER,\n      -- How many tries at it have failed, when the next may be made, and why the last failed.\n      tries INTEGER NOT NULL DEFAULT 0,\n      retry_at INTEGER,\n      failure TEXT,\n      -- Since when its tries have failed, for the Notice, until one of its kind runs.\n      failing_since INTEGER,\n      -- The time it came for which a Run not started at the cap has been recorded.\n      capped INTEGER\n    )"
+   },
+   {
+    "type": "table",
+    "name": "moves_out",
+    "sql": "CREATE TABLE moves_out (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      to_context TEXT NOT NULL,\n      at INTEGER NOT NULL,\n      caller TEXT NOT NULL,\n      move TEXT NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "moves_in",
+    "sql": "CREATE TABLE moves_in (\n      id TEXT PRIMARY KEY,\n      effects TEXT NOT NULL,\n      at INTEGER NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "run_changes",
+    "sql": "CREATE TABLE run_changes (\n      run TEXT NOT NULL REFERENCES runs (id),\n      change INTEGER NOT NULL,\n      PRIMARY KEY (run, change)\n    )"
+   },
+   {
+    "type": "table",
+    "name": "words_index",
+    "sql": "CREATE VIRTUAL TABLE words_index USING fts5 (\n      kind UNINDEXED, record_id UNINDEXED, text,\n      tokenize = 'unicode61 remove_diacritics 2'\n    )"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_entry_made",
+    "sql": "CREATE TRIGGER words_index_entry_made AFTER INSERT ON entries BEGIN\n        INSERT INTO words_index (rowid, kind, record_id, text)\n          VALUES (NEW.seq * 4 + 0, 'entry', NEW.id, NEW.words);\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_entry_changed",
+    "sql": "CREATE TRIGGER words_index_entry_changed\n      AFTER UPDATE OF words ON entries BEGIN\n        UPDATE words_index SET text = NEW.words WHERE rowid = NEW.seq * 4 + 0;\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_entry_removed",
+    "sql": "CREATE TRIGGER words_index_entry_removed AFTER DELETE ON entries BEGIN\n        DELETE FROM words_index WHERE rowid = OLD.seq * 4 + 0;\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_task_made",
+    "sql": "CREATE TRIGGER words_index_task_made AFTER INSERT ON tasks BEGIN\n        INSERT INTO words_index (rowid, kind, record_id, text)\n          VALUES (NEW.seq * 4 + 1, 'task', NEW.id, NEW.title);\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_task_changed",
+    "sql": "CREATE TRIGGER words_index_task_changed\n      AFTER UPDATE OF title ON tasks BEGIN\n        UPDATE words_index SET text = NEW.title WHERE rowid = NEW.seq * 4 + 1;\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_task_removed",
+    "sql": "CREATE TRIGGER words_index_task_removed AFTER DELETE ON tasks BEGIN\n        DELETE FROM words_index WHERE rowid = OLD.seq * 4 + 1;\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_project_made",
+    "sql": "CREATE TRIGGER words_index_project_made AFTER INSERT ON projects BEGIN\n        INSERT INTO words_index (rowid, kind, record_id, text)\n          VALUES (NEW.seq * 4 + 2, 'project', NEW.id, NEW.name);\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_project_changed",
+    "sql": "CREATE TRIGGER words_index_project_changed\n      AFTER UPDATE OF name ON projects BEGIN\n        UPDATE words_index SET text = NEW.name WHERE rowid = NEW.seq * 4 + 2;\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_project_removed",
+    "sql": "CREATE TRIGGER words_index_project_removed AFTER DELETE ON projects BEGIN\n        DELETE FROM words_index WHERE rowid = OLD.seq * 4 + 2;\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_person_made",
+    "sql": "CREATE TRIGGER words_index_person_made AFTER INSERT ON persons BEGIN\n        INSERT INTO words_index (rowid, kind, record_id, text)\n          VALUES (NEW.seq * 4 + 3, 'person', NEW.id, NEW.name);\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_person_changed",
+    "sql": "CREATE TRIGGER words_index_person_changed\n      AFTER UPDATE OF name ON persons BEGIN\n        UPDATE words_index SET text = NEW.name WHERE rowid = NEW.seq * 4 + 3;\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_person_removed",
+    "sql": "CREATE TRIGGER words_index_person_removed AFTER DELETE ON persons BEGIN\n        DELETE FROM words_index WHERE rowid = OLD.seq * 4 + 3;\n      END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_trashed",
+    "sql": "CREATE TRIGGER words_index_trashed AFTER INSERT ON trashed BEGIN\n      DELETE FROM words_index WHERE rowid IN (SELECT index_row FROM (SELECT seq * 4 + 0 AS index_row, 'entry' AS kind, id, words AS text\n         FROM entries WHERE NEW.kind = 'entry' AND id = NEW.record_id UNION ALL SELECT seq * 4 + 1 AS index_row, 'task' AS kind, id, title AS text\n         FROM tasks WHERE NEW.kind = 'task' AND id = NEW.record_id UNION ALL SELECT seq * 4 + 2 AS index_row, 'project' AS kind, id, name AS text\n         FROM projects WHERE NEW.kind = 'project' AND id = NEW.record_id UNION ALL SELECT seq * 4 + 3 AS index_row, 'person' AS kind, id, name AS text\n         FROM persons WHERE NEW.kind = 'person' AND id = NEW.record_id));\n    END"
+   },
+   {
+    "type": "trigger",
+    "name": "words_index_restored",
+    "sql": "CREATE TRIGGER words_index_restored AFTER DELETE ON trashed BEGIN\n      INSERT INTO words_index (rowid, kind, record_id, text) SELECT seq * 4 + 0 AS index_row, 'entry' AS kind, id, words AS text\n         FROM entries WHERE OLD.kind = 'entry' AND id = OLD.record_id UNION ALL SELECT seq * 4 + 1 AS index_row, 'task' AS kind, id, title AS text\n         FROM tasks WHERE OLD.kind = 'task' AND id = OLD.record_id UNION ALL SELECT seq * 4 + 2 AS index_row, 'project' AS kind, id, name AS text\n         FROM projects WHERE OLD.kind = 'project' AND id = OLD.record_id UNION ALL SELECT seq * 4 + 3 AS index_row, 'person' AS kind, id, name AS text\n         FROM persons WHERE OLD.kind = 'person' AND id = OLD.record_id;\n    END"
+   },
+   {
+    "type": "table",
+    "name": "meaning_index",
+    "sql": "CREATE TABLE meaning_index (\n      one INTEGER PRIMARY KEY CHECK (one = 1),\n      model TEXT NOT NULL,\n      -- 1 once every Entry queued when it was last marked stale has been embedded.\n      built INTEGER NOT NULL,\n      -- The number the next Entry queued is queued at.\n      queued INTEGER NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "meaning_queue",
+    "sql": "CREATE TABLE meaning_queue (\n      entry TEXT PRIMARY KEY,\n      what TEXT NOT NULL CHECK (what IN ('embed', 'remove')),\n      -- The number it was queued at, which is new each time it is queued.\n      queued INTEGER NOT NULL\n    )"
+   },
+   {
+    "type": "index",
+    "name": "meaning_queue_in_order",
+    "sql": "CREATE INDEX meaning_queue_in_order ON meaning_queue (queued)"
+   },
+   {
+    "type": "table",
+    "name": "meaning_spend",
+    "sql": "CREATE TABLE meaning_spend (\n      month TEXT PRIMARY KEY,\n      dollars REAL NOT NULL\n    )"
+   },
+   {
+    "type": "trigger",
+    "name": "meaning_entry_made",
+    "sql": "CREATE TRIGGER meaning_entry_made AFTER INSERT ON entries BEGIN\n      \n    UPDATE meaning_index SET queued = queued + 1;\n    INSERT OR REPLACE INTO meaning_queue (entry, what, queued)\n      VALUES (NEW.id, 'embed', (SELECT queued FROM meaning_index));\n    END"
+   },
+   {
+    "type": "trigger",
+    "name": "meaning_entry_changed",
+    "sql": "CREATE TRIGGER meaning_entry_changed AFTER UPDATE OF words ON entries BEGIN\n      \n    UPDATE meaning_index SET queued = queued + 1;\n    INSERT OR REPLACE INTO meaning_queue (entry, what, queued)\n      VALUES (NEW.id, 'embed', (SELECT queued FROM meaning_index));\n    END"
+   },
+   {
+    "type": "trigger",
+    "name": "meaning_entry_removed",
+    "sql": "CREATE TRIGGER meaning_entry_removed AFTER DELETE ON entries BEGIN\n      \n    UPDATE meaning_index SET queued = queued + 1;\n    INSERT OR REPLACE INTO meaning_queue (entry, what, queued)\n      VALUES (OLD.id, 'remove', (SELECT queued FROM meaning_index));\n    END"
+   },
+   {
+    "type": "table",
+    "name": "calls",
+    "sql": "CREATE TABLE calls (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      -- The voice provider's id for the session, by which the object ends one the Device did not.\n      session TEXT NOT NULL,\n      -- When the object set it up, and when its end was reported, by the object's clock.\n      at INTEGER NOT NULL,\n      ended_at INTEGER,\n      -- How it ended: hung_up, provider_ended, lost or replaced; null while it goes on.\n      ended TEXT,\n      -- Why the provider says it ended the session, as the Device or the object heard it.\n      provider_reason TEXT,\n      -- Who heard the provider end it: device or object, or null.\n      end_heard_by TEXT\n    , alive_at INTEGER, cost REAL)"
+   },
+   {
+    "type": "index",
+    "name": "calls_going",
+    "sql": "CREATE INDEX calls_going ON calls (ended)"
+   },
+   {
+    "type": "table",
+    "name": "pi_durable_schema",
+    "sql": "CREATE TABLE pi_durable_schema (\n\t\t\tsingleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n\t\t\tversion INTEGER NOT NULL CHECK (version >= 0)\n\t\t) STRICT"
+   },
+   {
+    "type": "table",
+    "name": "pi_durable_metadata",
+    "sql": "CREATE TABLE pi_durable_metadata (\n\t\t\tsingleton INTEGER PRIMARY KEY CHECK (singleton = 1),\n\t\t\tnext_id TEXT NOT NULL,\n\t\t\tnext_seq INTEGER NOT NULL\n\t\t) STRICT"
+   },
+   {
+    "type": "table",
+    "name": "pi_record_ids",
+    "sql": "CREATE TABLE pi_record_ids (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\trecord_type TEXT NOT NULL CHECK (record_type IN ('conversation', 'entry', 'task', 'submission', 'document'))\n\t\t) STRICT"
+   },
+   {
+    "type": "table",
+    "name": "pi_conversations",
+    "sql": "CREATE TABLE pi_conversations (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\towner_conversation_id INTEGER,\n\t\t\towner_task_id INTEGER,\n\t\t\trecord TEXT NOT NULL CHECK (json_valid(record))\n\t\t) STRICT"
+   },
+   {
+    "type": "index",
+    "name": "pi_conversations_by_owner_conversation",
+    "sql": "CREATE INDEX pi_conversations_by_owner_conversation ON pi_conversations (owner_conversation_id, id)"
+   },
+   {
+    "type": "index",
+    "name": "pi_conversations_by_owner_task",
+    "sql": "CREATE INDEX pi_conversations_by_owner_task ON pi_conversations (owner_task_id, id)"
+   },
+   {
+    "type": "table",
+    "name": "pi_entries",
+    "sql": "CREATE TABLE pi_entries (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tconversation_id INTEGER NOT NULL,\n\t\t\thead INTEGER,\n\t\t\tcommit_seq INTEGER NOT NULL,\n\t\t\trecord TEXT NOT NULL CHECK (json_valid(record))\n\t\t) STRICT"
+   },
+   {
+    "type": "index",
+    "name": "pi_entries_by_conversation",
+    "sql": "CREATE INDEX pi_entries_by_conversation ON pi_entries (conversation_id, id DESC)"
+   },
+   {
+    "type": "index",
+    "name": "pi_entry_heads_by_conversation",
+    "sql": "CREATE INDEX pi_entry_heads_by_conversation ON pi_entries (conversation_id, id DESC) WHERE head IS NOT NULL"
+   },
+   {
+    "type": "table",
+    "name": "pi_submissions",
+    "sql": "CREATE TABLE pi_submissions (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tconversation_id INTEGER NOT NULL,\n\t\t\trequest_id TEXT,\n\t\t\tstatus TEXT NOT NULL CHECK (status IN ('queued', 'placed', 'done', 'unanswered')),\n\t\t\trecord TEXT NOT NULL CHECK (json_valid(record))\n\t\t) STRICT"
+   },
+   {
+    "type": "index",
+    "name": "pi_submissions_by_request",
+    "sql": "CREATE INDEX pi_submissions_by_request ON pi_submissions (conversation_id, request_id)"
+   },
+   {
+    "type": "index",
+    "name": "pi_submissions_by_conversation",
+    "sql": "CREATE INDEX pi_submissions_by_conversation ON pi_submissions (conversation_id, id)"
+   },
+   {
+    "type": "index",
+    "name": "pi_submissions_by_status",
+    "sql": "CREATE INDEX pi_submissions_by_status ON pi_submissions (status, id)"
+   },
+   {
+    "type": "table",
+    "name": "pi_documents",
+    "sql": "CREATE TABLE pi_documents (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tkind TEXT NOT NULL,\n\t\t\tfamily INTEGER NOT NULL CHECK (family IN (0, 1)),\n\t\t\tkey_value TEXT NOT NULL,\n\t\t\tscope_kind TEXT NOT NULL CHECK (scope_kind IN ('session', 'conversation', 'task')),\n\t\t\towner_id INTEGER NOT NULL,\n\t\t\tcreated_at INTEGER NOT NULL,\n\t\t\tretired_at INTEGER,\n\t\t\trecord TEXT NOT NULL CHECK (json_valid(record))\n\t\t) STRICT"
+   },
+   {
+    "type": "index",
+    "name": "pi_documents_by_address",
+    "sql": "CREATE INDEX pi_documents_by_address\n\t\t\tON pi_documents (kind, scope_kind, owner_id, family, key_value, created_at DESC, retired_at)"
+   },
+   {
+    "type": "index",
+    "name": "pi_documents_by_scope",
+    "sql": "CREATE INDEX pi_documents_by_scope ON pi_documents (scope_kind, owner_id, id)"
+   },
+   {
+    "type": "index",
+    "name": "pi_documents_by_scope_kind",
+    "sql": "CREATE INDEX pi_documents_by_scope_kind ON pi_documents (scope_kind, owner_id, kind, id)"
+   },
+   {
+    "type": "table",
+    "name": "pi_document_revisions",
+    "sql": "CREATE TABLE pi_document_revisions (\n\t\t\tdocument_id INTEGER NOT NULL,\n\t\t\tseq INTEGER NOT NULL,\n\t\t\tkind TEXT NOT NULL CHECK (kind IN ('base', 'delta')),\n\t\t\tversion INTEGER NOT NULL,\n\t\t\tcontent TEXT NOT NULL CHECK (json_valid(content)),\n\t\t\tPRIMARY KEY (document_id, seq)\n\t\t) STRICT"
+   },
+   {
+    "type": "index",
+    "name": "pi_document_revisions_by_kind",
+    "sql": "CREATE INDEX pi_document_revisions_by_kind ON pi_document_revisions (document_id, kind, seq DESC)"
+   },
+   {
+    "type": "table",
+    "name": "pi_tasks",
+    "sql": "CREATE TABLE \"pi_tasks\" (\n\t\t\tid INTEGER PRIMARY KEY,\n\t\t\tconversation_id INTEGER NOT NULL,\n\t\t\tkind TEXT NOT NULL,\n\t\t\tstatus TEXT NOT NULL CHECK (status IN ('pending', 'running', 'waiting', 'sleeping', 'completing', 'terminal')),\n\t\t\tabort_requested INTEGER NOT NULL CHECK (abort_requested IN (0, 1)),\n\t\t\tbackground INTEGER NOT NULL CHECK (background IN (0, 1)),\n\t\t\trecord TEXT NOT NULL CHECK (json_valid(record))\n\t\t) STRICT"
+   },
+   {
+    "type": "index",
+    "name": "pi_tasks_by_status",
+    "sql": "CREATE INDEX pi_tasks_by_status ON pi_tasks (status, id)"
+   },
+   {
+    "type": "index",
+    "name": "pi_tasks_by_conversation",
+    "sql": "CREATE INDEX pi_tasks_by_conversation ON pi_tasks (conversation_id, id)"
+   },
+   {
+    "type": "index",
+    "name": "pi_tasks_by_kind",
+    "sql": "CREATE INDEX pi_tasks_by_kind ON pi_tasks (kind, id)"
+   },
+   {
+    "type": "index",
+    "name": "pi_tasks_by_abort_requested",
+    "sql": "CREATE INDEX pi_tasks_by_abort_requested ON pi_tasks (abort_requested, id)"
+   },
+   {
+    "type": "index",
+    "name": "pi_tasks_by_background",
+    "sql": "CREATE INDEX pi_tasks_by_background ON pi_tasks (background, id)"
+   }
+  ],
+  "rows": {
+   "ladder": [
+    {
+     "rowid": 1,
+     "one": 1,
+     "step": 3,
+     "stuck_under": null,
+     "stuck_step": null,
+     "stuck_cause": null,
+     "bookmark": null,
+     "bookmark_step": null
+    }
+   ],
+   "entries": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "287e0361-b8ac-4b44-8472-6fa96da90060",
+     "words": "MARKER-07c9d633-560b-4f38-8a21-b230fbc6b95e The boiler is making that noise again",
+     "at": 1795165200000,
+     "author_kind": "person",
+     "author_name": null,
+     "through_conversation": 0,
+     "follow_up_to": null
+    },
+    {
+     "rowid": 2,
+     "seq": 2,
+     "id": "8de50374-6ad2-489b-ab99-fd81b3a7d70c",
+     "words": "MARKER-02652677-dbbf-47e8-b168-7d3f10e9608e Quote for the new tiles came in, a little high",
+     "at": 1795165200000,
+     "author_kind": "person",
+     "author_name": null,
+     "through_conversation": 0,
+     "follow_up_to": "287e0361-b8ac-4b44-8472-6fa96da90060"
+    },
+    {
+     "rowid": 3,
+     "seq": 3,
+     "id": "91c19925-a501-4db4-8c2b-450d9b0f5e01",
+     "words": "MARKER-2768f81f-9f1a-4b6b-9412-b9845a126f8e Nothing to keep",
+     "at": 1795165200000,
+     "author_kind": "person",
+     "author_name": null,
+     "through_conversation": 0,
+     "follow_up_to": null
+    },
+    {
+     "rowid": 4,
+     "seq": 4,
+     "id": "0879fa35-eb60-4160-b632-c37ccef55508",
+     "words": "MARKER-5c77ce91-d7a0-450f-b72c-496c99d6df87 Noted from elsewhere",
+     "at": 1795251600000,
+     "author_kind": "connection",
+     "author_name": "Claude",
+     "through_conversation": 0,
+     "follow_up_to": null
+    }
+   ],
+   "entry_versions": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "entry": "8de50374-6ad2-489b-ab99-fd81b3a7d70c",
+     "version": 0,
+     "words": "MARKER-d7c1864d-b291-4753-b10d-8e35b2107476 Quote for the new tiles came in",
+     "at": 1795165200000,
+     "author_kind": "person",
+     "author_name": null
+    }
+   ],
+   "standing_marks": [
+    {
+     "rowid": 1,
+     "entry": "287e0361-b8ac-4b44-8472-6fa96da90060"
+    }
+   ],
+   "held_changes": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "b2f62cef-da69-4ba9-aa8a-654c7b89fd0c",
+     "entry": "287e0361-b8ac-4b44-8472-6fa96da90060",
+     "tool": "edit_entry",
+     "words": "MARKER-8913de85-e625-4584-9d8d-fdbae74b2826 The boiler is making a knocking noise",
+     "new_tasks": "[]",
+     "version": 0,
+     "goes_with": "[]",
+     "at": 1795165200000
+    }
+   ],
+   "projects": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "9eb0a7d7-cca0-4196-b769-70970ee8a805",
+     "name": "MARKER-0f09329b-b001-445e-8690-8f6375fd776e Kitchen",
+     "at": 1795165200000,
+     "due_date": null
+    }
+   ],
+   "project_events": [],
+   "persons": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "3c329ce5-d097-4091-ac20-9d3e9023c0aa",
+     "name": "MARKER-724a457f-7d04-4b33-a39d-f6cc199d6cf5 Sam",
+     "at": 1795165200000
+    }
+   ],
+   "tasks": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "262e2716-9538-4bbd-ba01-929aa01ba835",
+     "title": "MARKER-7b2b953d-a0af-4b79-9529-af429f8ff95f Call the plumber",
+     "origin_entry": "287e0361-b8ac-4b44-8472-6fa96da90060",
+     "at": 1795165200000,
+     "author_kind": "person",
+     "author_name": null,
+     "project": null,
+     "due_date": "2026-11-23",
+     "defer_date": "2026-11-21",
+     "recurrence": null
+    },
+    {
+     "rowid": 2,
+     "seq": 2,
+     "id": "f3e7642e-ab08-4869-9bb1-0aad1314f3c4",
+     "title": "MARKER-082fc578-6068-4ac2-bf11-9624bcee11e0 Find the warranty",
+     "origin_entry": "287e0361-b8ac-4b44-8472-6fa96da90060",
+     "at": 1795165200000,
+     "author_kind": "person",
+     "author_name": null,
+     "project": null,
+     "due_date": null,
+     "defer_date": null,
+     "recurrence": null
+    },
+    {
+     "rowid": 3,
+     "seq": 3,
+     "id": "adbdee26-1e5f-4ef9-9836-7e220c866e75",
+     "title": "MARKER-f5f7d7db-8084-4117-a604-e2fbef74bff3 Choose the tiles",
+     "origin_entry": "8de50374-6ad2-489b-ab99-fd81b3a7d70c",
+     "at": 1795165200000,
+     "author_kind": "person",
+     "author_name": null,
+     "project": "9eb0a7d7-cca0-4196-b769-70970ee8a805",
+     "due_date": null,
+     "defer_date": null,
+     "recurrence": null
+    },
+    {
+     "rowid": 4,
+     "seq": 4,
+     "id": "69a5ff87-bf09-4f3d-b2fc-c3246d38db8d",
+     "title": "MARKER-f7ae6519-990a-435c-b972-e49ed01b6739 A Task gone with it",
+     "origin_entry": "91c19925-a501-4db4-8c2b-450d9b0f5e01",
+     "at": 1795165200000,
+     "author_kind": "person",
+     "author_name": null,
+     "project": null,
+     "due_date": null,
+     "defer_date": null,
+     "recurrence": null
+    },
+    {
+     "rowid": 5,
+     "seq": 5,
+     "id": "8573c739-f711-4e6f-bd29-29f5b85dfbd9",
+     "title": "MARKER-7b2b953d-a0af-4b79-9529-af429f8ff95f Call the plumber",
+     "origin_entry": "287e0361-b8ac-4b44-8472-6fa96da90060",
+     "at": 1795251600000,
+     "author_kind": "person",
+     "author_name": null,
+     "project": null,
+     "due_date": "2026-11-30",
+     "defer_date": "2026-11-28",
+     "recurrence": "{\"kind\":\"weeks\",\"every\":1,\"on\":[\"monday\"],\"from\":\"2026-11-23\"}"
+    }
+   ],
+   "task_events": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "task": "f3e7642e-ab08-4869-9bb1-0aad1314f3c4",
+     "what": "delegated",
+     "at": 1795165200000,
+     "person": "3c329ce5-d097-4091-ac20-9d3e9023c0aa",
+     "on_kind": null,
+     "on_id": null
+    },
+    {
+     "rowid": 2,
+     "seq": 2,
+     "task": "262e2716-9538-4bbd-ba01-929aa01ba835",
+     "what": "waited_on",
+     "at": 1795165200000,
+     "person": null,
+     "on_kind": "project",
+     "on_id": "9eb0a7d7-cca0-4196-b769-70970ee8a805"
+    },
+    {
+     "rowid": 3,
+     "seq": 3,
+     "task": "262e2716-9538-4bbd-ba01-929aa01ba835",
+     "what": "finished",
+     "at": 1795251600000,
+     "person": null,
+     "on_kind": null,
+     "on_id": null
+    }
+   ],
+   "entry_links": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "entry": "287e0361-b8ac-4b44-8472-6fa96da90060",
+     "to_kind": "person",
+     "to_id": "3c329ce5-d097-4091-ac20-9d3e9023c0aa",
+     "anchor_start": null,
+     "anchor_end": null,
+     "anchor_text": null
+    }
+   ],
+   "trash_items": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "4b0758e2-7a82-4050-84f9-eb2d10826e4b",
+     "kind": "entry",
+     "record_id": "91c19925-a501-4db4-8c2b-450d9b0f5e01",
+     "at": 1795251600000
+    }
+   ],
+   "trashed": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "kind": "entry",
+     "record_id": "91c19925-a501-4db4-8c2b-450d9b0f5e01",
+     "item": "4b0758e2-7a82-4050-84f9-eb2d10826e4b"
+    },
+    {
+     "rowid": 2,
+     "seq": 2,
+     "kind": "task",
+     "record_id": "69a5ff87-bf09-4f3d-b2fc-c3246d38db8d",
+     "item": "4b0758e2-7a82-4050-84f9-eb2d10826e4b"
+    }
+   ],
+   "dormant_links": [],
+   "context_settings": [
+    {
+     "rowid": 1,
+     "id": "398be5bc9609036f2fc4de445df5c85298355434aec84ea6b1170b2a36880839",
+     "name": "Personal",
+     "time_zone": "Europe/Paris",
+     "deployment": "fff01a08b1501d4be452d3e6811518205e5083e9ddd38941297f609f17302f00",
+     "brief_time": "07:00",
+     "review_day": "sunday",
+     "review_time": "17:00",
+     "notifications": 1
+    }
+   ],
+   "change_calls": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "record_entry"
+    },
+    {
+     "rowid": 2,
+     "seq": 2,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "add_link"
+    },
+    {
+     "rowid": 3,
+     "seq": 3,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "delegate_task"
+    },
+    {
+     "rowid": 4,
+     "seq": 4,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "set_task_dates"
+    },
+    {
+     "rowid": 5,
+     "seq": 5,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "set_recurrence"
+    },
+    {
+     "rowid": 6,
+     "seq": 6,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "create_project"
+    },
+    {
+     "rowid": 7,
+     "seq": 7,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "record_entry"
+    },
+    {
+     "rowid": 8,
+     "seq": 8,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "move_task"
+    },
+    {
+     "rowid": 9,
+     "seq": 9,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "wait_on"
+    },
+    {
+     "rowid": 10,
+     "seq": 10,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "edit_entry"
+    },
+    {
+     "rowid": 11,
+     "seq": 11,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "mark_standing"
+    },
+    {
+     "rowid": 12,
+     "seq": 12,
+     "at": 1795165200000,
+     "caller_kind": "agent",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "edit_entry"
+    },
+    {
+     "rowid": 13,
+     "seq": 13,
+     "at": 1795165200000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "record_entry"
+    },
+    {
+     "rowid": 14,
+     "seq": 14,
+     "at": 1795251600000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "delete_entry"
+    },
+    {
+     "rowid": 15,
+     "seq": 15,
+     "at": 1795251600000,
+     "caller_kind": "hand",
+     "caller_id": null,
+     "caller_name": null,
+     "tool": "finish_task"
+    },
+    {
+     "rowid": 16,
+     "seq": 16,
+     "at": 1795251600000,
+     "caller_kind": "connection",
+     "caller_id": "OkLocNbtivgGFzeFC_9dbg",
+     "caller_name": "Claude",
+     "tool": "record_entry"
+    }
+   ],
+   "changes": [
+    {
+     "rowid": 1,
+     "call": 1,
+     "ord": 0,
+     "kind": "entry",
+     "record_id": "287e0361-b8ac-4b44-8472-6fa96da90060",
+     "what": "made",
+     "summary": "MARKER-07c9d633-560b-4f38-8a21-b230fbc6b95e The boiler is making that noise aga…",
+     "by": "call"
+    },
+    {
+     "rowid": 2,
+     "call": 1,
+     "ord": 1,
+     "kind": "task",
+     "record_id": "262e2716-9538-4bbd-ba01-929aa01ba835",
+     "what": "made",
+     "summary": "MARKER-7b2b953d-a0af-4b79-9529-af429f8ff95f Call the plumber",
+     "by": "call"
+    },
+    {
+     "rowid": 3,
+     "call": 1,
+     "ord": 2,
+     "kind": "task",
+     "record_id": "f3e7642e-ab08-4869-9bb1-0aad1314f3c4",
+     "what": "made",
+     "summary": "MARKER-082fc578-6068-4ac2-bf11-9624bcee11e0 Find the warranty",
+     "by": "call"
+    },
+    {
+     "rowid": 4,
+     "call": 2,
+     "ord": 0,
+     "kind": "entry",
+     "record_id": "287e0361-b8ac-4b44-8472-6fa96da90060",
+     "what": "changed",
+     "summary": "MARKER-07c9d633-560b-4f38-8a21-b230fbc6b95e The boiler is making that noise aga…",
+     "by": "call"
+    },
+    {
+     "rowid": 5,
+     "call": 2,
+     "ord": 1,
+     "kind": "person",
+     "record_id": "3c329ce5-d097-4091-ac20-9d3e9023c0aa",
+     "what": "made",
+     "summary": "MARKER-724a457f-7d04-4b33-a39d-f6cc199d6cf5 Sam",
+     "by": "call"
+    },
+    {
+     "rowid": 6,
+     "call": 3,
+     "ord": 0,
+     "kind": "task",
+     "record_id": "f3e7642e-ab08-4869-9bb1-0aad1314f3c4",
+     "what": "changed",
+     "summary": "MARKER-082fc578-6068-4ac2-bf11-9624bcee11e0 Find the warranty",
+     "by": "call"
+    },
+    {
+     "rowid": 7,
+     "call": 4,
+     "ord": 0,
+     "kind": "task",
+     "record_id": "262e2716-9538-4bbd-ba01-929aa01ba835",
+     "what": "changed",
+     "summary": "MARKER-7b2b953d-a0af-4b79-9529-af429f8ff95f Call the plumber",
+     "by": "call"
+    },
+    {
+     "rowid": 8,
+     "call": 5,
+     "ord": 0,
+     "kind": "task",
+     "record_id": "262e2716-9538-4bbd-ba01-929aa01ba835",
+     "what": "changed",
+     "summary": "MARKER-7b2b953d-a0af-4b79-9529-af429f8ff95f Call the plumber",
+     "by": "call"
+    },
+    {
+     "rowid": 9,
+     "call": 6,
+     "ord": 0,
+     "kind": "project",
+     "record_id": "9eb0a7d7-cca0-4196-b769-70970ee8a805",
+     "what": "made",
+     "summary": "MARKER-0f09329b-b001-445e-8690-8f6375fd776e Kitchen",
+     "by": "call"
+    },
+    {
+     "rowid": 10,
+     "call": 7,
+     "ord": 0,
+     "kind": "entry",
+     "record_id": "8de50374-6ad2-489b-ab99-fd81b3a7d70c",
+     "what": "made",
+     "summary": "MARKER-d7c1864d-b291-4753-b10d-8e35b2107476 Quote for the new tiles came in",
+     "by": "call"
+    },
+    {
+     "rowid": 11,
+     "call": 7,
+     "ord": 1,
+     "kind": "task",
+     "record_id": "adbdee26-1e5f-4ef9-9836-7e220c866e75",
+     "what": "made",
+     "summary": "MARKER-f5f7d7db-8084-4117-a604-e2fbef74bff3 Choose the tiles",
+     "by": "call"
+    },
+    {
+     "rowid": 12,
+     "call": 8,
+     "ord": 0,
+     "kind": "task",
+     "record_id": "adbdee26-1e5f-4ef9-9836-7e220c866e75",
+     "what": "changed",
+     "summary": "MARKER-f5f7d7db-8084-4117-a604-e2fbef74bff3 Choose the tiles",
+     "by": "call"
+    },
+    {
+     "rowid": 13,
+     "call": 9,
+     "ord": 0,
+     "kind": "task",
+     "record_id": "262e2716-9538-4bbd-ba01-929aa01ba835",
+     "what": "changed",
+     "summary": "MARKER-7b2b953d-a0af-4b79-9529-af429f8ff95f Call the plumber",
+     "by": "call"
+    },
+    {
+     "rowid": 14,
+     "call": 10,
+     "ord": 0,
+     "kind": "entry",
+     "record_id": "8de50374-6ad2-489b-ab99-fd81b3a7d70c",
+     "what": "changed",
+     "summary": "MARKER-02652677-dbbf-47e8-b168-7d3f10e9608e Quote for the new tiles came in, a…",
+     "by": "call"
+    },
+    {
+     "rowid": 15,
+     "call": 11,
+     "ord": 0,
+     "kind": "entry",
+     "record_id": "287e0361-b8ac-4b44-8472-6fa96da90060",
+     "what": "changed",
+     "summary": "MARKER-07c9d633-560b-4f38-8a21-b230fbc6b95e The boiler is making that noise aga…",
+     "by": "call"
+    },
+    {
+     "rowid": 16,
+     "call": 12,
+     "ord": 0,
+     "kind": "held_change",
+     "record_id": "b2f62cef-da69-4ba9-aa8a-654c7b89fd0c",
+     "what": "made",
+     "summary": "Edit your Entry's words",
+     "by": "call"
+    },
+    {
+     "rowid": 17,
+     "call": 13,
+     "ord": 0,
+     "kind": "entry",
+     "record_id": "91c19925-a501-4db4-8c2b-450d9b0f5e01",
+     "what": "made",
+     "summary": "MARKER-2768f81f-9f1a-4b6b-9412-b9845a126f8e Nothing to keep",
+     "by": "call"
+    },
+    {
+     "rowid": 18,
+     "call": 13,
+     "ord": 1,
+     "kind": "task",
+     "record_id": "69a5ff87-bf09-4f3d-b2fc-c3246d38db8d",
+     "what": "made",
+     "summary": "MARKER-f7ae6519-990a-435c-b972-e49ed01b6739 A Task gone with it",
+     "by": "call"
+    },
+    {
+     "rowid": 19,
+     "call": 14,
+     "ord": 0,
+     "kind": "entry",
+     "record_id": "91c19925-a501-4db4-8c2b-450d9b0f5e01",
+     "what": "deleted",
+     "summary": "MARKER-2768f81f-9f1a-4b6b-9412-b9845a126f8e Nothing to keep",
+     "by": "call"
+    },
+    {
+     "rowid": 20,
+     "call": 14,
+     "ord": 1,
+     "kind": "task",
+     "record_id": "69a5ff87-bf09-4f3d-b2fc-c3246d38db8d",
+     "what": "deleted",
+     "summary": "MARKER-f7ae6519-990a-435c-b972-e49ed01b6739 A Task gone with it",
+     "by": "rule"
+    },
+    {
+     "rowid": 21,
+     "call": 15,
+     "ord": 0,
+     "kind": "task",
+     "record_id": "262e2716-9538-4bbd-ba01-929aa01ba835",
+     "what": "changed",
+     "summary": "MARKER-7b2b953d-a0af-4b79-9529-af429f8ff95f Call the plumber",
+     "by": "call"
+    },
+    {
+     "rowid": 22,
+     "call": 15,
+     "ord": 1,
+     "kind": "task",
+     "record_id": "8573c739-f711-4e6f-bd29-29f5b85dfbd9",
+     "what": "made",
+     "summary": "MARKER-7b2b953d-a0af-4b79-9529-af429f8ff95f Call the plumber",
+     "by": "rule"
+    },
+    {
+     "rowid": 23,
+     "call": 16,
+     "ord": 0,
+     "kind": "entry",
+     "record_id": "0879fa35-eb60-4160-b632-c37ccef55508",
+     "what": "made",
+     "summary": "MARKER-5c77ce91-d7a0-450f-b72c-496c99d6df87 Noted from elsewhere",
+     "by": "call"
+    }
+   ],
+   "change_log_pruned": [],
+   "write_keys": [],
+   "runs": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "42e9a835-eab5-4640-bff5-2912e97e6fc9",
+     "started_by": "message",
+     "message": "b74a2720-e246-4eb0-98d7-dfca6215ab60",
+     "submission": 8,
+     "at": 1795251600000,
+     "model": "claude-sonnet-5-5",
+     "input_tokens": 0,
+     "output_tokens": 2,
+     "cache_read_tokens": 0,
+     "cache_write_tokens": 9738,
+     "cost": 0.024365,
+     "ended": "answered",
+     "failure": null,
+     "from_record": null,
+     "told_through": 16,
+     "raised": null,
+     "replaced": 0,
+     "read_at": null,
+     "tasks_named": null
+    },
+    {
+     "rowid": 2,
+     "seq": 2,
+     "id": "f1c3a305-7e73-427b-97b9-382881e9bcaa",
+     "started_by": "message",
+     "message": "b89b77a9-30ae-4719-886a-cc51f62cee65",
+     "submission": 13,
+     "at": 1795251600000,
+     "model": "claude-sonnet-5-5",
+     "input_tokens": 0,
+     "output_tokens": 2,
+     "cache_read_tokens": 9738,
+     "cache_write_tokens": 220,
+     "cost": 0.0015438000000000001,
+     "ended": "answered",
+     "failure": null,
+     "from_record": null,
+     "told_through": 16,
+     "raised": null,
+     "replaced": 0,
+     "read_at": null,
+     "tasks_named": null
+    }
+   ],
+   "clock_schedule": [
+    {
+     "rowid": 1,
+     "kind": "brief",
+     "through": 1795165200000,
+     "trying": null,
+     "tries": 0,
+     "retry_at": null,
+     "failure": null,
+     "failing_since": null,
+     "capped": null
+    },
+    {
+     "rowid": 2,
+     "kind": "review",
+     "through": 1795165200000,
+     "trying": null,
+     "tries": 0,
+     "retry_at": null,
+     "failure": null,
+     "failing_since": null,
+     "capped": null
+    }
+   ],
+   "moves_out": [],
+   "moves_in": [],
+   "run_changes": [],
+   "words_index": [
+    {
+     "rowid": 4,
+     "kind": "entry",
+     "record_id": "287e0361-b8ac-4b44-8472-6fa96da90060",
+     "text": "MARKER-07c9d633-560b-4f38-8a21-b230fbc6b95e The boiler is making that noise again"
+    },
+    {
+     "rowid": 5,
+     "kind": "task",
+     "record_id": "262e2716-9538-4bbd-ba01-929aa01ba835",
+     "text": "MARKER-7b2b953d-a0af-4b79-9529-af429f8ff95f Call the plumber"
+    },
+    {
+     "rowid": 6,
+     "kind": "project",
+     "record_id": "9eb0a7d7-cca0-4196-b769-70970ee8a805",
+     "text": "MARKER-0f09329b-b001-445e-8690-8f6375fd776e Kitchen"
+    },
+    {
+     "rowid": 7,
+     "kind": "person",
+     "record_id": "3c329ce5-d097-4091-ac20-9d3e9023c0aa",
+     "text": "MARKER-724a457f-7d04-4b33-a39d-f6cc199d6cf5 Sam"
+    },
+    {
+     "rowid": 8,
+     "kind": "entry",
+     "record_id": "8de50374-6ad2-489b-ab99-fd81b3a7d70c",
+     "text": "MARKER-02652677-dbbf-47e8-b168-7d3f10e9608e Quote for the new tiles came in, a little high"
+    },
+    {
+     "rowid": 9,
+     "kind": "task",
+     "record_id": "f3e7642e-ab08-4869-9bb1-0aad1314f3c4",
+     "text": "MARKER-082fc578-6068-4ac2-bf11-9624bcee11e0 Find the warranty"
+    },
+    {
+     "rowid": 13,
+     "kind": "task",
+     "record_id": "adbdee26-1e5f-4ef9-9836-7e220c866e75",
+     "text": "MARKER-f5f7d7db-8084-4117-a604-e2fbef74bff3 Choose the tiles"
+    },
+    {
+     "rowid": 16,
+     "kind": "entry",
+     "record_id": "0879fa35-eb60-4160-b632-c37ccef55508",
+     "text": "MARKER-5c77ce91-d7a0-450f-b72c-496c99d6df87 Noted from elsewhere"
+    },
+    {
+     "rowid": 21,
+     "kind": "task",
+     "record_id": "8573c739-f711-4e6f-bd29-29f5b85dfbd9",
+     "text": "MARKER-7b2b953d-a0af-4b79-9529-af429f8ff95f Call the plumber"
+    }
+   ],
+   "meaning_index": [
+    {
+     "rowid": 1,
+     "one": 1,
+     "model": "@cf/baai/bge-m3",
+     "built": 1,
+     "queued": 5
+    }
+   ],
+   "meaning_queue": [],
+   "meaning_spend": [
+    {
+     "rowid": 1,
+     "month": "2026-11",
+     "dollars": 0.000001488
+    }
+   ],
+   "calls": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "71d1c0b3-81ed-45e5-87d2-6f17d5d59abc",
+     "session": "live_85a3e797-5510-415e-9ec3-8299d0d9f674",
+     "at": 1795251600000,
+     "ended_at": 1795251720000,
+     "ended": "hung_up",
+     "provider_reason": "close_requested",
+     "end_heard_by": "device",
+     "alive_at": 1795251600000,
+     "cost": 0.1
+    },
+    {
+     "rowid": 2,
+     "seq": 2,
+     "id": "48d779fd-b33e-4d45-ba79-8981618d4182",
+     "session": "live_8415b556-4cd2-4a8a-b349-3292147e0d2f",
+     "at": 1795251720000,
+     "ended_at": null,
+     "ended": null,
+     "provider_reason": null,
+     "end_heard_by": null,
+     "alive_at": 1795251735000,
+     "cost": null
+    }
+   ],
+   "pi_durable_schema": [
+    {
+     "rowid": 1,
+     "singleton": 1,
+     "version": 2
+    }
+   ],
+   "pi_durable_metadata": [
+    {
+     "rowid": 1,
+     "singleton": 1,
+     "next_id": "16",
+     "next_seq": 10
+    }
+   ],
+   "pi_record_ids": [
+    {
+     "rowid": 1,
+     "id": 1,
+     "record_type": "conversation"
+    },
+    {
+     "rowid": 2,
+     "id": 2,
+     "record_type": "document"
+    },
+    {
+     "rowid": 3,
+     "id": 3,
+     "record_type": "document"
+    },
+    {
+     "rowid": 4,
+     "id": 4,
+     "record_type": "document"
+    },
+    {
+     "rowid": 5,
+     "id": 5,
+     "record_type": "document"
+    },
+    {
+     "rowid": 6,
+     "id": 6,
+     "record_type": "document"
+    },
+    {
+     "rowid": 7,
+     "id": 7,
+     "record_type": "entry"
+    },
+    {
+     "rowid": 8,
+     "id": 8,
+     "record_type": "submission"
+    },
+    {
+     "rowid": 9,
+     "id": 9,
+     "record_type": "task"
+    },
+    {
+     "rowid": 10,
+     "id": 10,
+     "record_type": "entry"
+    },
+    {
+     "rowid": 11,
+     "id": 11,
+     "record_type": "entry"
+    },
+    {
+     "rowid": 12,
+     "id": 12,
+     "record_type": "entry"
+    },
+    {
+     "rowid": 13,
+     "id": 13,
+     "record_type": "submission"
+    },
+    {
+     "rowid": 14,
+     "id": 14,
+     "record_type": "task"
+    },
+    {
+     "rowid": 15,
+     "id": 15,
+     "record_type": "entry"
+    }
+   ],
+   "pi_conversations": [
+    {
+     "rowid": 1,
+     "id": 1,
+     "owner_conversation_id": null,
+     "owner_task_id": null,
+     "record": "{\"id\":1}"
+    }
+   ],
+   "pi_entries": [
+    {
+     "rowid": 7,
+     "id": 7,
+     "conversation_id": 1,
+     "head": null,
+     "commit_seq": 2,
+     "record": "{\"kind\":\"praxis.message\",\"data\":{\"id\":\"b74a2720-e246-4eb0-98d7-dfca6215ab60\",\"words\":\"MARKER-7254ec91-8259-43f3-8f21-41bf1eade7f1 What is due this week?\",\"spoken\":false,\"at\":1795251600000},\"model\":[{\"role\":\"user\",\"content\":\"<bearings>\\nToday is 2026-11-21. This Context is \\\"Personal\\\". There are no other Contexts.\\n\\nThe Standing Entries of this Context, oldest first:\\n\\n<standing_entry id=\\\"287e0361-b8ac-4b44-8472-6fa96da90060\\\" day=\\\"2026-11-20\\\">\\nMARKER-07c9d633-560b-4f38-8a21-b230fbc6b95e The boiler is making that noise again\\n</standing_entry>\\n\\nThe Held Changes still waiting for the person's tap, oldest first:\\n<held_change id=\\\"b2f62cef-da69-4ba9-aa8a-654c7b89fd0c\\\" entry=\\\"287e0361-b8ac-4b44-8472-6fa96da90060\\\">Edit your Entry's words</held_change>\\n\\nYou have not been told before what others changed. The newest changes they made, oldest first:\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"record_entry\\\">entry 287e0361-b8ac-4b44-8472-6fa96da90060 made; task 262e2716-9538-4bbd-ba01-929aa01ba835 made; task f3e7642e-ab08-4869-9bb1-0aad1314f3c4 made</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"add_link\\\">entry 287e0361-b8ac-4b44-8472-6fa96da90060 changed; person 3c329ce5-d097-4091-ac20-9d3e9023c0aa made</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"delegate_task\\\">task f3e7642e-ab08-4869-9bb1-0aad1314f3c4 changed</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"set_task_dates\\\">task 262e2716-9538-4bbd-ba01-929aa01ba835 changed</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"set_recurrence\\\">task 262e2716-9538-4bbd-ba01-929aa01ba835 changed</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"create_project\\\">project 9eb0a7d7-cca0-4196-b769-70970ee8a805 made</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"record_entry\\\">entry 8de50374-6ad2-489b-ab99-fd81b3a7d70c made; task adbdee26-1e5f-4ef9-9836-7e220c866e75 made</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"move_task\\\">task adbdee26-1e5f-4ef9-9836-7e220c866e75 changed</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"wait_on\\\">task 262e2716-9538-4bbd-ba01-929aa01ba835 changed</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"edit_entry\\\">entry 8de50374-6ad2-489b-ab99-fd81b3a7d70c changed</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"mark_standing\\\">entry 287e0361-b8ac-4b44-8472-6fa96da90060 changed</change>\\n<change at=\\\"2026-11-20T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"record_entry\\\">entry 91c19925-a501-4db4-8c2b-450d9b0f5e01 made; task 69a5ff87-bf09-4f3d-b2fc-c3246d38db8d made</change>\\n<change at=\\\"2026-11-21T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"delete_entry\\\">entry 91c19925-a501-4db4-8c2b-450d9b0f5e01 deleted; task 69a5ff87-bf09-4f3d-b2fc-c3246d38db8d deleted by rule</change>\\n<change at=\\\"2026-11-21T09:00:00.000Z\\\" by=\\\"the person\\\" tool=\\\"finish_task\\\">task 262e2716-9538-4bbd-ba01-929aa01ba835 changed; task 8573c739-f711-4e6f-bd29-29f5b85dfbd9 made by rule</change>\\n<change at=\\\"2026-11-21T09:00:00.000Z\\\" by=\\\"the Connection \\\"Claude\\\"\\\" tool=\\\"record_entry\\\">entry 0879fa35-eb60-4160-b632-c37ccef55508 made</change>\\n</bearings>\\n\\nMARKER-7254ec91-8259-43f3-8f21-41bf1eade7f1 What is due this week?\",\"timestamp\":1795298189700}],\"id\":7,\"conversationId\":1}"
+    },
+    {
+     "rowid": 10,
+     "id": 10,
+     "conversation_id": 1,
+     "head": null,
+     "commit_seq": 4,
+     "record": "{\"model\":[{\"role\":\"system\",\"content\":\"\",\"sections\":{\"preamble\":\"You are the Agent of Praxis, a journal-centric task manager for one person. You work on the Journal of one Context, through the tools you are given and nothing else.\\n\\n- Act at once when asked: record Entries; create, finish, reschedule, delegate and delete Tasks; make Projects and Persons. Do not ask for a confirmation first, and always say what you changed.\\n- Changing or deleting the words of an Entry the person wrote changes nothing at once: it leaves a Held Change, which only their tap in Praxis makes. Say so, and that a typed or spoken yes does not make it. Cancel one when they tell you to.\\n- When you record the person's words as an Entry, keep them verbatim, trimmed of filler, never paraphrased, with no Markdown added. Compose prose only when asked.\\n- When you compose, in an Entry or a Message, you may use this Markdown, with CommonMark's syntax: emphasis and strong, inline code and code blocks, links and bare addresses, bulleted and numbered lists, quotes, headings, tables and images. A link or an image takes only an https address. Anything else is shown as typed, so do not use it: raw HTML, footnotes, strikethrough, rules and task-list checkboxes. An image you put in an Entry waits for the person's tap before it loads, and one in a Message never loads.\\n- You know the other Contexts' names and nothing else of them. Asked about one, say the person can switch to it by hand.\\n- You cannot open links, search the web or run code. Say so when asked.\\n- Dates you give to tools are days (YYYY-MM-DD) in the Context's time zone; resolve \\\"next Friday\\\" yourself from today's date.\\n- You are given the Context's Standing Entries with each Message: keep honouring them, and when two disagree, the newer wins. They and the Journal are your only memory: what is said only in the Conversation may be lost.\\n- With each Message you are also told the Held Changes still waiting for the person's tap and what others changed since the last Message you answered, each named by its id and not by its words: read what you need through the tools.\\n- Mark an Entry standing only when the person asks you to keep honouring something, recording it first in their words if it is not yet an Entry. Never mark or unmark one unasked.\\n- A Message may be spoken in a Call: it is then the text of what the person said, and is told you as such. Record it as you would a typed one, in the words of that text. Your answer is heard, in a voice model's own words: write a short answer, offer the rest rather than giving it, and always say what you changed. A spoken yes makes no Held Change either.\"},\"toolsAdded\":[{\"name\":\"record_entry\",\"description\":\"Record an Entry in the Journal. The words are kept exactly as given and never read for Tasks or links: each Task to make with the Entry is given in `tasks`, and has the Entry as its Origin Entry, and each link in `links`. A link to a Task or Project is a Reference and one to a Person a Mention; it may name a new Person or Project to make, and may be anchored to a span of the words. `follow_up_to` names the one earlier Entry this one continues or corrects, if any: a Follow-up. The words are never refused for a link: one naming a record not in this Context is not kept, and an anchor past the words' end is left off. Read the Entry returned for the links kept.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"string\"},\"tasks\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"}},\"required\":[\"title\"],\"additionalProperties\":false}},\"links\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"to\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"enum\":[\"task\",\"project\",\"person\"]},\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"kind\",\"id\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"new_person\"},\"name\":{\"type\":\"string\"}},\"required\":[\"kind\",\"name\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"new_project\"},\"name\":{\"type\":\"string\"}},\"required\":[\"kind\",\"name\"],\"additionalProperties\":false}]},\"anchor\":{\"type\":\"object\",\"properties\":{\"start\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991},\"end\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991}},\"required\":[\"start\",\"end\"],\"additionalProperties\":false}},\"required\":[\"to\"],\"additionalProperties\":false}},\"follow_up_to\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"words\"],\"additionalProperties\":false}},{\"name\":\"get_entry\",\"description\":\"Get one Entry by its id.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"list_entries\",\"description\":\"List the Journal's Entries, newest first, 50 to a page. Give `standing: true` to list only the Standing Entries: those the person marked for the Agent to keep honouring.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"cursor\":{\"type\":\"string\",\"minLength\":1},\"standing\":{\"type\":\"boolean\",\"const\":true}},\"additionalProperties\":false,\"required\":[]}},{\"name\":\"edit_entry\",\"description\":\"Change an Entry's words, stating the `version` of them read with the Entry: a change against one no longer current is `stale`, so read the Entry again. The words before are kept as a Version, listed by list_entry_versions. Each Task to make with the new words is given in `tasks`, as for record_entry; words that lose a Task's line delete no Task. Its links stay: an anchor moves with what is changed around it, and one whose span the change touches stays without one. When the Entry's Author is the person, their words are changed only by their tap. From the Agent the call changes nothing and returns, with `held: true`, the Held Change it left for the tap, which a typed or spoken yes never makes. From a Connection it is refused: add a Follow-up with record_entry instead, or ask the person to make the edit.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"words\":{\"type\":\"string\"},\"version\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991},\"tasks\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"}},\"required\":[\"title\"],\"additionalProperties\":false}}},\"required\":[\"id\",\"words\",\"version\"],\"additionalProperties\":false}},{\"name\":\"restore_entry_version\",\"description\":\"Put an Entry's words back to one of its Versions, numbered `restore` as list_entry_versions gave it, stating the `version` the Entry is at, as for edit_entry. It is a new change: the words it replaces become a Version and the others stay. It makes no Task, whatever the words hold. When the Entry's Author is the person, their words are changed only by their tap. From the Agent the call changes nothing and returns, with `held: true`, the Held Change it left for the tap, which a typed or spoken yes never makes. From a Connection it is refused: add a Follow-up with record_entry instead, or ask the person to make the edit.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"restore\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991},\"version\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991}},\"required\":[\"id\",\"restore\",\"version\"],\"additionalProperties\":false}},{\"name\":\"delete_entry\",\"description\":\"Send an Entry to the Trash, from which it can be restored for 30 days. The Tasks it is the Origin Entry of go with it, open or closed, with every Occurrence of a recurring one, and so do its own References and Mentions; each Task waiting on one of them stops waiting. A Follow-up of it stays, and shows that it continues a deleted Entry; every other link to it is kept, shown as deleted until it is restored. No Entry's words change. It is never refused for what hangs off it. When the Entry's Author is the person, their words are changed only by their tap. From the Agent the call changes nothing and returns, with `held: true`, the Held Change it left for the tap, which a typed or spoken yes never makes. From a Connection it is refused: add a Follow-up with record_entry instead, or ask the person to make the edit.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"list_entry_versions\",\"description\":\"List an Entry's Versions, newest first, 50 to a page: every earlier state of its words, each with who changed them and when. A Version covers the words only, not the links.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"cursor\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"add_link\",\"description\":\"Link an Entry to a Task or Project (a Reference) or to a Person (a Mention), optionally anchored to a span of its words. The words never change, so this is never held. `to` may name a new Person or Project to make. Linking what the Entry already links, at that span or with none, changes nothing.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"entry_id\":{\"type\":\"string\",\"minLength\":1},\"to\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"enum\":[\"task\",\"project\",\"person\"]},\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"kind\",\"id\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"new_person\"},\"name\":{\"type\":\"string\"}},\"required\":[\"kind\",\"name\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"new_project\"},\"name\":{\"type\":\"string\"}},\"required\":[\"kind\",\"name\"],\"additionalProperties\":false}]},\"anchor\":{\"type\":\"object\",\"properties\":{\"start\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991},\"end\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991}},\"required\":[\"start\",\"end\"],\"additionalProperties\":false}},\"required\":[\"entry_id\",\"to\"],\"additionalProperties\":false}},{\"name\":\"remove_link\",\"description\":\"Remove the links from an Entry to a Task, Project or Person: every one, or given an anchor only the one at that span. The words never change, so this is never held, and the record itself stays.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"entry_id\":{\"type\":\"string\",\"minLength\":1},\"to\":{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"enum\":[\"task\",\"project\",\"person\"]},\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"kind\",\"id\"],\"additionalProperties\":false},\"anchor\":{\"type\":\"object\",\"properties\":{\"start\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":9007199254740991},\"end\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9007199254740991}},\"required\":[\"start\",\"end\"],\"additionalProperties\":false}},\"required\":[\"entry_id\",\"to\"],\"additionalProperties\":false}},{\"name\":\"mark_standing\",\"description\":\"Mark an Entry as a Standing Entry, which the Agent is given at the start of every Run in this Context and keeps honouring; when two disagree, the newer wins. The Agent marks one only when the person asks, recording it first in the person's words, and never unasked. The words never change, so this is never held. A Context's Standing Entries hold 10,000 characters in all at most: a mark that would pass that is refused, with the Standing Entries in the way. Marking a Standing Entry changes nothing, and a Follow-up to one is not standing unless marked itself.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"unmark_standing\",\"description\":\"Unmark a Standing Entry: it stays in the Journal as an ordinary Entry, and the Agent is no longer given it. The Agent unmarks one only when the person asks. Unmarking an Entry that is not standing changes nothing.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"add_task\",\"description\":\"Make a Task on an Entry that exists, which becomes its Origin Entry. Every Task is made with an Entry named: there is no Task without one.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"entry_id\":{\"type\":\"string\",\"minLength\":1},\"title\":{\"type\":\"string\"}},\"required\":[\"entry_id\",\"title\"],\"additionalProperties\":false}},{\"name\":\"finish_task\",\"description\":\"Finish a Task: it was done. Finishing a Finished Task changes nothing, and a Dropped one is refused until it is reopened.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"drop_task\",\"description\":\"Drop a Task: the person decided not to do it. It stays where it was; dropping is not deleting. Dropping a Dropped Task changes nothing, and a Finished one is refused until it is reopened.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"reopen_task\",\"description\":\"Reopen a Finished or Dropped Task, so it is open again. Reopening an open Task changes nothing.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"rename_task\",\"description\":\"Change a Task's title. A Task has a title and no body: say more in an Entry.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"title\":{\"type\":\"string\"}},\"required\":[\"id\",\"title\"],\"additionalProperties\":false}},{\"name\":\"set_task_dates\",\"description\":\"Set or clear a Task's Due Date, its Defer Date, or both. Each is a day written YYYY-MM-DD with no time of day, or null to clear it; one left out stays as it was. Dates are never prose: resolve \\\"next Friday\\\" with today and the time zone from get_settings. A Task is Overdue once its Due Date has passed and Deferred until its Defer Date comes.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"due_date\":{\"anyOf\":[{\"type\":\"string\",\"format\":\"date\",\"pattern\":\"^(?:(?:\\\\d\\\\d[2468][048]|\\\\d\\\\d[13579][26]|\\\\d\\\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)|(?:02)-(?:0[1-9]|1\\\\d|2[0-8])))$\"},{\"type\":\"null\"}]},\"defer_date\":{\"anyOf\":[{\"type\":\"string\",\"format\":\"date\",\"pattern\":\"^(?:(?:\\\\d\\\\d[2468][048]|\\\\d\\\\d[13579][26]|\\\\d\\\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)|(?:02)-(?:0[1-9]|1\\\\d|2[0-8])))$\"},{\"type\":\"null\"}]}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"set_recurrence\",\"description\":\"Put a Recurrence on a Task, or change the one it has: when the Task is finished or dropped, the next Occurrence is made by rule, a new Task with the same title, Project, Recurrence, delegation and Origin Entry, and its Defer Date as many days before its Due Date as this one's. The rule sets the next Due Date. A schedule is every N days, every N weeks on chosen weekdays, every N months on a day of the month or the last day (\\\"last\\\"), or every N years, and the next Due Date is the first day on it after both the current Due Date and the day the Task was closed; it counts from the Task's Due Date now, so every 2 weeks runs from this week. A day the month lacks falls on its last day. An interval (\\\"interval\\\") is counted from the day the Task was closed. The Task must have a Due Date and be open. A change applies from the next Occurrence: this one's Due Date stays. Setting the rule it has changes nothing.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"recurrence\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"days\"},\"every\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}},\"required\":[\"kind\",\"every\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"weeks\"},\"every\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000},\"on\":{\"minItems\":1,\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"monday\",\"tuesday\",\"wednesday\",\"thursday\",\"friday\",\"saturday\",\"sunday\"]}}},\"required\":[\"kind\",\"every\",\"on\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"months\"},\"every\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000},\"on\":{\"anyOf\":[{\"type\":\"integer\",\"minimum\":1,\"maximum\":31},{\"type\":\"string\",\"const\":\"last\"}]}},\"required\":[\"kind\",\"every\",\"on\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"years\"},\"every\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000}},\"required\":[\"kind\",\"every\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"interval\"},\"every\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":1000},\"unit\":{\"type\":\"string\",\"enum\":[\"days\",\"weeks\",\"months\",\"years\"]}},\"required\":[\"kind\",\"every\",\"unit\"],\"additionalProperties\":false}]}},\"required\":[\"id\",\"recurrence\"],\"additionalProperties\":false}},{\"name\":\"remove_recurrence\",\"description\":\"End a Task's Recurrence: closing it makes no next Occurrence. Give the open Occurrence, which is the one holding the rule. Its Due Date stays. Removing it from a Task with none changes nothing.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"delegate_task\",\"description\":\"Delegate a Task to a Person in this Context: they are doing it, and it is no longer actionable for the person, who still tracks it. Only this call delegates: a Mention never does. The Person has no access to Praxis and nothing is sent to them. Delegating to the Person it is Delegated to changes nothing; to another hands it on. A closed Task is refused until it is reopened. The delegation ends when the Task is finished, dropped or taken back.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"person_id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\",\"person_id\"],\"additionalProperties\":false}},{\"name\":\"take_back_task\",\"description\":\"Take back a Delegated Task: no Person is doing it any more, and it is the person's to act on again. Taking back a Task no one is doing changes nothing.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"wait_on\",\"description\":\"Set a Task waiting on another Task or a Project in this Context, which can be in another Project. It is not actionable while what it waits on is open, and the wait ends by itself when that one is finished or dropped. A Task can wait on several. It never waits on a Person: delegate the Task, or wait on a Task Delegated to them. Waiting locks nothing: the Task can still be finished. Waiting on what it already waits on changes nothing. A wait that would make a cycle is refused, and so is one on something closed, or from a closed Task until it is reopened.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"on\":{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"enum\":[\"task\",\"project\"]},\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"kind\",\"id\"],\"additionalProperties\":false}},\"required\":[\"id\",\"on\"],\"additionalProperties\":false}},{\"name\":\"stop_waiting\",\"description\":\"Stop a Task waiting on a Task or Project. Stopping a wait the Task does not have changes nothing.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"on\":{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"enum\":[\"task\",\"project\"]},\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"kind\",\"id\"],\"additionalProperties\":false}},\"required\":[\"id\",\"on\"],\"additionalProperties\":false}},{\"name\":\"delete_task\",\"description\":\"Send a Task to the Trash, from which it can be restored for 30 days. Its Recurrence goes with it when it is the open Occurrence, and no next Occurrence is made: deleting is not closing, so drop a Task the person decided not to do. Each Task waiting on it stops waiting. Its Origin Entry and earlier Occurrences stay, and an Entry that References it shows the link as deleted until it is restored. It is never refused for what hangs off it.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"get_task\",\"description\":\"Get one Task by its id, with its dates, its derived state and the reason for it: the end it reached and when, or, while open, whether it is actionable, what it waits on, who it is Delegated to, the day it is Deferred until and the day it became Overdue.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"list_tasks\",\"description\":\"List the Context's Tasks, newest first, 50 to a page, open or closed, each with its derived state. Give `named` to list only those whose title holds it, whatever its case and accents.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"cursor\":{\"type\":\"string\",\"minLength\":1},\"named\":{\"type\":\"string\",\"minLength\":1}},\"additionalProperties\":false,\"required\":[]}},{\"name\":\"move_task\",\"description\":\"Put a Task in a Project, move it to another, or take it out of any with a project_id of null. A Task is in one Project at most, and a Project is the only thing that contains Tasks.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"project_id\":{\"anyOf\":[{\"type\":\"string\",\"minLength\":1},{\"type\":\"null\"}]}},\"required\":[\"id\",\"project_id\"],\"additionalProperties\":false}},{\"name\":\"make_project_from_task\",\"description\":\"Turn a Task that turns out to have parts into a Project, in one call: a Project is made, named after the Task unless a name is given, and the Task becomes its first Task, keeping its Origin Entry. A Task has no parts: add the others to the Project.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"name\":{\"type\":\"string\"}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"create_project\",\"description\":\"Make a Project: work made of several Tasks. It has a name and, optionally, a Due Date written YYYY-MM-DD, which says nothing about its Tasks'. It has no description: say more in an Entry. Two Projects may share a name.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"due_date\":{\"type\":\"string\",\"format\":\"date\",\"pattern\":\"^(?:(?:\\\\d\\\\d[2468][048]|\\\\d\\\\d[13579][26]|\\\\d\\\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)|(?:02)-(?:0[1-9]|1\\\\d|2[0-8])))$\"}},\"required\":[\"name\"],\"additionalProperties\":false}},{\"name\":\"rename_project\",\"description\":\"Change a Project's name.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"name\":{\"type\":\"string\"}},\"required\":[\"id\",\"name\"],\"additionalProperties\":false}},{\"name\":\"set_project_due_date\",\"description\":\"Set a Project's Due Date, a day written YYYY-MM-DD, or clear it with null. It says nothing about its Tasks' Due Dates. Resolve \\\"next Friday\\\" with get_settings first. An open Project is Overdue once its Due Date has passed.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"due_date\":{\"anyOf\":[{\"type\":\"string\",\"format\":\"date\",\"pattern\":\"^(?:(?:\\\\d\\\\d[2468][048]|\\\\d\\\\d[13579][26]|\\\\d\\\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)|(?:02)-(?:0[1-9]|1\\\\d|2[0-8])))$\"},{\"type\":\"null\"}]}},\"required\":[\"id\",\"due_date\"],\"additionalProperties\":false}},{\"name\":\"finish_project\",\"description\":\"Declare a Project Finished. It is never Finished by its Tasks running out, only by this. The Tasks still open in it are Dropped. It is never refused.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"drop_project\",\"description\":\"Drop a Project: the person decided not to do it. It stays where it was; dropping is not deleting. The Tasks still open in it are Dropped. It is never refused.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"reopen_project\",\"description\":\"Reopen a Finished or Dropped Project, so it is open again. The Tasks dropped with it stay Dropped: reopen each one wanted.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"delete_project\",\"description\":\"Send a Project to the Trash, from which it can be restored for 30 days. Nothing goes with it: its Tasks stay, Finished ones among them, and show no Project, and each Task waiting on it stops waiting. To give up the work in it, drop the Project first. An Entry that References it shows the link as deleted until it is restored. It is never refused for what hangs off it.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"get_project\",\"description\":\"Get one Project by its id, with its Due Date, its state (open, perhaps Overdue, or the end declared and when) and its Tasks, each with its derived state.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"list_projects\",\"description\":\"List the Context's Projects, newest first, 50 to a page, each with its Tasks. Give a state to list only the open, Finished or Dropped ones, and `named` to list only those whose name holds it, whatever its case and accents.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"cursor\":{\"type\":\"string\",\"minLength\":1},\"state\":{\"type\":\"string\",\"enum\":[\"open\",\"finished\",\"dropped\"]},\"named\":{\"type\":\"string\",\"minLength\":1}},\"additionalProperties\":false,\"required\":[]}},{\"name\":\"create_person\",\"description\":\"Make a Person: someone the person deals with, so Entries can Mention them. A Person has a name and nothing else: say more in an Entry that Mentions them. Two Persons may share a name, and are never taken to be the same.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"],\"additionalProperties\":false}},{\"name\":\"rename_person\",\"description\":\"Change a Person's name.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1},\"name\":{\"type\":\"string\"}},\"required\":[\"id\",\"name\"],\"additionalProperties\":false}},{\"name\":\"delete_person\",\"description\":\"Send a Person to the Trash, from which they can be restored for 30 days. Nothing goes with them: each open Task Delegated to them is taken back, and an Entry that Mentions them shows the Mention as deleted until they are restored. It is never refused for what hangs off them.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"get_person\",\"description\":\"Get one Person by their id, with the latest Entry that Mentions them, which tells two Persons with one name apart.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"list_persons\",\"description\":\"List the Context's Persons, newest first, 50 to a page, each with the latest Entry that Mentions them. Give `named` to list only those whose name holds it, whatever its case and accents.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"cursor\":{\"type\":\"string\",\"minLength\":1},\"named\":{\"type\":\"string\",\"minLength\":1}},\"additionalProperties\":false,\"required\":[]}},{\"name\":\"get_settings\",\"description\":\"Get this Context's settings: its name, its time zone, today's date there, when the Brief and the Review come, each a time of day in that time zone, null while it is off, and whether their Notifications are switched on. Today, and so whether a Task is Overdue or Deferred, is the current day in that time zone. Use them to resolve a day such as \\\"next Friday\\\" before giving it to a tool.\",\"parameters\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false,\"required\":[]}},{\"name\":\"set_brief_time\",\"description\":\"Set the time of day the Brief comes in this Context, HH:MM on the 24-hour clock in its time zone, or switch it off with null. The Brief is the Message the Agent leaves each day, unasked, saying what needs attention. Set it only when the person asks.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"time\":{\"anyOf\":[{\"type\":\"string\",\"pattern\":\"^([01][0-9]|2[0-3]):[0-5][0-9]$\"},{\"type\":\"null\"}]}},\"required\":[\"time\"],\"additionalProperties\":false}},{\"name\":\"set_review_time\",\"description\":\"Set the day of the week and the time of day the Review comes in this Context, HH:MM on the 24-hour clock in its time zone, or switch it off with a time of null. A day left out stays as it was, and switching it off keeps its day. The Review is the Message the Agent leaves each week, unasked, listing what has gone stale or been missed. Set it only when the person asks.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"day\":{\"type\":\"string\",\"enum\":[\"monday\",\"tuesday\",\"wednesday\",\"thursday\",\"friday\",\"saturday\",\"sunday\"]},\"time\":{\"anyOf\":[{\"type\":\"string\",\"pattern\":\"^([01][0-9]|2[0-3]):[0-5][0-9]$\"},{\"type\":\"null\"}]}},\"required\":[\"time\"],\"additionalProperties\":false}},{\"name\":\"view_attention\",\"description\":\"What in this Context is open for the person to act on, derived by rule and the same for every caller, in five sections in this order. `due`: every open Task that is Overdue or due today, whatever else holds for it, and every open Project that is, oldest Due Date first. `newly_actionable`: actionable Tasks whose wait ended, that were taken back or whose Defer Date came in the last seven days, newest first, each with why and when it came up. `delegated`: every other Delegated Task that is neither Waiting nor Deferred, oldest delegation first. `projects`: every open Project by name, with its count of actionable Tasks, flagged with `no_open_task` when it needs a next Task or finishing. `loose`: every other actionable Task in no Project, oldest first. A Task appears once, in the first section it fits; a Project in `due` is still in `projects`. A Waiting or Deferred Task that is not due is not shown: reach it through its Project, its Entry or search.\",\"parameters\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false,\"required\":[]}},{\"name\":\"search\",\"description\":\"Search this Context: one ranked list, best match first, 50 to a page, of the Entries, Tasks, Projects and Persons whose words, title or name hold every word given, and of the Entries whose words mean what the words given mean, though they may not use them. Case and accents are set aside, and the last word, with nothing after it, also finds the words it begins, as while it is typed. Nothing in the Trash and no earlier Version of an Entry is searched. Each hit gives the record's kind, id and summary, when it was made, and an excerpt with the spans that matched by words, none for an Entry found by meaning alone; read the record by its id. `words_only` is null when meaning was used, and otherwise says why the list is from words alone: `missing`, no meaning index in this Deployment; `stale`, it is being built from the Journal; `unreachable`, it did not answer this time; `cap_reached`, the month's spend has reached the cap. An Entry saved a moment ago is found by words at once and by meaning shortly after. Narrow it with any of: `from` and `to`, days in the Context's time zone, both included, by when a record was made; `project_id`, to the Tasks in that Project and the Entries that Reference it or hold a Task in it; `person_id`, to the Entries that Mention that Person and the Tasks ever Delegated to them; `author`, to the Entries and Tasks whose Author that is, a Connection by its name if given. Narrowed by a Project, a Person or an Author, no Project or Person is listed.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"string\"},\"from\":{\"type\":\"string\",\"format\":\"date\",\"pattern\":\"^(?:(?:\\\\d\\\\d[2468][048]|\\\\d\\\\d[13579][26]|\\\\d\\\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)|(?:02)-(?:0[1-9]|1\\\\d|2[0-8])))$\"},\"to\":{\"type\":\"string\",\"format\":\"date\",\"pattern\":\"^(?:(?:\\\\d\\\\d[2468][048]|\\\\d\\\\d[13579][26]|\\\\d\\\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)|(?:02)-(?:0[1-9]|1\\\\d|2[0-8])))$\"},\"project_id\":{\"type\":\"string\",\"minLength\":1},\"person_id\":{\"type\":\"string\",\"minLength\":1},\"author\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"person\"}},\"required\":[\"kind\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"agent\"}},\"required\":[\"kind\"],\"additionalProperties\":false},{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"connection\"},\"name\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"kind\"],\"additionalProperties\":false}]},\"cursor\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"words\"],\"additionalProperties\":false}},{\"name\":\"restore\",\"description\":\"Bring back from the Trash the item holding a record, given the id of any record in it: the record deleted and everything that went with it come back together, as they were. A Task whose Origin Entry is in the Trash brings that Entry back, with what went with it. Each link the delete took away comes back unless its other end has changed since: a Task moved to another Project stays there, one Delegated to someone else stays so, and a wait resumes only if the waiting Task is still open. References, Mentions and Follow-up links always come back.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"list_trash\",\"description\":\"List what is in the Trash, newest delete first, 50 to a page: each item is what one delete sent there, the record deleted and what went with it, with when it was deleted and when it will be removed for good, 30 days after. Nothing in the Trash is in any other read: restore an item to read or change it again.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"cursor\":{\"type\":\"string\",\"minLength\":1}},\"additionalProperties\":false,\"required\":[]}},{\"name\":\"cancel_held_change\",\"description\":\"Cancel a Held Change left for the person's tap: the Entry stays as it is. The Agent cancels one when the person tells it to. One already made, cancelled or lapsed is not found.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"minLength\":1}},\"required\":[\"id\"],\"additionalProperties\":false}},{\"name\":\"list_held_changes\",\"description\":\"List the Held Changes left for the person's tap, newest first, 50 to a page: each a change to or delete of an Entry the person wrote that the Agent asked for, with the Entry's words before and after and, for a delete, the Tasks that would go with it. One lapses the moment its Entry changes underneath it.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"cursor\":{\"type\":\"string\",\"minLength\":1}},\"additionalProperties\":false,\"required\":[]}},{\"name\":\"list_changes\",\"description\":\"List what changed in this Context since a cursor, oldest first: each write's Effects, its caller and when it arrived. Without a cursor it starts from the oldest change kept. Keep the cursor it gives to ask again later. The log keeps 90 days: when `read_afresh` is true the cursor was older than that, so read what you hold afresh and ask from the new cursor.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"cursor\":{\"type\":\"string\",\"minLength\":1}},\"additionalProperties\":false,\"required\":[]}}],\"timestamp\":1795298189707}],\"kind\":\"pi.system\",\"id\":10,\"conversationId\":1,\"byTaskId\":9}"
+    },
+    {
+     "rowid": 11,
+     "id": 11,
+     "conversation_id": 1,
+     "head": null,
+     "commit_seq": 5,
+     "record": "{\"model\":[{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Noted.\"}],\"api\":\"faux:1795298189508:fuaujmmiw6w\",\"provider\":\"scripted\",\"model\":\"claude-sonnet-5-5\",\"usage\":{\"input\":0,\"output\":2,\"cacheRead\":0,\"cacheWrite\":9738,\"totalTokens\":9740,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"total\":0}},\"stopReason\":\"stop\",\"timestamp\":1795298189712,\"durationMs\":1,\"thinkingLevel\":\"off\"}],\"kind\":\"pi.assistant\",\"id\":11,\"conversationId\":1,\"byTaskId\":9}"
+    },
+    {
+     "rowid": 12,
+     "id": 12,
+     "conversation_id": 1,
+     "head": null,
+     "commit_seq": 6,
+     "record": "{\"kind\":\"praxis.message\",\"data\":{\"id\":\"b89b77a9-30ae-4719-886a-cc51f62cee65\",\"words\":\"MARKER-9a97928c-dd93-4aac-95bb-e05f176524e7 Record that the boiler is fixed\",\"spoken\":true,\"at\":1795251600000},\"model\":[{\"role\":\"user\",\"content\":\"<bearings>\\nThis Message was spoken in a Call: the person hears your answer and may not be looking at the screen. Its words are the text of what they said, which may hold a mishearing.\\n\\nToday is 2026-11-21. This Context is \\\"Personal\\\". There are no other Contexts.\\n\\nThe Standing Entries of this Context, oldest first:\\n\\n<standing_entry id=\\\"287e0361-b8ac-4b44-8472-6fa96da90060\\\" day=\\\"2026-11-20\\\">\\nMARKER-07c9d633-560b-4f38-8a21-b230fbc6b95e The boiler is making that noise again\\n</standing_entry>\\n\\nThe Held Changes still waiting for the person's tap, oldest first:\\n<held_change id=\\\"b2f62cef-da69-4ba9-aa8a-654c7b89fd0c\\\" entry=\\\"287e0361-b8ac-4b44-8472-6fa96da90060\\\">Edit your Entry's words</held_change>\\n\\nNobody else has changed anything since the last Message you answered.\\n</bearings>\\n\\nMARKER-9a97928c-dd93-4aac-95bb-e05f176524e7 Record that the boiler is fixed\",\"timestamp\":1795298189733}],\"id\":12,\"conversationId\":1}"
+    },
+    {
+     "rowid": 15,
+     "id": 15,
+     "conversation_id": 1,
+     "head": null,
+     "commit_seq": 9,
+     "record": "{\"model\":[{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Noted.\"}],\"api\":\"faux:1795298189508:fuaujmmiw6w\",\"provider\":\"scripted\",\"model\":\"claude-sonnet-5-5\",\"usage\":{\"input\":0,\"output\":2,\"cacheRead\":9738,\"cacheWrite\":220,\"totalTokens\":9960,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"total\":0}},\"stopReason\":\"stop\",\"timestamp\":1795298189739,\"durationMs\":0,\"thinkingLevel\":\"off\"}],\"kind\":\"pi.assistant\",\"id\":15,\"conversationId\":1,\"byTaskId\":14}"
+    }
+   ],
+   "pi_submissions": [
+    {
+     "rowid": 8,
+     "id": 8,
+     "conversation_id": 1,
+     "request_id": "\"b74a2720-e246-4eb0-98d7-dfca6215ab60\"",
+     "status": "done",
+     "record": "{\"conversationId\":1,\"requestId\":\"b74a2720-e246-4eb0-98d7-dfca6215ab60\",\"type\":\"input\",\"status\":\"done\",\"entry\":7,\"id\":8,\"answer\":11}"
+    },
+    {
+     "rowid": 13,
+     "id": 13,
+     "conversation_id": 1,
+     "request_id": "\"b89b77a9-30ae-4719-886a-cc51f62cee65\"",
+     "status": "done",
+     "record": "{\"conversationId\":1,\"requestId\":\"b89b77a9-30ae-4719-886a-cc51f62cee65\",\"type\":\"input\",\"status\":\"done\",\"entry\":12,\"id\":13,\"answer\":15}"
+    }
+   ],
+   "pi_documents": [
+    {
+     "rowid": 2,
+     "id": 2,
+     "kind": "\"pi.live\"",
+     "family": 0,
+     "key_value": "\"\"",
+     "scope_kind": "conversation",
+     "owner_id": 1,
+     "created_at": 1,
+     "retired_at": null,
+     "record": "{\"id\":2,\"kind\":\"pi.live\",\"scope\":{\"kind\":\"conversation\",\"conversationId\":1},\"history\":\"latest\",\"fork\":\"initial\",\"createdAt\":1}"
+    },
+    {
+     "rowid": 3,
+     "id": 3,
+     "kind": "\"pi.inbox\"",
+     "family": 0,
+     "key_value": "\"\"",
+     "scope_kind": "conversation",
+     "owner_id": 1,
+     "created_at": 1,
+     "retired_at": null,
+     "record": "{\"id\":3,\"kind\":\"pi.inbox\",\"scope\":{\"kind\":\"conversation\",\"conversationId\":1},\"history\":\"latest\",\"fork\":\"initial\",\"createdAt\":1}"
+    },
+    {
+     "rowid": 4,
+     "id": 4,
+     "kind": "\"pi.usage\"",
+     "family": 0,
+     "key_value": "\"\"",
+     "scope_kind": "conversation",
+     "owner_id": 1,
+     "created_at": 1,
+     "retired_at": null,
+     "record": "{\"id\":4,\"kind\":\"pi.usage\",\"scope\":{\"kind\":\"conversation\",\"conversationId\":1},\"history\":\"latest\",\"fork\":\"initial\",\"createdAt\":1}"
+    },
+    {
+     "rowid": 5,
+     "id": 5,
+     "kind": "\"pi.provider\"",
+     "family": 0,
+     "key_value": "\"\"",
+     "scope_kind": "conversation",
+     "owner_id": 1,
+     "created_at": 1,
+     "retired_at": null,
+     "record": "{\"id\":5,\"kind\":\"pi.provider\",\"scope\":{\"kind\":\"conversation\",\"conversationId\":1},\"history\":\"latest\",\"fork\":\"initial\",\"createdAt\":1}"
+    },
+    {
+     "rowid": 6,
+     "id": 6,
+     "kind": "\"pi.agent\"",
+     "family": 0,
+     "key_value": "\"\"",
+     "scope_kind": "conversation",
+     "owner_id": 1,
+     "created_at": 1,
+     "retired_at": null,
+     "record": "{\"id\":6,\"kind\":\"pi.agent\",\"scope\":{\"kind\":\"conversation\",\"conversationId\":1},\"history\":\"rewindable\",\"fork\":\"asOf\",\"createdAt\":1}"
+    }
+   ],
+   "pi_document_revisions": [
+    {
+     "rowid": 2,
+     "document_id": 3,
+     "seq": 1,
+     "kind": "base",
+     "version": 1,
+     "content": "{\"items\":[]}"
+    },
+    {
+     "rowid": 4,
+     "document_id": 5,
+     "seq": 1,
+     "kind": "base",
+     "version": 1,
+     "content": "{\"sessionId\":\"01a2001c-617d-7701-ba8e-9d078a5393fb\"}"
+    },
+    {
+     "rowid": 5,
+     "document_id": 6,
+     "seq": 1,
+     "kind": "base",
+     "version": 1,
+     "content": "{\"model\":{\"provider\":\"scripted\",\"modelId\":\"claude-sonnet-5-5\"},\"maxTurns\":25}"
+    },
+    {
+     "rowid": 6,
+     "document_id": 2,
+     "seq": 9,
+     "kind": "base",
+     "version": 3,
+     "content": "{}"
+    },
+    {
+     "rowid": 7,
+     "document_id": 4,
+     "seq": 9,
+     "kind": "base",
+     "version": 1,
+     "content": "{\"models\":{\"scripted/claude-sonnet-5-5\":{\"input\":0,\"output\":4,\"cacheRead\":9738,\"cacheWrite\":9958,\"totalTokens\":19700,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"total\":0}}},\"tools\":{}}"
+    }
+   ],
+   "pi_tasks": [
+    {
+     "rowid": 9,
+     "id": 9,
+     "conversation_id": 1,
+     "kind": "\"pi.generation\"",
+     "status": "terminal",
+     "abort_requested": 0,
+     "background": 0,
+     "record": "{\"id\":9,\"conversationId\":1,\"kind\":\"pi.generation\",\"version\":3,\"input\":{},\"background\":false,\"abortRequested\":false,\"state\":{\"status\":\"terminal\",\"outcome\":{\"status\":\"completed\",\"result\":{\"entryId\":11}}},\"startedAt\":1795298189703,\"endedAt\":1795298189714}"
+    },
+    {
+     "rowid": 14,
+     "id": 14,
+     "conversation_id": 1,
+     "kind": "\"pi.generation\"",
+     "status": "terminal",
+     "abort_requested": 0,
+     "background": 0,
+     "record": "{\"id\":14,\"conversationId\":1,\"kind\":\"pi.generation\",\"version\":3,\"input\":{},\"background\":false,\"abortRequested\":false,\"state\":{\"status\":\"terminal\",\"outcome\":{\"status\":\"completed\",\"result\":{\"entryId\":15}}},\"startedAt\":1795298189735,\"endedAt\":1795298189740}"
+    }
+   ]
+  },
+  "sequence": [
+   {
+    "name": "change_calls",
+    "seq": 16
+   }
+  ]
+ },
+ "deployment": {
+  "made": [
+   {
+    "type": "table",
+    "name": "ladder",
+    "sql": "CREATE TABLE ladder (\n    one INTEGER PRIMARY KEY CHECK (one = 1),\n    step INTEGER NOT NULL,\n    stuck_under TEXT,\n    stuck_step INTEGER,\n    stuck_cause TEXT,\n    bookmark TEXT,\n    bookmark_step INTEGER\n  )"
+   },
+   {
+    "type": "table",
+    "name": "contexts",
+    "sql": "CREATE TABLE contexts (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      name TEXT NOT NULL,\n      accent TEXT NOT NULL,\n      -- A retired Context is hidden and keeps everything.\n      retired INTEGER NOT NULL,\n      -- When the last Backup holding its file was made, null while none has: the one Backup kept\n      -- past its 30 days while the Context is stuck on an upgrade (section 11).\n      backed_up INTEGER\n    )"
+   },
+   {
+    "type": "table",
+    "name": "connections",
+    "sql": "CREATE TABLE connections (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      name TEXT NOT NULL,\n      context_id TEXT NOT NULL REFERENCES contexts (id),\n      reading_only INTEGER NOT NULL,\n      ended INTEGER NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "devices",
+    "sql": "CREATE TABLE devices (\n      seq INTEGER PRIMARY KEY,\n      id TEXT NOT NULL UNIQUE,\n      name TEXT NOT NULL,\n      notifications INTEGER NOT NULL,\n      subscription TEXT,\n      -- When it last called a Deployment tool: a sighting, which no write reports as an Effect.\n      seen INTEGER NOT NULL\n    , offline_copy INTEGER NOT NULL DEFAULT 0)"
+   },
+   {
+    "type": "table",
+    "name": "spend_cap",
+    "sql": "CREATE TABLE spend_cap (\n      one INTEGER PRIMARY KEY CHECK (one = 1),\n      dollars REAL NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "spend",
+    "sql": "CREATE TABLE spend (\n      month TEXT NOT NULL,\n      context_id TEXT NOT NULL,\n      dollars REAL NOT NULL,\n      PRIMARY KEY (month, context_id)\n    )"
+   },
+   {
+    "type": "table",
+    "name": "key_refused",
+    "sql": "CREATE TABLE key_refused (\n      one INTEGER PRIMARY KEY CHECK (one = 1),\n      since INTEGER NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "backups",
+    "sql": "CREATE TABLE backups (\n      one INTEGER PRIMARY KEY CHECK (one = 1),\n      counted_from INTEGER NOT NULL,\n      last_made INTEGER\n    )"
+   },
+   {
+    "type": "table",
+    "name": "stuck_contexts",
+    "sql": "CREATE TABLE stuck_contexts (\n      context_id TEXT PRIMARY KEY,\n      release TEXT NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "write_keys",
+    "sql": "CREATE TABLE write_keys (\n      caller TEXT NOT NULL,\n      key TEXT NOT NULL,\n      tool TEXT NOT NULL,\n      at INTEGER NOT NULL,\n      result TEXT NOT NULL,\n      PRIMARY KEY (caller, key)\n    )"
+   },
+   {
+    "type": "table",
+    "name": "call_going",
+    "sql": "CREATE TABLE call_going (\n      one INTEGER PRIMARY KEY CHECK (one = 1),\n      context_id TEXT NOT NULL,\n      call TEXT NOT NULL\n    )"
+   },
+   {
+    "type": "table",
+    "name": "voice_key_refused",
+    "sql": "CREATE TABLE voice_key_refused (\n      one INTEGER PRIMARY KEY CHECK (one = 1),\n      since INTEGER NOT NULL\n    )"
+   }
+  ],
+  "rows": {
+   "ladder": [
+    {
+     "rowid": 1,
+     "one": 1,
+     "step": 3,
+     "stuck_under": null,
+     "stuck_step": null,
+     "stuck_cause": null,
+     "bookmark": null,
+     "bookmark_step": null
+    }
+   ],
+   "contexts": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "398be5bc9609036f2fc4de445df5c85298355434aec84ea6b1170b2a36880839",
+     "name": "Personal",
+     "accent": "blue",
+     "retired": 0,
+     "backed_up": 1795338135000
+    }
+   ],
+   "connections": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "OkLocNbtivgGFzeFC_9dbg",
+     "name": "Claude",
+     "context_id": "398be5bc9609036f2fc4de445df5c85298355434aec84ea6b1170b2a36880839",
+     "reading_only": 0,
+     "ended": 0
+    }
+   ],
+   "devices": [
+    {
+     "rowid": 1,
+     "seq": 1,
+     "id": "bfe1911a-28ba-4543-a0f8-2e7bec9c5b28",
+     "name": "A browser on iPhone",
+     "notifications": 1,
+     "subscription": "{\"endpoint\":\"https://push.praxis.test/74e693e3-c808-46d1-8afe-7851f9bd9f1c\",\"keys\":{\"p256dh\":\"BUserAgentKey\",\"auth\":\"AuthSecret\"}}",
+     "seen": 1795251600000,
+     "offline_copy": 1
+    }
+   ],
+   "spend_cap": [
+    {
+     "rowid": 1,
+     "one": 1,
+     "dollars": 30
+    }
+   ],
+   "spend": [
+    {
+     "rowid": 1,
+     "month": "2026-11",
+     "context_id": "398be5bc9609036f2fc4de445df5c85298355434aec84ea6b1170b2a36880839",
+     "dollars": 0.138410288
+    }
+   ],
+   "key_refused": [],
+   "backups": [
+    {
+     "rowid": 1,
+     "one": 1,
+     "counted_from": 1795165200000,
+     "last_made": 1795338135000
+    }
+   ],
+   "stuck_contexts": [],
+   "write_keys": [],
+   "call_going": [
+    {
+     "rowid": 1,
+     "one": 1,
+     "context_id": "398be5bc9609036f2fc4de445df5c85298355434aec84ea6b1170b2a36880839",
+     "call": "48d779fd-b33e-4d45-ba79-8981618d4182"
+    }
+   ],
+   "voice_key_refused": [
+    {
+     "rowid": 1,
+     "one": 1,
+     "since": 1795251735000
+    }
+   ]
+  },
+  "sequence": []
+ }
+}

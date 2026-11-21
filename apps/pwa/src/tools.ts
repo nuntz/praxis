@@ -162,3 +162,13 @@ export function unreachableMessage(error: unknown): string {
   if (error instanceof Unreachable || error instanceof SignInLapsed) return error.message;
   throw error;
 }
+
+/**
+ * What the screen says of something only the network reaches, such as search or the Trash, when a
+ * call to it never reached a tool (section 8.8): that it needs the network, in its own words. A
+ * lapsed sign-in says so instead, and anything else is a fault, thrown on.
+ */
+export function needsNetwork(error: unknown, said: string): string {
+  if (error instanceof Unreachable) return said;
+  return unreachableMessage(error);
+}

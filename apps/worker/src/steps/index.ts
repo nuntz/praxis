@@ -3,6 +3,7 @@ import contextStep2 from "./context-0002.ts";
 import contextStep3 from "./context-0003.ts";
 import deploymentStep1 from "./deployment-0001.ts";
 import deploymentStep2 from "./deployment-0002.ts";
+import deploymentStep3 from "./deployment-0003.ts";
 
 /**
  * One step of an upgrade ladder (section 11, ADR 0019): it changes the shape of an object's
@@ -19,4 +20,8 @@ export type Step = (sql: SqlStorage) => void;
 export const CONTEXT_LADDER: readonly Step[] = [contextStep1, contextStep2, contextStep3];
 
 /** The Deployment object's ladder, step 1 first. A new step goes at the end, in a file of its own. */
-export const DEPLOYMENT_LADDER: readonly Step[] = [deploymentStep1, deploymentStep2];
+export const DEPLOYMENT_LADDER: readonly Step[] = [
+  deploymentStep1,
+  deploymentStep2,
+  deploymentStep3,
+];

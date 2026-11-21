@@ -54,6 +54,7 @@ describe("set_device_notifications", () => {
       id,
       name: "Safari on iPhone",
       notifications: true,
+      offline_copy: false,
       seen: "2026-11-15T09:00:00.000Z",
     };
     expect(switched).toEqual({
@@ -146,6 +147,149 @@ describe("set_device_notifications", () => {
       { ...good, id: "" },
     ]) {
       expect(await deployment.call(hand, "set_device_notifications", input)).toMatchObject({
+        ok: false,
+        error: { code: "invalid_input" },
+      });
+    }
+    expect(await listed(deployment)).toEqual([]);
+  });
+});
+
+/** Switch the Offline Copy on or off for a Device, as its browser does once the person taps. */
+async function offlineCopy(deployment: Deployment, id: string, on: boolean) {
+  return value(
+    await deployment.call(
+      hand,
+      "set_device_offline_copy",
+      on ? { id, on, user_agent: SAFARI_ON_IPHONE } : { id, on },
+    ),
+  );
+}
+
+describe("set_device_offline_copy", () => {
+  test("is off until switched on: then the Device is listed with it, named from its browser and system", async () => {
+    const deployment = newDeployment("2026-11-15T09:00:00.000Z");
+    const id = crypto.randomUUID();
+    expect(await listed(deployment)).toEqual([]);
+
+    const switched = await offlineCopy(deployment, id, true);
+
+    const device = {
+      id,
+      name: "Safari on iPhone",
+      notifications: false,
+      offline_copy: true,
+      seen: "2026-11-15T09:00:00.000Z",
+    };
+    expect(switched).toEqual({
+      record: device,
+      effects: [{ kind: "device", id, what: "made", summary: "Safari on iPhone", by: "call" }],
+      changed: true,
+    });
+    expect(await listed(deployment)).toEqual([device]);
+  });
+
+  test("on a Device with Notifications on, it is a change to it, and switching it on again changes nothing", async () => {
+    const deployment = newDeployment();
+    const device = await switchOn(deployment, FIREFOX_ON_WINDOWS);
+
+    const switched = await offlineCopy(deployment, device.id, true);
+    const again = await offlineCopy(deployment, device.id, true);
+
+    const now = { ...device, offline_copy: true };
+    expect(switched).toEqual({
+      record: now,
+      effects: [
+        { kind: "device", id: device.id, what: "changed", summary: device.name, by: "call" },
+      ],
+      changed: true,
+    });
+    expect(again).toEqual({ record: now, effects: [], changed: false });
+    expect(await listed(deployment)).toEqual([now]);
+  });
+
+  test("switched off with Notifications still on, the Device stays listed with them", async () => {
+    const deployment = newDeployment();
+    const device = await switchOn(deployment);
+    await offlineCopy(deployment, device.id, true);
+
+    const off = await offlineCopy(deployment, device.id, false);
+
+    expect(off).toEqual({
+      record: device,
+      effects: [
+        { kind: "device", id: device.id, what: "changed", summary: device.name, by: "call" },
+      ],
+      changed: true,
+    });
+    expect(await listed(deployment)).toEqual([device]);
+  });
+
+  test("switched off with nothing else on there, the Device leaves the list; off again changes nothing", async () => {
+    const deployment = newDeployment();
+    const id = crypto.randomUUID();
+    const made = (await offlineCopy(deployment, id, true)).record;
+    if (made === null) throw new Error("Expected the Device listed");
+
+    const off = await offlineCopy(deployment, id, false);
+    const again = await offlineCopy(deployment, id, false);
+
+    expect(off).toEqual({
+      record: null,
+      effects: [{ kind: "device", id, what: "deleted", summary: made.name, by: "call" }],
+      changed: true,
+    });
+    expect(again).toEqual({ record: null, effects: [], changed: false });
+    expect(await listed(deployment)).toEqual([]);
+  });
+
+  test("Notifications switched off where the Offline Copy is on leave the Device listed with the copy", async () => {
+    const deployment = newDeployment();
+    const device = await switchOn(deployment);
+    await offlineCopy(deployment, device.id, true);
+
+    const off = value(
+      await deployment.call(hand, "set_device_notifications", { id: device.id, on: false }),
+    );
+
+    const now = { ...device, notifications: false, offline_copy: true };
+    expect(off).toEqual({
+      record: now,
+      effects: [
+        { kind: "device", id: device.id, what: "changed", summary: device.name, by: "call" },
+      ],
+      changed: true,
+    });
+    expect(await listed(deployment)).toEqual([now]);
+  });
+
+  test("a renamed Device keeps its name when its Offline Copy is switched on there", async () => {
+    const deployment = newDeployment();
+    const device = await switchOn(deployment, FIREFOX_ON_WINDOWS);
+    value(await deployment.call(hand, "rename_device", { id: device.id, name: "My phone" }));
+
+    await offlineCopy(deployment, device.id, true);
+
+    expect((await listed(deployment)).map(({ name }) => name)).toEqual(["My phone"]);
+  });
+
+  test("removing the Device switches its Offline Copy off with everything else", async () => {
+    const deployment = newDeployment();
+    const id = crypto.randomUUID();
+    await offlineCopy(deployment, id, true);
+
+    value(await deployment.call(hand, "remove_device", { id }));
+
+    expect(await listed(deployment)).toEqual([]);
+  });
+
+  test("switching on takes the browser's user agent and a Device's id", async () => {
+    const deployment = newDeployment();
+    for (const input of [
+      { id: crypto.randomUUID(), on: true },
+      { id: "", on: true, user_agent: SAFARI_ON_IPHONE },
+    ]) {
+      expect(await deployment.call(hand, "set_device_offline_copy", input)).toMatchObject({
         ok: false,
         error: { code: "invalid_input" },
       });

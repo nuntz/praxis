@@ -124,6 +124,8 @@ export const deploymentOffering: Record<string, [Offer, Offer, Offer, Offer, Off
   rename_device: [      "yes", "no",  "no",  "no",       "no"  ],
   set_device_notifications: [
                         "yes", "no",  "no",  "no",       "no"  ],
+  set_device_offline_copy: [
+                        "yes", "no",  "no",  "no",       "no"  ],
   remove_device: [      "yes", "no",  "no",  "no",       "no"  ],
   get_spend: [          "yes", "no",  "no",  "no",       "no"  ],
   set_spend_cap: [      "yes", "no",  "no",  "no",       "no"  ],
@@ -232,6 +234,7 @@ export const deploymentRunsWith: Record<string, (id: string) => unknown> = {
   list_devices: () => ({}),
   rename_device: () => ({ id: "no-such-device", name: "Laptop" }),
   set_device_notifications: () => ({ id: "no-such-device", on: false }),
+  set_device_offline_copy: () => ({ id: "no-such-device", on: false }),
   remove_device: () => ({ id: "no-such-device" }),
   get_spend: () => ({}),
   set_spend_cap: () => ({ cap: 25 }),

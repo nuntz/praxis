@@ -13,12 +13,17 @@ import {
   unsubscribeHere,
 } from "./device.ts";
 import { latestRead } from "./latest-read.ts";
+import { clearCopy, copyProblem, offlineCopy, startCopy } from "./offline-copy.ts";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
+import { unsentKeptQuestion } from "./Unsent.tsx";
+import { discardUnsentWrites, unsent } from "./unsent.ts";
 
 /**
- * The Deployment's Devices, in its settings (section 8.10): each browser with Notifications
- * switched on, by its name and when it was last seen, renamed or removed from here, and this
- * browser's own switch. Removing a Device switches it off and does not sign it out.
+ * The Deployment's Devices, in its settings (section 8.10): each browser with Notifications or an
+ * Offline Copy switched on, by its name and when it was last seen, renamed or removed from here,
+ * and this browser's own switches. Removing a Device switches it off and does not sign it out.
+ * Switching the Offline Copy off here, or removing this Device, clears the copy, and the person is
+ * asked first about any Unsent writes (section 8.8).
  */
 export function Devices() {
   const [devices, setDevices] = createSignal<Device[]>([]);
@@ -28,6 +33,8 @@ export function Devices() {
   const [sending, setSending] = createSignal(false);
   const here = thisDevice();
   const hereListed = () => devices().find((device) => device.id === here);
+  // What clears the copy here, waiting for the person to say what becomes of the Unsent writes.
+  const [asking, setAsking] = createSignal<(() => Promise<boolean>) | null>(null);
 
   const listed = latestRead(async (current) => {
     try {
@@ -87,10 +94,9 @@ export function Devices() {
    * Call a Device write for whether it went through, saying what went wrong otherwise. Its record
    * is null once the Device has left the list, so the record alone cannot say.
    */
-  async function write<N extends "remove_device" | "set_device_notifications">(
-    tool: N,
-    input: DeploymentToolInput<N>,
-  ): Promise<DeploymentToolOutput[N] | null> {
+  async function write<
+    N extends "remove_device" | "set_device_notifications" | "set_device_offline_copy",
+  >(tool: N, input: DeploymentToolInput<N>): Promise<DeploymentToolOutput[N] | null> {
     setSending(true);
     try {
       const result = await callDeploymentTool(tool, input);
@@ -108,17 +114,73 @@ export function Devices() {
     }
   }
 
-  /** Remove a Device, from any Device; this one also gives up its push subscription. */
-  async function remove(device: Device) {
-    if ((await write("remove_device", { id: device.id })) === null) return;
-    show(device.id, null);
-    if (device.id === here) await unsubscribeHere().catch(() => {});
+  /**
+   * Clear the copy here once a write that switches it off has gone through, asking first what
+   * becomes of the Unsent writes this Device holds, if any.
+   */
+  function clearingCopy(switchOff: () => Promise<boolean>) {
+    if (offlineCopy() === null || unsent().length === 0) {
+      void switchOff().then((done) => {
+        if (done) clearCopy();
+      });
+      return;
+    }
+    setAsking(() => switchOff);
+  }
+
+  /** The person said what becomes of the Unsent writes: the copy is switched off and cleared. */
+  async function answered(discard: boolean) {
+    const switchOff = asking();
+    // Only the writes the person was asked about: one made while the switch is out is kept.
+    const askedAbout = unsent().map((write) => write.id);
+    setAsking(null);
+    if (!switchOff || !(await switchOff())) return;
+    if (discard) discardUnsentWrites(askedAbout);
+    clearCopy();
+  }
+
+  /** Remove a Device, from any Device; this one also gives up its push subscription and its copy. */
+  function remove(device: Device) {
+    const removing = async () => {
+      if ((await write("remove_device", { id: device.id })) === null) return false;
+      show(device.id, null);
+      if (device.id === here) await unsubscribeHere().catch(() => {});
+      return true;
+    };
+    if (device.id === here) clearingCopy(removing);
+    else void removing();
+  }
+
+  /** Switch the Offline Copy on here: it is fetched at once, and kept fresh while Praxis is open. */
+  async function switchCopyOnHere() {
+    if (here === null) return;
+    setSending(true);
+    const switched = await writeToDeployment(
+      "set_device_offline_copy",
+      { id: here, on: true, user_agent: navigator.userAgent },
+      setProblem,
+    );
+    setSending(false);
+    if (switched === null) return;
+    show(here, switched);
+    await startCopy();
+  }
+
+  function switchCopyOffHere() {
+    if (here === null) return;
+    clearingCopy(async () => {
+      const off = await write("set_device_offline_copy", { id: here, on: false });
+      if (off === null) return false;
+      show(here, off.record);
+      return true;
+    });
   }
 
   async function switchOffHere() {
     if (here === null) return;
-    if ((await write("set_device_notifications", { id: here, on: false })) === null) return;
-    show(here, null);
+    const off = await write("set_device_notifications", { id: here, on: false });
+    if (off === null) return;
+    show(here, off.record);
     await unsubscribeHere().catch(() => {});
   }
 
@@ -128,8 +190,14 @@ export function Devices() {
         Devices
       </h2>
       <p class="settings-note">
-        A Device is listed while Notifications are switched on there. It is told when the Agent
-        leaves a Brief or a Review, in a Context whose Notifications are on, and of nothing else.
+        A Device is listed while Notifications or an Offline Copy is switched on there. With
+        Notifications it is told when the Agent leaves a Brief or a Review, in a Context whose
+        Notifications are on, and of nothing else.
+      </p>
+      <p class="settings-note">
+        An Offline Copy keeps, for every Context, Attention, the open Tasks and Projects, the
+        Persons, the Standing Entries and the last 30 days of Entries in this browser's storage,
+        unencrypted, to read with no network. It holds no Conversation and no image.
       </p>
       <Show when={read()}>
         <ThisDevice
@@ -139,10 +207,59 @@ export function Devices() {
           onSwitchOn={(key) => void switchOnHere(key)}
           onSwitchOff={() => void switchOffHere()}
         />
+        <Show
+          when={hereListed()?.offline_copy}
+          fallback={
+            <button
+              type="button"
+              disabled={sending() || here === null}
+              onClick={() => void switchCopyOnHere()}
+            >
+              Keep an Offline Copy here
+            </button>
+          }
+        >
+          <button
+            type="button"
+            class="quiet"
+            disabled={sending() || asking() !== null}
+            onClick={switchCopyOffHere}
+          >
+            Switch off the Offline Copy here
+          </button>
+        </Show>
+      </Show>
+      <Show when={asking()}>
+        <fieldset class="clearing-copy" aria-labelledby="clearing-copy-question">
+          <p id="clearing-copy-question">
+            Switching off clears the Offline Copy from this browser.{" "}
+            {unsentKeptQuestion(unsent().length)}
+          </p>
+          <div class="held-change-actions">
+            <button type="button" onClick={() => void answered(false)}>
+              Keep Unsent writes
+            </button>
+            <button type="button" class="quiet" onClick={() => void answered(true)}>
+              Discard them too
+            </button>
+            <button type="button" class="quiet" onClick={() => setAsking(null)}>
+              Cancel
+            </button>
+          </div>
+        </fieldset>
+      </Show>
+      <Show when={copyProblem()}>
+        {(message) => (
+          <p class="problem" role="alert">
+            {message()}
+          </p>
+        )}
       </Show>
       <Show
         when={devices().length > 0}
-        fallback={<p class="settings-note">No Device has Notifications switched on.</p>}
+        fallback={
+          <p class="settings-note">No Device has Notifications or an Offline Copy switched on.</p>
+        }
       >
         <ul class="connection-rows" aria-label="Devices">
           <For each={devices()}>
@@ -152,7 +269,7 @@ export function Devices() {
                 here={device.id === here}
                 sending={sending()}
                 onRenamed={(renamed) => show(device.id, renamed)}
-                onRemove={() => void remove(device)}
+                onRemove={() => remove(device)}
                 onProblem={setProblem}
               />
             )}
@@ -269,6 +386,7 @@ function DeviceRow(props: {
       <Show when={props.here}>
         <span class="connection-context">This Device</span>
       </Show>
+      <span class="connection-context">{switchedOn(props.device)}</span>
       <span class="connection-context">
         Last seen <time datetime={props.device.seen}>{seenAt(props.device.seen)}</time>
       </span>
@@ -282,6 +400,12 @@ function DeviceRow(props: {
       </button>
     </li>
   );
+}
+
+/** What is switched on at a Device, as its row says. */
+function switchedOn(device: Device): string {
+  if (device.notifications && device.offline_copy) return "Notifications and Offline Copy";
+  return device.notifications ? "Notifications" : "Offline Copy";
 }
 
 /** When a Device was last seen, in the Device's own locale. */

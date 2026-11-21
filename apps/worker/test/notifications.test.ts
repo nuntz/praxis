@@ -209,6 +209,29 @@ describe("a Device whose subscription is gone", () => {
     expect(received(kept)).toHaveLength(1);
     expect(value(await deployment.call(hand, "list_devices", {})).items).toEqual([listedKept]);
   });
+
+  test("keeps it listed with Notifications off while its Offline Copy is on", async () => {
+    scriptModel(answering("Something is due."));
+    const deployment = newDeployment(BEFORE_THE_BRIEF);
+    const work = await makeContext(deployment, "Work");
+    const given = await deviceSwitchedOn(deployment);
+    const [phone] = value(await deployment.call(hand, "list_devices", {})).items;
+    if (!phone) throw new Error("Expected the Device listed");
+    value(
+      await deployment.call(hand, "set_device_offline_copy", {
+        id: phone.id,
+        on: true,
+        user_agent: "Mozilla/5.0 (iPhone) Version/18.1 Safari/604.1",
+      }),
+    );
+    unsubscribe(given);
+
+    await brief(deployment, work);
+
+    expect(value(await deployment.call(hand, "list_devices", {})).items).toEqual([
+      { ...phone, notifications: false, offline_copy: true },
+    ]);
+  });
 });
 
 describe("a push service that fails", () => {

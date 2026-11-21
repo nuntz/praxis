@@ -9,7 +9,7 @@ import { setVoiceRefusing } from "./voice-fake.ts";
 // tools as every caller would. It reaches every table a step could change: Entries with Versions,
 // links, Follow-ups and a Standing mark, Tasks with events, a Recurrence, a delegation and a wait,
 // a Project, a Person, the Trash, a Held Change, the change log, a Connection and what it wrote, a
-// Device with its push subscription, the spend cap, a Run and its Conversation, a Call ended and
+// Device with its push subscription and its Offline Copy on, the spend cap, a Run and its Conversation, a Call ended and
 // one going, the voice key refused, and a Backup.
 // Words carry markers, so the upgrade test holds them to the check that no words leave.
 //
@@ -148,6 +148,13 @@ export async function fillFixture(): Promise<{ ids: FixtureIds; made: Export }> 
       id: device,
       on: true,
       subscription: subscribe(),
+      user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1",
+    }),
+  );
+  value(
+    await deployment.call(hand, "set_device_offline_copy", {
+      id: device,
+      on: true,
       user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1",
     }),
   );

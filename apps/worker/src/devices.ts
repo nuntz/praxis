@@ -19,6 +19,7 @@ type DeviceRow = {
   id: string;
   name: string;
   notifications: number;
+  offline_copy: number;
   subscription: string | null;
   seen: number;
 };
@@ -28,6 +29,7 @@ export type DeviceToolName =
   | "list_devices"
   | "rename_device"
   | "set_device_notifications"
+  | "set_device_offline_copy"
   | "remove_device";
 
 /** How each kind of Notification names itself, after the Context's name (ADR 0013). */
@@ -106,9 +108,9 @@ export const deviceHandlers: Pick<DeploymentHandlers, DeviceToolName> = {
   async set_device_notifications({ input, sql, arrivedAt, push }) {
     const found = device(sql, input.id);
     if (!input.on) {
-      if (found === null) return success(written(null, []));
-      switchNotificationsOff(sql, found.id);
-      return success(written(null, [effectOnDevice(found, "deleted")]));
+      if (found === null || !found.notifications) return success(written(found, []));
+      const left = switchNotificationsOff(sql, found.id);
+      return success(written(left, [effectOnDevice(found, left ? "changed" : "deleted")]));
     }
     if (push.publicKey === null) {
       return refusal(
@@ -123,10 +125,12 @@ export const deviceHandlers: Pick<DeploymentHandlers, DeviceToolName> = {
         id: input.id,
         name: nameDevice(input.user_agent ?? ""),
         notifications: true,
+        offline_copy: false,
         seen: instantToIso(arrivedAt),
       };
       sql.exec(
-        `INSERT INTO devices (id, name, notifications, subscription, seen) VALUES (?, ?, 1, ?, ?)`,
+        `INSERT INTO devices (id, name, notifications, offline_copy, subscription, seen)
+         VALUES (?, ?, 1, 0, ?, ?)`,
         made.id,
         made.name,
         subscription,
@@ -146,23 +150,66 @@ export const deviceHandlers: Pick<DeploymentHandlers, DeviceToolName> = {
     return success(written(switched, [effectOnDevice(switched, "changed")]));
   },
 
+  async set_device_offline_copy({ input, sql, arrivedAt }) {
+    const found = device(sql, input.id);
+    if (!input.on) {
+      if (found === null || !found.offline_copy) return success(written(found, []));
+      if (found.notifications) {
+        sql.exec(`UPDATE devices SET offline_copy = 0 WHERE id = ?`, found.id);
+        const switched = { ...found, offline_copy: false };
+        return success(written(switched, [effectOnDevice(switched, "changed")]));
+      }
+      sql.exec(`DELETE FROM devices WHERE id = ?`, found.id);
+      return success(written(null, [effectOnDevice(found, "deleted")]));
+    }
+    if (found === null) {
+      const made: Device = {
+        id: input.id,
+        // The schema takes the user agent whenever the call switches the copy on.
+        name: nameDevice(input.user_agent ?? ""),
+        notifications: false,
+        offline_copy: true,
+        seen: instantToIso(arrivedAt),
+      };
+      sql.exec(
+        `INSERT INTO devices (id, name, notifications, offline_copy, subscription, seen)
+         VALUES (?, ?, 0, 1, NULL, ?)`,
+        made.id,
+        made.name,
+        arrivedAt,
+      );
+      return success(written(made, [effectOnDevice(made, "made")]));
+    }
+    if (found.offline_copy) return success(written(found, []));
+    sql.exec(`UPDATE devices SET offline_copy = 1 WHERE id = ?`, found.id);
+    const switched = { ...found, offline_copy: true };
+    return success(written(switched, [effectOnDevice(switched, "changed")]));
+  },
+
   async remove_device({ input, sql }) {
     const found = device(sql, input.id);
     if (found === null) return noSuchDevice();
-    // Notifications are all that can be on for now, so removing it is switching them off.
-    switchNotificationsOff(sql, found.id);
+    // Everything on there is switched off, so it leaves the list, and its Offline Copy, if it
+    // keeps one, is cleared on its next contact, when it finds itself not listed with it.
+    sql.exec(`DELETE FROM devices WHERE id = ?`, found.id);
     return success(written(null, [effectOnDevice(found, "deleted")]));
   },
 };
 
 /**
- * Switch a Device's Notifications off, or only while it still holds this subscription. They are
- * all that can be switched on for now, so the Device leaves the list: the Offline Copy (#71) will
- * keep it listed while that is on.
+ * Switch a Device's Notifications off, or only while it still holds this subscription. With its
+ * Offline Copy on it stays listed, without its subscription; with nothing else on it leaves the
+ * list. The Device as it is left, or null once it has left the list or held another subscription.
  */
-function switchNotificationsOff(sql: SqlStorage, id: string, subscription?: string): void {
-  if (subscription === undefined) sql.exec(`DELETE FROM devices WHERE id = ?`, id);
-  else sql.exec(`DELETE FROM devices WHERE id = ? AND subscription = ?`, id, subscription);
+function switchNotificationsOff(sql: SqlStorage, id: string, subscription?: string): Device | null {
+  const held = subscription === undefined ? "" : " AND subscription = ?";
+  const which = subscription === undefined ? [id] : [id, subscription];
+  sql.exec(
+    `UPDATE devices SET notifications = 0, subscription = NULL WHERE id = ?${held} AND offline_copy = 1`,
+    ...which,
+  );
+  sql.exec(`DELETE FROM devices WHERE id = ?${held} AND offline_copy = 0`, ...which);
+  return device(sql, id);
 }
 
 /** The Device with this id was seen at `at`, if it is listed: a sighting, not a change. */
@@ -171,7 +218,7 @@ export function noteSeen(sql: SqlStorage, id: string, at: number): void {
 }
 
 /** A Device's columns, as `toDevice` reads them. */
-const COLUMNS = "id, name, notifications, subscription, seen";
+const COLUMNS = "id, name, notifications, offline_copy, subscription, seen";
 
 function device(sql: SqlStorage, id: string): Device | null {
   const row = sql.exec<DeviceRow>(`SELECT ${COLUMNS} FROM devices WHERE id = ?`, id).toArray()[0];
@@ -191,6 +238,7 @@ function toDevice(row: DeviceRow): Device {
     id: row.id,
     name: row.name,
     notifications: row.notifications === 1,
+    offline_copy: row.offline_copy === 1,
     seen: instantToIso(row.seen),
   };
 }

@@ -3,7 +3,9 @@ import { imageLoadingIn } from "@praxis/domain/markdown";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
-import { unreachableMessage, useCallTool } from "./tools.ts";
+import { contextCopy, readFromCopy } from "./offline-copy.ts";
+import { online } from "./online.ts";
+import { Unreachable, unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { Words } from "./Words.tsx";
 
 const characters = (count: number) => count.toLocaleString();
@@ -15,6 +17,7 @@ const characters = (count: number) => count.toLocaleString();
  */
 export function Standing(props: { timeZone: string }) {
   const callTool = useCallTool();
+  const contextId = useContextId();
   const live = useLive();
   const [entries, setEntries] = createSignal<Entry[] | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
@@ -48,7 +51,11 @@ export function Standing(props: { timeZone: string }) {
       setEntries(read);
     } catch (error) {
       if (!current()) return;
-      setProblem(unreachableMessage(error));
+      // With no network the list is the Offline Copy's, as last fetched (section 8.8).
+      const held = error instanceof Unreachable ? contextCopy(contextId) : null;
+      if (held === null) return setProblem(unreachableMessage(error));
+      setProblem(null);
+      setEntries(held.standing);
     }
   });
 
@@ -97,7 +104,12 @@ export function Standing(props: { timeZone: string }) {
                     <time class="standing-day" datetime={entry.at}>
                       {dateFormat.format(new Date(entry.at))}
                     </time>
-                    <Words words={entry.words} images={imageLoadingIn(entry)} />
+                    <Words
+                      words={entry.words}
+                      images={
+                        online() && !readFromCopy(contextId) ? imageLoadingIn(entry) : "never"
+                      }
+                    />
                     <div class="standing-actions">
                       <button
                         type="button"
