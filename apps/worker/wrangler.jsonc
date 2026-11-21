@@ -33,6 +33,9 @@
     "PUSH_PUBLIC_KEY": "",
     "PUSH_SUBJECT": ""
   },
+  // Workers Logs keeps the Worker's console lines, which carry only ids, tool names, result codes,
+  // counts and timings (ADR 0010). Invocation logs are off, so no request's metadata is kept.
+  "observability": { "logs": { "enabled": true, "invocation_logs": false } },
   // The daily Backup (section 10.1): once a day the Worker asks the Deployment object for one.
   "triggers": { "crons": ["0 3 * * *"] },
   // Where the Backups are kept, on the person's account, which the setup wizard's Pulumi program

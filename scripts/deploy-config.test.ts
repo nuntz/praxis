@@ -29,3 +29,11 @@ test("everything else is wrangler.jsonc's", () => {
   const { r2_buckets: ____, ...source } = wrangler;
   expect(rest).toEqual(source);
 });
+
+test("every Deployment keeps the Worker's log lines and no request metadata (ADR 0010)", () => {
+  for (const jurisdiction of ["", "eu"]) {
+    expect(deployConfig(wrangler, jurisdiction).observability).toEqual({
+      logs: { enabled: true, invocation_logs: false },
+    });
+  }
+});
