@@ -646,7 +646,7 @@ The column is composed by the screen from four sources, in this order:
   - In any other Entry it shows its description and waits for a tap. A tap loads that image for that showing and is not remembered. Editing the Entry makes it the person's, and its images then load by themselves.
   - One that fails to load shows its description and its address as a link.
   - The content security policy allows images from any `https` host, and nothing else new.
-- **How it looks** is fixed in the design system's Rendered Markdown section and drawn in its Markdown preview, from [Styles for rendered Markdown in the design system](https://github.com/nuntz/praxis/issues/36).
+- **How it looks** is fixed in the [Praxis design system](https://claude.ai/artifact/1drME2ytFn9ta9seAetLuw): the Rendered Markdown section of its `project/README.md`, drawn in `project/components/Markdown/preview.html`, from [Styles for rendered Markdown in the design system](https://github.com/nuntz/praxis/issues/36).
   - Markdown changes weight, indentation and face, never size, and never takes the Context's accent. A heading is the size of the words around it, and three levels are kept apart: bold, semibold, and semibold in the muted colour.
   - A quote is indented behind a hairline, in the muted colour. Code is in the Device's own monospace on the inset colour. A table is hairlines only, with no box and a muted header.
   - The three kinds of link are told apart by shape. A Mention is a tinted pill, a Reference is an inset pill, and a link or a bare address is underlined ink.

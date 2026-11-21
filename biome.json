@@ -43,6 +43,10 @@
       "plugins": ["./lint/fresh-marker.grit"]
     },
     {
+      "includes": ["**/test/**", "**/*.test.ts", "e2e/**"],
+      "plugins": ["./lint/assert-what-comes-back.grit"]
+    },
+    {
       "includes": ["apps/pwa/src/**"],
       "plugins": ["./lint/computed-on.grit"]
     },

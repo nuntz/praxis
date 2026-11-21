@@ -92,6 +92,19 @@ const fixtures: Record<string, string> = {
     ".b { position: fixed; }",
     ".c { position: relative; }",
   ].join("\n"),
+  // A test asserts what a call gives back: one that only did not throw may have skipped its input.
+  "packages/domain/test/unthrown.test.ts": [
+    'import { expect } from "bun:test";',
+    "declare function render(words: string): string[];",
+    'expect(() => render("> deep")).not.toThrow();',
+    'expect(() => render("> deep")).not.toThrow(RangeError);',
+    'expect(() => render("")).toThrow("no words");',
+    'expect(render("> deep")).toContain("deep");',
+  ].join("\n"),
+  "e2e/unthrown.spec.ts": [
+    'import { expect } from "@playwright/test";',
+    "export const shown = expect(Promise.resolve()).resolves.not.toThrow();",
+  ].join("\n"),
   // The recommended rules are on.
   "apps/pwa/src/recommended.ts": "export function f(a: number) {\n  debugger;\n  return a;\n}",
 };
@@ -129,6 +142,7 @@ const computedOn = "plugin";
 const outsideJurisdiction = "plugin";
 const midnightAsked = "plugin";
 const pinned = "plugin";
+const unthrown = "plugin";
 
 describe("the lint guards", () => {
   test("the domain package cannot import Cloudflare or Bun", () => {
@@ -191,6 +205,11 @@ describe("the lint guards", () => {
 
   test("the screen pins no control over what scrolls", () => {
     expect(rulesAt("apps/pwa/src/pinned.css")).toEqual([pinned, pinned]);
+  });
+
+  test("a test cannot rest on a call not throwing, in a seam or domain test or a journey", () => {
+    expect(rulesAt("packages/domain/test/unthrown.test.ts")).toEqual([unthrown, unthrown]);
+    expect(rulesAt("e2e/unthrown.spec.ts")).toEqual([unthrown]);
   });
 
   test("the recommended rules are on", () => {

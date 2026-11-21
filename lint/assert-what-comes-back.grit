@@ -1,0 +1,8 @@
+language js
+
+or {
+  `$subject.not.toThrow()`,
+  `$subject.not.toThrow($_)`
+} as $unthrown where {
+  register_diagnostic(span=$unthrown, message="Assert what the call gives back, as the Markdown renderer's test checks the deep words come out: a call can skip what it was given and still not throw.")
+}
