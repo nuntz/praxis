@@ -316,3 +316,35 @@ describe("list_messages", () => {
     expect(result).toMatchObject({ ok: false, error: { code: "invalid_input" } });
   });
 });
+
+describe("the Agent's tool schemas", () => {
+  test("keeps write keys private and rejects a missing required argument before a valid write", async () => {
+    const words = marked("A valid note");
+    let requests = 0;
+    const calls = calling([() => ["record_entry", {}], () => ["record_entry", { words }]]);
+    scriptModel((given, ...rest) => {
+      requests++;
+      const offered = given.messages.flatMap((message) =>
+        message.role === "system" ? (message.toolsAdded ?? []) : [],
+      );
+      const record = offered.find(({ name }) => name === "record_entry");
+      expect(record?.parameters).toMatchObject({
+        type: "object",
+        properties: { words: { type: "string" } },
+        additionalProperties: false,
+      });
+      expect(record?.parameters).not.toHaveProperty("properties.key");
+      return calls(given, ...rest);
+    });
+    const context = newContext();
+    await context.callAny(hand, "send_message", { words: marked("Record my note") });
+    await context.runsEnded();
+    expect(requests).toBe(3);
+    expect(
+      value(await context.call(hand, "list_entries", {})).items.map(({ words }) => words),
+    ).toEqual([words]);
+    const runs = value(await context.call(hand, "list_runs", {})).items;
+    expect(runs[0]).toMatchObject({ ended: "answered", failure: null });
+    expect(runs[0]?.changes).toHaveLength(1);
+  });
+});
