@@ -1,4 +1,5 @@
 import { MEANING_DIMENSIONS, type MeaningIndex } from "../src/meaning.ts";
+import { harnessFault } from "./harness-faults.ts";
 
 // The meaning index is one of the faked things (section 13): Workers AI's embeddings and the
 // Vectorize index they are kept in. The fake runs in the tests' own isolate, as the scripted model
@@ -30,7 +31,7 @@ let held: Promise<void> | null = null;
  */
 export function meanAlike(...words: string[]): void {
   const slot = new Set(meanings.values()).size;
-  if (slot >= MEANING_DIMENSIONS) throw new Error("The fake has no room for another meaning");
+  if (slot >= MEANING_DIMENSIONS) throw harnessFault("The fake has no room for another meaning");
   for (const word of words) {
     const key = word.toLowerCase();
     if (!meanings.has(key)) meanings.set(key, slot);

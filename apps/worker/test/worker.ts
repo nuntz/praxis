@@ -4,6 +4,7 @@ import { deploymentObject } from "../src/deployment-object.ts";
 import type { Move, MovedBy } from "../src/move-rows.ts";
 import { CONTEXT_LADDER, DEPLOYMENT_LADDER } from "../src/steps/index.ts";
 import { refusableBucket } from "./bucket.ts";
+import { harnessFault } from "./harness-faults.ts";
 import { testMeaning } from "./meaning-fake.ts";
 import { testModel } from "./model-fake.ts";
 import { nextMoveFault } from "./move-faults.ts";
@@ -56,7 +57,7 @@ export class ContextObject extends contextObject(testModel, testMeaning, testVoi
     ctx.storage.setAlarm = (time, options) => {
       const at = typeof time === "number" ? time : time.getTime();
       if (at < Date.now() - ALARM_SLACK) {
-        throw new Error(
+        throw harnessFault(
           `A Context's alarm was set at ${new Date(at).toISOString()}, before the real now: an instant of the object's clock was given to the platform unconverted.`,
         );
       }

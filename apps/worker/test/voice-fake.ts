@@ -1,6 +1,7 @@
 import type { ProviderEnd } from "@praxis/domain";
 import type { SessionRequest, VoiceRefusal } from "../src/provider-session.ts";
 import type { VoiceProvider } from "../src/voice.ts";
+import { harnessFault } from "./harness-faults.ts";
 
 // The voice provider is one of the faked things (section 13). This is its end at the Context's
 // object: it sets a session up for each Call, answering the Device's offer with one of its own, and
@@ -47,7 +48,7 @@ const fakeVoice: VoiceProvider = {
     const found = sessions.find(({ id }) => id === session);
     if (found === undefined && setUpBefore.has(session)) return ending;
     if (found === undefined) {
-      throw new Error(`The object ended a session the fake never set up: ${session}`);
+      throw harnessFault(`The object ended a session the fake never set up: ${session}`);
     }
     found.endedByObject = true;
     found.timesEnded += 1;

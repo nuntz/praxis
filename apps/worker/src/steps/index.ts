@@ -8,7 +8,10 @@ import deploymentStep2 from "./deployment-0002.ts";
  * One step of an upgrade ladder (section 11, ADR 0019): it changes the shape of an object's
  * tables, never their meaning, in its own transaction. Each lives in a file of its own, numbered,
  * which imports nothing and is never edited once released: `lint/steps.test.ts` holds each to the
- * hash `released.json` keeps of it.
+ * hash `released.json` keeps of it. A step may meet tables that already hold its change, as an
+ * object made before the ladder climbs every step, so it looks before it alters, as step 1's
+ * `addMissingColumns` does. `test/upgrade.test.ts` runs a new step so; run it before keeping the
+ * step's hash and making the release's fixture, which a mended step has to make again.
  */
 export type Step = (sql: SqlStorage) => void;
 

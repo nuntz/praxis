@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, expect } from "vitest";
+import { afterAll, afterEach, beforeEach, expect } from "vitest";
 import { setBucketRefusing } from "./bucket.ts";
+import { takeHarnessFaults } from "./harness-faults.ts";
 import { captureConsole, forget, leakedMarkers } from "./markers.ts";
 import {
   forgetMeanings,
@@ -46,4 +47,18 @@ afterEach(() => {
     supersededScripts(),
     "A Context asked a script this test had replaced: a Context keeps the model it was first asked with, so script once and switch inside the script, as heldAnswer() does",
   ).toEqual([]);
+});
+
+// A fault thrown off a test's path is only logged, so the harness looks for one after each test,
+// and once the file's last is done, after the alarms then due have fired, as they do at once.
+function noHarnessFault() {
+  expect(
+    takeHarnessFaults(),
+    "The harness found a fault of a fake or one of its guards, thrown where no test awaited it",
+  ).toEqual([]);
+}
+afterEach(noHarnessFault);
+afterAll(async () => {
+  await new Promise((fired) => setTimeout(fired, 100));
+  noHarnessFault();
 });
