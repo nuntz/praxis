@@ -701,12 +701,172 @@ button.quiet {
   font: var(--type-meta);
 }
 
-/* An Entry's words are the person's, one step larger, never restyled. */
-.entry-words {
+/*
+ * An Entry's words are the person's, one step larger, rendered from the fixed set (section 8.4)
+ * as the design system's Rendered Markdown section draws it: Markdown changes weight,
+ * indentation and face, never size, and never takes the accent. A Message's are the size of the
+ * Conversation around them.
+ */
+.words {
+  min-width: 0;
   max-width: 620px;
   font: var(--type-words);
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.message .words {
+  font: var(--type-body);
+}
+
+.words :is(p, h4, h5, h6, ul, ol, blockquote, pre, .table-scroll) {
+  margin: 0;
+}
+
+.words > * + *,
+.words blockquote > * + * {
+  margin-top: var(--space-3);
+}
+
+.words li > * + *,
+.words li + li {
+  margin-top: var(--space-1);
+}
+
+/* Spaces and lines within a paragraph stay as typed. */
+.words :is(p, li) {
+  white-space: pre-wrap;
+}
+
+/* Three heading levels, the size of the words around them: bold, semibold, semibold muted. */
+.words :is(h4, h5, h6) {
+  font: inherit;
+  font-weight: 600;
+}
+
+.words h4 {
+  font-weight: 700;
+}
+
+.words h6 {
+  color: var(--muted);
+}
+
+.words > h4:not(:first-child) {
+  margin-top: var(--space-5);
+}
+
+.words > h5:not(:first-child) {
+  margin-top: var(--space-4);
+}
+
+.words strong {
+  font-weight: 700;
+}
+
+.words :is(ul, ol) {
+  padding-left: 24px;
+}
+
+.words li::marker {
+  color: var(--muted);
+}
+
+/* A quote is indented behind a hairline, in the muted colour, with no box. */
+.words blockquote {
+  margin: 0;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--rule);
+  color: var(--muted);
+}
+
+/* Code is in the Device's own monospace on the inset colour. A block scrolls and never wraps. */
+.words code {
+  font-family: var(--font-mono);
+}
+
+.words .code-span {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--inset);
+  font-size: 0.88em;
+}
+
+.words pre {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+  font: var(--type-code-block);
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+/* A link or a bare address is underlined ink, apart from a Mention's and a Reference's pills. */
+.words a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A table is hairlines only, with no box and a muted header, and scrolls sideways in place. */
+.words .table-scroll {
+  overflow-x: auto;
+}
+
+.words table {
+  border-collapse: collapse;
+  font: var(--type-body);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.words th {
+  color: var(--muted);
+  font: var(--type-label);
+  text-align: left;
+}
+
+.words :is(th, td) {
+  padding: var(--space-2) 24px var(--space-2) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.words tr:last-child td {
+  border-bottom: 0;
+}
+
+.words .align-left {
+  text-align: left;
+}
+
+.words .align-center {
+  text-align: center;
+}
+
+.words .align-right {
+  text-align: right;
+}
+
+/* An Inline Task's line, a rule and raw HTML on lines of its own: as typed, marker and all. */
+.words .typed {
+  white-space: pre-wrap;
+}
+
+/* An image is its description, with the image icon in the muted colour. */
+.words-image {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+.words-image svg {
+  flex-shrink: 0;
+}
+
+.words-image-description {
+  color: var(--ink);
 }
 
 /* The three kinds of link are told apart by shape: a Mention is a tinted pill, a Reference an inset one. */

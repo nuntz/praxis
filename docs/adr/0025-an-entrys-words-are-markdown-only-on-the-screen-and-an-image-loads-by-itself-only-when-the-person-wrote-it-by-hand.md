@@ -19,5 +19,7 @@ An Entry's words are stored exactly as typed and the server never reads them. Th
 - Offline, an image shows its description. The Offline Copy and the service worker hold no image.
 - The content security policy allows images from any `https` host. Nothing else new is allowed.
 - A leading `- ` is a list item and no longer an Inline Task. `- [ ]` is accepted in its place.
+- A line typed within a paragraph stays a line, where CommonMark would run it into the one before: the person's lines are theirs, as they were when the words were plain text.
+- A bare address is one typed with its `https://`. `www.` and a mail address are words, since a link takes only an `https` address.
 - Nothing is checked on a write: words are never refused for their Markdown.
 - An image's host learns when and from where an Entry was shown. The person accepts that for what they wrote by hand.

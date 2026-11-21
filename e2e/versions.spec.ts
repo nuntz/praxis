@@ -28,7 +28,9 @@ test("the person edits an Entry, restores an earlier Version and records a Follo
   const saved = page.waitForResponse((response) => response.url().endsWith("/tools/edit_entry"));
   await entry.getByRole("button", { name: "Save", exact: true }).click();
   await saved;
-  await expect(entry.getByTestId("words")).toHaveText(edited, { useInnerText: true });
+  const shown = entry.getByTestId("words");
+  await expect(shown.getByText(`${first}, far too high`, { exact: true })).toBeVisible();
+  await expect(shown.getByText(`[] Ask for another quote ${tag}`, { exact: true })).toBeVisible();
   await expect(entry.getByRole("checkbox", { name: `Ask for another quote ${tag}` })).toBeVisible();
 
   // The edited mark opens the Versions, each compared against the current words.

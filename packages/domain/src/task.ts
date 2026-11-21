@@ -147,9 +147,14 @@ const INLINE_TASK = /^(?:\[\]|\[ \]|- \[ \])(.*)$/;
  */
 export function inlineTasks(words: string): NewTask[] {
   return words.split(/\r\n|\r|\n/).flatMap((line) => {
-    const title = INLINE_TASK.exec(line)?.[1]?.trim();
+    const title = inlineTaskTitle(line);
     return title ? [{ title }] : [];
   });
+}
+
+/** The title of the Task a line makes, or null when it makes none. */
+export function inlineTaskTitle(line: string): string | null {
+  return INLINE_TASK.exec(line)?.[1]?.trim() || null;
 }
 
 /**

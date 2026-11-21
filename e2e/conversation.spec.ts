@@ -45,6 +45,44 @@ test("asking the Agent for a change, the Journal shows it as it is made", async 
   await expect(shown).toBeFocused();
 });
 
+test("a Message from the Agent is rendered as Markdown, and the person's own is shown as typed", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const context = await makeContext(page, {
+    name: `Markdown ${tag}`,
+    time_zone: "UTC",
+    accent: "teal",
+  });
+  await lastShown(page, context.id);
+  await page.goto("/");
+  if (onPhone(testInfo)) {
+    await page
+      .getByRole("navigation", { name: "Columns" })
+      .getByRole("button", { name: "Agent", exact: true })
+      .click();
+  }
+  const conversation = page.getByRole("region", { name: "Conversation" });
+
+  const asked = `Say: **The boathouse** is cheaper ${tag}\n- under the ceiling\n- see https://forms.example.com/offsite`;
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in Markdown ${tag}`, exact: true })
+    .fill(asked);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+
+  const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
+  const answer = messages.last().getByTestId("words");
+  await expect(answer.locator("strong")).toHaveText("The boathouse");
+  await expect(answer.getByRole("listitem")).toHaveText([
+    "under the ceiling",
+    "see https://forms.example.com/offsite",
+  ]);
+  await expect(
+    answer.getByRole("link", { name: "https://forms.example.com/offsite", exact: true }),
+  ).toHaveAttribute("rel", "noreferrer");
+  await expect(conversation.getByText(asked, { exact: true })).toBeVisible();
+});
+
 test("a Run that failed keeps the Message with a Notice under it, and Try again answers it", async ({
   page,
 }, testInfo) => {

@@ -31,6 +31,7 @@ const directTests: Record<string, { namedAt: NamedAt[]; files: Record<string, st
       "typed-link.test.ts": "what the person types to link something",
       "follow-edit.test.ts": "following an anchor through a change to the words",
       "compare-words.test.ts": "comparing a Version against the current words",
+      "markdown.test.ts": "what the Markdown renderer lets through",
     },
   },
   "apps/pwa/test": {

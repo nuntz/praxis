@@ -485,7 +485,7 @@ function AgentMessageItem(props: {
       <span class="message-from">Agent</span>
       <Show when={props.message.clock}>{(clock) => <ClockHeading clock={clock()} />}</Show>
       <Show when={props.message.words}>
-        <Words words={props.message.words} />
+        <Words words={props.message.words} testId="words" />
       </Show>
       <For each={leftForTap()}>{(held) => <HeldChangeItem held={held} />}</For>
       {/* Opened, it shows the Run's calls, and once it has ended, what it cost. */}

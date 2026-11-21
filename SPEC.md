@@ -638,9 +638,9 @@ The column is composed by the screen from four sources, in this order:
 **How an Entry's words are shown.** ADR 0025.
 
 - An Entry's words are rendered as Markdown, on the screen only. An Unsent Entry is rendered like any other.
-- **The set** is fixed, with CommonMark's syntax: emphasis and strong, inline code and code blocks, links and bare addresses, bulleted and numbered lists, quotes, headings, tables and images. A table wider than its column scrolls sideways inside the Entry.
+- **The set** is fixed, with CommonMark's syntax: emphasis and strong, inline code and code blocks, links and bare addresses, bulleted and numbered lists, quotes, headings, tables and images. A line typed within a paragraph stays a line. A table wider than its column scrolls sideways inside the Entry.
 - **Shown as typed**: raw HTML, footnotes, strikethrough, rules and task-list checkboxes. An Inline Task's line shows as typed, with no checkbox. Its Task is shown with the Entry.
-- **Addresses**: a link or an image takes only an `https` address. Anything else is shown as typed. A link opens in a new tab and sends no referrer.
+- **Addresses**: a link or an image takes only an `https` address. Anything else is shown as typed. A bare address is one typed with its `https://`: `www.` and a mail address are words. A link opens in a new tab and sends no referrer.
 - **An image** is given by its address, and Praxis keeps none of its bytes.
   - It loads by itself only in an Entry whose Author is the person and which did not come through the Conversation.
   - In any other Entry it shows its description and waits for a tap. A tap loads that image for that showing and is not remembered. Editing the Entry makes it the person's, and its images then load by themselves.

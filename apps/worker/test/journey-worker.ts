@@ -7,7 +7,8 @@ import { lastWords, SCRIPTED_RETRY, scriptModel, testModel, UNAVAILABLE } from "
 // The Worker the browser journeys run against (playwright.config.ts): Praxis as deployed, with each
 // Context's Agent on a scripted model, so no journey calls a real model. The script stands in for
 // a model asked to record something: "Record: <words>" records an Entry of those words, and
-// "Edit <id> at <version>: <words>" changes that Entry's words, and then it answers. "Unreachable
+// "Edit <id> at <version>: <words>" changes that Entry's words, and then it answers. "Say:
+// <words>" answers with those words, as a model writing Markdown would. "Unreachable
 // once: <words>" fails as an overloaded provider does for the whole of the first Run that asks,
 // then answers when the Run is tried again. A Brief has nothing to raise, so one the clock starts
 // while a journey runs leaves no Message. Anything else it only answers. Its meaning index is the
@@ -16,6 +17,7 @@ import { lastWords, SCRIPTED_RETRY, scriptModel, testModel, UNAVAILABLE } from "
 export { DeploymentObject, default } from "../src/index.ts";
 
 const RECORD = /^Record: ([\s\S]+)$/;
+const SAY = /^Say: ([\s\S]+)$/;
 const EDIT = /^Edit (\S+) at (\d+): ([\s\S]+)$/;
 const UNREACHABLE_ONCE = /^Unreachable once: /;
 const CLOCK_STARTED = /^The clock started this Run/;
@@ -41,6 +43,8 @@ scriptModel((context) => {
     const input = { id: edit[1], version: Number(edit[2]), words: edit[3] };
     return fauxAssistantMessage(fauxToolCall("edit_entry", input), { stopReason: "toolUse" });
   }
+  const said = SAY.exec(words);
+  if (said?.[1]) return fauxAssistantMessage(said[1]);
   const asked = RECORD.exec(words);
   if (!asked?.[1]) return fauxAssistantMessage("Noted.");
   return fauxAssistantMessage(fauxToolCall("record_entry", { words: asked[1] }), {
