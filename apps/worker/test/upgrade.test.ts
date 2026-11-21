@@ -10,8 +10,10 @@ import { praxis } from "../src/worker.ts";
 import { fakeAccess, TEST_APPLICATION } from "./access-fake.ts";
 import { type Dump, dumpObject, layDump, shapeOf } from "./dump.ts";
 import { type FixtureIds, fixtureName } from "./fixture-scenario.ts";
+import pending from "./fixtures/pi-1.5.2-pending/pending.json";
 import { adoptMarkers, marked } from "./markers.ts";
 import { holdMeanings } from "./meaning-fake.ts";
+import { calling, scriptModel } from "./model-fake.ts";
 import { contextWithItsDeployment, DAY, hand, newDeployment, value, wakeAgain } from "./seam.ts";
 import { addSteps, failingStep, mendSteps, wakeUnder } from "./upgrade-faults.ts";
 import { holdSessions } from "./voice-fake.ts";
@@ -571,5 +573,72 @@ describe("a Deployment object stuck on its upgrade", () => {
     expect(
       (await send("/api/deployment/tools/list_contexts", { method: "POST", body: "{}" })).status,
     ).toBe(200);
+  });
+});
+
+describe("Pi 1.5.2's persisted pending generation", () => {
+  test("resumes its Run and tool results after upgrade, keeping each write once", async () => {
+    adoptMarkers(JSON.stringify(pending.context));
+    const tasks = (pending.context.rows.pi_tasks ?? []).map(({ record }) => JSON.parse(record));
+    expect(tasks).toContainEqual(
+      expect.objectContaining({
+        kind: "pi.generation",
+        version: 2,
+        state: expect.objectContaining({
+          status: "running",
+          checkpoint: expect.objectContaining({ phase: "request" }),
+        }),
+      }),
+    );
+    expect(pending.context.rows.pi_submissions[0]?.status).toBe("placed");
+    const words = marked("After the upgrade");
+    scriptModel(
+      calling([
+        () => {
+          throw new Error("The completed tool result was lost");
+        },
+        () => ["record_entry", { words }],
+      ]),
+    );
+    const object = () => env.CONTEXT.get(env.CONTEXT.idFromString(pending.contextId));
+    holdMeanings(pending.contextId, pending.context.rows.entries);
+    await layDump(
+      env.DEPLOYMENT.get(env.DEPLOYMENT.idFromString(pending.deploymentId)),
+      pending.deployment as Dump,
+    );
+    await layDump(object(), pending.context as Dump);
+    const deployment = newDeployment(pending.at, pending.deploymentId);
+    const context = deployment.context(pending.contextId);
+    await context.callAny(hand, "list_messages", {});
+    await context.runsEnded();
+    const entries = value(await context.call(hand, "list_entries", {})).items;
+    expect(entries.map(({ words }) => words).sort()).toEqual(
+      [pending.context.rows.entries[0]?.words, words].sort(),
+    );
+    const runs = value(await context.call(hand, "list_runs", {})).items;
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ ended: "answered", failure: null });
+    expect(runs[0]?.changes).toHaveLength(2);
+    const migrated = (await dumpObject(object())).rows.pi_tasks?.map(({ record }) =>
+      JSON.parse(String(record)),
+    );
+    expect(migrated).toContainEqual(
+      expect.objectContaining({
+        id: 14,
+        kind: "pi.generation",
+        version: 3,
+        state: expect.objectContaining({ status: "terminal" }),
+      }),
+    );
+    expect(migrated).toContainEqual(
+      expect.objectContaining({
+        kind: "pi.tool",
+        version: 4,
+        state: expect.objectContaining({ status: "terminal" }),
+      }),
+    );
+    await deployment.wakeAgain(pending.contextId);
+    expect(value(await context.call(hand, "list_entries", {})).items).toEqual(entries);
+    expect(value(await context.call(hand, "list_runs", {})).items).toEqual(runs);
   });
 });

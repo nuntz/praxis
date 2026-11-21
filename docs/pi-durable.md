@@ -2,7 +2,7 @@
 
 How the Agent's runtime (ADR 0024) is wired into a Context's object, and what it does that its README does not make plain. Read this before changing `apps/worker/src/agent.ts` or `apps/worker/test/model-fake.ts`.
 
-Pinned at `@earendil-works/pi-durable`, `pi-ai` and `chord` **1.5.2**, which move together. The API is marked experimental and changes between releases: check the installed types, under `node_modules/.bun/@earendil-works+pi-durable@*/node_modules/@earendil-works/pi-durable/dist`, before trusting this page or the README.
+Pinned at `@earendil-works/pi-durable`, `pi-ai` and `chord` **1.6.0**, which move together. The API is marked experimental and changes between releases: check the installed types, under `node_modules/.bun/@earendil-works+pi-durable@*/node_modules/@earendil-works/pi-durable/dist`, before trusting this page or the README.
 
 ## The shape
 
@@ -34,3 +34,34 @@ Pinned at `@earendil-works/pi-durable`, `pi-ai` and `chord` **1.5.2**, which mov
 - **The runtime's own summary is uncounted.** Its tokens go to `pi.usage`, not to any record, so the Run's spend would miss them: one more reason the hook declines rather than falls back.
 - **Clearing the Conversation drops every table under `pi_`** (`dropRuntimeTables`), and the Context's object lets go of its `ContextAgent`, so the next use opens a runtime afresh, which makes them again, empty. The runtime numbers its records and submissions from 1 again, so each Run record's handles on the old Conversation (`submission`, `from_record`) are let go in the same transaction: kept, a new submission would name an old Run. So is `told_through`: the new Conversation was never told what changed, and its first Message is told the newest changes, as one never told. It is refused while any Run has not ended, since the runtime is working in the record it would drop.
 - **Trying a failed Run again is a `continue` submission**, which answers the transcript as it stands, so it can only answer the newest Message. It places no record of its own, so its Run record keeps `from_record`, the first runtime record that may be its own, and its spend is counted from there.
+
+## Upgrading from 1.5.2 to 1.6.0
+
+[Pi Durable 1.6.0](https://github.com/earendil-works/pi/blob/v1.6.0/packages/durable/CHANGELOG.md)
+changes `pi.tool` from version 3 to 4 and `pi.generation` from version 2 to 3. Its migrations
+keep these older checkpoints. Praxis does not use the renamed `RunEndTask`, code-mode namespaces,
+parked tools or signal-only sleeps, and does not read tool `durationMs`. No host API change is
+needed. Pi AI's provider schema fixes travel with this upgrade; the tool seam checks that the
+model sees the schema without the write key, that a missing required argument makes no write, and that
+a valid call still works. These tests use the scripted provider, not a live provider request.
+
+`test/fixtures/pi-1.5.2-pending/pending.json` was captured on master
+`ec80ef02cf818d5e206885e319afea05b3a75bc1` with all three packages still at 1.5.2, using the fixture
+Worker test configuration and `dumpObject` on native workerd Durable Object SQLite. A scripted
+model called `record_entry`, then its second response was held with `heldAnswer`. The dump was
+taken before releasing that response: submission 8 is still `placed`, generation 14 is running
+in phase `request` at version 2, and tool 12 is already terminal at version 3. The fixture is
+synthetic and contains no user data. It is separate from the ladder fixtures because no Praxis
+ladder step changed.
+
+`upgrade.test.ts` restores both objects, opens the Conversation under 1.6.0, checks that the
+completed tool result reaches the next model request, and makes a second write. The original Run
+ends answered, each Entry and change appears once, the pending generation becomes terminal at
+version 3, a new tool runs at version 4, and another object restart preserves the results. This
+covers a pending generation following a completed tool; it does not establish migration of a
+tool interrupted during execution, a pending compaction, or the new signal/park paths.
+
+Do not roll the Worker back to 1.5.2 after opening these objects under 1.6.0. The older Harness
+can block newer tasks with `task_too_old` and treats a sleep without `until` as due. The runtime's
+tables remain outside Praxis's ladder, so the ladder's newer-step guard cannot establish runtime
+rollback safety. Follow ADR 0019: fix forward or restore a Backup into a fresh Deployment.
