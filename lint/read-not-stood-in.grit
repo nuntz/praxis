@@ -1,0 +1,13 @@
+language js
+
+or {
+  `$read ?? $_`,
+  `$read || $_`
+} as $stood where {
+  $read <: contains or {
+    `$_.getAttribute($_)`,
+    `$_.textContent()`,
+    `$_.boundingBox()`
+  },
+  register_diagnostic(span=$stood, message="A value a journey cannot read off the page fails it as missing, never as a stand-in such as \"\" or 0 (CODING_STANDARDS.md, Browser journeys): read it, and throw if it is null, as e2e/opening-offline.spec.ts does for an Unsent Entry's time.")
+}

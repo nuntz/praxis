@@ -101,6 +101,16 @@ const fixtures: Record<string, string> = {
     'expect(() => render("")).toThrow("no words");',
     'expect(render("> deep")).toContain("deep");',
   ].join("\n"),
+  // A journey reads a value off the page or fails as missing, with no stand-in for it.
+  "e2e/stood-in.spec.ts": [
+    "declare const time: { getAttribute(name: string): Promise<string | null> };",
+    "declare const box: { textContent(): Promise<string | null>; boundingBox(): Promise<{ x: number } | null> };",
+    'export const at = (await time.getAttribute("datetime")) ?? "";',
+    'export const words = (await box.textContent()) || "";',
+    "export const x = ((await box.boundingBox()) ?? { x: 0 }).x;",
+    'export const read = await time.getAttribute("datetime");',
+    'export const label = read ?? "unread";',
+  ].join("\n"),
   "e2e/unthrown.spec.ts": [
     'import { expect } from "@playwright/test";',
     "export const shown = expect(Promise.resolve()).resolves.not.toThrow();",
@@ -143,6 +153,7 @@ const outsideJurisdiction = "plugin";
 const midnightAsked = "plugin";
 const pinned = "plugin";
 const unthrown = "plugin";
+const stoodIn = "plugin";
 
 describe("the lint guards", () => {
   test("the domain package cannot import Cloudflare or Bun", () => {
@@ -205,6 +216,10 @@ describe("the lint guards", () => {
 
   test("the screen pins no control over what scrolls", () => {
     expect(rulesAt("apps/pwa/src/pinned.css")).toEqual([pinned, pinned]);
+  });
+
+  test("a journey cannot stand a value in for one it could not read off the page", () => {
+    expect(rulesAt("e2e/stood-in.spec.ts")).toEqual([stoodIn, stoodIn, stoodIn]);
   });
 
   test("a test cannot rest on a call not throwing, in a seam or domain test or a journey", () => {

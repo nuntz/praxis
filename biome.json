@@ -36,7 +36,7 @@
     },
     {
       "includes": ["e2e/**"],
-      "plugins": ["./lint/exact-label.grit"]
+      "plugins": ["./lint/exact-label.grit", "./lint/read-not-stood-in.grit"]
     },
     {
       "includes": ["apps/worker/test/**"],
