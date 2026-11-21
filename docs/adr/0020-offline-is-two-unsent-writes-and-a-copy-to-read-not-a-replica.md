@@ -28,4 +28,5 @@ With no network the PWA does two things. It shows an Offline Copy, a fixed set o
 - An Unsent write lives on one Device only. Praxis asks the browser to keep its storage for good, and where the browser will not promise that, says so beside the Unsent count. It promises nothing stronger.
 - The Conversation's text is never stored on a Device. With no network the Conversation shows only that it needs the network, an unread Brief or Review included, and its composer is off. The Journal's composer stays live.
 - Deployment tools, tapping a Held Change and every other Context write are unavailable with no network and say so.
+- Praxis opens with no network. The service worker keeps the built screen and asks the network first, so a lapsed sign-in still goes to Access's login page, and the browser keeps the Contexts last read, with nothing of their Journals, so the Device opens on the one it last showed. Each release keeps its own screen, and a later release reads the Unsent writes an earlier one stored.
 - The browser suite gains offline journeys (ADR 0015).

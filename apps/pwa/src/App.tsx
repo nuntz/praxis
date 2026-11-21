@@ -24,6 +24,7 @@ import { Peer, type PeerId } from "./design/Peer.tsx";
 import { ExportSettings } from "./Export.tsx";
 import { CurrentHeldChanges, followHeldChanges } from "./HeldChanges.tsx";
 import { Journal } from "./Journal.tsx";
+import { latestRead } from "./latest-read.ts";
 import { Live, socketOpener } from "./live.ts";
 import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
 import { CurrentMoveTargets } from "./Move.tsx";
@@ -37,6 +38,7 @@ import {
   callDeploymentTool,
   contextTools,
   signInLapsed,
+  Unreachable,
   unreachableMessage,
 } from "./tools.ts";
 import { knowShownContexts, refusedIn, UnsentStatus } from "./Unsent.tsx";
@@ -66,6 +68,42 @@ function rememberShown(id: string): void {
     localStorage.setItem(LAST_SHOWN, id);
   } catch {
     // Without storage the screen opens on the first Context next time, which is no fault.
+  }
+}
+
+/**
+ * Where this browser keeps the Contexts it last read, so Praxis opens on one with no network
+ * (section 8.8): each one's id, name, accent and whether it is retired, and nothing of its Journal.
+ * Every later release reads it as stored here, since it opens on what an earlier one kept.
+ */
+const CONTEXTS_LAST_READ = "praxis.contexts";
+
+/** A Context as this browser kept it, or null for anything else found there. */
+function keptListing(kept: unknown): ContextListing | null {
+  if (typeof kept !== "object" || kept === null) return null;
+  const { id, name, accent, retired } = kept as Record<string, unknown>;
+  if (typeof id !== "string" || typeof name !== "string" || typeof accent !== "string") return null;
+  if (typeof retired !== "boolean") return null;
+  return { id, name, accent: accent as ContextListing["accent"], retired };
+}
+
+function contextsLastRead(): ContextListing[] | null {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(CONTEXTS_LAST_READ) ?? "null");
+    if (!Array.isArray(stored)) return null;
+    const kept = stored.map(keptListing);
+    return kept.every((each) => each !== null) ? (kept as ContextListing[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberContextsRead(contexts: ContextListing[]): void {
+  const kept = contexts.map(({ id, name, accent, retired }) => ({ id, name, accent, retired }));
+  try {
+    localStorage.setItem(CONTEXTS_LAST_READ, JSON.stringify(kept));
+  } catch {
+    // Without storage Praxis opens only with the network, as it says when it cannot.
   }
 }
 
@@ -155,6 +193,7 @@ export function App() {
 
   /** Show a Context as a Deployment tool that changed it returned it. */
   function showChangedContext(changed: ContextListing) {
+    contextsRead.changed();
     setContexts((shown) =>
       (shown ?? []).map((context) => (context.id === changed.id ? changed : context)),
     );
@@ -166,10 +205,12 @@ export function App() {
 
   /** A Context deleted for good leaves the list: only a retired one can be, never the current. */
   function dropContext(id: string) {
+    contextsRead.changed();
     setContexts((shown) => (shown ?? []).filter((context) => context.id !== id));
   }
 
   function addContext(made: ContextListing) {
+    contextsRead.changed();
     setContexts((shown) => [...(shown ?? []), made]);
     switchTo(made.id);
   }
@@ -203,14 +244,49 @@ export function App() {
     onCleanup(() => worker.removeEventListener("message", onMessage));
   });
 
-  onMount(async () => {
+  // Whether the Contexts shown are the ones this browser last read, as no network gave any.
+  let shownAsLastRead = false;
+
+  /**
+   * Read the Contexts. With no network the screen shows the ones last read, if any, and reads them
+   * again once the network is back. A lapsed sign-in shows none: signing in again is what mends it.
+   * Only the last read's answer is shown, and one a change of the screen's own overtook is sent
+   * again, since the Deployment tools work again once the network is back.
+   */
+  const contextsRead = latestRead(async (current) => {
     try {
       const result = await callDeploymentTool("list_contexts", {});
+      if (!current()) return;
       if (!result.ok) return setProblem(result.error.message);
+      shownAsLastRead = false;
       setContexts(result.value.items);
     } catch (error) {
-      setProblem(unreachableMessage(error));
+      if (!current()) return;
+      const kept = error instanceof Unreachable ? contextsLastRead() : null;
+      if (contexts() === null && kept?.some((context) => !context.retired)) {
+        shownAsLastRead = true;
+        return setContexts(kept);
+      }
+      // Shown as last read already, they stay so until a read answers.
+      if (!shownAsLastRead) setProblem(unreachableMessage(error));
     }
+  });
+
+  /** Read the Contexts again if those shown are the ones last read, the network being back. */
+  async function readContextsIfLastRead() {
+    if (shownAsLastRead) await contextsRead.read();
+  }
+
+  onMount(() => void contextsRead.read());
+  onMount(() => {
+    const onOnline = () => void readContextsIfLastRead();
+    window.addEventListener("online", onOnline);
+    onCleanup(() => window.removeEventListener("online", onOnline));
+  });
+  // What the browser keeps is the list as last shown, as read or as changed since.
+  createEffect(() => {
+    const listed = contexts();
+    if (listed && !shownAsLastRead) rememberContextsRead(listed);
   });
 
   /** Read a Context's settings, while it is still current. */
@@ -267,6 +343,7 @@ export function App() {
       async changed(change) {
         const onThis = change.effects.find((effect) => effect.kind === "context");
         if (!onThis) return;
+        contextsRead.changed();
         setContexts(
           (shown) =>
             shown?.map((context) =>
@@ -276,6 +353,8 @@ export function App() {
         await readSettings(id);
       },
       async readAfresh() {
+        // The channel opened once the network was back, after the screen opened with none.
+        await readContextsIfLastRead();
         await readSettings(id);
       },
     });

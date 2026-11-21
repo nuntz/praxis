@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { defineConfig, type Plugin, type Rolldown } from "vite";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import { defineConfig, type Plugin, type ResolvedConfig, type Rolldown } from "vite";
 import solid from "vite-plugin-solid";
 import { colors, tokensCss } from "./src/design/tokens.ts";
 
@@ -103,7 +104,64 @@ function tokens(): Plugin {
   };
 }
 
+/** The service worker's source, which the build writes out with its release's files. */
+const SERVICE_WORKER = join(import.meta.dirname, "sw.js");
+
+/** The line of the service worker the build fills in (sw.js). */
+const SCREEN_LINE = /^const SCREEN = .*;$/m;
+
+/** Every file under a folder, by its path from it. */
+function filesUnder(folder: string): string[] {
+  return readdirSync(folder, { recursive: true, withFileTypes: true })
+    .filter((each) => each.isFile())
+    .map((each) => relative(folder, join(each.parentPath, each.name)));
+}
+
+/**
+ * The service worker, written with the release it keeps (section 8.8): every file the build made
+ * and every file of public/, as the Worker serves them, the screen at "/", and a name for the
+ * release made from all of them, so a release that changes any is a new service worker, which
+ * the browser takes in place of the last and which keeps only its own.
+ */
+function serviceWorker(): Plugin {
+  let config: ResolvedConfig;
+  return {
+    name: "praxis-service-worker",
+    apply: "build",
+    configResolved(resolved) {
+      config = resolved;
+    },
+    writeBundle(_options, bundle) {
+      const contents = new Map<string, string | Uint8Array>();
+      for (const output of Object.values(bundle)) {
+        contents.set(output.fileName, output.type === "chunk" ? output.code : output.source);
+      }
+      for (const file of config.publicDir ? filesUnder(config.publicDir) : []) {
+        contents.set(file, readFileSync(join(config.publicDir, file)));
+      }
+      const release = createHash("sha256");
+      const files = [...contents.keys()].sort();
+      for (const file of files)
+        release
+          .update(file)
+          .update("\0")
+          .update(contents.get(file) ?? "");
+      const source = readFileSync(SERVICE_WORKER, "utf8");
+      if (!SCREEN_LINE.test(source)) throw new Error(`${SERVICE_WORKER} has no SCREEN to fill in`);
+      release.update(source);
+      const screen = {
+        release: release.digest("hex").slice(0, 16),
+        files: files.map((file) => (file === "index.html" ? "/" : `/${file}`)),
+      };
+      writeFileSync(
+        join(config.build.outDir, "sw.js"),
+        source.replace(SCREEN_LINE, `const SCREEN = ${JSON.stringify(screen)};`),
+      );
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [solid(), tokens()],
+  plugins: [solid(), tokens(), serviceWorker()],
   build: { outDir: "dist", emptyOutDir: true },
 });

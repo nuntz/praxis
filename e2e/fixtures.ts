@@ -108,6 +108,16 @@ export async function lastShown(page: Page, id: string) {
 }
 
 /**
+ * Wait until the service worker has kept the screen, so Praxis opens with no network (section 8.8):
+ * it is active only once it has.
+ */
+export async function screenKept(page: Page) {
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+}
+
+/**
  * Hold every answer the screen gets from a tool, so a journey can act while its read is still out,
  * as load makes it: a step that races the answer then loses on every run (docs/flaky-journeys.md).
  * Each held call is asked of the real server at once, and only its answer is held: fetched one

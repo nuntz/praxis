@@ -17,7 +17,7 @@ An Entry's words are stored exactly as typed and the server never reads them. Th
 - Editing an Entry makes it the person's, so its images then load by themselves. That is how the person vouches for an Entry they did not write.
 - The last change to an Entry's words says whose hand they are from. A Held Change the person tapped leaves them the Author with the Agent's words in it, so its images wait for a tap until the person's own edit.
 - A tap loads one image for one showing and is not remembered.
-- Offline, an image shows its description. The Offline Copy and the service worker hold no image.
+- Offline, an image shows its description. The Offline Copy and the service worker hold no image an Entry shows.
 - The Worker puts a content security policy on the screen and its files, where there was none: the Deployment's own address for everything, and images from any `https` host. Nothing else new is allowed.
 - An image sends no referrer, as a link does, so its host learns nothing of the Deployment's address.
 - A leading `- ` is a list item and no longer an Inline Task. `- [ ]` is accepted in its place.

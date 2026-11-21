@@ -51,7 +51,11 @@ export type UnsentFinish = UnsentFields & {
 
 export type Unsent = UnsentEntry | UnsentFinish;
 
-/** Where this browser keeps its Unsent writes, in the order made. They need no record. */
+/**
+ * Where this browser keeps its Unsent writes, in the order made. They need no record. Every later
+ * release reads them as stored here, since the screen that stored one may be replaced before it is
+ * sent (section 8.8).
+ */
 const STORAGE_KEY = "praxis.unsent";
 
 function load(): Unsent[] {

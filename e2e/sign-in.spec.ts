@@ -1,4 +1,4 @@
-import { expect, openJournal, test } from "./fixtures.ts";
+import { expect, openJournal, screenKept, test } from "./fixtures.ts";
 
 // Every request passes Cloudflare Access first (section 7.1). Here the stand-in for Access in
 // front of the Worker (apps/worker/scripts/access-stand-in.ts) signs the browser in, and a lapsed
@@ -75,4 +75,21 @@ test("a request the Worker itself refuses as signed out asks the person to sign 
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in again" })).toBeVisible();
   await expect(journal.getByTestId("unsent-entry")).toHaveCount(1);
+});
+
+test("a lapsed sign-in sends Praxis opened afresh to Access's login page, not to the screen kept for no network", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  const { composer } = await openJournal(page, testInfo);
+  await expect(composer).toBeVisible();
+  await screenKept(page);
+
+  await page.context().addCookies([{ name: LAPSED, value: "yes", url: page.url() }]);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Journal" })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Sign in as the person" }).click();
+  await expect((await openJournal(page, testInfo)).composer).toBeVisible();
 });

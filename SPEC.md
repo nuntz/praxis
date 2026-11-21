@@ -695,13 +695,19 @@ ADR 0020. Glossary: Unsent, Offline Copy.
 
 Capture never fails, and Praxis is not local-first. The server stays the only place a rule runs or a Task's state is derived.
 
+**Opening with no network.**
+
+- The service worker keeps the built screen: the files the Worker serves at the Deployment's own address, and nothing else: never anything under `/api/`, and no image but the screen's own icons, never one an Entry shows. It asks the network first and shows what it kept only when the network cannot be reached, so whatever the network answers is shown: a lapsed Access sign-in sends the browser to Access's login page, and nothing kept is shown in its place.
+- The browser keeps the Contexts it last read: each one's id, name, accent and whether it is retired, and nothing of its Journal. With no network Praxis opens on the Context the Device last showed, from that list, and reads it again once the network is back. The Journal's composer names that Context in its accent, and its times are in the Device's time zone until the Context's settings are read. A Device that has read no list opens on none, and says it needs the network.
+- Each release keeps its own screen, and replaces the last once the browser has its service worker, which it fetches with the network. Until then the Device opens the earlier screen with no network, and the first load with the network is the current one. Unsent writes are kept in the browser's storage, apart from the screen: an earlier screen still open sends its own to the current Worker once the network is back, and the current screen sends whatever is left. So a release reads the Unsent writes an earlier one stored, as stored, and the tools take what an earlier screen sends.
+
 **Reading: the Offline Copy.**
 
 - Switched on per Device, off until then.
 - Holds, for every Context that is not retired: the result of `view_attention`, every open Task and Project, every Person, the Standing Entries, the last 30 days of Entries, and any older Entry that Device has opened.
 - Shown as last fetched, with the time. The person can switch Context.
 - Search, older Entries, the Trash, Versions and the change log need the network.
-- It holds no image, and the service worker caches none. Without the network an image shows its description.
+- It holds no image an Entry shows, and the service worker keeps none. Without the network an image shows its description.
 - Its text sits in the browser's storage unencrypted. Turning it off or removing the Device clears it, on that Device's next contact if it is away, and the person is asked first about any Unsent writes.
 
 **Writing: two Unsent writes.**
@@ -940,7 +946,7 @@ ADR 0015, 0019, 0020, 0021.
 
 **MCP.** A real MCP SDK client over Streamable HTTP against the Worker in workerd, with tokens signed by a test key. It asserts the tool list equals the Connection column, held calls are refused with the error saying what to do instead, a read-only Connection gets no writes, an ended Connection is refused on its next call, and a Connection reaches only its own Context.
 
-**The browser.** A Playwright suite gates CI from the start, against the built PWA served by the real Worker, at desktop and phone width. Journeys: record an Entry with an Inline Task; finish a Task from Attention; ask the Agent for a change and see the screen patch; tap a Held Change; restore from the Trash; make a Connection; and the five offline journeys of ADR 0015. Each journey also runs an automated accessibility check, in light and in dark, except in the nightly run under load, where it found nothing the push's run does not and took the time the journeys need. Since there is one Call at a time for the Deployment, a journey that starts a Call holds a lock across the suite's workers for the whole of it (`e2e/one-call.ts`).
+**The browser.** A Playwright suite gates CI from the start, against the built PWA served by the real Worker, at desktop and phone width. Journeys: record an Entry with an Inline Task; finish a Task from Attention; ask the Agent for a change and see the screen patch; tap a Held Change; restore from the Trash; make a Connection; and the offline journeys of ADR 0015. Each journey also runs an automated accessibility check, in light and in dark, except in the nightly run under load, where it found nothing the push's run does not and took the time the journeys need. Since there is one Call at a time for the Deployment, a journey that starts a Call holds a lock across the suite's workers for the whole of it (`e2e/one-call.ts`).
 
 **Fakes.** Five things are faked: the model, the voice provider (on the Device, with scripted text and no sound), the Web Push sender, the Access key set, and the meaning index, Workers AI and Vectorize together, which takes words a test says mean alike to be alike. Each adapter has one contract suite, run in CI against the fake and by hand against the real service. The voice provider is faked at the Context's object too, which sets every Call up at it and closes a session there, keeping what the voice was given to say first, and its contract runs in the browser suite (`e2e/voice-contract.spec.ts`), since the Device's channel to the provider is WebRTC, and against the real provider when given `VOICE_API_KEY` by hand: it holds the Device to sending only the Agent's answer, under an open handover, and the end of the Call, and checks by hand that the provider refuses anything else from the Device. The meaning index is bound only by the deploy, never in `wrangler.jsonc`, since a binding to either reaches the account even in tests; its contract by hand runs under a configuration of its own that binds both remotely. The bucket of Backups is not faked: it is workerd's own R2, outside the objects like a Device's push service, so a test reads what is kept there, and can make it refuse to keep anything, to see what a failed Backup leaves.
 

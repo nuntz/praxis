@@ -55,6 +55,8 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 
 - A step that adds a column fills it for the rows already there, as the code that writes it would have, from what the object holds: an object made before the step is live, and a null where the new code expects a value is a behaviour no release had. `deploymentStep1` in `apps/worker/src/steps/deployment-0001.ts` fills `backed_up` from the last Backup made.
 
+- What the screen stores on a Device for a later load, as an Unsent write, is read by every later release as it was stored: a release that changes its shape reads the earlier one too, since the screen that stored it may be gone before it is sent (section 8.8). `e2e/opening-offline.spec.ts` stores one written out as this release stores it, and the current screen sends it.
+
 ## The deploy job
 
 - A check in the deploy job stops on any failure it cannot tell from a "no": a command that fails, an output it cannot read. The Backup check reads `pulumi stack output --json` and stops when that fails, rather than taking the failure as a first deploy with nothing to check.
