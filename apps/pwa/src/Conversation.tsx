@@ -8,9 +8,11 @@ import type {
   RunCall,
   RunFailure,
 } from "@praxis/domain";
+import { runTranscriptName } from "@praxis/domain";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { Peer } from "./design/Peer.tsx";
+import { download } from "./Export.tsx";
 import { HeldChangeItem, useHeldChanges } from "./HeldChanges.tsx";
 import { recordAnchor } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
@@ -18,7 +20,7 @@ import { useLive } from "./live-context.ts";
 import { readNotices } from "./Notices.tsx";
 import { online } from "./online.ts";
 import { CapNotice, readSpend, spend } from "./Spend.tsx";
-import { unreachableMessage, useCallTool } from "./tools.ts";
+import { callDeploymentTool, unreachableMessage, useCallTool } from "./tools.ts";
 import { Words } from "./Words.tsx";
 
 const moneyFormat = new Intl.NumberFormat(undefined, {
@@ -44,6 +46,7 @@ export { unread as unreadBriefs };
  * person's Message whose Run failed keeps a Notice under it, and the newest a way to try again.
  */
 export function Conversation(props: {
+  contextId: string;
   contextName: string | undefined;
   /** Bring a record a Run changed into view, wherever it is shown. */
   onShowRecord: (anchor: string) => void;
@@ -214,6 +217,14 @@ export function Conversation(props: {
       answer: setWriting,
       message: place,
       gone: (id) => setMessages((shown) => shown.filter((message) => message.id !== id)),
+      // Cleared, from this Device or another: every Message is gone, and the Conversation starts
+      // afresh from the newest page, read again.
+      cleared: async () => {
+        setMessages([]);
+        setEarlierCursor(null);
+        setWriting(null);
+        await newest.read();
+      },
       // A Brief or Review says how many of the Tasks it names have been finished since: a change to
       // a Task may change that, so the newest page is read again while one is shown.
       changed: async (change) => {
@@ -250,6 +261,7 @@ export function Conversation(props: {
                 when={message.from === "agent" ? (message as AgentMessage) : null}
                 fallback={
                   <PersonMessageItem
+                    contextId={props.contextId}
                     message={message as PersonMessage}
                     canRetry={message.id === newestOfPerson()?.id && foot() === "composer"}
                     onRetry={retry}
@@ -258,6 +270,7 @@ export function Conversation(props: {
               >
                 {(said) => (
                   <AgentMessageItem
+                    contextId={props.contextId}
                     message={said()}
                     onShowRecord={props.onShowRecord}
                     onShown={shown}
@@ -299,7 +312,8 @@ export function Conversation(props: {
         <Show when={foot() === "unavailable"}>
           <p class="notice" role="status">
             This Conversation cannot be opened under this release of Praxis, so the Agent answers
-            nothing here. Nothing in the Journal is touched, and it works as ever.
+            nothing here. Nothing in the Journal is touched, and it works as ever. Clearing the
+            Conversation in this Context's settings starts it afresh.
           </p>
         </Show>
         <Show when={foot() === "offline"}>
@@ -341,9 +355,11 @@ const FAILED: Record<RunFailure, string> = {
 
 /**
  * A Message from the person, shown as typed. While its Run has failed, a Notice under it says why,
- * which is not a Message, with a way to try again on the newest (section 8.5).
+ * which is not a Message, with a way to try again on the newest (section 8.5), and to save the
+ * failed Run's transcript, for debugging.
  */
 function PersonMessageItem(props: {
+  contextId: string;
   message: PersonMessage;
   canRetry: boolean;
   onRetry: (message: PersonMessage) => Promise<void>;
@@ -376,6 +392,7 @@ function PersonMessageItem(props: {
                 Try again
               </button>
             </Show>
+            <SaveTranscript contextId={props.contextId} run={notice().run} />
           </div>
         )}
       </Show>
@@ -438,6 +455,7 @@ function ClockHeading(props: { clock: ClockFold }) {
 
 /** A Message from the Agent, shown as an Entry's words are, with its Run's calls folded under it. */
 function AgentMessageItem(props: {
+  contextId: string;
   message: AgentMessage;
   onShowRecord: (anchor: string) => void;
   /** A Brief or Review not yet read has been shown in a focused window. */
@@ -487,9 +505,56 @@ function AgentMessageItem(props: {
           <Show when={run().cost !== null}>
             <p class="run-cost">Cost {moneyFormat.format(run().cost ?? 0)}</p>
           </Show>
+          <Show when={run().ended !== null}>
+            <SaveTranscript contextId={props.contextId} run={run().id} />
+          </Show>
         </details>
       </Show>
     </li>
+  );
+}
+
+/**
+ * Save one Run as a file, for debugging (section 5.8): what the Agent was given, said and called.
+ * It is the only way the Conversation's text leaves Praxis, and only the person's tap saves one.
+ */
+function SaveTranscript(props: { contextId: string; run: string }) {
+  const [saving, setSaving] = createSignal(false);
+  const [problem, setProblem] = createSignal<string | null>(null);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const result = await callDeploymentTool("save_run_transcript", {
+        context_id: props.contextId,
+        run_id: props.run,
+      });
+      if (!result.ok) return setProblem(result.error.message);
+      setProblem(null);
+      download(
+        new Blob([JSON.stringify(result.value, null, 2)], { type: "application/json" }),
+        runTranscriptName(result.value),
+      );
+    } catch (error) {
+      setProblem(unreachableMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div class="run-transcript">
+      <button type="button" class="quiet" disabled={saving()} onClick={() => void save()}>
+        {saving() ? "Saving the transcript…" : "Save this Run's transcript"}
+      </button>
+      <Show when={problem()}>
+        {(message) => (
+          <p class="problem" role="alert">
+            {message()}
+          </p>
+        )}
+      </Show>
+    </div>
   );
 }
 

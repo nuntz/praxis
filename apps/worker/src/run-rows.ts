@@ -1,5 +1,17 @@
-import { monthBounds, type RunEnd, type RunFailure, type RunStart } from "@praxis/domain";
+import {
+  type ExportedRun,
+  instantToIso,
+  monthBounds,
+  type Page,
+  type RunEnd,
+  type RunFailure,
+  type RunRecord,
+  type RunStart,
+  type ToolResult,
+} from "@praxis/domain";
+import { changesOfRun } from "./change-log.ts";
 import { embeddedInMonth } from "./meaning-rows.ts";
+import { newestFirst } from "./newest-first.ts";
 
 /** A Run record as the Context's object keeps it (section 5.8). It holds no words. */
 export type RunRow = {
@@ -82,7 +94,7 @@ export function lastToldChange(sql: SqlStorage): number | null {
 
 /**
  * Keep the record of a Run not started because the month's spend had reached the cap (section
- * 5.8): no Message was kept for it to answer, and it spent nothing. `list_runs` (#69) lists it.
+ * 5.8): no Message was kept for it to answer, and it spent nothing. `list_runs` lists it.
  * The clock's says it was a Brief or a Review.
  */
 export function recordRunNotStarted(
@@ -141,9 +153,36 @@ export function runAnswering(sql: SqlStorage, submission: number | undefined): R
   );
 }
 
+/**
+ * Let go of every Run record's handles on the Conversation, once it has been cleared (section
+ * 5.8): the runtime's own numbers start again in the one made afresh, so none may name an old Run;
+ * and where the Agent was last told the log stood, which the new Conversation was never told, so
+ * its first Message is told the newest changes, as one never told. What a record says of its Run
+ * stays as it was.
+ */
+export function forgetConversation(sql: SqlStorage): void {
+  sql.exec(`UPDATE runs SET submission = NULL, from_record = NULL, told_through = NULL`);
+}
+
 /** Every Run that has not ended, oldest first: after a restart, each is waited on again. */
 export function runsNotEnded(sql: SqlStorage): RunRow[] {
   return sql.exec<RunRow>(`SELECT * FROM runs WHERE ended IS NULL ORDER BY seq`).toArray();
+}
+
+/**
+ * Where the next Run trying this one's Message again starts among the runtime's records, if one
+ * did: the records from there are that Run's.
+ */
+export function nextTryFrom(sql: SqlStorage, run: RunRow): number | null {
+  return sql
+    .exec<{ from: number | null }>(
+      `SELECT min(from_record) AS "from" FROM runs
+       WHERE message = ? AND from_record IS NOT NULL
+         AND seq > (SELECT seq FROM runs WHERE id = ?)`,
+      run.message,
+      run.id,
+    )
+    .one().from;
 }
 
 /** Note that a Run made the change the log numbers `change`. */
@@ -158,13 +197,15 @@ export function runById(sql: SqlStorage, id: string): RunRow | null {
 
 /**
  * The newest Run answering a Message from the person, the one the Conversation stands at for
- * them, if any. A Brief or a Review answers none.
+ * them, if any. A Brief or a Review answers none, and nor does a Run of a Conversation since
+ * cleared, which has no handle on it.
  */
 export function newestRun(sql: SqlStorage): RunRow | null {
   return (
     sql
       .exec<RunRow>(
-        `SELECT * FROM runs WHERE message IS NOT NULL AND started_by = 'message'
+        `SELECT * FROM runs
+         WHERE message IS NOT NULL AND submission IS NOT NULL AND started_by = 'message'
          ORDER BY seq DESC LIMIT 1`,
       )
       .toArray()[0] ?? null
@@ -201,4 +242,66 @@ export function spentInMonth(sql: SqlStorage, at: number): number {
     )
     .one().cost;
   return runs + embeddedInMonth(sql, at);
+}
+
+/**
+ * A Run record as an Export holds it: none of the runtime's handles on the Conversation, and not
+ * the changes it made, which the change log numbers and the file does not hold.
+ */
+export function exportedRun(row: RunRow): ExportedRun {
+  return {
+    id: row.id,
+    started_by: row.started_by,
+    at: instantToIso(row.at),
+    model: row.model,
+    tokens: {
+      input: row.input_tokens,
+      output: row.output_tokens,
+      cache_read: row.cache_read_tokens,
+      cache_write: row.cache_write_tokens,
+    },
+    cost: row.cost,
+    ended: row.ended,
+    failure: row.failure,
+  };
+}
+
+/**
+ * A Run record as `list_runs` and `get_run` give it (section 5.8): with the changes it made that the
+ * change log still keeps, each by kind and id and none of the words, and how many it no longer
+ * keeps.
+ */
+export function runRecord(sql: SqlStorage, row: RunRow): RunRecord {
+  const { kept, gone } = changesOfRun(sql, row.id);
+  return {
+    ...exportedRun(row),
+    // What it changed by kind and id: the summaries are of the records' words.
+    changes: kept.map(({ at, tool, effects }) => ({
+      at,
+      tool,
+      changed: effects.map(({ kind, id, what, by }) => ({ kind, id, what, by })),
+    })),
+    changes_gone: gone,
+  };
+}
+
+/** A page of this Context's Run records, newest first, from a cursor `list_runs` gave. */
+export function runRecordsPage(
+  sql: SqlStorage,
+  cursor: string | undefined,
+): ToolResult<Page<RunRecord>> {
+  const page = newestFirst("runs", cursor, (before) =>
+    sql.exec<RunRow & { seq: number }>(
+      `SELECT * FROM runs WHERE seq < ? ORDER BY seq DESC`,
+      before,
+    ),
+  );
+  if (!page.ok) return page;
+  return {
+    ok: true,
+    value: {
+      items: page.value.rows.map((row) => runRecord(sql, row)),
+      next_cursor: page.value.next_cursor,
+    },
+  };
 }

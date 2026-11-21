@@ -80,6 +80,24 @@ export function changesAfter(
   };
 }
 
+/**
+ * The changes a Run made that the log still keeps, oldest first, with how many it made that the
+ * log no longer keeps, pruned at 90 days (section 5.8).
+ */
+export function changesOfRun(sql: SqlStorage, run: string): { kept: Change[]; gone: number } {
+  const calls = sql
+    .exec<CallRow>(
+      `SELECT c.* FROM run_changes r JOIN change_calls c ON c.seq = r.change
+       WHERE r.run = ? ORDER BY c.seq`,
+      run,
+    )
+    .toArray();
+  const { made } = sql
+    .exec<{ made: number }>(`SELECT count(*) AS made FROM run_changes WHERE run = ?`, run)
+    .one();
+  return { kept: withEffects(sql, calls), gone: made - calls.length };
+}
+
 /** Each call as a change, with its Effects in order. */
 function withEffects(sql: SqlStorage, calls: CallRow[]): Change[] {
   const first = calls[0]?.seq;

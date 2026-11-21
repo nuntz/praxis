@@ -57,6 +57,22 @@ function aHeldCall(alsoChanged: Effect[]): Seen {
 }
 
 describe("the oracle", () => {
+  test("fails a read of Run records that gives words with one", () => {
+    const read = (model: string): Seen => ({
+      request: { caller: hand, tool: "get_run", input: {}, arrivedAt: Date.parse(at) },
+      result: { ok: true, value: { id: "r1", model } },
+      before: records(),
+      after: records(),
+      logged: [],
+      firstWithKey: null,
+    });
+
+    expect(judge(read("claude-sonnet-5-5"))).toEqual([]);
+    expect(judge(read(marked("Said in the Run")))).toEqual([
+      "get_run gave words with a Run record (section 5.8).",
+    ]);
+  });
+
   test("passes a write whose Effects are exactly what changed, logged with its caller", () => {
     expect(judge(aGoodWrite())).toEqual([]);
   });

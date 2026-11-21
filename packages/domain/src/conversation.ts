@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Caller, CallerKind } from "./callers.ts";
 import type { ClockKind } from "./clock.ts";
 import type { Effect } from "./effects.ts";
+import type { ExportedRun } from "./export.ts";
 import type { RunNotice } from "./notice.ts";
 import type { ErrorCode } from "./results.ts";
 import { type Parsed, parseInput, writeInput } from "./tools.ts";
@@ -82,6 +83,30 @@ export type RunEnd = "answered" | "cut_short" | "failed" | "cap_reached";
 
 /** What started a Run: a Message from the person, or the clock, for a Brief or a Review. */
 export type RunStart = "message" | ClockKind;
+
+/**
+ * A change a Run made, as its record holds it (section 5.8): when, the tool, and what it changed,
+ * each by kind and id, none of the words.
+ */
+export type RunChange = {
+  /** When the call arrived, as an ISO 8601 instant. */
+  at: string;
+  tool: string;
+  changed: Omit<Effect, "summary">[];
+};
+
+/**
+ * A Run record (section 5.8, ADR 0010): what started the Run, when, the model, tokens, cost, how
+ * it ended and which changes it made, and never its words. Kept for good, as an Export holds it,
+ * with the changes the change log still keeps: after its 90 days a change is gone from it, and is
+ * only counted.
+ */
+export type RunRecord = ExportedRun & {
+  /** The changes it made that the change log still keeps, oldest first. */
+  changes: RunChange[];
+  /** How many changes it made that the change log no longer keeps. */
+  changes_gone: number;
+};
 
 /**
  * Why a Deployment has no Agent (ADR 0017): its configuration gives no key for the model, or names
@@ -206,4 +231,49 @@ export function conversationOpened(search: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * A Run Transcript (section 5.8, ADR 0010): a file the person saves of one Run, by hand, for
+ * debugging. It holds what the Agent was given, said and called: the prompt and the tools it was
+ * offered, the Message it answered as the model was shown it, bearings and all, each answer of the
+ * model with its calls, and each call's result. It is the only way a Conversation's text leaves
+ * Praxis, and it is not an Export. Instants are ISO 8601.
+ */
+export type RunTranscript = {
+  kind: "run_transcript";
+  made_at: string;
+  context: { id: string; name: string };
+  run: RunRecord;
+  /** What the model is told of itself every Run, the same each time. */
+  prompt: string;
+  /** The tools it was offered: a Brief's or a Review's are the reads alone. */
+  tools: string[];
+  messages: TranscriptMessage[];
+};
+
+/**
+ * One message of a Run as the model saw it: what it was given (a Message, a Brief's or a Review's
+ * instructions, or the summary standing in for the older Conversation), what it answered with its
+ * calls and why it stopped, or a call's result as it was handed back.
+ */
+export type TranscriptMessage =
+  | { role: "user"; at: string; text: string }
+  | {
+      role: "assistant";
+      at: string;
+      text: string;
+      calls: { id: string; tool: string; input: unknown }[];
+      /** Why the model stopped: an answer, a call, or the provider's error. */
+      stop: string;
+      /** The provider's error, for an answer that is one. */
+      error: string | null;
+    }
+  | { role: "tool_result"; at: string; call: string; tool: string; text: string; error: boolean }
+  | { role: "system"; at: string; text: string };
+
+/** The name a Run Transcript is saved as: the Run's start and its id, never any of its words. */
+export function runTranscriptName(transcript: RunTranscript): string {
+  const at = transcript.run.at.replace(/\.\d+Z$/, "Z").replaceAll(":", "-");
+  return `praxis-run-${at}-${transcript.run.id.slice(0, 8)}.json`;
 }

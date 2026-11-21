@@ -37,8 +37,10 @@ import {
   type RunCall,
   type RunFailure,
   type RunStart,
+  type RunTranscript,
   type ToolName,
   type ToolResult,
+  type TranscriptMessage,
   tools,
 } from "@praxis/domain";
 import { type Digest, encodeCursor } from "./change-log.ts";
@@ -70,6 +72,22 @@ import type { StandingEntry } from "./standing-rows.ts";
 
 /** The prefix of the runtime's tables in the Context's database. */
 export const RUNTIME_TABLES = "pi_";
+
+/**
+ * Drop all of the runtime's record of the Conversation at once (section 5.8): every one of its
+ * tables, which a runtime opened afresh makes again, empty. Praxis never edits them, and they hold
+ * nothing true that is not elsewhere (section 9.2).
+ */
+export function dropRuntimeTables(sql: SqlStorage): void {
+  const tables = sql
+    .exec<{ name: string }>(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND substr(name, 1, ?) = ?`,
+      RUNTIME_TABLES.length,
+      RUNTIME_TABLES,
+    )
+    .toArray();
+  for (const { name } of tables) sql.exec(`DROP TABLE IF EXISTS "${name}"`);
+}
 
 /**
  * The kind of record the runtime keeps a Message from the person as, in its transcript. Its data
@@ -657,6 +675,34 @@ export class ContextAgent {
     return retried;
   }
 
+  /**
+   * What a Run Transcript holds of one Run that has ended (section 5.8): the prompt and the tools
+   * it was offered, then the record that started it, the person's Message or the clock's, and each
+   * of the runtime's records it left, up to the next Message, or to `nextTry`, where a Run trying it
+   * again starts. A Run trying a failed one again holds that Message too, then its own records.
+   * Null when the record that started it is no longer in the Conversation.
+   */
+  async transcript(
+    storage: DurableObjectStorage,
+    run: RunRow,
+    nextTry: number | null,
+  ): Promise<Pick<RunTranscript, "prompt" | "tools" | "messages"> | null> {
+    const { root } = await this.open(storage);
+    if (run.message === null) return null;
+    const started = await runtimeRecordStarting(root, run.message);
+    if (started === null) return null;
+    // A Run trying a failed one again places no record of its own: the Message is the first's.
+    const own =
+      run.from_record === null
+        ? await runtimeRecordsOfRun(root, started.id as number, nextTry)
+        : [started, ...(await runtimeRecordsOfRun(root, run.from_record, nextTry))];
+    return {
+      prompt: PREAMBLE,
+      tools: [...(byClock(run) ? CLOCK_TOOLS : AGENT_TOOLS)],
+      messages: own.flatMap((record) => (record.model ?? []).map(transcribed)),
+    };
+  }
+
   /** Every Run going or waiting has ended, and its record says how. */
   async runsEnded(storage: DurableObjectStorage): Promise<void> {
     await this.open(storage);
@@ -698,7 +744,8 @@ export class ContextAgent {
     }
     // A Run trying a failed one again places no Message: its records start where it started.
     const first = settled.entry ?? run.from_record;
-    const records = first === undefined || first === null ? [] : await runRecords(root, first);
+    const records =
+      first === undefined || first === null ? [] : await runtimeRecordsOfRun(root, first);
     endRun(
       this.#host.sql,
       run.id,
@@ -1125,8 +1172,38 @@ function withoutBearings(messages: readonly ModelMessage[]): ModelMessage[] {
   });
 }
 
-/** The runtime's records of one Run: from the Message it answers to the next Message. */
-async function runRecords(root: Conversation, first: number): Promise<EntryRecord[]> {
+/**
+ * The runtime's record placing this person's Message, or the clock's start of a Brief or a
+ * Review, by its id, looked for from the newest back, or null once it is not there.
+ */
+async function runtimeRecordStarting(root: Conversation, id: string): Promise<EntryRecord | null> {
+  let max: number | undefined;
+  for (;;) {
+    const page = await root.entries(
+      { order: "descending", ...(max === undefined ? {} : { maxEntryId: max as never }) },
+      SCAN_RECORDS,
+      undefined,
+      context,
+    );
+    for (const record of page.items) {
+      max = (record.id as number) - 1;
+      if (record.kind !== MESSAGE_KIND && record.kind !== CLOCK_KIND) continue;
+      if ((record.data as MessageData | ClockData).id === id) return record;
+    }
+    if (page.items.length < SCAN_RECORDS || max === undefined || max < 1) return null;
+  }
+}
+
+/**
+ * The runtime's records of one Run from `first`, the record placing the Message it answers or, for a
+ * Run trying a failed one again, the first that may be its own, up to the next Message or clock's
+ * start, or to `before`, where another Run starts.
+ */
+async function runtimeRecordsOfRun(
+  root: Conversation,
+  first: number,
+  before: number | null = null,
+): Promise<EntryRecord[]> {
   const found: EntryRecord[] = [];
   let min = first;
   for (;;) {
@@ -1136,13 +1213,63 @@ async function runRecords(root: Conversation, first: number): Promise<EntryRecor
       undefined,
       context,
     );
-    for (const entry of page.items) {
-      if (entry.kind === MESSAGE_KIND && (entry.id as number) !== first) return found;
-      found.push(entry);
-      min = (entry.id as number) + 1;
+    for (const record of page.items) {
+      const id = record.id as number;
+      if (before !== null && id >= before) return found;
+      const starts = record.kind === MESSAGE_KIND || record.kind === CLOCK_KIND;
+      if (starts && id !== first) return found;
+      found.push(record);
+      min = id + 1;
     }
     if (page.items.length < SCAN_RECORDS) return found;
   }
+}
+
+/** One of the runtime's messages as a Run Transcript holds it. */
+function transcribed(message: ModelMessage): TranscriptMessage {
+  const at = instantToIso(message.timestamp);
+  switch (message.role) {
+    case "user":
+      return { role: "user", at, text: contentText(message.content) };
+    case "assistant":
+      return {
+        role: "assistant",
+        at,
+        text: textOf(message),
+        calls: message.content.flatMap((block) =>
+          block.type === "toolCall"
+            ? [{ id: block.id, tool: block.name, input: block.arguments }]
+            : [],
+        ),
+        stop: message.stopReason,
+        error: message.errorMessage ?? null,
+      };
+    case "toolResult":
+      return {
+        role: "tool_result",
+        at,
+        call: message.toolCallId,
+        tool: message.toolName,
+        text: contentText(message.content),
+        error: message.isError,
+      };
+    case "system":
+      return {
+        role: "system",
+        at,
+        text: [contentText(message.content), ...Object.values(message.sections ?? {})]
+          .filter((part) => typeof part === "string" && part !== "")
+          .join("\n\n"),
+      };
+  }
+}
+
+/** The text of a message's content, an image standing as a mention of one. */
+function contentText(content: string | readonly { type: string; text?: string }[]): string {
+  if (typeof content === "string") return content;
+  return content
+    .map((block) => (block.type === "text" ? (block.text ?? "") : "[an image]"))
+    .join("");
 }
 
 /** What the model's answers among these messages spent: their tokens, priced. */

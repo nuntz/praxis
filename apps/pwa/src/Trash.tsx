@@ -17,6 +17,13 @@ export const DOWNLOADED =
   "Praxis cannot reach a file you downloaded, such as an Export: what is removed here stays in it.";
 
 /**
+ * Said beside it in the Trash (section 3.8): the Conversation keeps what the Agent quoted of a
+ * record removed for good, dropped only when the person clears it, whole.
+ */
+const QUOTED =
+  "The Conversation keeps what the Agent quoted of a record removed here until you clear it, in this Context's settings.";
+
+/**
  * The current Context's Trash (section 8.6): each item, what went with it and when it will be
  * removed for good. An item is restored, or removed for good, whole; emptying the Trash removes
  * every item. It is read again on every change, since any delete, restore or removal changes it.
@@ -122,6 +129,7 @@ export function Trash(props: { timeZone: string }) {
               </For>
             </ul>
             <p class="settings-note">{DOWNLOADED}</p>
+            <p class="settings-note">{QUOTED}</p>
             <button
               type="button"
               class="quiet"

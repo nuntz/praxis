@@ -30,6 +30,37 @@ describe("the oracle, on the Deployment object's tables", () => {
   });
 });
 
+describe("the oracle, on the Run records", () => {
+  test("fails a call while a Run record holds words", async () => {
+    const deployment = newDeployment(at);
+    const made = value(
+      await deployment.call(hand, "create_context", {
+        name: "Personal",
+        time_zone: "UTC",
+        accent: "blue",
+      }),
+    );
+    const context = deployment.context(made.record.id);
+    value(await context.call(hand, "list_entries", {}));
+    await runInDurableObject(
+      env.CONTEXT.get(env.CONTEXT.idFromString(made.record.id)),
+      (_, state) => {
+        state.storage.sql.exec(
+          `INSERT INTO runs (id, started_by, message, at, model, ended)
+           VALUES (?, 'message', ?, ?, 'claude-sonnet-5-5', 'answered')`,
+          crypto.randomUUID(),
+          marked("Words no Run record holds"),
+          Date.parse(at),
+        );
+      },
+    );
+
+    await expect(context.call(hand, "list_entries", {})).rejects.toThrow(
+      /A Run record holds none of the words/,
+    );
+  });
+});
+
 describe("the oracle, on what a Context's object forgets", () => {
   test("fails once a table still holds a removed record's summary 30 days on, when the object wakes", async () => {
     const deployment = newDeployment(at);

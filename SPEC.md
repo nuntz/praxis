@@ -518,8 +518,9 @@ ADR 0010. There is no agent log.
 
 - **The runtime's record**: what the Agent heard, said and called is the runtime's record of the Conversation, in the Context's object. It is kept until the person clears that Conversation, which drops all of it at once and leaves the Journal, the change log and the Run records as they were. It keeps what the Agent quoted of a record since removed for good, and is never edited to take that out (section 3.8).
 - **The change log**: what changed, with the caller.
-- **A Run record**, which holds no words: what started the Run, when, the model, tokens, cost, how it ended and which changes it made. Kept for good. A Run that failed, or was not started because of the cap, still leaves one.
-- **A Run Transcript** is a file the person saves of one Run, by hand: the prompt, the Messages, the tool calls and their results. It is the only way Conversation text leaves for debugging. It is not an Export.
+- **A Run record**, which holds no words: what started the Run, when, the model, tokens, cost, how it ended and which changes it made, each by kind and id. Kept for good. A Run that failed, or was not started because of the cap, still leaves one. `list_runs` and `get_run` give it to the person's hand; a change older than the change log's 90 days is only counted.
+- **A Run Transcript** is a file the person saves of one Run, by hand, from the Run's calls folded under its Message, or from the Notice under a Message whose Run failed: the prompt and the tools it was offered, the Message it answered as the model was shown it, each answer of the model with its calls, and each call's result. It is the only way Conversation text leaves for debugging. It is not an Export. A Run still going, one never started and one whose Conversation was cleared since have none.
+- **Clearing** is refused while a Run is going. It changes no record and leaves no Effect, like the Conversation tools. Each Run record lets go of its handles on the Conversation and of where the Agent was last told the change log stood, so the first Message after is told the newest changes; nothing it says of its Run changes. It also starts afresh a Conversation the runtime cannot open (section 11).
 - Platform logs carry ids, tool names, result codes, counts and timings, on every setting. There is no verbose switch.
 
 ## 6. Voice: the Call
@@ -773,7 +774,7 @@ ADR 0006, 0010, 0017, 0023, 0024.
   - a Call is starting here, or has ended;
   - carry a unit it holds on its way out to the Context it moves to, for a move interrupted (section 3.9);
   - it is stuck on its upgrade, or no longer (section 11).
-- The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to rename it, to delete it, for an Export or a Backup, a move, and ending a Call there when another starts elsewhere. For an Export or a Backup it carries the file the Context's object writes and reads none of it.
+- The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to rename it, to delete it, for an Export or a Backup, a move, a Run Transcript, and ending a Call there when another starts elsewhere. For an Export, a Backup or a Run Transcript it carries the file the Context's object writes and reads none of it.
 - A Context's object keeps its own name, for its settings and the summary of an Effect on it. The Deployment object is its only writer, writes it before its own list, and runs its writes one at a time, so the two never disagree (ADR 0006).
 - Revoking a Connection or retiring a Context takes effect on the next request.
 - Each Context has its own alarm, which schedules its Brief and Review, expires its Trash, prunes its change log and finishes an interrupted move.
@@ -814,7 +815,7 @@ ADR 0023. From [Recall](https://github.com/nuntz/praxis/issues/21).
 ### 9.5 Live updates
 
 - The PWA holds one WebSocket to its current Context's object, which hibernates when idle.
-- It carries two things, both downward: the Effects of each change in that Context, from which the PWA patches what it shows, and the Conversation: the Agent's answer as it is written, each Message once it is whole, and a Brief or Review gone once a newer one replaced it.
+- It carries two things, both downward: the Effects of each change in that Context, from which the PWA patches what it shows, and the Conversation: the Agent's answer as it is written, each Message once it is whole, a Brief or Review gone once a newer one replaced it, and the Conversation cleared.
 - On opening, it first says where the change log stands. Each change after comes with the cursor after it, as `list_changes` would give it.
 - Nothing travels up it. Every send is a tool call, and anything sent up closes it.
 - A PWA that was away catches up from `list_changes` and `list_messages`. An answer missed part-way is not replayed: the Message is read once it is whole.
@@ -893,7 +894,7 @@ ADR 0019.
 - **A stuck Deployment object** means nothing can be routed. The Worker shows one plain page saying the upgrade failed and under which release.
 - **A deploy is a one-way door** once any object has woken under it. There is no gradual rollout. Going back is by fixing forward, or by restoring a Backup into a fresh Deployment.
 - The deploy (section 12, ADR 0026) checks that a Backup from the last day exists, the one the daily trigger was last due to make, and stops with a warning if not, before anything changes. The person overrides it with a line `Deploy-Without-Backup: yes` in the message of the commit pushed. A first deploy has nothing to check.
-- The runtime's tables are not on the ladder. A runtime that cannot open its tables never blocks the Journal: the screen and Connections keep working, the Conversation shows as unavailable, and starting it afresh is the person's choice. Until then the Agent takes no Message there, and no Brief or Review runs.
+- The runtime's tables are not on the ladder. A runtime that cannot open its tables never blocks the Journal: the screen and Connections keep working, the Conversation shows as unavailable, and starting it afresh is the person's choice, by clearing it (section 5.8). Until then the Agent takes no Message there, and no Brief or Review runs.
 - The Export's format version is a separate number with its own ladder, which brings an old file forward as it is read and reaches back to format 1 for good.
 
 ## 12. Setup and configuration
@@ -931,7 +932,7 @@ ADR 0015, 0019, 0020, 0021.
 - **The oracle**: the harness wraps every write, snapshots the domain tables before and after, and fails unless the difference is exactly the Effects returned and the change log holds the same Effects with the right caller. A refused, stale or repeated-key call changes nothing. A held call changes nothing but its Held Change. It sees a record as a caller does: one sent to the Trash, or removed from it for good, is deleted, and one restored is made. It remembers each record that leaves a Context, removed for good or moved away once the move has finished, and when the Context's alarm wakes it 30 days on, fails if any text in any of its tables still holds that record's words or summary, reading every table without naming one, except the Conversation's, kept until the person clears it (section 5.8).
 - **Offering**: checked against the tables of sections 4.10 and 4.11, kept by hand in the repo. A generic test calls every tool as every caller.
 - **Guard**: CI fails when a tool has no row in the offering table or no seam test naming it. No line-coverage threshold.
-- **No words leave**: tests seed Entries and Messages with marker strings, and the harness fails any test where a marker appears in anything logged, in a Notification or in a Run record.
+- **No words leave**: tests seed Entries and Messages with marker strings, and the harness fails any test where a marker appears in anything logged, in a Notification or in a Run record, as kept or as `list_runs` and `get_run` give it. Once `clear_conversation` succeeds, it fails any marker left in the runtime's tables: the Conversation is dropped, not hidden.
 
 **The Agent.** A scripted model plays fixed tool calls and text through the real runtime loop in workerd. What the Agent says or chooses is never asserted in CI. Evals are a small set of seeded Journals, each with a request and a good outcome, judged on tool calls and Effects, run by hand when the prompt, the tool descriptions or the model changes.
 

@@ -69,6 +69,26 @@ export function ContextSettings(props: {
     }
   }
 
+  // Whether the person has asked to clear the Conversation and is being asked to be sure, and what
+  // the last clear said, until the screen is left.
+  const [confirming, setConfirming] = createSignal(false);
+  const [cleared, setCleared] = createSignal<string | null>(null);
+
+  async function clear() {
+    setSending(true);
+    try {
+      const result = await callTool("clear_conversation", {});
+      if (!result.ok) return setProblem(result.error.message);
+      setProblem(null);
+      setConfirming(false);
+      setCleared("The Conversation is cleared. The next Message starts it afresh.");
+    } catch (error) {
+      setProblem(unreachableMessage(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
   const setBrief = (time: string | null) => change(() => callTool("set_brief_time", { time }));
   const setReview = (input: { day?: Weekday; time: string | null }) =>
     change(() => callTool("set_review_time", input));
@@ -176,6 +196,42 @@ export function ContextSettings(props: {
           />{" "}
           Tell my Devices when the Brief or the Review is ready
         </label>
+      </fieldset>
+      {/* The Conversation's text is kept until the person clears it, all at once (section 5.8). */}
+      <fieldset class="clock-setting">
+        <legend>Conversation</legend>
+        <p class="setting-note">
+          Clearing drops every Message, and what the Agent quoted of records since removed for good
+          with them. The Journal, its changes and the Run records stay as they are. It cannot be
+          undone.
+        </p>
+        <Show
+          when={confirming()}
+          fallback={
+            <button
+              type="button"
+              disabled={sending()}
+              onClick={() => {
+                setCleared(null);
+                setConfirming(true);
+              }}
+            >
+              Clear the Conversation
+            </button>
+          }
+        >
+          <div class="clear-conversation-actions">
+            <button type="button" disabled={sending()} onClick={() => void clear()}>
+              Clear it for good
+            </button>
+            <button type="button" class="quiet" onClick={() => setConfirming(false)}>
+              Keep it
+            </button>
+          </div>
+        </Show>
+        <p class="setting-note" role="status">
+          {cleared() ?? ""}
+        </p>
       </fieldset>
       {/* The meaning index is derived and kept outside the Context, so it can always be thrown
         away and made again from the Journal (section 9.4). */}

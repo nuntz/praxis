@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, lastShown, makeContext, onPhone, openJournal, test } from "./fixtures.ts";
 
 test("asking the Agent for a change, the Journal shows it as it is made", async ({
@@ -73,6 +74,8 @@ test("a Run that failed keeps the Message with a Notice under it, and Try again 
   const sent = messages.filter({ hasText: words });
   await expect(sent.getByText(/The model could not be reached/)).toBeVisible();
   await expect(messages).toHaveCount(1);
+  // The failed Run can be saved for debugging from its Notice, as any Run from its calls.
+  await expect(sent.getByRole("button", { name: "Save this Run's transcript" })).toBeVisible();
 
   const retried = page.waitForResponse(/\/retry_run$/);
   await sent.getByRole("button", { name: "Try again", exact: true }).click();
@@ -81,4 +84,55 @@ test("a Run that failed keeps the Message with a Notice under it, and Try again 
   await expect(messages.last().getByText("Back again.", { exact: true })).toBeVisible();
   await expect(messages).toHaveCount(2);
   await expect(sent.getByText(/The model could not be reached/)).toHaveCount(0);
+});
+
+test("the person saves a Run's transcript, then clears the Conversation from the settings", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const context = await makeContext(page, {
+    name: `Cleared ${tag}`,
+    time_zone: "UTC",
+    accent: "moss",
+  });
+  await lastShown(page, context.id);
+  await page.goto("/");
+  const toConversation = async () => {
+    if (!onPhone(testInfo)) return;
+    await page
+      .getByRole("navigation", { name: "Columns" })
+      .getByRole("button", { name: "Agent", exact: true })
+      .click();
+  };
+  await toConversation();
+  const conversation = page.getByRole("region", { name: "Conversation" });
+  const words = `Water the ferns ${tag}`;
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in Cleared ${tag}`, exact: true })
+    .fill(`Record: ${words}`);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+  const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
+  await expect(messages).toHaveCount(2);
+
+  // One Run, saved as a file by the person's tap: what the Agent was given, said and called.
+  await messages.last().getByText("1 call", { exact: true }).click();
+  const downloading = page.waitForEvent("download");
+  await messages.last().getByRole("button", { name: "Save this Run's transcript" }).click();
+  const file = await downloading;
+  expect(file.suggestedFilename()).toMatch(/^praxis-run-.+\.json$/);
+  const saved = JSON.parse(await readFile(await file.path(), "utf8"));
+  expect(saved).toMatchObject({ kind: "run_transcript", context: { id: context.id } });
+  expect(JSON.stringify(saved.messages)).toContain(words);
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settings = page.getByRole("region", { name: `Settings for Cleared ${tag}` });
+  await settings.getByRole("button", { name: "Clear the Conversation", exact: true }).click();
+  const clearing = page.waitForResponse(/\/tools\/clear_conversation$/);
+  await settings.getByRole("button", { name: "Clear it for good", exact: true }).click();
+  expect((await (await clearing).json()).ok).toBe(true);
+  await expect(settings.getByText(/^The Conversation is cleared/)).toBeVisible();
+
+  // Every screen open on the Conversation hears it was cleared: it holds no Message.
+  await toConversation();
+  await expect(messages).toHaveCount(0);
 });

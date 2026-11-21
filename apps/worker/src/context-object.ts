@@ -14,7 +14,7 @@ import {
   type Effect,
   failure,
   isConversationToolName,
-  isDerivedWrite,
+  isRecordlessWrite,
   isToolName,
   isWrite,
   type LiveMessage,
@@ -23,10 +23,12 @@ import {
   type NoAgent,
   offeredConversationTool,
   parseConversationToolInput,
+  type RunTranscript,
   refusal,
   type SearchIndex,
   success,
   type ToolInput,
+  type ToolOutput,
   type ToolResult,
 } from "@praxis/domain";
 import {
@@ -34,6 +36,7 @@ import {
   type ClockBearings,
   ContextAgent,
   DIGEST_CHANGES,
+  dropRuntimeTables,
   HELD_NAMED,
 } from "./agent.ts";
 import { arrivalTime, startTimer } from "./arrival.ts";
@@ -98,11 +101,14 @@ import {
 import { admit, dispatch, type Handlers, isObjectTool, type ToolRequest } from "./registry.ts";
 import { deploymentOf } from "./routing.ts";
 import {
+  forgetConversation,
   lastToldChange,
   newestRun,
+  nextTryFrom,
   type RunRow,
   recordRunNotStarted,
   runById,
+  runRecord,
   runsNotEnded,
   spentInMonth,
 } from "./run-rows.ts";
@@ -132,6 +138,7 @@ import { moveTools } from "./tools/moves.ts";
 import { personTools } from "./tools/persons.ts";
 import { NO_SUCH_PROJECT, projectTools } from "./tools/projects.ts";
 import { recurrenceTools } from "./tools/recurrences.ts";
+import { runTools } from "./tools/runs.ts";
 import { settingsTools } from "./tools/settings.ts";
 import { taskTools } from "./tools/tasks.ts";
 import { trashTools } from "./tools/trash.ts";
@@ -156,6 +163,7 @@ const handlers: Handlers = {
   ...trashTools,
   ...heldChangeTools,
   ...moveTools,
+  ...runTools,
 };
 
 /** How long the alarm sleeps between wakes while it has something to do. */
@@ -175,14 +183,13 @@ const NO_AGENT: Record<NoAgent, string> = {
     "There is no Agent in this Deployment: its configuration names a model Praxis ships no price for, so no Run could be counted. Naming another is a change to the configuration and a deploy.",
 };
 
-// #69's `clear_conversation` will let the person start the Conversation afresh, which mends this
-// too; until it lands, only waiting for a release that mends it does.
 /**
  * Why a Message is refused when the runtime cannot open this Conversation's tables under this
- * release (section 11): the person can only wait, so the refusal says so.
+ * release (section 11): a release that mends it does, and so does clearing the Conversation, which
+ * starts it afresh and loses only what was said in it.
  */
 const CONVERSATION_UNOPENED =
-  "This Context's Conversation cannot be opened under this release, so the Agent answers nothing here until a release that mends it is deployed: the Journal and Connections work as before.";
+  "This Context's Conversation cannot be opened under this release, so the Agent answers nothing here until a release that mends it is deployed, or until the Conversation is cleared in this Context's settings, which starts it afresh: the Journal and Connections work as before.";
 
 /** A Message `note_shown` names that is no Brief or Review shown in this Conversation. */
 function noSuchBrief(): ToolResult<never> {
@@ -383,6 +390,55 @@ export function contextObject(
       if (this.#stuck !== null) return { stuck: this.#stuck };
       await this.restartClock(at);
       return { file: contextFile(this.ctx.storage.sql, at) };
+    }
+
+    /**
+     * What a Run Transcript holds of one of this Context's Runs (section 5.8), which the
+     * Deployment object asks for on `save_run_transcript` and carries to the person, reading none
+     * of it. A Run still going, one never started at the cap, and one whose Conversation was
+     * cleared since have none; nor does one while the Conversation cannot be opened.
+     */
+    async runTranscript(
+      id: string,
+    ): Promise<ToolResult<Pick<RunTranscript, "run" | "prompt" | "tools" | "messages">>> {
+      if (this.#stuck !== null) return stuckRefusal(this.#stuck);
+      const agent = await this.conversation();
+      // Read once the Conversation is open, and again after the last wait.
+      const sql = this.ctx.storage.sql;
+      const run = runById(sql, id);
+      if (run === null) return failure("not_found", "There is no such Run in this Context.");
+      if (run.ended === null) {
+        return refusal(
+          "This Run is still going: its transcript can be saved once it has ended.",
+          [],
+        );
+      }
+      if (run.ended === "cap_reached") {
+        return refusal(
+          "This Run never started, since the month's spend had reached the cap: nothing was given, said or called in it.",
+          [],
+        );
+      }
+      const cleared = refusal(
+        "This Run's Conversation has been cleared since, so nothing of what was said in it is kept.",
+        [],
+      );
+      if (run.submission === null) return cleared;
+      if (typeof agent === "string") {
+        return refusal(agent === "unavailable" ? CONVERSATION_UNOPENED : NO_AGENT[agent], []);
+      }
+      // A clear meanwhile drops the records being read and lets go of the Run's handle on them.
+      const clearedSince = () => runById(sql, id)?.submission !== run.submission;
+      let kept: Awaited<ReturnType<ContextAgent["transcript"]>>;
+      try {
+        kept = await agent.transcript(this.ctx.storage, run, nextTryFrom(sql, run));
+      } catch (error) {
+        if (clearedSince()) return cleared;
+        throw error;
+      }
+      const now = runById(sql, id);
+      if (kept === null || now === null || clearedSince()) return cleared;
+      return success({ run: runRecord(sql, now), ...kept });
     }
 
     /**
@@ -608,9 +664,11 @@ export function contextObject(
             ? await this.listNotices(request)
             : request.tool === "search"
               ? await this.search(request)
-              : this.rebuildSearchIndex(request);
-        // None of them returns Effects: a write among them changes only what is derived.
-        const write = isWrite(request.tool) && !isDerivedWrite(request.tool);
+              : request.tool === "clear_conversation"
+                ? await this.clearConversation(request)
+                : this.rebuildSearchIndex(request);
+        // None of them returns Effects: a write among them changes no record.
+        const write = isWrite(request.tool) && !isRecordlessWrite(request.tool);
         logCall({ tool: request.tool, write }, result, elapsed());
         return result;
       }
@@ -688,6 +746,54 @@ export function contextObject(
         meaningFailed("search", error);
         return { words_only: "unreachable" };
       }
+    }
+
+    /**
+     * `clear_conversation`, by the person's hand from the Context's settings (section 5.8): all of
+     * the runtime's record is dropped at once, and the next thing to need the Agent opens it
+     * afresh, which also mends a Conversation the runtime could not open under this release. The
+     * Journal, the change log and the Run records stay as they were, but for the Runs' handles on
+     * the Conversation. It is refused while a Run is going, since the runtime is working in the
+     * record it would drop. It changes no record and leaves no Effect; a repeated key answers as
+     * the first call did.
+     */
+    private async clearConversation(request: ToolRequest): Promise<ToolResult<unknown>> {
+      const admitted = admit(request);
+      if (!admitted.ok) return admitted;
+      const { key } = admitted.value.input as ToolInput<"clear_conversation">;
+      // A Brief or a Review the clock is starting is going too, once it has started.
+      await this.#clocking;
+      // From here to the drop nothing awaits: no Run can start in the record being dropped, and the
+      // key is read as the drop finds it.
+      const sql = this.ctx.storage.sql;
+      const keyed = {
+        caller: request.caller,
+        key,
+        tool: "clear_conversation",
+        at: request.arrivedAt,
+      };
+      const repeated = repeatedKey(sql, keyed);
+      if (repeated) return repeated;
+      if (runsNotEnded(sql).length > 0) {
+        return refusal(
+          "A Run is going in this Conversation, so nothing was cleared: try again once it has ended.",
+          [],
+        );
+      }
+      const result: ToolResult<ToolOutput["clear_conversation"]> = success({
+        conversation: "cleared",
+      });
+      this.ctx.storage.transactionSync(() => {
+        dropRuntimeTables(sql);
+        forgetConversation(sql);
+        if (key !== undefined) rememberKey(sql, { ...keyed, key, result });
+      });
+      // The Agent held the runtime opened on the tables dropped: the next to need it opens anew.
+      if (typeof this.#agent === "object") this.#agent = undefined;
+      this.#agentWake = { active: false };
+      this.send({ kind: "cleared" });
+      await this.keepAlarm();
+      return result;
     }
 
     /**
@@ -906,7 +1012,13 @@ export function contextObject(
     ): Promise<ToolResult<unknown>> {
       const sql = this.ctx.storage.sql;
       const failed = runById(sql, id);
-      if (failed === null || failed.message === null || failed.started_by !== "message") {
+      // A Run of a Conversation since cleared has no handle on it: nothing of it is there to try.
+      if (
+        failed === null ||
+        failed.message === null ||
+        failed.submission === null ||
+        failed.started_by !== "message"
+      ) {
         return failure("not_found", "There is no such Run in this Context's Conversation.");
       }
       if (failed.ended !== "failed") {

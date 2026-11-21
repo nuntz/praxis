@@ -2,7 +2,7 @@ import type { Entry, Task } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
 import { failMeaningAfter, heldEmbeddings, setMeaningFailing } from "./meaning-fake.ts";
-import { answering, type Script, scriptModel } from "./model-fake.ts";
+import { heldAnswer, scriptModel } from "./model-fake.ts";
 import { agent, atOnce, everyCaller, hand, newDeployment, value } from "./seam.ts";
 
 // The Deployment object holds the list of Contexts, with their names and accents and nothing from
@@ -448,16 +448,8 @@ describe("delete_context after its object was deleted and the answer lost", () =
 
 describe("delete_context while a Run is going", () => {
   test("is refused, with nothing deleted, until the Run has ended", async () => {
-    let answer = () => {};
-    const answered = new Promise<void>((resolve) => {
-      answer = resolve;
-    });
-    const done = answering("Done.");
-    const held: Script = async (...args) => {
-      await answered;
-      return done(...args);
-    };
-    scriptModel(held);
+    const { script, answer } = heldAnswer();
+    scriptModel(script);
     const deployment = newDeployment();
     const work = await make(deployment, "Work");
     await make(deployment, "Home");

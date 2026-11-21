@@ -71,6 +71,8 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   search: [        "yes", "yes", "yes", "yes",      "yes" ],
   rebuild_search_index: [
                    "yes", "no",  "no",  "no",       "no"  ],
+  clear_conversation: [
+                   "yes", "no",  "no",  "no",       "no"  ],
   restore: [       "yes", "yes", "no",  "no",       "no"  ],
   remove_for_good: [
                    "yes", "no",  "no",  "no",       "no"  ],
@@ -84,6 +86,8 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   list_held_changes: [
                    "yes", "yes", "yes", "no",       "no"  ],
   list_notices: [  "yes", "no",  "no",  "no",       "no"  ],
+  list_runs: [     "yes", "no",  "no",  "no",       "no"  ],
+  get_run: [       "yes", "no",  "no",  "no",       "no"  ],
   get_move_unit: [ "yes", "no",  "no",  "no",       "no"  ],
   // The Conversation tools (section 4.12): the person's hand only.
   send_message: [  "yes", "no",  "no",  "no",       "no"  ],
@@ -122,6 +126,7 @@ export const deploymentOffering: Record<string, [Offer, Offer, Offer, Offer, Off
   set_spend_cap: [      "yes", "no",  "no",  "no",       "no"  ],
   make_export: [        "yes", "no",  "no",  "no",       "no"  ],
   get_last_backup: [    "yes", "no",  "no",  "no",       "no"  ],
+  save_run_transcript: ["yes", "no",  "no",  "no",       "no"  ],
 };
 
 /**
@@ -179,6 +184,7 @@ export const runsWith: Record<string, () => unknown> = {
   view_attention: () => ({}),
   search: () => ({ words: marked("Offered") }),
   rebuild_search_index: () => ({}),
+  clear_conversation: () => ({}),
   restore: () => ({ id: "no-such-record" }),
   remove_for_good: () => ({ id: "no-such-record" }),
   empty_trash: () => ({}),
@@ -188,6 +194,8 @@ export const runsWith: Record<string, () => unknown> = {
   cancel_held_change: () => ({ id: "no-such-held-change" }),
   list_held_changes: () => ({}),
   list_notices: () => ({}),
+  list_runs: () => ({}),
+  get_run: () => ({ id: "no-such-run" }),
   get_move_unit: () => ({ kind: "entry", id: "no-such-entry" }),
   send_message: () => ({ words: marked("Offered") }),
   retry_run: () => ({ run: "no-such-run" }),
@@ -223,4 +231,5 @@ export const deploymentRunsWith: Record<string, (id: string) => unknown> = {
   set_spend_cap: () => ({ cap: 25 }),
   make_export: () => ({}),
   get_last_backup: () => ({}),
+  save_run_transcript: (id) => ({ context_id: id, run_id: "no-such-run" }),
 };

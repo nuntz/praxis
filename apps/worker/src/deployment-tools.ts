@@ -285,6 +285,21 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
     return success(written({ cap: input.cap }, [effectOnSpendCap(input.cap)]));
   },
 
+  async save_run_transcript({ input, sql, env, arrivedAt }) {
+    // A retired Context cannot be read (section 4.3): its Runs are found once it is brought back.
+    const listed = listing(sql, input.context_id);
+    if (listed === null || listed.retired) return noSuchContext();
+    // The Context's object writes it, and this one carries it and reads none of it (ADR 0006).
+    const answer = await contextObjectOf(env, listed.id).runTranscript(input.run_id);
+    if (!answer.ok) return answer;
+    return success({
+      kind: "run_transcript",
+      made_at: instantToIso(arrivedAt),
+      context: { id: listed.id, name: listed.name },
+      ...answer.value,
+    });
+  },
+
   async make_export({ sql, env, arrivedAt }) {
     const { made, stuck } = await exportOf(sql, env, arrivedAt);
     // An Export is always the whole Deployment (section 10.1): a Context stuck on its upgrade

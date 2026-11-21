@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Caller, CallerKind } from "./callers.ts";
+import type { RunTranscript } from "./conversation.ts";
 import { timeZone } from "./day.ts";
 import { type Device, pushSubscription } from "./device.ts";
 import type { Written } from "./effects.ts";
@@ -223,6 +224,12 @@ export const deploymentTools = {
       "Read when the last daily Backup was made, or null while none has been. A Backup is the Export's file, made by the system once a day and kept 30 days.",
     input: z.strictObject({}),
   },
+  save_run_transcript: {
+    kind: "read",
+    description:
+      "Save a Run Transcript: a file of one Run, for debugging, holding the prompt and the tools it was offered, the Message it answered as the model was shown it, each answer of the model with its calls, and each call's result. It is the only way a Conversation's text leaves Praxis, and is not an Export. A Run still going, one never started and one whose Conversation was cleared have none.",
+    input: z.strictObject({ context_id: id, run_id: id }),
+  },
 } as const;
 
 export type DeploymentToolName = keyof typeof deploymentTools;
@@ -268,6 +275,7 @@ export type DeploymentToolOutput = {
   set_spend_cap: Written<SpendCap>;
   make_export: Export;
   get_last_backup: LastBackup;
+  save_run_transcript: RunTranscript;
 };
 
 export function parseDeploymentToolInput<N extends DeploymentToolName>(

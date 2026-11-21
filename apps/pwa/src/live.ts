@@ -12,6 +12,8 @@ export type LiveListener = {
   message?(message: Message): void;
   /** A Message no longer in the Conversation, by its id: a Brief or Review a newer one replaced. */
   gone?(message: string): void;
+  /** The Conversation was cleared: it holds no Message now. */
+  cleared?(): void;
   /**
    * The channel opened again after a drop. What the Conversation said meanwhile is not replayed:
    * read it with `list_messages`.
@@ -178,6 +180,10 @@ export class Live {
     }
     if (message.kind === "gone") {
       for (const listener of this.#listeners) listener.gone?.(message.message);
+      return;
+    }
+    if (message.kind === "cleared") {
+      for (const listener of this.#listeners) listener.cleared?.();
       return;
     }
     await this.#deliver(message.items);

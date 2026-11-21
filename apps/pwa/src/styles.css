@@ -305,7 +305,8 @@ button.quiet {
   gap: var(--space-1);
 }
 
-.delete-context-actions {
+.delete-context-actions,
+.clear-conversation-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -1022,6 +1023,18 @@ button.quiet.attention-project-toggle {
   margin: var(--space-1) 0 0;
   color: var(--muted);
   font: var(--type-meta);
+}
+
+.run-transcript {
+  margin: var(--space-1) 0 0;
+}
+
+.run-notice .run-transcript {
+  margin: 0;
+}
+
+.run-transcript .problem {
+  margin: var(--space-1) 0 0;
 }
 
 /* A Notice is Praxis telling the person about its own condition: never a Message. */

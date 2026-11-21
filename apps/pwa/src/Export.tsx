@@ -3,7 +3,7 @@ import { createSignal, Show } from "solid-js";
 import { callDeploymentTool, unreachableMessage } from "./tools.ts";
 
 /** Hand the person a file to keep, as the browser saves a download. */
-function download(blob: Blob, name: string): void {
+export function download(blob: Blob, name: string): void {
   const address = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = address;

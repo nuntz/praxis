@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Attention } from "./attention.ts";
 import type { CallerKind } from "./callers.ts";
+import type { RunRecord } from "./conversation.ts";
 import { day, daysBefore, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
 import { type Entry, type Page, STANDING_CEILING, type Version } from "./entry.ts";
@@ -34,11 +35,12 @@ type ToolDefinition = {
        */
       destructive: boolean;
       /**
-       * True for a write that changes only what is derived, as rebuilding the meaning index does:
-       * no record, no Effect and nothing in the change log, so it returns what it set going in
-       * place of `Written` (ADR 0007).
+       * Set for a write that changes no record: no Effect and nothing in the change log, so it
+       * returns what it did in place of `Written` (ADR 0007). `derived` when it changes only what
+       * is derived, as rebuilding the meaning index does; `conversation` when it changes only the
+       * Conversation, which is not data (section 4.12), as clearing it does.
        */
-      derived?: true;
+      changesNoRecord?: "derived" | "conversation";
     }
 );
 
@@ -584,9 +586,18 @@ export const tools = {
   rebuild_search_index: {
     kind: "write",
     destructive: false,
-    derived: true,
+    changesNoRecord: "derived",
     description:
       "Rebuild this Context's meaning index from its Journal: every Entry is embedded afresh, which costs a little and counts toward the spend cap. Until it is done, search answers from words alone and says so. No record changes.",
+    input: writeInput({}),
+    offered: toHandOnly,
+  },
+  clear_conversation: {
+    kind: "write",
+    destructive: true,
+    changesNoRecord: "conversation",
+    description:
+      "Clear this Context's Conversation: every Message, what the Agent heard, said and called, is dropped at once, and the next Message starts it afresh. The Journal, the change log and the Run records stay as they were; a Run Transcript can no longer be saved of a Run before it. It is refused while a Run is going. It cannot be undone.",
     input: writeInput({}),
     offered: toHandOnly,
   },
@@ -651,6 +662,19 @@ export const tools = {
     input: z.strictObject({}),
     offered: toHandOnly,
   },
+  list_runs: {
+    kind: "read",
+    description:
+      "List this Context's Run records, newest first, 50 to a page: what started each Run, when, the model, its tokens and cost, how it ended and the changes it made, by kind and id. A Run record holds none of what was said, and is kept for good: a change older than the change log's 90 days is only counted, and a Run whose Conversation was cleared keeps its record.",
+    input: z.strictObject({ cursor }),
+    offered: toHandOnly,
+  },
+  get_run: {
+    kind: "read",
+    description: "Get one Run record by its id, as list_runs gives it: none of what was said.",
+    input: z.strictObject({ id }),
+    offered: toHandOnly,
+  },
   get_move_unit: {
     kind: "read",
     description:
@@ -693,13 +717,16 @@ export function isWrite(name: string): name is WriteName {
   return isToolName(name) && tools[name].kind === "write";
 }
 
-/** The writes that change only what is derived, and return no Effects (ADR 0007). */
-export type DerivedWriteName = {
-  [N in WriteName]: (typeof tools)[N] extends { derived: true } ? N : never;
+/**
+ * The writes that change no record, only what is derived or the Conversation, and return no
+ * Effects (ADR 0007).
+ */
+export type RecordlessWriteName = {
+  [N in WriteName]: (typeof tools)[N] extends { changesNoRecord: string } ? N : never;
 }[WriteName];
 
-export function isDerivedWrite(name: string): name is DerivedWriteName {
-  return isWrite(name) && "derived" in tools[name];
+export function isRecordlessWrite(name: string): name is RecordlessWriteName {
+  return isWrite(name) && "changesNoRecord" in tools[name];
 }
 
 export type ToolInput<N extends ToolName> = z.infer<(typeof tools)[N]["input"]>;
@@ -756,6 +783,8 @@ export type ToolOutput = {
   view_attention: Attention;
   search: SearchResults;
   rebuild_search_index: SearchIndex;
+  /** The Conversation is cleared: it holds no Message now. */
+  clear_conversation: { conversation: "cleared" };
   restore: Written<TrashItem>;
   remove_for_good: Written<Removal>;
   empty_trash: Written<Removal>;
@@ -765,18 +794,21 @@ export type ToolOutput = {
   cancel_held_change: Written<HeldChange>;
   list_held_changes: Page<HeldChange>;
   list_notices: { items: StandingNotice[] };
+  list_runs: Page<RunRecord>;
+  get_run: RunRecord;
   get_move_unit: MoveUnit;
 };
 
 /**
- * Every write but a derived one returns `Written`, or `Held` for a held call (ADR 0007): a write
- * whose output is anything else fails the typecheck here until its definition says `derived`.
+ * Every write but one that changes no record returns `Written`, or `Held` for a held call (ADR
+ * 0007): a write whose output is anything else fails the typecheck here until its definition says
+ * what it changes in `changesNoRecord`.
  */
 type NotWritten = {
-  [N in Exclude<WriteName, DerivedWriteName>]: ToolOutput[N] extends Written<unknown> | Held
+  [N in Exclude<WriteName, RecordlessWriteName>]: ToolOutput[N] extends Written<unknown> | Held
     ? never
     : N;
-}[Exclude<WriteName, DerivedWriteName>];
+}[Exclude<WriteName, RecordlessWriteName>];
 export const everyWriteReportsEffects: [NotWritten] extends [never] ? true : NotWritten = true;
 
 /** A tool's input checked against its schema, or the `invalid_input` saying what is wrong. */

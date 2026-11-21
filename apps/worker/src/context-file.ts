@@ -19,7 +19,7 @@ import {
 } from "@praxis/domain";
 import { type AuthorColumns, toAuthor } from "./author.ts";
 import { movesOut } from "./move-rows.ts";
-import type { RunRow } from "./run-rows.ts";
+import { exportedRun, type RunRow } from "./run-rows.ts";
 
 /**
  * This Context's file of an Export as at `at` (section 10.1): its settings, its Journal with what
@@ -302,29 +302,9 @@ function trash(sql: SqlStorage): ExportedTrashItem[] {
     }));
 }
 
-/**
- * Each Run record, in the order started, with none of the runtime's handles on the Conversation
- * and not the changes it made, which the change log numbers and the file does not hold.
- */
+/** Each Run record, in the order started, as an Export holds it. */
 function runs(sql: SqlStorage): ExportedRun[] {
-  return sql
-    .exec<RunRow>(`SELECT * FROM runs ORDER BY seq`)
-    .toArray()
-    .map((row) => ({
-      id: row.id,
-      started_by: row.started_by,
-      at: instantToIso(row.at),
-      model: row.model,
-      tokens: {
-        input: row.input_tokens,
-        output: row.output_tokens,
-        cache_read: row.cache_read_tokens,
-        cache_write: row.cache_write_tokens,
-      },
-      cost: row.cost,
-      ended: row.ended,
-      failure: row.failure,
-    }));
+  return sql.exec<RunRow>(`SELECT * FROM runs ORDER BY seq`).toArray().map(exportedRun);
 }
 
 /** Each unit on its way out of this Context, in the order the moves were asked for. */

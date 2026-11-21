@@ -180,6 +180,25 @@ export function newContext(
   };
 }
 
+/**
+ * A fresh Context made by the hand in a Deployment of its own, as `newContext` makes one, with that
+ * Deployment and the Context's id: for a test that calls a Deployment tool about it, or that
+ * reaches its object.
+ */
+export async function contextWithItsDeployment(
+  startAt = "2026-11-15T09:00:00.000Z",
+  name = "Work",
+) {
+  const deployment = newDeployment(startAt);
+  const made = await deployment.call(hand, "create_context", {
+    name,
+    time_zone: "UTC",
+    accent: "blue",
+  });
+  const id = value(made).record.id;
+  return { deployment, id, context: deployment.context(id) };
+}
+
 /** A Context's object as a test reaches it, once the Deployment object has said which it is. */
 function contextHandle(time: { now: number }, reach: () => ReturnType<typeof reachContext>) {
   const callAny = async (caller: Caller, tool: string, input: unknown) => {

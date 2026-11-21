@@ -7,8 +7,8 @@ import {
   type Effect,
   instantToIso,
   isConversationToolName,
-  isDerivedWrite,
   isHeld,
+  isRecordlessWrite,
   isWrite,
   keysForgottenBy,
   SPEND_CAP_ID,
@@ -95,6 +95,12 @@ const otherTables = [
   "ladder",
 ];
 
+/** The tables holding the Run records, which hold no words (section 5.8). */
+const RUN_TABLES = ["runs", "run_changes"];
+
+/** The reads that give a Run record, which gives none of its words. */
+const RUN_READS = ["list_runs", "get_run"];
+
 /** Each record's rows as JSON, by `kind:id`. */
 export type Records = Map<string, string>;
 
@@ -132,7 +138,25 @@ export async function throughOracle(stub: Stub, request: Request): Promise<ToolR
     words: { before: before.words, after: after.words, log: after.summaries },
   });
   expect(problems, `The oracle, on ${request.tool} as ${request.caller.kind}`).toEqual([]);
+  if (request.tool === "clear_conversation" && result.ok) await holdsNoConversation(stub);
   return result;
+}
+
+/**
+ * Fail unless the runtime's tables hold none of the words said in the Conversation, once it has
+ * been cleared (section 5.8): all of its record is dropped at once, not hidden.
+ */
+async function holdsNoConversation(stub: Stub): Promise<void> {
+  const left = await runInDurableObject(stub, (_, state) => {
+    const sql = state.storage.sql;
+    return textsIn(
+      sql,
+      tablesIn(sql).filter((name) => name.startsWith(RUNTIME_TABLES)),
+    ).flatMap(({ where, text }) => (markersIn(text).length > 0 ? [where] : []));
+  });
+  expect(left, "A cleared Conversation leaves none of its words in the runtime's tables").toEqual(
+    [],
+  );
 }
 
 /** What is wrong with one call as the oracle saw it. Nothing, when the call kept its word. */
@@ -145,9 +169,13 @@ export function judge(seen: Seen): string[] {
     problems.push("A repeated key did not return the first result.");
   }
   problems.push(...wordsLeftBehind(seen));
+  if (RUN_READS.includes(request.tool) && markersIn(JSON.stringify(result)).length > 0) {
+    problems.push(`${request.tool} gave words with a Run record (section 5.8).`);
+  }
   if (isConversationToolName(request.tool)) return judgeConversation(changed, logged);
-  // A derived write, such as rebuilding the meaning index, changes no record: judged as a read.
-  const write = isWrite(request.tool) && !isDerivedWrite(request.tool);
+  // A write that changes no record, only what is derived or the Conversation, as rebuilding the
+  // meaning index and clearing the Conversation do: judged as a read.
+  const write = isWrite(request.tool) && !isRecordlessWrite(request.tool);
   if (!write || !result.ok || firstWithKey !== null) {
     const why = !write ? "A read" : !result.ok ? "A call that failed" : "A repeated key";
     if (changed.length > 0) problems.push(`${why} changed records: ${canonical(changed)}`);
@@ -676,6 +704,13 @@ function snapshot(
     expect(
       unknown,
       "Every table is known to the oracle: add it to domainTables in apps/worker/test/oracle.ts if its rows are records, else to otherTables",
+    ).toEqual([]);
+    // A Run record holds no words (section 5.8, ADR 0010): no marker seeded in words is in one.
+    expect(
+      textsIn(sql, RUN_TABLES)
+        .filter(({ text }) => markersIn(text).length > 0)
+        .map(({ where }) => where),
+      "A Run record holds none of the words of a Journal or a Conversation",
     ).toEqual([]);
     // The words index is derived (section 9.4): whatever a call did, it holds the words of each
     // record not in the Trash and nothing else, so a record is found from the moment it is made

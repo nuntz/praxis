@@ -50,6 +50,13 @@ test("the person deletes an Entry, sees it and its Task in the Trash, and restor
   await expect(item).toContainText(`With it: Task ${title}`);
   await expect(item.getByText(/^Removed for good on /)).toBeVisible();
   await expect(trash.getByText(/^Praxis cannot reach a file you downloaded/)).toBeVisible();
+  // What the Agent quoted stays in the Conversation until the person clears it (section 3.8).
+  await expect(
+    trash.getByText(
+      "The Conversation keeps what the Agent quoted of a record removed here until you clear it, in this Context's settings.",
+      { exact: true },
+    ),
+  ).toBeVisible();
 
   const restoring = page.waitForResponse(/\/tools\/restore$/);
   await item.getByRole("button", { name: "Restore", exact: true }).click();

@@ -141,6 +141,25 @@ export function calling(
   };
 }
 
+/**
+ * A script that answers in these words only once `answer()` is called, so a test holds a Run going
+ * while it calls something else.
+ */
+export function heldAnswer(words = "Done."): { script: Script; answer: () => void } {
+  let answer = () => {};
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  const done = answering(words);
+  return {
+    script: async (...args) => {
+      await answered;
+      return done(...args);
+    },
+    answer,
+  };
+}
+
 /** A script that answers every Message in these words, calling nothing. */
 export function answering(words: string): Script {
   return () => fauxAssistantMessage(words);

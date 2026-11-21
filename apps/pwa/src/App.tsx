@@ -407,6 +407,7 @@ export function App() {
                         </Show>
                       </Peer>
                       <Conversation
+                        contextId={currentId() ?? ""}
                         contextName={current()?.name}
                         onShowRecord={showRecord}
                         onShowCap={showCap}

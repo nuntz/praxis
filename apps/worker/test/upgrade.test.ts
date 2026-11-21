@@ -1,6 +1,6 @@
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { EXPORT_FORMAT_VERSION, type Export } from "@praxis/domain";
+import { EXPORT_FORMAT_VERSION, type Export, type MessagesPage } from "@praxis/domain";
 import { describe, expect, test, vi } from "vitest";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
 import { RUNTIME_TABLES } from "../src/agent.ts";
@@ -10,9 +10,9 @@ import { praxis } from "../src/worker.ts";
 import { fakeAccess, TEST_APPLICATION } from "./access-fake.ts";
 import { type Dump, dumpObject, layDump, shapeOf } from "./dump.ts";
 import { type FixtureIds, fixtureName } from "./fixture-scenario.ts";
-import { adoptMarkers } from "./markers.ts";
+import { adoptMarkers, marked } from "./markers.ts";
 import { holdMeanings } from "./meaning-fake.ts";
-import { DAY, hand, newDeployment, value, wakeAgain } from "./seam.ts";
+import { contextWithItsDeployment, DAY, hand, newDeployment, value, wakeAgain } from "./seam.ts";
 import { addSteps, failingStep, mendSteps, wakeUnder } from "./upgrade-faults.ts";
 
 // The upgrade test of section 13 (ADR 0019). Each release committed a fixture: a Context object
@@ -301,18 +301,7 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
 
     test("a runtime that cannot open its tables leaves the Journal working, the Conversation unavailable", async () => {
       const { context } = await wakeFixture(fixture);
-      await runInDurableObject(contextObjectOf(fixture), (_, state) => {
-        const sql = state.storage.sql;
-        // The runtime keeps the version its own tables are at: one it does not know, it will not open.
-        const [versions] = sql
-          .exec<{ name: string }>(
-            `SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE ? AND name LIKE '%schema%'`,
-            `${RUNTIME_TABLES}%`,
-          )
-          .toArray();
-        if (versions === undefined) throw new Error("The runtime keeps no version of its tables");
-        sql.exec(`UPDATE "${versions.name}" SET version = 99`);
-      });
+      await leaveRuntimeUnopenable(contextObjectOf(fixture));
       await wakeAgain(contextObjectOf(fixture));
 
       expect(value(await context.callAny(hand, "list_messages", {}))).toEqual({
@@ -329,6 +318,47 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
     });
   },
 );
+
+/**
+ * Leave a Context's object with runtime tables its runtime will not open, as a release whose
+ * runtime does not know their version would: it keeps the version its own tables are at.
+ */
+async function leaveRuntimeUnopenable(stub: DurableObjectStub): Promise<void> {
+  await runInDurableObject(stub, (_, state) => {
+    const sql = state.storage.sql;
+    const [versions] = sql
+      .exec<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE ? AND name LIKE '%schema%'`,
+        `${RUNTIME_TABLES}%`,
+      )
+      .toArray();
+    if (versions === undefined) throw new Error("The runtime keeps no version of its tables");
+    sql.exec(`UPDATE "${versions.name}" SET version = 99`);
+  });
+}
+
+describe("clear_conversation, on a runtime that cannot open its tables", () => {
+  test("mends the Conversation: it starts afresh, and the Agent answers again", async () => {
+    const { deployment, id, context } = await contextWithItsDeployment(
+      "2026-11-15T09:00:00.000Z",
+      "Personal",
+    );
+    const messages = async () =>
+      value(await context.callAny(hand, "list_messages", {})) as MessagesPage;
+    await context.callAny(hand, "send_message", { words: marked("Hello") });
+    await context.runsEnded();
+    await leaveRuntimeUnopenable(env.CONTEXT.get(env.CONTEXT.idFromString(id)));
+    await deployment.wakeAgain(id);
+    expect((await messages()).agent).toBe("unavailable");
+
+    value(await context.call(hand, "clear_conversation", {}));
+
+    expect(await messages()).toEqual({ items: [], next_cursor: null, agent: "available" });
+    value(await context.callAny(hand, "send_message", { words: marked("Hello again") }));
+    await context.runsEnded();
+    expect((await messages()).items.map(({ from }) => from)).toEqual(["agent", "person"]);
+  });
+});
 
 describe("step 1, on a Context's object made before the ladder", () => {
   /** A new Context's object, made as one before the ladder was, by `before`, and woken again. */

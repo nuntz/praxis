@@ -34,12 +34,22 @@ export type ToolCall<N extends ToolName> = {
 /**
  * The Context tools the Context's object runs itself, after the same checks, since they cannot run
  * inside one transaction of its SQL: `list_notices` asks the Deployment object what it answers,
- * `search` asks the meaning index, and `rebuild_search_index` sets the index to be built afresh,
- * which changes no record and leaves no Effect.
+ * `search` asks the meaning index, `rebuild_search_index` sets the index to be built afresh, and
+ * `clear_conversation` drops the runtime's record and opens it afresh: neither changes a record
+ * nor leaves an Effect.
  */
-export type ObjectToolName = "list_notices" | "search" | "rebuild_search_index";
+export type ObjectToolName =
+  | "list_notices"
+  | "search"
+  | "rebuild_search_index"
+  | "clear_conversation";
 
-const OBJECT_TOOLS: readonly string[] = ["list_notices", "search", "rebuild_search_index"];
+const OBJECT_TOOLS: readonly string[] = [
+  "list_notices",
+  "search",
+  "rebuild_search_index",
+  "clear_conversation",
+];
 
 export function isObjectTool(name: string): name is ObjectToolName {
   return OBJECT_TOOLS.includes(name);
