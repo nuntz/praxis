@@ -20,7 +20,7 @@ Pinned at `@earendil-works/pi-durable`, `pi-ai` and `chord` **1.5.2**, which mov
 
 ## Gotchas
 
-- **`agent()` in the Context's object opens the Agent and fixes its model** for as long as the object lives, so a test's script must come first (`scriptModel` in `test/model-fake.ts`). Code that only needs to know whether there is an Agent, such as `keepAlarm`, asks `hasAgent()`, which opens nothing: calling `agent()` from `make` once broke every test that scripts after making its Context.
+- **`agent()` in the Context's object opens the Agent and fixes its model** for as long as the object lives, so a test's script must come first (`scriptModel` in `test/model-fake.ts`): a test that needs the model to change, say from unreachable to answering, scripts once and switches inside the script, as `heldAnswer()` does. The harness fails a test in which a Context asked a script the test had since replaced. Code that only needs to know whether there is an Agent, such as `keepAlarm`, asks `hasAgent()`, which opens nothing: calling `agent()` from `make` once broke every test that scripts after making its Context.
 
 - **A Run's identity is `live.run.inputs[0]`**, the submission it answers. `live.run.taskId` is the generation task, which is handed on every model round, so it changes mid-Run.
 - **The runtime calls its transcript records entries.** They are never Entries: Praxis code names them records, kinds or Messages (see Domain words in `CODING_STANDARDS.md`).

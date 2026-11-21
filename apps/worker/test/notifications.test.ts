@@ -80,18 +80,24 @@ describe("a Brief's Notification", () => {
   });
 
   test("a Brief with nothing to raise sends nothing, and nor does one that failed", async () => {
+    // A Context keeps the model it was first asked with: one script, unreachable from the second.
+    let reachable = true;
+    const [nothing, unreachable] = [answering(NOTHING_TO_RAISE), failing(UNAVAILABLE)];
+    scriptModel((...args) => (reachable ? nothing(...args) : unreachable(...args)));
     const deployment = newDeployment(BEFORE_THE_BRIEF);
     const work = await makeContext(deployment, "Work");
     const phone = await deviceSwitchedOn(deployment);
 
-    scriptModel(answering(NOTHING_TO_RAISE));
     await brief(deployment, work);
-    scriptModel(failing(UNAVAILABLE));
+    reachable = false;
     await brief(deployment, work);
     deployment.advance(DAY);
     await wake(deployment, work);
 
     expect(received(phone)).toEqual([]);
+    const runs = value(await deployment.context(work).call(hand, "list_runs", {})).items;
+    expect(runs.map(({ ended }) => ended)).toContain("failed");
+    expect(runs.map(({ ended }) => ended)).toContain("answered");
   });
 
   test("a Context with its switch off sends none, while another Context's still comes", async () => {

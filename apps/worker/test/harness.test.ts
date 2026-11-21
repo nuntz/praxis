@@ -1,6 +1,7 @@
 import type { Change, Effect, ToolResult } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { forget, leakedMarkers, logs, marked } from "./markers.ts";
+import { answering, forgetSuperseded, scriptModel, supersededScripts } from "./model-fake.ts";
 import { judge, judgeDeployment, type Records, type Seen, type SeenDeployment } from "./oracle.ts";
 import { agent, connection, hand, newContext, value } from "./seam.ts";
 
@@ -394,5 +395,22 @@ describe("the platform's logs", () => {
       { tool: "record_entry", result: "invalid_input", ms: expect.any(Number) },
       { tool: "unknown", result: "not_offered", ms: expect.any(Number) },
     ]);
+  });
+});
+
+describe("the scripted model", () => {
+  test("is held to the script a Context was first asked with: a script given after that is seen asked out of turn", async () => {
+    scriptModel(answering("First."));
+    const context = newContext();
+    await context.callAny(hand, "send_message", { words: "Hello" });
+    await context.runsEnded();
+    scriptModel(answering("Never heard."));
+
+    await context.callAny(hand, "send_message", { words: "Again" });
+    await context.runsEnded();
+
+    expect(supersededScripts()).toEqual(["Again"]);
+    // Seen, so the harness's own check after this test passes.
+    forgetSuperseded();
   });
 });

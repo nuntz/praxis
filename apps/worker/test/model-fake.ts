@@ -21,6 +21,26 @@ export type Script = FauxResponseFactory;
 
 let playingModel: AgentModel | NoAgent = "no_key";
 
+/** The script playing now: one asked after another replaced it is asked by a Context it missed. */
+let playing: object = {};
+
+/** What each script asked after a newer one replaced it was asked by, in this test. */
+const superseded: string[] = [];
+
+/**
+ * The scripts asked in this test after a newer one replaced them. A Context keeps the model it
+ * was first asked with, so a script given once its Agent is open never reaches it: the test then
+ * runs on the script it meant to replace.
+ */
+export function supersededScripts(): readonly string[] {
+  return superseded;
+}
+
+/** Start a test with no script asked out of turn. */
+export function forgetSuperseded(): void {
+  superseded.length = 0;
+}
+
 /**
  * The scripted model is asked again as the real one is, but at once: twice more, a millisecond
  * apart, so a test sees the asking again without waiting seconds for it.
@@ -64,7 +84,10 @@ export function scriptModel(
   models.setProvider(faux.provider);
   // Each request takes the next response, and each puts the script back for the one after, so
   // it never runs out: a provider with no response left fails the request, as a model error.
+  const mine = {};
+  playing = mine;
   const step: Script = (...args) => {
+    if (playing !== mine) superseded.push(lastWords(args[0]));
     faux.appendResponses([step]);
     return script(...args);
   };
