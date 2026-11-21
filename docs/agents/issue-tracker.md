@@ -38,6 +38,8 @@ A ticket is one **slice** of `SPEC.md`, and its open siblings own the rest. When
 
 A ticket whose tool meets a rule a sibling ticket owns, without that sibling blocking it, says what stands in until that sibling lands, such as a call refused until the Held Change it should leave exists. The implementer builds the stand-in, with a placeholder comment naming the sibling.
 
+A question an implementer leaves open for a sibling to settle is a placeholder too: a comment naming that sibling by number, at the code its answer changes, so `bun lint/tickets.ts --closing <n>` names it when the sibling closes. #61 left one in a closed ticket's comment and in code naming no ticket ("Settled with the Agent's Runs"); #62 closed with it open, and #79 met it as an acceptance criterion its tests contradicted.
+
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.

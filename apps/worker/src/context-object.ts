@@ -998,13 +998,13 @@ export function contextObject(
       const { arrivedAt } = request;
       if (tool === "start_call") {
         const input = parsed.input as ConversationToolInput<"start_call">;
-        return this.inTurn(() =>
+        return this.oneAtATime(() =>
           this.keyed(tool, request, input.key, () => this.startCall(agent, input, arrivedAt)),
         );
       }
       if (tool === "end_call") {
         const input = parsed.input as ConversationToolInput<"end_call">;
-        return this.inTurn(() =>
+        return this.oneAtATime(() =>
           this.keyed(tool, request, input.key, () => this.endCall(input, arrivedAt)),
         );
       }
@@ -1045,17 +1045,17 @@ export function contextObject(
       return result;
     }
 
-    /** The Call tools going or waiting, which run one at a time. */
-    #callTurns: Promise<unknown> = Promise.resolve();
+    /** The last Call tool going or waiting: they run one at a time. */
+    #callTools: Promise<unknown> = Promise.resolve();
 
     /**
      * Run a Call tool once the one before it has finished: each reads which Calls are going and
      * writes them after waiting on the provider, so two at once would each miss what the other did.
      */
-    private inTurn<T>(run: () => Promise<T>): Promise<T> {
-      const turn = this.#callTurns.then(run, run);
-      this.#callTurns = turn.catch(() => {});
-      return turn;
+    private oneAtATime<T>(run: () => Promise<T>): Promise<T> {
+      const going = this.#callTools.then(run, run);
+      this.#callTools = going.catch(() => {});
+      return going;
     }
 
     /**
