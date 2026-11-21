@@ -1,5 +1,6 @@
 import type {
   AgentMessage,
+  CallEnd,
   ClockFold,
   Effect,
   Message,
@@ -11,7 +12,7 @@ import type {
 import { runTranscriptName } from "@praxis/domain";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
-import { DeviceCall, type DeviceCallEnd } from "./call.ts";
+import { DeviceCall } from "./call.ts";
 import { Peer } from "./design/Peer.tsx";
 import { download } from "./Export.tsx";
 import { HeldChangeItem, useHeldChanges } from "./HeldChanges.tsx";
@@ -233,23 +234,33 @@ export function Conversation(props: {
             if (!result.ok) {
               readSpendIfCapped(result.error);
               setProblem(result.error.message);
-              return null;
+              return { refused: result.error.message };
             }
             placeAnswered(result.value.message);
-            return result.value.message.id;
+            return { message: result.value.message.id };
           } catch (error) {
-            setProblem(unreachableMessage(error));
-            return null;
+            const why = unreachableMessage(error);
+            setProblem(why);
+            return { refused: why };
           }
         },
-        ended: ({ ended, reason }) => {
+        failed: (notice) => FAILED[notice.failure],
+        ended: ({ ended, reason, record }) => {
           setCall(null);
           setMuted(false);
-          setCallEnded(callEndedWords(ended, reason));
+          setCallEnded(callEndedWords(record?.ended ?? ended, record?.provider_reason ?? reason));
+          // A Call counts toward the month's spend, which may now near or reach the cap.
+          void readSpend();
+          void readNotices();
         },
       });
-      if (typeof started === "string") setProblem(started);
-      else setCall(started);
+      if (typeof started === "string") {
+        setProblem(started);
+        // Refused at the cap, whose Notice then takes the composer's place, or for the voice key,
+        // whose standing Notice the Deployment now holds.
+        void readSpend();
+        void readNotices();
+      } else setCall(started);
     } catch (error) {
       setProblem(unreachableMessage(error));
     } finally {
@@ -270,7 +281,7 @@ export function Conversation(props: {
       answer: setWriting,
       message: (message) => {
         place(message);
-        if (message.from === "agent") call()?.answer(message);
+        call()?.answer(message);
       },
       gone: (id) => setMessages((shown) => shown.filter((message) => message.id !== id)),
       // Cleared, from this Device or another: every Message is gone, and the Conversation starts
@@ -434,11 +445,28 @@ export function Conversation(props: {
 
 /**
  * Why a Call ended, as the Notice in the Conversation's foot says it, or null for the person's own
- * tap, which needs none. The provider's reason is its own word for it.
+ * tap, which needs none: as the object's record says, or, when the object could not be reached,
+ * as this Device saw it. The provider's reason is its own word for it.
  */
-function callEndedWords(ended: DeviceCallEnd, reason: string | null): string | null {
-  if (ended === "hung_up") return null;
-  if (ended === "lost") return "The Call ended: the connection to the voice provider was lost.";
+function callEndedWords(ended: CallEnd, reason: string | null): string | null {
+  switch (ended) {
+    case "hung_up":
+      return null;
+    case "lost":
+      return "The Call ended: the connection to the voice provider was lost.";
+    case "left":
+      return "The Call ended when Praxis was left: the tab hidden, the screen locked or the network gone.";
+    case "silence":
+      return "The Call ended after two minutes in which nothing was said.";
+    case "replaced":
+      return "The Call ended: another Call was started in this Deployment.";
+    case "no_sign_of_life":
+      return "The Call ended: Praxis heard nothing from this Device for 45 seconds.";
+    case "cap_reached":
+      return "The Call ended: this month's spend reached its cap.";
+    case "provider_ended":
+      break;
+  }
   switch (reason) {
     case "expired":
       return "The Call ended: it reached the voice provider's two-hour limit.";

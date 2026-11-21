@@ -3,6 +3,7 @@ import type { Wake } from "@earendil-works/pi-durable";
 import {
   type CallEnd,
   type Caller,
+  type CallRecord,
   type Change,
   type ClockKind,
   type ContextFile,
@@ -27,6 +28,7 @@ import {
   type RunTranscript,
   refusal,
   type SearchIndex,
+  SIGN_OF_LIFE_LAPSE,
   success,
   type ToolInput,
   type ToolOutput,
@@ -42,13 +44,13 @@ import {
 } from "./agent.ts";
 import { arrivalTime, startTimer } from "./arrival.ts";
 import {
-  type CallRow,
   callById,
   callRecord,
   callsGoing,
   endCall,
   insertCall,
   keepEndHeardByObject,
+  noteAlive,
 } from "./call-rows.ts";
 import {
   appendChange,
@@ -217,6 +219,21 @@ const VOICE_REFUSED: Record<VoiceRefusal, string> = {
 
 /** A Call `end_call` names that this Context never set up. */
 const NO_SUCH_CALL = "There is no such Call in this Context.";
+
+/** A Call refused because the month's spend has reached the cap, with the cap in the way. */
+function callCapRefusal(cap: number): ToolResult<never> {
+  return refusal(
+    `This month's spend has reached the cap of ${dollars(cap)}, so no Call starts. Raising the cap in the Deployment's settings lets one start at once; otherwise Calls start again when the month turns.`,
+    [capInTheWay(cap)],
+  );
+}
+
+/**
+ * What the voice says as the object ends a Call at the cap, given to it on the provider's side
+ * channel before the session is closed (section 6): nothing of the Journal, and no number.
+ */
+export const CAP_SAID =
+  "This month's spend has reached its cap, so this Call ends now. Raising the cap in the settings lets another start.";
 
 /** A Message `note_shown` names that is no Brief or Review shown in this Conversation. */
 function noSuchBrief(): ToolResult<never> {
@@ -1008,10 +1025,16 @@ export function contextObject(
           this.keyed(tool, request, input.key, () => this.endCall(input, arrivedAt)),
         );
       }
+      if (tool === "note_call_alive") {
+        const input = parsed.input as ConversationToolInput<"note_call_alive">;
+        return this.oneAtATime(() =>
+          this.keyed(tool, request, input.key, () => this.callAlive(input, arrivedAt)),
+        );
+      }
       const input = parsed.input as ConversationToolInput<
         "send_message" | "retry_run" | "note_shown"
       >;
-      // start_call and end_call are run above, so what is left is one of these.
+      // The Call tools are run above, so what is left is one of these.
       if (typeof agent === "string") {
         return "message" in input
           ? noSuchBrief()
@@ -1049,8 +1072,9 @@ export function contextObject(
     #callTools: Promise<unknown> = Promise.resolve();
 
     /**
-     * Run a Call tool once the one before it has finished: each reads which Calls are going and
-     * writes them after waiting on the provider, so two at once would each miss what the other did.
+     * Run a Call tool once the one before it has finished, so a Device's start, sign of life and
+     * end of a Call are taken in the order they came. Each end still names the state it read, since
+     * the alarm and the Deployment object end Calls outside this line.
      */
     private oneAtATime<T>(run: () => Promise<T>): Promise<T> {
       const going = this.#callTools.then(run, run);
@@ -1061,7 +1085,9 @@ export function contextObject(
     /**
      * `start_call` (section 6): set a Call up at the voice provider with the voice key, which never
      * reaches a Device, on the voice model with its instructions, and answer the Device's offer.
-     * Refused without the Agent or the voice key, and when the provider sets nothing up.
+     * Refused without the Agent or the voice key, at the cap, and when the provider sets nothing
+     * up. Once it is set up the Deployment object names it the one Call going, and ends the one
+     * before it, in whichever Context.
      */
     private async startCall(
       agent: ContextAgent | NoAgent | "unavailable",
@@ -1073,16 +1099,35 @@ export function contextObject(
       }
       const voice = voiceOf(this.env);
       if (voice === null) return refusal(NO_VOICE, []);
-      // A stand-in until #80 holds one Call to the whole Deployment, and starts none at the cap:
-      // starting one ends any other going in this Context, at the provider.
-      for (const going of callsGoing(this.ctx.storage.sql)) {
-        await this.endAtProvider(voice, going, { at, ended: "replaced" });
-      }
+      const spend = await this.deployment().beforeCall(this.spendReport(at), at);
+      if (spend.notice === "cap_reached") return callCapRefusal(spend.cap);
       const set = await voice.setUp(sessionRequest(input.offer));
+      if (set === "key_refused") await this.reportVoiceKey({ key: "refused", at });
       if (typeof set === "string") return refusal(VOICE_REFUSED[set], []);
       const id = crypto.randomUUID();
       insertCall(this.ctx.storage.sql, { id, session: set.session, at });
+      // Armed first, so a Call the Deployment object never hears of still ends once it is silent.
+      await this.keepAlarm();
+      await this.reportVoiceKey({ key: "taken", at });
+      try {
+        await this.deployment().callStarting(this.contextId(), id, at);
+      } catch {
+        console.error(JSON.stringify({ call: "untold", told: "starting" }));
+      }
       return success({ call: { id, answer: set.answer } });
+    }
+
+    /**
+     * Tell the Deployment object what the voice provider made of the voice key: refused, a standing
+     * Notice in every Context, or taken, which ends it (section 6). A failure to reach it costs
+     * only the Notice.
+     */
+    private async reportVoiceKey(report: { key: "refused" | "taken"; at: number }): Promise<void> {
+      try {
+        await this.deployment().takeKeyReport({ ...report, provider: "voice" });
+      } catch {
+        console.error(JSON.stringify({ key: "unreported", provider: "voice" }));
+      }
     }
 
     /**
@@ -1095,33 +1140,100 @@ export function contextObject(
       at: number,
     ): Promise<ToolResult<unknown>> {
       const sql = this.ctx.storage.sql;
-      const call = callById(sql, input.call);
-      if (call === null) return failure("not_found", NO_SUCH_CALL);
-      if (call.ended === null) {
-        const voice = voiceOf(this.env);
-        if (input.provider_end === null && voice !== null) {
-          await this.endAtProvider(voice, call, { at, ended: input.ended });
-        } else {
-          endCall(sql, call.id, { at, ended: input.ended, heard: input.provider_end });
-        }
+      if (callById(sql, input.call) === null) return failure("not_found", NO_SUCH_CALL);
+      const end = { at, ended: input.ended };
+      if (input.provider_end === null) await this.endAtProvider(input.call, end);
+      else if (endCall(sql, input.call, { ...end, heard: input.provider_end })) {
+        await this.reportCallEnded(input.call, end);
       }
-      const now = callById(sql, input.call);
-      if (now === null) throw new Error("A Call read a moment ago is gone");
-      return success({ call: callRecord(now) });
+      return success({ call: this.callRecordOf(input.call) });
     }
 
     /**
-     * End a Call whose session the Device has not heard end, then end that session on the side
-     * channel, which drops every sound it is sent, and keep what the provider says as it does.
+     * `note_call_alive` (section 6): the Device's sign of life in a Call, every 15 seconds. What
+     * the Call has cost so far is counted, and at the cap the object ends it at the provider,
+     * having the voice say so first. Answers with its record, so a Device whose Call the object
+     * has ended ends its own end of it.
+     */
+    private async callAlive(
+      input: ConversationToolInput<"note_call_alive">,
+      at: number,
+    ): Promise<ToolResult<unknown>> {
+      const sql = this.ctx.storage.sql;
+      const call = callById(sql, input.call);
+      if (call === null) return failure("not_found", NO_SUCH_CALL);
+      if (call.ended === null) {
+        noteAlive(sql, call.id, at);
+        await this.keepAlarm();
+        const spend = await this.deployment().beforeCall(this.spendReport(at), at);
+        if (spend.notice === "cap_reached") {
+          await this.endAtProvider(call.id, { at, ended: "cap_reached" }, CAP_SAID);
+        }
+      }
+      return success({ call: this.callRecordOf(input.call) });
+    }
+
+    /**
+     * End a Call going here because another has started in the Deployment: the Deployment object
+     * asks, having named the new one the Call going. Not run behind the Call tools, since the one
+     * starting may be one of them, waiting on the Deployment object.
+     */
+    async endReplaced(id: string, at: number): Promise<void> {
+      if (this.#stuck !== null) return;
+      await this.endAtProvider(id, { at, ended: "replaced" });
+    }
+
+    /**
+     * End a Call whose session the Device has not heard end, if it still goes on: count it, then
+     * end that session on the side channel, which drops every sound it is sent, having the voice
+     * say `saying` first when given, and keep what the provider says as it does.
      */
     private async endAtProvider(
-      voice: VoiceProvider,
-      call: CallRow,
+      id: string,
       end: { at: number; ended: CallEnd },
+      saying?: string,
     ): Promise<void> {
       const sql = this.ctx.storage.sql;
-      endCall(sql, call.id, { ...end, heard: null });
-      keepEndHeardByObject(sql, call.id, await voice.end(call.session));
+      const call = callById(sql, id);
+      if (call === null || !endCall(sql, id, { ...end, heard: null })) return;
+      await this.reportCallEnded(id, end);
+      const voice = voiceOf(this.env);
+      if (voice !== null) keepEndHeardByObject(sql, id, await voice.end(call.session, saying));
+    }
+
+    /**
+     * A Call has just ended: report what this Context has spent, the Call's cost in it, and tell
+     * the Deployment object it is no longer going, which changes nothing there when another has
+     * taken its place. A failure to reach it is counted with the next report, and the next Call to
+     * start finds this one ended.
+     */
+    private async reportCallEnded(id: string, end: { at: number; ended: CallEnd }): Promise<void> {
+      const deployment = this.deployment();
+      try {
+        await deployment.takeSpendReport(this.spendReport(end.at));
+        await deployment.callEnded(this.contextId(), id);
+      } catch {
+        console.error(JSON.stringify({ call: "untold", told: "ended" }));
+      }
+    }
+
+    /** The record of a Call this Context has, read as it stands now. */
+    private callRecordOf(id: string): CallRecord {
+      const now = callById(this.ctx.storage.sql, id);
+      if (now === null) throw new Error("A Call read a moment ago is gone");
+      return callRecord(now);
+    }
+
+    /**
+     * End each Call going whose Device has sent no sign of life for `SIGN_OF_LIFE_LAPSE`, at the
+     * provider itself, as at `at` (section 6): nothing rests on the Device.
+     */
+    private async endCallsUnheard(at: number): Promise<void> {
+      for (const call of callsGoing(this.ctx.storage.sql)) {
+        if (call.alive_at + SIGN_OF_LIFE_LAPSE <= at) {
+          await this.endAtProvider(call.id, { at, ended: "no_sign_of_life" });
+        }
+      }
     }
 
     /**
@@ -1428,7 +1540,8 @@ export function contextObject(
     /**
      * Everything the Context's clock does, as at `at`: forgetting keys past 30 days, removing for
      * good what has been in the Trash 30 days, pruning the change log at 90, finishing a move
-     * interrupted, and starting a Brief or a Review that is due.
+     * interrupted, ending a Call whose Device has fallen silent, and starting a Brief or a Review
+     * that is due.
      */
     async wake(at: number): Promise<void> {
       if (this.#stuck !== null) return;
@@ -1442,6 +1555,7 @@ export function contextObject(
         pruneChanges(sql, at);
       });
       await this.finishMoves(at);
+      await this.endCallsUnheard(at);
       await this.startClockRuns(at);
       await this.keepAlarm();
     }
@@ -1536,6 +1650,10 @@ export function contextObject(
       if (this.#agentWake.at !== undefined) wanted.push(this.#agentWake.at + skew);
       if (this.#meaningStopped && anythingQueued(storage.sql)) wanted.push(now + MEANING_RETRY);
       if (movesOut(storage.sql).length > 0) wanted.push(now + MOVE_RETRY);
+      // A Call going ends once its Device has been silent too long: at once, when it has been.
+      for (const call of callsGoing(storage.sql)) {
+        wanted.push(Math.max(now, call.alive_at + SIGN_OF_LIFE_LAPSE));
+      }
       // Without the Agent's key, no Brief or Review is ever due.
       if (
         this.hasAgent() &&

@@ -3,13 +3,14 @@ import { CONTEXT_LADDER, DEPLOYMENT_LADDER } from "../src/steps/index.ts";
 import { marked } from "./markers.ts";
 import { subscribe } from "./push-fake.ts";
 import { agent, DAY, hand, left, newDeployment, value } from "./seam.ts";
+import { setVoiceRefusing } from "./voice-fake.ts";
 
 // The fixed scenario each release's fixture is filled by (section 13, ADR 0019), run through the
 // tools as every caller would. It reaches every table a step could change: Entries with Versions,
 // links, Follow-ups and a Standing mark, Tasks with events, a Recurrence, a delegation and a wait,
 // a Project, a Person, the Trash, a Held Change, the change log, a Connection and what it wrote, a
-// Device with its push subscription, the spend cap, a Run and its Conversation, a Call, and a
-// Backup.
+// Device with its push subscription, the spend cap, a Run and its Conversation, a Call ended and
+// one going, the voice key refused, and a Backup.
 // Words carry markers, so the upgrade test holds them to the check that no words leave.
 //
 // Changing it changes no fixture already saved: the next release's is filled by it as it is then.
@@ -174,6 +175,17 @@ export async function fillFixture(): Promise<{ ids: FixtureIds; made: Export }> 
       provider_end: { reason: "close_requested" },
     }),
   );
+  // A Call left going, which the Deployment names as the one going, with a sign of life since it
+  // was set up; and the voice key refused once since, a standing Notice.
+  const going = value(
+    await context.callAny(hand, "start_call", { offer: "v=0 fixture offer" }),
+  ) as { call: CallStarted };
+  deployment.advance(15 * 1000);
+  value(await context.callAny(hand, "note_call_alive", { call: going.call.id }));
+  setVoiceRefusing("key_refused");
+  const refused = await context.callAny(hand, "start_call", { offer: "v=0 fixture offer" });
+  setVoiceRefusing(null);
+  if (refused.ok) throw new Error("Expected the voice key refused");
 
   deployment.advance(DAY);
   await deployment.backUp();

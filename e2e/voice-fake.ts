@@ -1,7 +1,8 @@
 import type { Page } from "@playwright/test";
 
 // The voice provider is one of the faked things (section 13). This is its end on the Device: it
-// stands in for the browser's WebRTC and microphone, so a Call carries scripted text and
+// stands in for the browser's WebRTC and microphone, and for whether the page is shown, which a
+// journey cannot hide, so a Call carries scripted text and
 // handovers and no sound, as the provider's channel would. Its end at the Context's object is
 // apps/worker/test/voice-fake.ts, which the journeys' Worker sets every Call up at. It holds the
 // Device to the contract (e2e/voice-contract.spec.ts): an event the Device may not send, or the
@@ -29,6 +30,8 @@ export type FakeVoice = {
   faults: string[];
   /** Whether the Device's microphone track is on. */
   microphoneOn(): boolean;
+  /** The person leaves Praxis: the tab hidden, as when the screen is locked, or shown again. */
+  hide(hidden: boolean): void;
 };
 
 declare global {
@@ -188,6 +191,17 @@ export function installFakeVoice(): void {
       channel?.close();
     },
     microphoneOn: () => track.enabled && !track.stopped,
+    hide: () => {},
+  };
+
+  let hidden = false;
+  Object.defineProperty(document, "visibilityState", {
+    get: () => (hidden ? "hidden" : "visible"),
+  });
+  Object.defineProperty(document, "hidden", { get: () => hidden });
+  fake.hide = (to) => {
+    hidden = to;
+    document.dispatchEvent(new Event("visibilitychange"));
   };
 
   window.__voiceFake = fake;
@@ -220,5 +234,6 @@ export async function fakeVoice(page: Page) {
     spoken: () => page.evaluate(() => window.__voiceFake.spoken),
     faults: () => page.evaluate(() => window.__voiceFake.faults),
     microphoneOn: () => page.evaluate(() => window.__voiceFake.microphoneOn()),
+    hide: (hidden: boolean) => page.evaluate((to) => window.__voiceFake.hide(to), hidden),
   };
 }

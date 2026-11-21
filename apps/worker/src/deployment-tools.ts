@@ -495,8 +495,13 @@ async function carry(
 }
 
 /** The object of the Context with this id. */
-function contextObjectOf(env: Env, id: string) {
+export function contextObjectOf(env: Env, id: string) {
   return env.CONTEXT.get(env.CONTEXT.idFromString(id));
+}
+
+/** Whether the Context with this id is listed, retired or not: it has not been deleted. */
+export function isListed(sql: SqlStorage, id: string): boolean {
+  return sql.exec(`SELECT 1 FROM contexts WHERE id = ?`, id).toArray().length > 0;
 }
 
 /** Whether the Context with this id was made and is not retired, so requests may reach it. */

@@ -1,10 +1,20 @@
 import type { CallRecord, CallStarted, MessagesPage } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
+import { CAP_SAID } from "../src/context-object.ts";
 import { VOICE_INSTRUCTIONS, VOICE_MODEL } from "../src/voice/gpt-live-1.1.ts";
 import { noModel } from "./model-fake.ts";
-import { hand, newContext, value } from "./seam.ts";
+import {
+  clock,
+  connection,
+  contextWithItsDeployment,
+  hand,
+  newContext,
+  newDeployment,
+  value,
+} from "./seam.ts";
 import {
   FAKE_ANSWER,
+  holdEnd,
   holdSetUp,
   setEndReason,
   setVoicePresent,
@@ -18,7 +28,8 @@ import {
 
 const OFFER = "v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=device\r\n";
 
-type Context = ReturnType<typeof newContext>;
+/** A Context as a test reaches it, made alone or in a Deployment it shares. */
+type Context = Pick<ReturnType<typeof newContext>, "callAny">;
 
 async function started(context: Context, input: object = {}): Promise<CallStarted> {
   const result = await context.callAny(hand, "start_call", { offer: OFFER, ...input });
@@ -168,8 +179,7 @@ describe("start_call", () => {
     expect(result).toMatchObject({ ok: false, error: { code: "invalid_input" } });
   });
 
-  // Until #80 holds one Call to the whole Deployment, starting one ends any other in this Context.
-  test("ends a Call going in this Context, at the provider, before setting the next up", async () => {
+  test("ends a Call going in this Context, at the provider, once the next is set up", async () => {
     const context = newContext();
     const first = await started(context);
 
@@ -197,6 +207,8 @@ describe("end_call", () => {
       at: "2026-11-15T09:00:00.000Z",
       ended_at: "2026-11-15T09:00:00.000Z",
       ended: "hung_up",
+      seconds: 0,
+      cost: 0,
       provider_reason: "close_requested",
       end_heard_by: "device",
     });
@@ -254,7 +266,7 @@ describe("end_call", () => {
     expect(record).toMatchObject({ ended: "provider_ended", provider_reason: "content" });
   });
 
-  test("a Call is counted from setting it up until the Device reports its end", async () => {
+  test("a Call is counted from setting it up until the Device reports its end: its record says how long and what it cost at five cents a minute", async () => {
     const context = newContext();
     const call = await started(context);
     context.advance(90_000);
@@ -266,6 +278,19 @@ describe("end_call", () => {
     });
 
     expect(Date.parse(record.ended_at ?? "") - Date.parse(record.at)).toBe(90_000);
+    expect(record.seconds).toBe(90);
+    expect(record.cost).toBeCloseTo(0.075, 10);
+  });
+
+  test("a part of a second is counted as a whole one, as the provider bills by the second", async () => {
+    const context = newContext();
+    const call = await started(context);
+    context.advance(59_001);
+
+    const record = await ended(context, { call: call.id, ended: "hung_up", provider_end: null });
+
+    expect(record.seconds).toBe(60);
+    expect(record.cost).toBeCloseTo(0.05, 10);
   });
 
   test("reported again, changes nothing and answers with the record as it is", async () => {
@@ -305,5 +330,263 @@ describe("end_call", () => {
     });
 
     expect(result).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+  });
+});
+
+describe("counting", () => {
+  test("a Call's cost is counted against the month's spend once it ends, on top of the Runs", async () => {
+    const { deployment, context } = await contextWithItsDeployment();
+    const call = await started(context);
+    deployment.advance(10 * 60_000);
+
+    await ended(context, { call: call.id, ended: "hung_up", provider_end: null });
+
+    expect(value(await deployment.call(hand, "get_spend", {})).spent).toBeCloseTo(0.5, 10);
+  });
+
+  test("no Call starts at the cap, and the refusal says so with the cap in the way", async () => {
+    const { deployment, context } = await contextWithItsDeployment();
+    value(await deployment.call(hand, "set_spend_cap", { cap: 0.1 }));
+    const call = await started(context);
+    deployment.advance(3 * 60_000);
+    await ended(context, { call: call.id, ended: "hung_up", provider_end: null });
+
+    const refused = await context.callAny(hand, "start_call", { offer: OFFER });
+
+    expect(refused).toMatchObject({
+      ok: false,
+      error: {
+        code: "refused",
+        message: expect.stringMatching(/cap/),
+        in_the_way: [expect.objectContaining({ kind: "spend_cap" })],
+      },
+    });
+    expect(voiceSessions()).toHaveLength(1);
+  });
+});
+
+/** Two Contexts made by the hand in one Deployment. */
+async function twoContexts() {
+  const deployment = newDeployment();
+  const made = async (name: string) =>
+    deployment.context(
+      value(
+        await deployment.call(hand, "create_context", { name, time_zone: "UTC", accent: "blue" }),
+      ).record.id,
+    );
+  return { deployment, work: await made("Work"), home: await made("Home") };
+}
+
+async function alive(context: Context, call: string): Promise<CallRecord> {
+  return (value(await context.callAny(hand, "note_call_alive", { call })) as { call: CallRecord })
+    .call;
+}
+
+describe("one Call at a time for the Deployment", () => {
+  test("starting a Call in one Context ends the one going in another, at the provider", async () => {
+    const { work, home } = await twoContexts();
+    const first = await started(work);
+
+    await started(home);
+
+    expect(voiceSessions().map(({ endedByObject }) => endedByObject)).toEqual([true, false]);
+    expect(await alive(work, first.id)).toMatchObject({
+      ended: "replaced",
+      end_heard_by: "object",
+    });
+  });
+
+  test("a Call that has ended is not ended again when the next starts", async () => {
+    const { work, home } = await twoContexts();
+    const first = await started(work);
+    await ended(work, { call: first.id, ended: "hung_up", provider_end: { reason: null } });
+
+    await started(home);
+
+    expect(voiceSessions().map(({ endedByObject }) => endedByObject)).toEqual([false, false]);
+  });
+
+  test("two started at once in two Contexts leave one Call going: the later ends the earlier", async () => {
+    const { work, home } = await twoContexts();
+    const release = holdSetUp();
+
+    const starting = [started(work), started(home)];
+    await new Promise((settled) => setTimeout(settled, 50));
+    release();
+    const [first, second] = await Promise.all(starting);
+
+    const records = [await alive(work, first?.id ?? ""), await alive(home, second?.id ?? "")];
+    expect(records.filter(({ ended }) => ended === null)).toHaveLength(1);
+    expect(records.filter(({ ended }) => ended === "replaced")).toHaveLength(1);
+  });
+});
+
+describe("ending a Call twice", () => {
+  test("a Call the object is ending when the Device reports its end is ended once, as it was first", async () => {
+    const { work, home } = await twoContexts();
+    const first = await started(work);
+    const release = holdEnd();
+    // The next Call has the object end this one at the provider, which is held.
+    const next = started(home);
+    await new Promise((settled) => setTimeout(settled, 50));
+
+    const reported = await ended(work, { call: first.id, ended: "hung_up", provider_end: null });
+    release();
+    await next;
+
+    expect(reported).toMatchObject({ ended: "replaced" });
+    expect(voiceSessions()[0]?.timesEnded).toBe(1);
+    expect(await alive(work, first.id)).toMatchObject({
+      ended: "replaced",
+      end_heard_by: "object",
+    });
+  });
+});
+
+describe("note_call_alive", () => {
+  test("answers with the Call's record while it goes on", async () => {
+    const context = newContext();
+    const call = await started(context);
+
+    const record = await alive(context, call.id);
+
+    expect(record).toMatchObject({ id: call.id, ended: null, seconds: null, cost: null });
+  });
+
+  test("with no sign of life for 45 seconds, the object ends the Call at the provider itself", async () => {
+    const context = newContext();
+    const call = await started(context);
+    context.advance(30_000);
+    await alive(context, call.id);
+    context.advance(44_000);
+    await context.fireAlarm();
+    expect(voiceSessions()[0]?.endedByObject).toBe(false);
+
+    context.advance(1_000);
+    await context.fireAlarm();
+
+    expect(voiceSessions()[0]?.endedByObject).toBe(true);
+    expect(await alive(context, call.id)).toMatchObject({
+      ended: "no_sign_of_life",
+      seconds: 75,
+      provider_reason: "close_requested",
+      end_heard_by: "object",
+    });
+  });
+
+  test("a Call going as the month turns counts in each month for its time in it, so the new month's cap ends it", async () => {
+    const { deployment, context } = await contextWithItsDeployment("2026-11-30T23:59:00.000Z");
+    const call = await started(context);
+    deployment.advance(60_000);
+    await alive(context, call.id);
+    value(await deployment.call(hand, "set_spend_cap", { cap: 0.04 }));
+    deployment.advance(30_000);
+    expect(await alive(context, call.id)).toMatchObject({ ended: null });
+    deployment.advance(30_000);
+
+    const record = await alive(context, call.id);
+
+    expect(record).toMatchObject({ ended: "cap_reached", seconds: 120 });
+    expect(value(await deployment.call(hand, "get_spend", {}))).toMatchObject({
+      month: "2026-12",
+      spent: expect.closeTo(0.05, 10),
+    });
+  });
+
+  test("a Call ended late by the object is counted no longer than the provider's two-hour limit", async () => {
+    const context = newContext();
+    const call = await started(context);
+    context.advance(3 * 60 * 60_000);
+    await context.fireAlarm();
+
+    expect(await alive(context, call.id)).toMatchObject({
+      ended: "no_sign_of_life",
+      seconds: 7200,
+      cost: expect.closeTo(6, 10),
+    });
+  });
+
+  test("a Call going is counted as it goes: its time so far is in the month's spend", async () => {
+    const { deployment, context } = await contextWithItsDeployment();
+    const call = await started(context);
+    deployment.advance(60_000);
+
+    await alive(context, call.id);
+
+    expect(value(await deployment.call(hand, "get_spend", {})).spent).toBeCloseTo(0.05, 10);
+  });
+
+  test("at the cap, the object has the voice say so, then ends the Call at the provider", async () => {
+    const { deployment, context } = await contextWithItsDeployment();
+    value(await deployment.call(hand, "set_spend_cap", { cap: 0.1 }));
+    const call = await started(context);
+    deployment.advance(60_000);
+    expect(await alive(context, call.id)).toMatchObject({ ended: null });
+    deployment.advance(90_000);
+
+    const record = await alive(context, call.id);
+
+    expect(record).toMatchObject({ ended: "cap_reached", seconds: 150, end_heard_by: "object" });
+    expect(voiceSessions()[0]).toMatchObject({ endedByObject: true, saidAtEnd: CAP_SAID });
+    expect(CAP_SAID).toMatch(/cap/);
+  });
+
+  test("a Call ended by the Device is answered as it ended", async () => {
+    const context = newContext();
+    const call = await started(context);
+    const done = await ended(context, { call: call.id, ended: "left", provider_end: null });
+
+    expect(await alive(context, call.id)).toEqual(done);
+  });
+
+  test("a Call this Context never set up is not found", async () => {
+    const result = await newContext().callAny(hand, "note_call_alive", { call: "no-such-call" });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "not_found" } });
+  });
+});
+
+describe("the voice key", () => {
+  test("refused by the provider, is a standing Notice in every Context, until a Call is set up", async () => {
+    const { work, home } = await twoContexts();
+    setVoiceRefusing("key_refused");
+    await work.callAny(hand, "start_call", { offer: OFFER });
+
+    const notices = value(await home.call(hand, "list_notices", {})).items;
+
+    expect(notices).toEqual([{ kind: "voice_key_refused", since: "2026-11-15T09:00:00.000Z" }]);
+    setVoiceRefusing(null);
+    await started(home);
+    expect(value(await work.call(hand, "list_notices", {})).items).toEqual([]);
+  });
+
+  test("the provider unreachable leaves no standing Notice", async () => {
+    const context = newContext();
+    setVoiceRefusing("unavailable");
+    await context.callAny(hand, "start_call", { offer: OFFER });
+
+    expect(value(await context.call(hand, "list_notices", {})).items).toEqual([]);
+  });
+});
+
+describe("a Connection", () => {
+  test("can neither start a Call nor see one: no Call tool is offered to it, nor to the Agent or the clock", async () => {
+    const context = newContext();
+    const call = await started(context);
+
+    for (const caller of [connection, clock]) {
+      for (const [tool, input] of [
+        ["start_call", { offer: OFFER }],
+        ["note_call_alive", { call: call.id }],
+        ["end_call", { call: call.id, ended: "hung_up", provider_end: null }],
+      ] as const) {
+        expect(await context.callAny(caller, tool, input)).toMatchObject({
+          ok: false,
+          error: { code: "not_offered" },
+        });
+      }
+    }
+    expect(voiceSessions()).toHaveLength(1);
+    expect(await alive(context, call.id)).toMatchObject({ ended: null });
   });
 });

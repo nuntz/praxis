@@ -6,14 +6,32 @@
  */
 
 /**
- * How a Call ended, as the Device reported it or the object found it: the person hung up; the
- * provider ended it itself, at its session limit or by its safety filter; the Device lost its
- * connection to the provider; or another Call started in the Context took its place.
+ * The ways a Device reports a Call ended (`end_call`): the person hung up; the provider ended it
+ * itself, at its session limit or by its safety filter; the Device lost its connection to the
+ * provider; the person left Praxis, the tab hidden, the screen locked or the network gone; or
+ * nothing was said for about two minutes.
  */
-export type CallEnd = "hung_up" | "provider_ended" | "lost" | "replaced";
+export const CALL_ENDS_REPORTED = ["hung_up", "provider_ended", "lost", "left", "silence"] as const;
 
-/** The ways a Device reports a Call ended (`end_call`). */
-export const CALL_ENDS_REPORTED = ["hung_up", "provider_ended", "lost"] as const;
+/**
+ * How a Call ended, as the Device reported it, or as the object found it: another Call started in
+ * the Deployment took its place, its Device sent no sign of life for `SIGN_OF_LIFE_LAPSE`, or the
+ * month's spend reached the cap.
+ */
+export type CallEnd =
+  | (typeof CALL_ENDS_REPORTED)[number]
+  | "replaced"
+  | "no_sign_of_life"
+  | "cap_reached";
+
+/** How often the Device in a Call sends the object a sign of life (`note_call_alive`). */
+export const SIGN_OF_LIFE_EVERY = 15_000;
+
+/** How long the object waits for a sign of life before it ends the Call at the provider itself. */
+export const SIGN_OF_LIFE_LAPSE = 45_000;
+
+/** How long nothing is said in a Call, by the person or the voice, before the Device ends it. */
+export const SILENCE_ENDS_CALL = 120_000;
 
 /**
  * What was heard of the voice provider ending a Call's session: the reason it gave, if any, such
@@ -25,9 +43,9 @@ export type ProviderEnd = { reason: string | null } | null;
 export type EndHeardBy = "device" | "object";
 
 /**
- * A Call's record (section 6): when it was set up, when and how it ended, and the provider's own
- * reason when it ended the session, as the Device heard it or, when the Device did not, the
- * object did on the provider's side channel. It holds no words.
+ * A Call's record (section 6): when it was set up, when and how it ended, how long it went and what
+ * it cost, and the provider's own reason when it ended the session, as the Device heard it or, when
+ * the Device did not, the object did on the provider's side channel. It holds no words.
  */
 export type CallRecord = {
   id: string;
@@ -36,6 +54,13 @@ export type CallRecord = {
   /** When its end was reported, or null while it goes on. */
   ended_at: string | null;
   ended: CallEnd | null;
+  /** How long it went, in whole seconds by the object's clock, once it has ended. */
+  seconds: number | null;
+  /**
+   * What it cost in US dollars, once it has ended: its seconds at the voice model's price shipped
+   * with the code, counted against the cap on top of the Runs it started.
+   */
+  cost: number | null;
   /** Why the provider says it ended the session, such as `close_requested` or `content`. */
   provider_reason: string | null;
   /**
@@ -52,8 +77,9 @@ export type CallRecord = {
 export type CallStarted = { id: string; answer: string };
 
 /**
- * The only events the Device may send the voice provider (section 6): the Agent's answer, under
- * the handover it answers, and the end of the Call. The object sets the session to refuse every
+ * The only events the Device may send the voice provider (section 6): the Agent's answer, or what
+ * Praxis says in its place when there is none, under the handover it answers, and the end of the
+ * Call. The object sets the session to refuse every
  * other from the Device, and the Device's own code sends no other.
  */
 export const DEVICE_SENDS = ["session.commentary.append", "session.close"] as const;

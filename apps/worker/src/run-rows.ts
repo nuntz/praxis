@@ -9,6 +9,7 @@ import {
   type RunStart,
   type ToolResult,
 } from "@praxis/domain";
+import { callsSpent } from "./call-rows.ts";
 import { changesOfRun } from "./change-log.ts";
 import { embeddedInMonth } from "./meaning-rows.ts";
 import { newestFirst } from "./newest-first.ts";
@@ -228,9 +229,10 @@ export function runsAnswering(sql: SqlStorage, messages: string[]): Map<string, 
 }
 
 /**
- * What this Context has spent in the calendar month `at` falls in, in all, in US dollars: its Runs
- * started in it and its embedding for the meaning index. It is what it reports to the Deployment
- * object, which counts it against the cap (section 5.7).
+ * What this Context has spent in the calendar month `at` falls in, in all, in US dollars, as at
+ * `at`: its Runs and Calls started in it, a Call going counted so far, and its embedding for the
+ * meaning index. It is what it reports to the Deployment object, which counts it against the cap
+ * (section 5.7).
  */
 export function spentInMonth(sql: SqlStorage, at: number): number {
   const { start, end } = monthBounds(at);
@@ -241,7 +243,7 @@ export function spentInMonth(sql: SqlStorage, at: number): number {
       end,
     )
     .one().cost;
-  return runs + embeddedInMonth(sql, at);
+  return runs + callsSpent(sql, { start, end }, at) + embeddedInMonth(sql, at);
 }
 
 /**

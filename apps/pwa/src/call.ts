@@ -1,9 +1,13 @@
 import {
-  type AgentMessage,
   type CALL_ENDS_REPORTED,
+  type CallRecord,
   type CallStarted,
   DEVICE_SENDS,
+  type Message,
   type ProviderEnd,
+  type RunNotice,
+  SIGN_OF_LIFE_EVERY,
+  SILENCE_ENDS_CALL,
   spokenParts,
 } from "@praxis/domain";
 import type { CallTool } from "./tools.ts";
@@ -12,8 +16,11 @@ import type { CallTool } from "./tools.ts";
 // voice provider, over WebRTC, and is never kept. On its own channel to the provider the Device
 // follows the text of what is said and the handovers: at each handover it sends everything said
 // since the last one to the Agent as a Message, marked as spoken, and passes the Agent's Message
-// back under that handover, to be spoken. It sends the provider nothing else but the end of the
-// Call. The voice key never reaches it: the Context's object sets the Call up.
+// back under that handover, to be spoken, or what Praxis has to say when there is none: the Message
+// refused, or its Run failed. It sends the provider nothing else but the end of the Call. The voice
+// key never reaches it: the Context's object sets the Call up. While the Call goes on it sends the
+// object a sign of life, and ends the Call itself on leaving Praxis and after two minutes of
+// silence; the object ends it when the Device falls silent, at the cap, and when another starts.
 
 /** How a Call ends, as the Device reports it. */
 export type DeviceCallEnd = (typeof CALL_ENDS_REPORTED)[number];
@@ -37,11 +44,16 @@ const EVENTS = "oai-events";
 export type CallHooks = {
   /**
    * Send everything the person said since the last handover to the Agent, as a spoken Message:
-   * the Message's id once it is added, or null when it was not.
+   * the Message's id once it is added, or, when it was not, why, in words the voice can say.
    */
-  ask(words: string): Promise<string | null>;
-  /** The Call has ended, with the provider's reason when it gave one, and the object is told. */
-  ended(end: { ended: DeviceCallEnd; reason: string | null }): void;
+  ask(words: string): Promise<{ message: string } | { refused: string }>;
+  /** What the Notice under a Message whose Run failed says, which the voice says too. */
+  failed(notice: RunNotice): string;
+  /**
+   * The Call has ended: how, as this Device saw it, with the provider's reason when it gave one,
+   * and the Call's record as the object answered, or null when it could not be reached.
+   */
+  ended(end: { ended: DeviceCallEnd; reason: string | null; record: CallRecord | null }): void;
 };
 
 /** One fragment of the text of what the person said, and when in the session it began. */
@@ -50,6 +62,7 @@ type Heard = { words: string; from: number };
 /** An event the provider sends on the Device's channel, as far as the Device reads it. */
 type ProviderEvent =
   | { type: "session.input_transcript.delta"; delta: string; start_ms?: number }
+  | { type: "session.output_transcript.delta" }
   | { type: "session.delegation.created"; delegation: { id: string }; offset_ms?: number }
   | { type: "session.closed"; reason?: string }
   | { type: string };
@@ -75,7 +88,19 @@ export class DeviceCall {
   /** The handover each Message sent was sent for, by the Message's id. */
   readonly #handoverOf = new Map<string, string>();
   /** An answer that came before `send_message` said which Message it was, by that Message. */
-  readonly #early = new Map<string, AgentMessage>();
+  readonly #early = new Map<string, Message>();
+  /**
+   * When something was last said, by the person or the voice, or handed over, or given to be
+   * spoken, by this clock.
+   */
+  #lastSaid = Date.now();
+  /** The sign of life, sent while the Call goes on. */
+  #signOfLife: ReturnType<typeof setInterval> | undefined;
+  /** Leaving Praxis ends the Call: what is listened for, to stop listening once it has ended. */
+  readonly #leaving = (event: Event) => {
+    if (event.type === "visibilitychange" && document.visibilityState !== "hidden") return;
+    void this.#close("left");
+  };
   /** Set while the person hangs up: the Device waits to hear the provider end the session. */
   #ending: ((end: ProviderEnd) => void) | null = null;
   #ended = false;
@@ -168,18 +193,46 @@ export class DeviceCall {
       if (this.#connection.connectionState === "failed") this.#lose();
     });
     // Leaving Praxis ends a Call (section 6): the tab hidden, the screen locked, the network gone.
-    // That, two minutes of silence, the cap and the sign of life are #80's.
+    document.addEventListener("visibilitychange", this.#leaving);
+    window.addEventListener("pagehide", this.#leaving);
+    window.addEventListener("offline", this.#leaving);
+    this.#signOfLife = setInterval(() => void this.#alive(), SIGN_OF_LIFE_EVERY);
+  }
+
+  /**
+   * Every 15 seconds: end the Call after about two minutes in which nothing was said, an answer
+   * awaited for that long included, or send the object a sign of life. An answer saying the object has ended the Call,
+   * as at the cap, ends this end of it. One not answered is let be: the object ends the Call once it
+   * has heard nothing for long enough.
+   */
+  async #alive(): Promise<void> {
+    if (this.#ended || this.#ending) return;
+    if (Date.now() - this.#lastSaid >= SILENCE_ENDS_CALL) {
+      return this.#close("silence");
+    }
+    try {
+      const result = await this.#callTool("note_call_alive", { call: this.id });
+      if (result.ok && result.value.call.ended !== null) this.#endedByObject(result.value.call);
+    } catch {
+      // Unanswered: the next one may be.
+    }
   }
 
   #hear(event: ProviderEvent): void {
     switch (event.type) {
+      case "session.output_transcript.delta":
+        // What the voice says is not kept: that it spoke keeps the Call from falling silent.
+        this.#lastSaid = Date.now();
+        return;
       case "session.input_transcript.delta": {
         const { delta, start_ms } = event as Extract<ProviderEvent, { delta: string }>;
+        this.#lastSaid = Date.now();
         this.#heard.push({ words: delta, from: start_ms ?? Number.NEGATIVE_INFINITY });
         return;
       }
       case "session.delegation.created": {
         const { delegation, offset_ms } = event as Extract<ProviderEvent, { delegation: object }>;
+        this.#lastSaid = Date.now();
         void this.#handOver(delegation.id, offset_ms ?? Number.POSITIVE_INFINITY);
         return;
       }
@@ -207,8 +260,10 @@ export class DeviceCall {
     const words = joined(said.map(({ words }) => words));
     // A handover with nothing said before it asks the Agent nothing, and waits unanswered.
     if (words === "" || this.#ended) return;
-    const message = await this.#hooks.ask(words);
-    if (message === null) return;
+    const asked = await this.#hooks.ask(words);
+    // Refused, as at the cap: the voice says so, in its place.
+    if ("refused" in asked) return this.#speak(handover, asked.refused);
+    const { message } = asked;
     this.#handoverOf.set(message, handover);
     const early = this.#early.get(message);
     if (early) {
@@ -218,25 +273,41 @@ export class DeviceCall {
   }
 
   /**
-   * An Agent's Message, as the screen shows it: one that answers a Message sent in this Call, once
-   * its Run has ended, is passed back under its handover, split at sentences into parts the
-   * provider takes. A Message answering anything else is answered in writing only.
+   * A Message as the screen shows it. The Agent's answer to a Message sent in this Call, once its
+   * Run has ended, is passed back under that Message's handover, split at sentences into parts the
+   * provider takes; when the Run failed, the voice says what the Notice under the person's Message
+   * says instead. A Message answering anything else, as one typed elsewhere meanwhile, is answered
+   * in writing only.
    */
-  answer(message: AgentMessage): void {
-    if (this.#ended || message.answers === null || message.run.ended === null) return;
-    const handover = this.#handoverOf.get(message.answers);
+  answer(message: Message): void {
+    if (this.#ended) return;
+    if (message.from === "agent") {
+      // A failed Run's answer, if it wrote one, is not spoken: its Notice is, as it comes.
+      if (message.answers === null || message.run.ended === null) return;
+      if (message.run.ended !== "failed") this.#reply(message.answers, message, message.words);
+    } else if (message.notice !== null) {
+      this.#reply(message.id, message, this.#hooks.failed(message.notice));
+    }
+  }
+
+  /**
+   * Speak these words under the handover the person's Message `asked` was sent for, or keep the
+   * Message that brings them until `send_message` has said which Message it was.
+   */
+  #reply(asked: string, message: Message, words: string): void {
+    const handover = this.#handoverOf.get(asked);
     if (handover === undefined) {
-      this.#early.set(message.answers, message);
+      this.#early.set(asked, message);
       return;
     }
-    this.#handoverOf.delete(message.answers);
-    // A Run that failed has no Message to speak: the voice saying so is #80's.
-    this.#speak(handover, message.words);
+    this.#handoverOf.delete(asked);
+    this.#speak(handover, words);
   }
 
   /** Give the voice model the Agent's answer to speak, under the one handover it answers. */
   #speak(handover: string, words: string): void {
     if (!this.#unanswered.delete(handover)) return;
+    this.#lastSaid = Date.now();
     for (const content of spokenParts(words)) {
       this.#send({ type: "session.commentary.append", delegation_id: handover, content });
     }
@@ -264,14 +335,20 @@ export class DeviceCall {
     for (const track of this.#microphone.getAudioTracks()) track.enabled = !muted;
   }
 
+  /** The person hangs up. */
+  hangUp(): Promise<void> {
+    return this.#close("hung_up");
+  }
+
   /**
-   * The person hangs up: the Device ends the session at the provider and waits to hear it ended,
-   * then reports the end, saying whether it heard.
+   * End the Call from this Device, by the person's tap, on leaving Praxis or after two minutes of
+   * silence: the Device ends the session at the provider and waits to hear it ended, then reports
+   * the end, saying whether it heard.
    */
-  async hangUp(): Promise<void> {
+  async #close(ended: "hung_up" | "left" | "silence"): Promise<void> {
     if (this.#ended || this.#ending) return;
     let heard: (end: ProviderEnd) => void = () => {};
-    const ended = new Promise<ProviderEnd>((resolve) => {
+    const heardEnd = new Promise<ProviderEnd>((resolve) => {
       const timer = setTimeout(() => resolve(null), END_WAIT);
       heard = (end) => {
         clearTimeout(timer);
@@ -281,7 +358,16 @@ export class DeviceCall {
     this.#ending = heard;
     if (this.#channel.readyState === "open") this.#send({ type: "session.close" });
     else heard(null);
-    await this.#finish("hung_up", await ended);
+    await this.#finish(ended, await heardEnd);
+  }
+
+  /**
+   * The object has ended the Call, at the cap, when another started or when it heard nothing from
+   * this Device: it ended the session at the provider too, so this end only lets go.
+   */
+  #endedByObject(record: CallRecord): void {
+    if (this.#ending) this.#ending(null);
+    void this.#finish("lost", null, record);
   }
 
   /** The connection went without the provider saying the session ended. */
@@ -291,21 +377,35 @@ export class DeviceCall {
   }
 
   /**
-   * End the Call on this Device, once: let go of the microphone and the connection, and report the
-   * end to the object, which ends the session itself when the Device did not hear it end.
+   * End the Call on this Device, once: stop listening, let go of the microphone and the connection,
+   * and report the end to the object, which ends the session itself when the Device did not hear it
+   * end; unless the object ended it, and its record is given.
    */
-  async #finish(ended: DeviceCallEnd, heard: ProviderEnd): Promise<void> {
+  async #finish(ended: DeviceCallEnd, heard: ProviderEnd, given?: CallRecord): Promise<void> {
     if (this.#ended) return;
     this.#ended = true;
+    clearInterval(this.#signOfLife);
+    document.removeEventListener("visibilitychange", this.#leaving);
+    window.removeEventListener("pagehide", this.#leaving);
+    window.removeEventListener("offline", this.#leaving);
     for (const track of this.#microphone.getTracks()) track.stop();
     this.#audio.srcObject = null;
     this.#connection.close();
-    try {
-      await this.#callTool("end_call", { call: this.id, ended, provider_end: heard });
-    } catch {
-      // Not reached: the object ends a Call whose Device went silent itself (#80).
+    let record = given ?? null;
+    if (given === undefined) {
+      try {
+        const result = await this.#callTool("end_call", {
+          call: this.id,
+          ended,
+          provider_end: heard,
+        });
+        if (result.ok) record = result.value.call;
+      } catch {
+        // Not reached, as when the network is gone: the object ends the Call once it has heard no
+        // sign of life for long enough.
+      }
     }
-    this.#hooks.ended({ ended, reason: heard?.reason ?? null });
+    this.#hooks.ended({ ended, reason: heard?.reason ?? null, record });
   }
 }
 

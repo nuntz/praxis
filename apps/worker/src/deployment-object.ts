@@ -14,12 +14,15 @@ import {
 } from "@praxis/domain";
 import { startTimer } from "./arrival.ts";
 import { type BackupOutcome, backUp, backupHandlers } from "./backups.ts";
+import { callNoLongerGoing, nameCallGoing } from "./call-going-rows.ts";
 import {
   callableConnection,
   carryMove,
+  contextObjectOf,
   type DeploymentCall,
   type DeploymentHandlers,
   deploymentHandlers,
+  isListed,
   isReachable,
   otherContextNames,
 } from "./deployment-tools.ts";
@@ -153,12 +156,50 @@ export function deploymentObject(
     }
 
     /**
-     * A Context's report of what its Runs and its embedding have spent in a calendar month, in
-     * all, counted against the cap (section 5.7).
+     * A Context's report of what its Runs, its Calls and its embedding have spent in a calendar
+     * month, in all, counted against the cap (section 5.7).
      */
     async takeSpendReport(report: SpendReport): Promise<void> {
       this.serving();
       takeSpendReport(this.ctx.storage.sql, report);
+    }
+
+    /**
+     * Whether a Call may start in a Context, or go on, which is the cap: at it, none starts, and
+     * the one going is ended (section 6). It brings the Context's report of what it has spent so
+     * far, a Call going counted to the moment, so the Call's time is counted as it goes.
+     */
+    async beforeCall(report: SpendReport, at: number): Promise<Spend> {
+      this.serving();
+      const sql = this.ctx.storage.sql;
+      takeSpendReport(sql, report);
+      return readSpend(sql, at);
+    }
+
+    /**
+     * A Context's word that a Call has started there: it is the one Call going in the Deployment,
+     * and the one before it, in whichever Context, is ended there (section 6). It is named the one
+     * going before the other is ended, so of two started at once the later always stands. A Context
+     * deleted since has no Call left to end.
+     */
+    async callStarting(context: string, call: string, at: number): Promise<void> {
+      this.serving();
+      const sql = this.ctx.storage.sql;
+      const before = nameCallGoing(sql, { context_id: context, call });
+      if (before === null) return;
+      if (!isListed(sql, before.context_id)) return;
+      try {
+        await contextObjectOf(this.env, before.context_id).endReplaced(before.call, at);
+      } catch {
+        // Ended there once its Device falls silent.
+        console.error(JSON.stringify({ call: "unended", why: "replaced" }));
+      }
+    }
+
+    /** A Context's word that a Call there has ended: none is going, unless another started since. */
+    async callEnded(context: string, call: string): Promise<void> {
+      this.serving();
+      callNoLongerGoing(this.ctx.storage.sql, { context_id: context, call });
     }
 
     /**
@@ -174,9 +215,9 @@ export function deploymentObject(
     }
 
     /**
-     * A Context's report that the model's provider refused the key in a Run, or took it. The key is
-     * the Deployment's, so its refusal is a standing Notice in every Context until a call succeeds
-     * in any (section 5.6).
+     * A Context's report that the model's provider refused the key in a Run, or took it, or the
+     * voice provider the voice key in setting a Call up. Each key is the Deployment's, so its
+     * refusal is a standing Notice in every Context until a call succeeds in any (sections 5.6, 6).
      */
     async takeKeyReport(report: KeyReport): Promise<void> {
       this.serving();

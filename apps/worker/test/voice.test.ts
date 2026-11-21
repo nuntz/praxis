@@ -56,6 +56,25 @@ describe("the voice provider's side channel", () => {
     expect(reason).toEqual({ reason: "close_requested" });
   });
 
+  test("given words to say first, gives them to the voice outside any handover, then ends the session once it has had time to say them", async () => {
+    const { attach, sent } = provider((side) => {
+      if (sent.at(-1)?.includes("session.close")) {
+        side.send(JSON.stringify({ type: "session.closed", reason: "close_requested" }));
+      }
+    });
+
+    const reason = await endOnSideChannel(attach, "live_1", "voice-key", {
+      saying: "The cap is reached.",
+      sayFor: 30,
+    });
+
+    expect(sent.map((event) => JSON.parse(event))).toEqual([
+      { type: "session.commentary.append", delegation_id: null, content: "The cap is reached." },
+      { type: "session.close" },
+    ]);
+    expect(reason).toEqual({ reason: "close_requested" });
+  });
+
   test("a provider that closes the socket without saying the session ended is not heard to end it", async () => {
     const { attach } = provider((side) => side.close(1000, "Gone"));
 
@@ -65,7 +84,7 @@ describe("the voice provider's side channel", () => {
   test("a provider that never says the session ended is let go of in time, not heard", async () => {
     const { attach } = provider(() => {});
 
-    expect(await endOnSideChannel(attach, "live_1", "voice-key", 50)).toBeNull();
+    expect(await endOnSideChannel(attach, "live_1", "voice-key", { wait: 50 })).toBeNull();
   });
 
   test("a session the object cannot attach to, as one gone already, is not heard to end", async () => {

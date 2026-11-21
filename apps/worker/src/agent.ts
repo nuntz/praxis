@@ -804,8 +804,10 @@ export class ContextAgent {
     }
     // Counted before the screen learns the Run ended, so the spend it reads then holds it.
     await this.#reportSpend(run.at);
-    if (failure === "key_refused") await this.#reportKey({ key: "refused", at: run.at });
-    else if (reachedModel(records)) await this.#reportKey({ key: "taken", at: run.at });
+    if (failure === "key_refused")
+      await this.#reportKey({ key: "refused", at: run.at, provider: "model" });
+    else if (reachedModel(records))
+      await this.#reportKey({ key: "taken", at: run.at, provider: "model" });
     // A Message sent meanwhile may already be newer than this Run's.
     const recent = (await this.page(root, undefined, RECENT_MESSAGES)).items;
     const answer = recent.find((message) => message.from === "agent" && message.run.id === run.id);

@@ -20,6 +20,8 @@ export type RunNotice = { run: string; failure: RunFailure };
  * are not counted.
  *
  * - `key_refused`: the model's provider refused the key since this instant, until a call succeeds.
+ * - `voice_key_refused`: the voice provider refused the voice key since this instant, so no Call
+ *   starts, until one is set up (section 6).
  * - `nearing_cap`: the month's spend has passed 80% of the cap.
  * - `cap_reached`: the month's spend has reached the cap, and no new Run starts.
  * - `clock_failed`: a Brief or a Review that was due could not run since this instant, and why. It
@@ -33,7 +35,7 @@ export type RunNotice = { run: string; failure: RunFailure };
  *   upgrades. It stays until the Context upgrades.
  */
 export type StandingNotice =
-  | { kind: "key_refused"; since: string }
+  | { kind: "key_refused" | "voice_key_refused"; since: string }
   | { kind: "nearing_cap" | "cap_reached"; spent: number; cap: number }
   | { kind: "clock_failed"; clock: ClockKind; failure: RunFailure; since: string }
   | { kind: "no_backup"; last_made: string | null }

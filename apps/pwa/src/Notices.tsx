@@ -77,6 +77,8 @@ function noticeWords(notice: StandingNotice): string {
   switch (notice.kind) {
     case "key_refused":
       return `The model's provider has refused this Deployment's key since ${sinceFormat.format(new Date(notice.since))}: it may be wrong, out of credit or at the provider's own spend limit. The Agent answers nothing until a call succeeds. The key is set in the Deployment's configuration.`;
+    case "voice_key_refused":
+      return `The voice provider has refused this Deployment's voice key since ${sinceFormat.format(new Date(notice.since))}: it may be wrong, out of credit or at the provider's own spend limit. No Call starts until one is set up. The voice key is set in the Deployment's configuration.`;
     case "cap_reached":
     case "nearing_cap":
       return capWords({ notice: notice.kind, spent: notice.spent, cap: notice.cap });

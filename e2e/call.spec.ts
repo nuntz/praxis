@@ -1,11 +1,35 @@
 import type { Page, TestInfo } from "@playwright/test";
-import { SPOKEN_PART } from "@praxis/domain";
-import { callContextTool, expect, lastShown, makeContext, onPhone, test } from "./fixtures.ts";
+import { SIGN_OF_LIFE_EVERY, SILENCE_ENDS_CALL, SPOKEN_PART } from "@praxis/domain";
+import {
+  callContextTool,
+  expect,
+  test as journey,
+  lastShown,
+  makeContext,
+  onPhone,
+} from "./fixtures.ts";
+import { holdTheCall } from "./one-call.ts";
 import { fakeVoice } from "./voice-fake.ts";
 
 // A Call (section 6, ADR 0021): the person speaks with the Agent, on a voice provider faked on the
-// Device with scripted text and no sound (e2e/voice-fake.ts). Each journey makes a Context of its
-// own, since starting a Call ends any other going in its Context.
+// Device with scripted text and no sound (e2e/voice-fake.ts). There is one Call at a time for the
+// Deployment, so each journey holds the Call for the whole of it (e2e/one-call.ts), as no other
+// journey's start may end its own, and makes a Context of its own, as its Messages are counted.
+
+const test = journey.extend<{ theCall: undefined }>({
+  theCall: [
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright reads which fixtures it takes from it.
+    async ({}, use, testInfo) => {
+      const release = await holdTheCall(testInfo);
+      try {
+        await use(undefined);
+      } finally {
+        release();
+      }
+    },
+    { auto: true },
+  ],
+});
 
 /** A Context of this journey's own, shown, with its Conversation in view: on a phone, by its tab. */
 async function inContext(page: Page, testInfo: TestInfo, name: string) {
@@ -185,4 +209,124 @@ test("a connection lost ends the Call with a Notice, and the object closes the s
   await expect(
     conversation.getByRole("button", { name: "Start a Call", exact: true }),
   ).toBeVisible();
+});
+
+test("starting a Call elsewhere ends this one: the object ends it at the provider, and the Device's sign of life finds it ended", async ({
+  page,
+}, testInfo) => {
+  await page.clock.install();
+  const voice = await fakeVoice(page);
+  const { tag, name, conversation } = await inContext(page, testInfo, "Replaced");
+  await startCall(page, conversation, name);
+
+  // Another Call, in another Context, as another Device starts one.
+  const other = await makeContext(page, {
+    name: `Elsewhere ${tag}`,
+    time_zone: "UTC",
+    accent: "teal",
+  });
+  const elsewhere = await callContextTool(page, other.id, "start_call", {
+    offer: "v=0\r\ns=elsewhere\r\n",
+  });
+  const alive = page.waitForResponse(/\/tools\/note_call_alive$/);
+  await page.clock.fastForward(SIGN_OF_LIFE_EVERY);
+
+  expect((await (await alive).json()).value.call).toMatchObject({
+    ended: "replaced",
+    end_heard_by: "object",
+  });
+  await expect(
+    conversation.getByRole("status").filter({ hasText: "another Call was started" }),
+  ).toBeVisible();
+  await expect(
+    conversation.getByRole("button", { name: "Start a Call", exact: true }),
+  ).toBeVisible();
+  // The object ended the session itself: the Device sent the provider nothing.
+  expect(await voice.sent()).toEqual([]);
+  await callContextTool(page, other.id, "end_call", {
+    call: elsewhere.call.id,
+    ended: "hung_up",
+    provider_end: null,
+  });
+});
+
+test("about two minutes in which nothing is said end the Call, with a Notice", async ({
+  page,
+}, testInfo) => {
+  await page.clock.install();
+  const voice = await fakeVoice(page);
+  const { tag, name, conversation } = await inContext(page, testInfo, "Silence");
+  await startCall(page, conversation, name);
+  await voice.say(`What is due ${tag}?`);
+  await expect.poll(async () => (await voice.spoken()).length).toBe(1);
+
+  const ended = page.waitForResponse(/\/tools\/end_call$/);
+  await page.clock.fastForward(SILENCE_ENDS_CALL + SIGN_OF_LIFE_EVERY);
+
+  expect((await (await ended).json()).value.call).toMatchObject({
+    ended: "silence",
+    provider_reason: "close_requested",
+    end_heard_by: "device",
+  });
+  await expect(
+    conversation.getByRole("status").filter({ hasText: "two minutes in which nothing was said" }),
+  ).toBeVisible();
+  expect((await voice.sent()).map(({ type }) => type)).toEqual([
+    "session.commentary.append",
+    "session.close",
+  ]);
+});
+
+test("leaving Praxis ends the Call at the provider", async ({ page }, testInfo) => {
+  const voice = await fakeVoice(page);
+  const { name, conversation } = await inContext(page, testInfo, "Left");
+  await startCall(page, conversation, name);
+
+  const ended = page.waitForResponse(/\/tools\/end_call$/);
+  // The tab hidden, as when the screen is locked or another app is opened.
+  await voice.hide(true);
+
+  expect((await (await ended).json()).value.call).toMatchObject({
+    ended: "left",
+    end_heard_by: "device",
+  });
+  expect((await voice.sent()).map(({ type }) => type)).toEqual(["session.close"]);
+  await voice.hide(false);
+  await expect(
+    conversation.getByRole("status").filter({ hasText: "ended when Praxis was left" }),
+  ).toBeVisible();
+});
+
+test("when a Run fails in a Call, the voice says so and the usual Notice sits under the Message", async ({
+  page,
+}, testInfo) => {
+  const voice = await fakeVoice(page);
+  const { tag, name, conversation } = await inContext(page, testInfo, "Failing");
+  await startCall(page, conversation, name);
+
+  const handover = await voice.say(`Unreachable once: ${tag}`);
+
+  const said = "The model could not be reached, so the Agent did not answer. Your Message is kept.";
+  await expect.poll(voice.spoken).toEqual([{ delegation_id: handover, content: said }]);
+  const message = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
+  await expect(message).toHaveCount(1);
+  await expect(message.getByRole("status")).toContainText("could not be reached");
+  expect(await voice.faults()).toEqual([]);
+});
+
+test("a Message typed elsewhere during a Call is answered in writing only", async ({
+  page,
+}, testInfo) => {
+  const voice = await fakeVoice(page);
+  const { tag, id, name, conversation } = await inContext(page, testInfo, "Typed");
+  await startCall(page, conversation, name);
+
+  // Typed on another Device in the same Context, as the composer here gives way to the Call.
+  await callContextTool(page, id, "send_message", { words: `Say: Written only ${tag}.` });
+
+  const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
+  await expect(messages.last()).toContainText(`Written only ${tag}.`);
+  await voice.say(`What is due ${tag}?`);
+  await expect.poll(async () => (await voice.spoken()).length).toBe(1);
+  expect((await voice.spoken()).map(({ content }) => content)).toEqual(["Noted."]);
 });

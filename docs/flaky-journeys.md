@@ -4,6 +4,7 @@ A journey that fails only under load, a few runs in a hundred. Every journey sha
 
 - A new journey is looped (step 1) before the full suite runs it, as one racing its own repeats is a full run lost.
 - A change to `e2e/fixtures.ts`, `apps/worker/test/journey-worker.ts` or a journey's timing runs under `bun run test:e2e:runner` before it is pushed: the run under load pinned to two cores, as four of a desktop's still run it 1.6 times as fast as the runner, and unpinned it passes what the nightly fails (#87, #88).
+- A journey that starts a Call waits for every other one that does (`e2e/one-call.ts`), as there is one Call at a time for the Deployment, so its loop runs them one at a time whatever the workers: loop it with fewer repeats, as 8 of the whole of `e2e/call.spec.ts` at both widths take a few minutes.
 - A journey that fails once in CI is filed with the run id, the failing line and the error before the job is rerun: a rerun that passes keeps no evidence.
 
 1. **Loop it alone.** `bunx playwright test <file> -g "<title>" --project=desktop --repeat-each=128 --workers=16` takes about 25 seconds, and a race failing one run in twenty shows several times in each. Each failure keeps its own folder under `test-results/`. `bun scripts/journey-failures.ts <run folder>` groups a run's failures by journey, first error and repeat, and `--steps <failure folder>` lists the actions of its trace that took 800 ms or more; a CI run's folder is its artifact, `gh run download <run id> -n playwright-traces`.

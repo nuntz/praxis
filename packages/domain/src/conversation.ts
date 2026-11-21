@@ -172,13 +172,19 @@ export const conversationTools = {
   start_call: {
     kind: "write",
     description:
-      "Set a Call up in this Context (section 6): the Context's object asks the voice provider for a session, with the voice model and its instructions, which the Device cannot change, and answers the Device's WebRTC offer with the provider's answer. The sound then travels between the Device and the provider. Refused without the voice key or the Agent's. Starting one ends any other going in this Context.",
+      "Set a Call up in this Context (section 6): the Context's object asks the voice provider for a session, with the voice model and its instructions, which the Device cannot change, and answers the Device's WebRTC offer with the provider's answer. The sound then travels between the Device and the provider. Refused without the voice key or the Agent's, and at the spend cap. Starting one ends any other going in the Deployment, in whichever Context.",
     input: writeInput({
       offer: z
         .string()
         .min(1)
         .max(100_000, { message: "The offer is longer than a WebRTC offer is." }),
     }),
+  },
+  note_call_alive: {
+    kind: "write",
+    description:
+      "The Device in a Call sends a sign of life every 15 seconds while it goes on (section 6). Answers with the Call's record: once it has ended, as when the object ended it at the cap, the Device ends its end of it too. When none comes for 45 seconds, the object ends the Call at the provider itself. The screen calls it; the person never does by a tap.",
+    input: writeInput({ call: z.string().min(1) }),
   },
   end_call: {
     kind: "write",
@@ -239,6 +245,8 @@ export type ConversationToolOutput = {
   start_call: { call: CallStarted };
   /** The Call's record, now it has ended. */
   end_call: { call: CallRecord };
+  /** The Call's record as it stands: ended null while it goes on. */
+  note_call_alive: { call: CallRecord };
   list_messages: MessagesPage;
 };
 

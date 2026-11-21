@@ -14,6 +14,7 @@ import { adoptMarkers, marked } from "./markers.ts";
 import { holdMeanings } from "./meaning-fake.ts";
 import { contextWithItsDeployment, DAY, hand, newDeployment, value, wakeAgain } from "./seam.ts";
 import { addSteps, failingStep, mendSteps, wakeUnder } from "./upgrade-faults.ts";
+import { holdSessions } from "./voice-fake.ts";
 
 // The upgrade test of section 13 (ADR 0019). Each release committed a fixture: a Context object
 // and a Deployment object filled by a fixed scenario through the tools of that release, saved as a
@@ -74,6 +75,9 @@ async function wakeFixture(fixture: Fixture) {
   // The meaning index is outside the object, and outlives a deploy as the object does.
   const entries = (fixture.context.rows.entries ?? []) as { id: string; words: string }[];
   holdMeanings(fixture.ids.context, entries);
+  // So is the voice provider, which set up the fixture's Calls.
+  const calls = (fixture.context.rows.calls ?? []) as { session: string }[];
+  holdSessions(calls.map(({ session }) => session));
   await layDump(deploymentObjectOf(fixture), fixture.deployment);
   await layDump(contextObjectOf(fixture), fixture.context);
   const deployment = newDeployment(fixture.ids.at, fixture.ids.deployment);
