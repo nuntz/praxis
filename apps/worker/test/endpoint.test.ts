@@ -133,8 +133,16 @@ describe("the Access sign-in every request needs", () => {
 });
 
 describe("the screen and its files", () => {
+  // CI runs these tests before the screen is built, so they see none of its files, and a local run
+  // sees the same from the empty folder vitest.config.ts serves, whatever build apps/pwa/dist holds.
+  test("are none of them here, as in CI, whatever the screen's build holds", async () => {
+    for (const path of ["/", "/index.html", "/manifest.webmanifest"]) {
+      expect((await env.ASSETS.fetch(`https://praxis.test${path}`)).status, path).toBe(404);
+    }
+  });
+
   test("carry the content security policy: the screen's own address, and images from any https host", async () => {
-    // Whatever they answer: CI runs this before the screen is built, when each is not found.
+    // Whatever they answer, which here is that each is not found.
     for (const path of ["/", "/index.html", "/manifest.webmanifest", "/a/path/the/screen/routes"]) {
       const served = await send(path);
       expect(served.headers.get("content-security-policy"), path).toBe(

@@ -16,6 +16,11 @@ export default defineConfig({
       wrangler: { configPath: "./wrangler.jsonc" },
       // Praxis as deployed, with each Context's Agent on a scripted model (test/worker.ts).
       main: "./test/worker.ts",
+      // The screen's files from a folder that holds none, as CI runs these tests before the screen
+      // is built, so a local run answers as CI's does, whatever build apps/pwa/dist holds.
+      miniflare: {
+        assets: { directory: "./test/no-screen" },
+      },
     }),
   ],
   // Every tool call logs a line, so a passing test's output is left out; a failing one keeps it.

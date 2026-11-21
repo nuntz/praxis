@@ -1,0 +1,2 @@
+# The Worker tests serve the screen from this folder, which holds nothing: CI runs them before the
+# screen is built (vitest.config.ts).
