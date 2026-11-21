@@ -3,6 +3,7 @@ import { NOTHING_TO_RAISE } from "../src/agent.ts";
 import { contextObject } from "../src/context-object.ts";
 import { meanAlike, testMeaning } from "./meaning-fake.ts";
 import { lastWords, SCRIPTED_RETRY, scriptModel, testModel, UNAVAILABLE } from "./model-fake.ts";
+import { testVoice } from "./voice-fake.ts";
 
 // The Worker the browser journeys run against (playwright.config.ts): Praxis as deployed, with each
 // Context's Agent on a scripted model, so no journey calls a real model. The script stands in for
@@ -12,7 +13,9 @@ import { lastWords, SCRIPTED_RETRY, scriptModel, testModel, UNAVAILABLE } from "
 // once: <words>" fails as an overloaded provider does for the whole of the first Run that asks,
 // then answers when the Run is tried again. A Brief has nothing to raise, so one the clock starts
 // while a journey runs leaves no Message. Anything else it only answers. Its meaning index is the
-// fake, which takes a molar and a dentist to mean alike. Never deployed.
+// fake, which takes a molar and a dentist to mean alike. Its voice provider is the fake's end at the
+// object, which sets up every Call it is asked for; the Device's end is faked in the browser
+// (e2e/voice-fake.ts), with scripted text and no sound. Never deployed.
 
 export { DeploymentObject, default } from "../src/index.ts";
 
@@ -54,4 +57,4 @@ scriptModel((context) => {
 
 meanAlike("dentist", "molar");
 
-export const ContextObject = contextObject(testModel, testMeaning);
+export const ContextObject = contextObject(testModel, testMeaning, testVoice);

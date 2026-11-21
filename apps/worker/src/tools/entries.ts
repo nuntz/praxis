@@ -60,6 +60,33 @@ type VersionRow = AuthorColumns & {
   at: number;
 };
 
+/** The words of some text, as `drawnFrom` compares them: case, accents and punctuation aside. */
+function wordsOf(text: string): string[] {
+  return text
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word !== "");
+}
+
+/**
+ * Whether an Entry's words are the person's own, drawn from what they said in the Message the
+ * Agent's Run answers (section 3.2): every word of the Entry is theirs, in the order they said it,
+ * though some they said, as filler, may be left out. A word added or moved makes it the Agent's.
+ */
+function drawnFrom(words: string, said: string): boolean {
+  const kept = wordsOf(words);
+  if (kept.length === 0) return false;
+  const heard = wordsOf(said);
+  let at = 0;
+  for (const word of heard) {
+    if (word === kept[at]) at++;
+    if (at === kept.length) return true;
+  }
+  return false;
+}
+
 export const entryTools: Pick<
   Handlers,
   | "record_entry"
@@ -73,7 +100,7 @@ export const entryTools: Pick<
   | "mark_standing"
   | "unmark_standing"
 > = {
-  record_entry({ caller, input, arrivedAt, today, sql }) {
+  record_entry({ caller, input, arrivedAt, today, sql, wordsAnswered }) {
     const links = keepableLinks(sql, input.words, input.links ?? []);
     // Like a link, a Follow-up naming no Entry here is not kept: the words are never refused. One
     // naming an Entry in the Trash is kept dormant, as a link is.
@@ -81,7 +108,11 @@ export const entryTools: Pick<
       input.follow_up_to !== undefined && entryEvenIfTrashed(sql, input.follow_up_to)
         ? input.follow_up_to
         : null;
-    const author = authorOf(caller);
+    // An Entry the Agent records of the person's words is theirs; one it composed is its own.
+    const author =
+      wordsAnswered !== null && drawnFrom(input.words, wordsAnswered)
+        ? ({ kind: "person" } as const)
+        : authorOf(caller);
     const id = crypto.randomUUID();
     // Only the Agent works from the Conversation: whatever it records came through it.
     const throughConversation = caller.kind === "agent";
@@ -97,8 +128,9 @@ export const entryTools: Pick<
       followUpTo,
     );
     // The Tasks come as a list beside the words. The words are never read to find them.
+    // A Task is its maker's, whoever's words its Entry holds.
     for (const { title } of input.tasks ?? []) {
-      insertTask(sql, { title, originEntry: id, at: arrivedAt, author });
+      insertTask(sql, { title, originEntry: id, at: arrivedAt, author: authorOf(caller) });
     }
     // So do the links, and the words are never read to find them either.
     const made = insertLinks(sql, { id, words: input.words }, links, arrivedAt);

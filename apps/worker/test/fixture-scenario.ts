@@ -1,4 +1,4 @@
-import type { Export } from "@praxis/domain";
+import type { CallStarted, Export } from "@praxis/domain";
 import { CONTEXT_LADDER, DEPLOYMENT_LADDER } from "../src/steps/index.ts";
 import { marked } from "./markers.ts";
 import { subscribe } from "./push-fake.ts";
@@ -8,7 +8,8 @@ import { agent, DAY, hand, left, newDeployment, value } from "./seam.ts";
 // tools as every caller would. It reaches every table a step could change: Entries with Versions,
 // links, Follow-ups and a Standing mark, Tasks with events, a Recurrence, a delegation and a wait,
 // a Project, a Person, the Trash, a Held Change, the change log, a Connection and what it wrote, a
-// Device with its push subscription, the spend cap, a Run and its Conversation, and a Backup.
+// Device with its push subscription, the spend cap, a Run and its Conversation, a Call, and a
+// Backup.
 // Words carry markers, so the upgrade test holds them to the check that no words leave.
 //
 // Changing it changes no fixture already saved: the next release's is filled by it as it is then.
@@ -153,6 +154,26 @@ export async function fillFixture(): Promise<{ ids: FixtureIds; made: Export }> 
 
   value(await context.callAny(hand, "send_message", { words: marked("What is due this week?") }));
   await context.runsEnded();
+
+  // A Call, which leaves a record with no words, and a Message spoken in it.
+  const { call } = value(
+    await context.callAny(hand, "start_call", { offer: "v=0 fixture offer" }),
+  ) as { call: CallStarted };
+  value(
+    await context.callAny(hand, "send_message", {
+      words: marked("Record that the boiler is fixed"),
+      spoken: true,
+    }),
+  );
+  await context.runsEnded();
+  deployment.advance(2 * 60 * 1000);
+  value(
+    await context.callAny(hand, "end_call", {
+      call: call.id,
+      ended: "hung_up",
+      provider_end: { reason: "close_requested" },
+    }),
+  );
 
   deployment.advance(DAY);
   await deployment.backUp();

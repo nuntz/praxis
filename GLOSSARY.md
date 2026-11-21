@@ -45,7 +45,7 @@ A stretch of a Context's Conversation carried out by speaking. The person starts
 _Avoid_: Voice session, voice mode, voice chat
 
 **Author**:
-Who made an Entry or Task: the person, the Agent, or a Connection, shown by its name. A record the person edits becomes theirs.
+Who made an Entry or Task: the person, the Agent, or a Connection, shown by its name. A record the person edits becomes theirs, and an Entry the Agent records of the person's own words, typed or spoken, is theirs from the start.
 _Avoid_: Creator, owner, source
 
 **Connection**:

@@ -94,6 +94,8 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   retry_run: [     "yes", "no",  "no",  "no",       "no"  ],
   note_shown: [    "yes", "no",  "no",  "no",       "no"  ],
   list_messages: [ "yes", "no",  "no",  "no",       "no"  ],
+  start_call: [    "yes", "no",  "no",  "no",       "no"  ],
+  end_call: [      "yes", "no",  "no",  "no",       "no"  ],
 };
 
 /**
@@ -201,6 +203,8 @@ export const runsWith: Record<string, () => unknown> = {
   retry_run: () => ({ run: "no-such-run" }),
   note_shown: () => ({ message: "no-such-message" }),
   list_messages: () => ({}),
+  start_call: () => ({ offer: "v=0 offered" }),
+  end_call: () => ({ call: "no-such-call", ended: "hung_up", provider_end: null }),
 };
 
 /** An input each Deployment tool runs with, given a Context made first. Every row needs one. */

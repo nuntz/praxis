@@ -3,6 +3,12 @@
 interface Env {
   /** The Agent's provider key, the person's own (ADR 0017). Optional: without it there is no Agent. */
   AGENT_API_KEY?: string;
+  /**
+   * The voice provider's key, the person's own (section 6, ADR 0021). Optional: without it there is
+   * no way to start a Call. The Context's object sets each Call up with it; it never reaches a
+   * Device.
+   */
+  VOICE_API_KEY?: string;
   /** The private half of the Web Push signing key pair, a JWK as JSON, which the wizard makes. */
   PUSH_PRIVATE_KEY?: string;
   /**

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CALL_ENDS_REPORTED, type CallRecord, type CallStarted } from "./call.ts";
 import type { Caller, CallerKind } from "./callers.ts";
 import type { ClockKind } from "./clock.ts";
 import type { Effect } from "./effects.ts";
@@ -35,6 +36,12 @@ export type AgentMessage = {
   from: "agent";
   words: string;
   run: RunFold;
+  /**
+   * The person's Message it answers, by its id, once its Run is known; null for a Brief or a
+   * Review. In a Call the Device passes it back to be spoken under the handover that Message was
+   * sent for (section 6).
+   */
+  answers: string | null;
   /** For a Brief or a Review, what it is and when it was taken; null for an answer to the person. */
   clock: ClockFold | null;
 };
@@ -125,6 +132,12 @@ export type MessagesPage = {
    * Conversation shows as unavailable, and the Journal is untouched (section 11).
    */
   agent: "available" | NoAgent | "unavailable";
+  /**
+   * Whether a Call can be started here as far as the voice key goes: without one there is no way
+   * to start a Call, and nothing is shown as broken (section 6). Without an Agent there is none
+   * either, whatever this says.
+   */
+  voice: "available" | "no_key";
 };
 
 /** The words of a Message: what the person typed or said, never empty. */
@@ -155,6 +168,34 @@ export const conversationTools = {
     description:
       "Note that Praxis has shown a Brief or a Review, by its Message's id, in a focused window on this Device: it is then read, once for the Context and on every Device, and a newer one no longer replaces it. The screen calls it; the person never marks one read. Noting one again changes nothing.",
     input: writeInput({ message: z.string().min(1) }),
+  },
+  start_call: {
+    kind: "write",
+    description:
+      "Set a Call up in this Context (section 6): the Context's object asks the voice provider for a session, with the voice model and its instructions, which the Device cannot change, and answers the Device's WebRTC offer with the provider's answer. The sound then travels between the Device and the provider. Refused without the voice key or the Agent's. Starting one ends any other going in this Context.",
+    input: writeInput({
+      offer: z
+        .string()
+        .min(1)
+        .max(100_000, { message: "The offer is longer than a WebRTC offer is." }),
+    }),
+  },
+  end_call: {
+    kind: "write",
+    description:
+      "Report that a Call has ended, how, and what the Device heard of the provider ending its session: the reason it gave, which may be none, or null when the Device heard nothing, and the object then ends the session at the provider itself. Reporting one already ended changes nothing.",
+    input: writeInput({
+      call: z.string().min(1),
+      ended: z.enum(CALL_ENDS_REPORTED),
+      provider_end: z
+        .strictObject({
+          reason: z
+            .string()
+            .regex(/^[a-z_]{1,64}$/, { message: "The provider's reason is a word of its own." })
+            .nullable(),
+        })
+        .nullable(),
+    }),
   },
   list_messages: {
     kind: "read",
@@ -194,6 +235,10 @@ export type ConversationToolOutput = {
   retry_run: { message: PersonMessage };
   /** The Brief or Review now read, by its Message's id. */
   note_shown: { message: string; read: true };
+  /** The Call set up, and the provider's answer to the Device's offer. */
+  start_call: { call: CallStarted };
+  /** The Call's record, now it has ended. */
+  end_call: { call: CallRecord };
   list_messages: MessagesPage;
 };
 

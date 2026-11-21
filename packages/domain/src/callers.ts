@@ -26,8 +26,8 @@ export function authorOf(caller: Caller): Author {
     case "hand":
       return { kind: "person" };
     case "agent":
-      // Not final: an Entry holding the person's words verbatim is the person's, and only one
-      // the Agent composed when asked is its own (section 3.2). Settled with the Agent's Runs.
+      // An Entry the Agent records of the person's own words in the Message it answers is theirs,
+      // which `record_entry` stamps from those words; this is the Author of everything else.
       return { kind: "agent" };
     case "connection":
       return { kind: "connection", name: caller.name };

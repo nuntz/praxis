@@ -1,4 +1,5 @@
 import contextStep1 from "./context-0001.ts";
+import contextStep2 from "./context-0002.ts";
 import deploymentStep1 from "./deployment-0001.ts";
 
 /**
@@ -10,7 +11,7 @@ import deploymentStep1 from "./deployment-0001.ts";
 export type Step = (sql: SqlStorage) => void;
 
 /** A Context's object's ladder, step 1 first. A new step goes at the end, in a file of its own. */
-export const CONTEXT_LADDER: readonly Step[] = [contextStep1];
+export const CONTEXT_LADDER: readonly Step[] = [contextStep1, contextStep2];
 
 /** The Deployment object's ladder, step 1 first. A new step goes at the end, in a file of its own. */
 export const DEPLOYMENT_LADDER: readonly Step[] = [deploymentStep1];

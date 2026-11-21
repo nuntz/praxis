@@ -28,6 +28,11 @@
 #        # Optional: the Agent's model, one Praxis ships a price for; a deploy with any other fails.
 #        # Without it, claude-sonnet-5-5.
 #        # praxis:agentModel: claude-sonnet-5-5
+#        # Optional: the voice provider's OpenAI API key (platform.openai.com → API keys), for a
+#        # Call. What is said in a Call, and what the Agent answers, reaches OpenAI and whatever it
+#        # keeps for its own monitoring. Without a key there is no way to start a Call.
+#        praxis:voiceApiKey:
+#          fn::secret: sk-proj-example
 #        # The Web Push signing key pair, which `bun apps/worker/scripts/push-keys.ts` makes: the
 #        # public key on its first line, the private key as a JWK on its second. Make it once and
 #        # keep it: every browser's subscription is bound to it. Without it no Device gets a

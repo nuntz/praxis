@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Wake } from "@earendil-works/pi-durable";
 import {
+  type CallEnd,
   type Caller,
   type Change,
   type ClockKind,
@@ -40,6 +41,15 @@ import {
   HELD_NAMED,
 } from "./agent.ts";
 import { arrivalTime, startTimer } from "./arrival.ts";
+import {
+  type CallRow,
+  callById,
+  callRecord,
+  callsGoing,
+  endCall,
+  insertCall,
+  keepEndHeardByObject,
+} from "./call-rows.ts";
 import {
   appendChange,
   changesAfter,
@@ -98,6 +108,7 @@ import {
   takenAlready,
   takeOut,
 } from "./move-rows.ts";
+import { sessionRequest, type VoiceRefusal } from "./provider-session.ts";
 import { admit, dispatch, type Handlers, isObjectTool, type ToolRequest } from "./registry.ts";
 import { deploymentOf } from "./routing.ts";
 import {
@@ -144,6 +155,7 @@ import { taskTools } from "./tools/tasks.ts";
 import { trashTools } from "./tools/trash.ts";
 import { waitTools } from "./tools/waits.ts";
 import { expireTrash, nextExpiry } from "./trash-rows.ts";
+import type { VoiceProvider } from "./voice.ts";
 
 /** A message of the live channel: these changes, and the cursor standing after `last`. */
 function changesMessage(items: Change[], last: number): LiveMessage {
@@ -190,6 +202,21 @@ const NO_AGENT: Record<NoAgent, string> = {
  */
 const CONVERSATION_UNOPENED =
   "This Context's Conversation cannot be opened under this release, so the Agent answers nothing here until a release that mends it is deployed, or until the Conversation is cleared in this Context's settings, which starts it afresh: the Journal and Connections work as before.";
+
+/** Why no Call starts without the voice key: the person gives one in the configuration. */
+const NO_VOICE =
+  "There is no way to start a Call in this Deployment: its configuration gives no key for the voice provider. Giving one is a change to the configuration and a deploy.";
+
+/** Why the voice provider set no Call up: the person mends a refused key, and waits otherwise. */
+const VOICE_REFUSED: Record<VoiceRefusal, string> = {
+  key_refused:
+    "The voice provider refused this Deployment's voice key, so no Call was started. Giving another is a change to the configuration and a deploy.",
+  unavailable:
+    "The voice provider could not be reached, so no Call was started. Try again in a while.",
+};
+
+/** A Call `end_call` names that this Context never set up. */
+const NO_SUCH_CALL = "There is no such Call in this Context.";
 
 /** A Message `note_shown` names that is no Brief or Review shown in this Conversation. */
 function noSuchBrief(): ToolResult<never> {
@@ -252,12 +279,14 @@ export type ExportAnswer = { file: ContextFile } | { stuck: StuckUpgrade };
 /**
  * The Context object, given where its Agent's model comes from: the Deployment's configuration, or
  * a scripted model in tests (section 13). Without a model, `modelOf` says why there is no Agent.
- * Its meaning index is the Deployment's bindings, or the fake in tests, or none. Its ladder is the
+ * Its meaning index is the Deployment's bindings, or the fake in tests, or none. Its voice provider
+ * is reached with the Deployment's voice key, or is the fake in tests, or none. Its ladder is the
  * release's, or one a test gives an object to make a step fail (test/upgrade-faults.ts).
  */
 export function contextObject(
   modelOf: (env: Env) => AgentModel | NoAgent,
   meaningOf: (env: Env) => MeaningIndex | null,
+  voiceOf: (env: Env) => VoiceProvider | null,
   ladderFor: (id: string) => readonly Step[] = () => CONTEXT_LADDER,
 ) {
   /**
@@ -960,30 +989,139 @@ export function contextObject(
       const agent = await this.conversation();
       if (tool === "list_messages") {
         const { cursor } = parsed.input as ConversationToolInput<"list_messages">;
-        if (typeof agent === "string") return success({ items: [], next_cursor: null, agent });
-        return success(await agent.messages(this.ctx.storage, cursor));
+        const voice = voiceOf(this.env) === null ? "no_key" : "available";
+        if (typeof agent === "string") {
+          return success({ items: [], next_cursor: null, agent, voice });
+        }
+        return success({ ...(await agent.messages(this.ctx.storage, cursor)), voice });
+      }
+      const { arrivedAt } = request;
+      if (tool === "start_call") {
+        const input = parsed.input as ConversationToolInput<"start_call">;
+        return this.inTurn(() =>
+          this.keyed(tool, request, input.key, () => this.startCall(agent, input, arrivedAt)),
+        );
+      }
+      if (tool === "end_call") {
+        const input = parsed.input as ConversationToolInput<"end_call">;
+        return this.inTurn(() =>
+          this.keyed(tool, request, input.key, () => this.endCall(input, arrivedAt)),
+        );
       }
       const input = parsed.input as ConversationToolInput<
         "send_message" | "retry_run" | "note_shown"
       >;
+      // start_call and end_call are run above, so what is left is one of these.
       if (typeof agent === "string") {
         return "message" in input
           ? noSuchBrief()
           : refusal(agent === "unavailable" ? CONVERSATION_UNOPENED : NO_AGENT[agent], []);
       }
+      return this.keyed(tool, request, input.key, () =>
+        "message" in input
+          ? this.noteShown(agent, input.message, arrivedAt)
+          : "run" in input
+            ? this.retryRun(agent, input.run, arrivedAt)
+            : this.startRun(agent, input, arrivedAt),
+      );
+    }
+
+    /**
+     * Run a Conversation write under its key: a repeat answers as the first call did, and does
+     * nothing again.
+     */
+    private async keyed(
+      tool: ConversationToolName,
+      request: ToolRequest,
+      key: string | undefined,
+      run: () => Promise<ToolResult<unknown>>,
+    ): Promise<ToolResult<unknown>> {
       const sql = this.ctx.storage.sql;
-      const { caller, arrivedAt } = request;
-      const keyed = { caller, key: input.key, tool, at: arrivedAt };
+      const keyed = { caller: request.caller, key, tool, at: request.arrivedAt };
       const repeated = repeatedKey(sql, keyed);
       if (repeated) return repeated;
-      const result =
-        "message" in input
-          ? await this.noteShown(agent, input.message, arrivedAt)
-          : "run" in input
-            ? await this.retryRun(agent, input.run, arrivedAt)
-            : await this.startRun(agent, input, arrivedAt);
-      if (input.key !== undefined) rememberKey(sql, { ...keyed, key: input.key, result });
+      const result = await run();
+      if (key !== undefined) rememberKey(sql, { ...keyed, key, result });
       return result;
+    }
+
+    /** The Call tools going or waiting, which run one at a time. */
+    #callTurns: Promise<unknown> = Promise.resolve();
+
+    /**
+     * Run a Call tool once the one before it has finished: each reads which Calls are going and
+     * writes them after waiting on the provider, so two at once would each miss what the other did.
+     */
+    private inTurn<T>(run: () => Promise<T>): Promise<T> {
+      const turn = this.#callTurns.then(run, run);
+      this.#callTurns = turn.catch(() => {});
+      return turn;
+    }
+
+    /**
+     * `start_call` (section 6): set a Call up at the voice provider with the voice key, which never
+     * reaches a Device, on the voice model with its instructions, and answer the Device's offer.
+     * Refused without the Agent or the voice key, and when the provider sets nothing up.
+     */
+    private async startCall(
+      agent: ContextAgent | NoAgent | "unavailable",
+      input: ConversationToolInput<"start_call">,
+      at: number,
+    ): Promise<ToolResult<unknown>> {
+      if (typeof agent === "string") {
+        return refusal(agent === "unavailable" ? CONVERSATION_UNOPENED : NO_AGENT[agent], []);
+      }
+      const voice = voiceOf(this.env);
+      if (voice === null) return refusal(NO_VOICE, []);
+      // A stand-in until #80 holds one Call to the whole Deployment, and starts none at the cap:
+      // starting one ends any other going in this Context, at the provider.
+      for (const going of callsGoing(this.ctx.storage.sql)) {
+        await this.endAtProvider(voice, going, { at, ended: "replaced" });
+      }
+      const set = await voice.setUp(sessionRequest(input.offer));
+      if (typeof set === "string") return refusal(VOICE_REFUSED[set], []);
+      const id = crypto.randomUUID();
+      insertCall(this.ctx.storage.sql, { id, session: set.session, at });
+      return success({ call: { id, answer: set.answer } });
+    }
+
+    /**
+     * `end_call` (section 6): the Device reports a Call has ended, how, and what it heard of the
+     * provider ending its session. When it heard nothing, the object ends the session on the
+     * provider's side channel itself. One already ended is answered as it is.
+     */
+    private async endCall(
+      input: ConversationToolInput<"end_call">,
+      at: number,
+    ): Promise<ToolResult<unknown>> {
+      const sql = this.ctx.storage.sql;
+      const call = callById(sql, input.call);
+      if (call === null) return failure("not_found", NO_SUCH_CALL);
+      if (call.ended === null) {
+        const voice = voiceOf(this.env);
+        if (input.provider_end === null && voice !== null) {
+          await this.endAtProvider(voice, call, { at, ended: input.ended });
+        } else {
+          endCall(sql, call.id, { at, ended: input.ended, heard: input.provider_end });
+        }
+      }
+      const now = callById(sql, input.call);
+      if (now === null) throw new Error("A Call read a moment ago is gone");
+      return success({ call: callRecord(now) });
+    }
+
+    /**
+     * End a Call whose session the Device has not heard end, then end that session on the side
+     * channel, which drops every sound it is sent, and keep what the provider says as it does.
+     */
+    private async endAtProvider(
+      voice: VoiceProvider,
+      call: CallRow,
+      end: { at: number; ended: CallEnd },
+    ): Promise<void> {
+      const sql = this.ctx.storage.sql;
+      endCall(sql, call.id, { ...end, heard: null });
+      keepEndHeardByObject(sql, call.id, await voice.end(call.session));
     }
 
     /**
@@ -1153,7 +1291,8 @@ export function contextObject(
           ? model
           : new ContextAgent(
               {
-                call: (tool, input, caller) => this.callAsAgent(tool, input, caller),
+                call: (tool, input, caller, wordsAnswered) =>
+                  this.callAsAgent(tool, input, caller, wordsAnswered),
                 sql: this.ctx.storage.sql,
                 send: (message) => this.send(message),
                 arm: (wake) => {
@@ -1174,7 +1313,7 @@ export function contextObject(
      * A call from the Agent in a Run, or from the clock in a Brief or a Review, through the same
      * registry as every other caller.
      */
-    private callAsAgent(tool: string, input: unknown, caller: Caller) {
+    private callAsAgent(tool: string, input: unknown, caller: Caller, wordsAnswered?: string) {
       const sql = this.ctx.storage.sql;
       const arrivedAt = arrivalTime() + this.#clockSkew;
       const elapsed = startTimer();
@@ -1184,6 +1323,7 @@ export function contextObject(
         tool,
         input,
         arrivedAt,
+        ...(wordsAnswered === undefined ? {} : { wordsAnswered }),
       });
       logCall({ tool, write: isWrite(tool) }, result, elapsed());
       const after = lastChange(sql);

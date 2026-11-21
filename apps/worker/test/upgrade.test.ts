@@ -80,6 +80,23 @@ async function wakeFixture(fixture: Fixture) {
   return { deployment, context: deployment.context(fixture.ids.context) };
 }
 
+/**
+ * The fixture's Context as this release's ladder leaves it, at the top of the ladder: the step
+ * before one a test adds. An older release's fixture climbs this release's steps to reach it.
+ */
+async function climbed(fixture: Fixture): Promise<Dump> {
+  const { context } = await wakeFixture(fixture);
+  value(await context.call(hand, "get_settings", {}));
+  return dumpObject(contextObjectOf(fixture));
+}
+
+/** The step a fixture's Context stood on when it was saved. */
+function savedStep(fixture: Fixture): number {
+  const [ladder] = (fixture.context.rows.ladder ?? []) as { step: number }[];
+  if (ladder === undefined) throw new Error(`The fixture ${fixture.name} holds no ladder`);
+  return ladder.step;
+}
+
 /** Where an object stands on its ladder. */
 function ladderOf(stub: DurableObjectStub) {
   return runInDurableObject(stub, (_, state) =>
@@ -176,6 +193,7 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
     });
 
     test("a step made to fail leaves it whole on the step before, serving nothing, until a release mends it", async () => {
+      const before = rowsOutsideTheLadder(await climbed(fixture));
       addSteps(fixture.ids.context, failingStep);
       wakeUnder("release-with-a-bad-step");
       const { deployment, context } = await wakeFixture(fixture);
@@ -185,9 +203,7 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
         stuck_under: "release-with-a-bad-step",
         stuck_step: CONTEXT_LADDER.length + 1,
       });
-      expect(rowsOutsideTheLadder(await dumpObject(contextObjectOf(fixture)))).toEqual(
-        rowsOutsideTheLadder(fixture.context),
-      );
+      expect(rowsOutsideTheLadder(await dumpObject(contextObjectOf(fixture)))).toEqual(before);
       const refused = await context.call(hand, "list_entries", {});
       expect(refused).toMatchObject({ ok: false, error: { code: "refused", in_the_way: [] } });
       expect(refused.ok ? "" : refused.error.message).toMatch(
@@ -222,9 +238,7 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
       // Its clock stops: nothing in its Trash goes, past its 30 days, and nothing is pruned.
       deployment.advance(31 * DAY);
       await deployment.fireAlarmOf(fixture.ids.context);
-      expect(rowsOutsideTheLadder(await dumpObject(contextObjectOf(fixture)))).toEqual(
-        rowsOutsideTheLadder(fixture.context),
-      );
+      expect(rowsOutsideTheLadder(await dumpObject(contextObjectOf(fixture)))).toEqual(before);
 
       // Woken again under the same release, it does not try again, though the step is mended.
       mendSteps(fixture.ids.context);
@@ -255,6 +269,7 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
         (sql) =>
           sql.exec(`DELETE FROM change_calls WHERE seq = (SELECT max(seq) FROM change_calls)`),
       ];
+      const before = rowsOutsideTheLadder(await climbed(fixture));
       for (const [place, step] of changing.entries()) {
         mendSteps(fixture.ids.context);
         addSteps(fixture.ids.context, step);
@@ -262,9 +277,7 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
         const { context } = await wakeFixture(fixture);
 
         expect(await context.call(hand, "list_entries", {})).toMatchObject({ ok: false });
-        expect(rowsOutsideTheLadder(await dumpObject(contextObjectOf(fixture)))).toEqual(
-          rowsOutsideTheLadder(fixture.context),
-        );
+        expect(rowsOutsideTheLadder(await dumpObject(contextObjectOf(fixture)))).toEqual(before);
       }
     });
 
@@ -278,12 +291,12 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
 
       expect((await ladderOf(contextObjectOf(fixture))).step).toBe(CONTEXT_LADDER.length + 1);
       expect(value(await context.call(hand, "list_entries", {})).items.length).toBeGreaterThan(0);
-      // It noted the platform's bookmark before its first pending step, as it stood then.
+      // It noted the platform's bookmark before its first pending step, on the step it was saved on.
       expect(
         await runInDurableObject(contextObjectOf(fixture), (_, state) =>
           state.storage.sql.exec(`SELECT bookmark, bookmark_step FROM ladder`).one(),
         ),
-      ).toEqual({ bookmark: expect.any(String), bookmark_step: CONTEXT_LADDER.length });
+      ).toEqual({ bookmark: expect.any(String), bookmark_step: savedStep(fixture) });
     });
 
     test("an object whose tables are newer than the code serves nothing", async () => {
@@ -308,6 +321,7 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
         items: [],
         next_cursor: null,
         agent: "unavailable",
+        voice: "available",
       });
       expect(await context.callAny(hand, "send_message", { words: "Hello?" })).toMatchObject({
         ok: false,
@@ -353,7 +367,12 @@ describe("clear_conversation, on a runtime that cannot open its tables", () => {
 
     value(await context.call(hand, "clear_conversation", {}));
 
-    expect(await messages()).toEqual({ items: [], next_cursor: null, agent: "available" });
+    expect(await messages()).toEqual({
+      items: [],
+      next_cursor: null,
+      agent: "available",
+      voice: "available",
+    });
     value(await context.callAny(hand, "send_message", { words: marked("Hello again") }));
     await context.runsEnded();
     expect((await messages()).items.map(({ from }) => from)).toEqual(["agent", "person"]);

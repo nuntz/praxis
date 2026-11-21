@@ -40,6 +40,8 @@ const allowedEmailDomain = config.get("allowedEmailDomain");
 // Both optional: without a key there is no Agent, and without a model the Worker's default.
 const agentApiKey = config.getSecret("agentApiKey");
 const agentModel = config.get("agentModel");
+// Optional: without the voice provider's key there is no way to start a Call (section 6).
+const voiceApiKey = config.getSecret("voiceApiKey");
 // The Web Push signing key pair the wizard makes once. Without it no Device can switch
 // Notifications on.
 const pushPublicKey = config.get("pushPublicKey") ?? "";
@@ -158,8 +160,9 @@ export const workerVars = pulumi.secret(
  * only adds, so the deploy deletes a key taken out of the configuration itself.
  */
 export const workerSecrets = pulumi.secret(
-  pulumi.all([agentApiKey, pushPrivateKey]).apply(([key, push]) => ({
+  pulumi.all([agentApiKey, voiceApiKey, pushPrivateKey]).apply(([key, voice, push]) => ({
     ...(key ? { AGENT_API_KEY: key } : {}),
+    ...(voice ? { VOICE_API_KEY: voice } : {}),
     ...(push ? { PUSH_PRIVATE_KEY: push } : {}),
   })),
 );

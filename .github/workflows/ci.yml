@@ -192,7 +192,7 @@ jobs:
           bun ../../scripts/deploy-config.ts "$(jq -r '.JURISDICTION' <<< "$given")"
           CLOUDFLARE_ACCOUNT_ID="$account" bunx wrangler deploy --config wrangler.deploy.json \
             --secrets-file "$secrets" "${vars[@]}"
-          for name in AGENT_API_KEY PUSH_PRIVATE_KEY; do
+          for name in AGENT_API_KEY VOICE_API_KEY PUSH_PRIVATE_KEY; do
             jq -e --arg name "$name" 'has($name)' "$secrets" > /dev/null && continue
             status="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \

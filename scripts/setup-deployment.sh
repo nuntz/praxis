@@ -305,7 +305,7 @@ write_env ALLOWED_EMAILS "${ALLOWED_EMAILS:-}"
 write_env ALLOWED_EMAIL_DOMAIN "${ALLOWED_EMAIL_DOMAIN:-}"
 
 # ── 6 ─────────────────────────────────────────────────────────────────────
-stage "The Agent: your Anthropic key and the model"
+stage "The Agent and a Call: your keys and the model"
 say "The Agent runs on your own Anthropic API key (console.anthropic.com → API keys). It is optional:"
 say "without one there is no Agent, and the Journal, the screen and Connections work as normal."
 open_url "https://console.anthropic.com/settings/limits"
@@ -320,6 +320,16 @@ if ! AGENT_MODEL="${AGENT_MODEL:-}" bun apps/worker/scripts/check-model.ts; then
 fi
 write_env AGENT_MODEL "${AGENT_MODEL:-}"
 note "Changing the key or the model later is a change to this configuration and a deploy."
+say ""
+say "A Call, speaking with the Agent, runs on your own OpenAI API key (platform.openai.com → API keys),"
+say "for OpenAI's voice model, GPT-Live-1.1. It is optional: without one there is no way to start a Call."
+say "Without the Agent's key there is no Call either."
+say "What you say in a Call, and what the Agent answers, reaches OpenAI, and whatever OpenAI keeps"
+say "for its own monitoring. Praxis keeps no sound, and never asks OpenAI to store a session."
+open_url "https://platform.openai.com/settings/organization/limits"
+step "Set a monthly budget there too: it is the backstop behind Praxis's own cap."
+ask_secret VOICE_API_KEY "OpenAI API key (blank for no Call):" || true
+write_env VOICE_API_KEY "${VOICE_API_KEY:-}"
 # The Web Push signing key pair, made once: every browser's subscription is bound to its public
 # key, so a new pair would leave each Device switched on sent nothing.
 if [[ -n "$(_existing PUSH_PUBLIC_KEY || true)" && -n "$(_existing PUSH_PRIVATE_KEY || true)" ]]; then
@@ -380,6 +390,7 @@ definition=$(mktemp); trap 'rm -f "$definition"' EXIT
   printf '    praxis:googleClientSecret:\n      fn::secret: %s\n' "$(yaml_str "$GOOGLE_CLIENT_SECRET")"
   [[ -n "${AGENT_API_KEY:-}" ]] && printf '    praxis:agentApiKey:\n      fn::secret: %s\n' "$(yaml_str "$AGENT_API_KEY")"
   [[ -n "${AGENT_MODEL:-}" ]] && printf '    praxis:agentModel: %s\n' "$(yaml_str "$AGENT_MODEL")"
+  [[ -n "${VOICE_API_KEY:-}" ]] && printf '    praxis:voiceApiKey:\n      fn::secret: %s\n' "$(yaml_str "$VOICE_API_KEY")"
   printf '    praxis:pushPublicKey: %s\n' "$(yaml_str "$PUSH_PUBLIC_KEY")"
   printf '    praxis:pushPrivateKey:\n      fn::secret: %s\n' "$(yaml_str "$PUSH_PRIVATE_KEY")"
   [[ -n "${JURISDICTION:-}" ]] && printf '    praxis:jurisdiction: %s\n' "$(yaml_str "$JURISDICTION")"

@@ -1115,6 +1115,42 @@ button.quiet.attention-project-toggle {
   outline: none;
 }
 
+/* A Call starts from under the Conversation's composer, which is the one send. */
+button.quiet.start-call {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+}
+
+/* In a Call the composer gives way to its controls, in the composer's place and in its colours. */
+.call-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--accent-tint);
+}
+
+.call-status {
+  margin: 0;
+  color: var(--ink);
+  font: var(--type-label);
+}
+
+.call-buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.call-buttons button[aria-pressed="false"] {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+}
+
 .link-picker {
   margin: 0;
   padding: var(--space-1);

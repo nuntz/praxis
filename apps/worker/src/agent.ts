@@ -117,6 +117,7 @@ export type AgentHost = {
     tool: ToolName,
     input: unknown,
     caller: Caller,
+    wordsAnswered?: string,
   ): { result: ToolResult<unknown>; change: number | null };
   /** The Context's own SQLite, for the Run records. */
   sql: SqlStorage;
@@ -183,7 +184,15 @@ const PREAMBLE = `You are the Agent of Praxis, a journal-centric task manager fo
 - Dates you give to tools are days (YYYY-MM-DD) in the Context's time zone; resolve "next Friday" yourself from today's date.
 - You are given the Context's Standing Entries with each Message: keep honouring them, and when two disagree, the newer wins. They and the Journal are your only memory: what is said only in the Conversation may be lost.
 - With each Message you are also told the Held Changes still waiting for the person's tap and what others changed since the last Message you answered, each named by its id and not by its words: read what you need through the tools.
-- Mark an Entry standing only when the person asks you to keep honouring something, recording it first in their words if it is not yet an Entry. Never mark or unmark one unasked.`;
+- Mark an Entry standing only when the person asks you to keep honouring something, recording it first in their words if it is not yet an Entry. Never mark or unmark one unasked.
+- A Message may be spoken in a Call: it is then the text of what the person said, and is told you as such. Record it as you would a typed one, in the words of that text. Your answer is heard, in a voice model's own words: write a short answer, offer the rest rather than giving it, and always say what you changed. A spoken yes makes no Held Change either.`;
+
+/**
+ * What the Agent is told with a Message spoken in a Call (section 6): it is being heard. The rest
+ * of how to answer one is in the preamble, the same every Run.
+ */
+export const HEARD =
+  "This Message was spoken in a Call: the person hears your answer and may not be looking at the screen. Its words are the text of what they said, which may hold a mishearing.";
 
 const AGENT: Caller = { kind: "agent" };
 const CLOCK: Caller = { kind: "clock" };
@@ -198,7 +207,7 @@ function byClock(run: RunRow | null): boolean {
  * a Brief or a Review it calls them as the clock, which is offered reads only: the registry refuses
  * the rest, whatever the model was shown.
  */
-function agentTools(host: AgentHost) {
+function agentTools(host: AgentHost, wordsAnswered: (run: RunRow) => Promise<string | null>) {
   return offeredTo("agent").map((name) =>
     defineTool({
       name,
@@ -212,8 +221,15 @@ function agentTools(host: AgentHost) {
           tools[name].kind === "write" ? { ...(args as object), key: `run:${api.callId}` } : args;
         // The Run is the one answering the Message the runtime says it is answering now.
         const live = await api.snapshot(LiveDoc, api.conversationId, context);
+        // The person's words it answers, which an Entry of theirs is drawn from (section 3.2). The
+        // Run is read again after waiting for them, as a clear meanwhile lets go of its handles.
+        const asked = runAnswering(host.sql, live?.run?.inputs[0]);
+        const words = asked && !byClock(asked) ? await wordsAnswered(asked) : null;
         const run = runAnswering(host.sql, live?.run?.inputs[0]);
-        const { result, change } = host.call(name, input, byClock(run) ? CLOCK : AGENT);
+        const { result, change } =
+          words === null || run === null || byClock(run)
+            ? host.call(name, input, byClock(run) ? CLOCK : AGENT)
+            : host.call(name, input, AGENT, words);
         if (change !== null && run) addRunChange(host.sql, run.id, change);
         const details: CallDetails = result.ok
           ? { result: "ok", effects: (result.value as { effects?: Effect[] }).effects ?? [] }
@@ -241,10 +257,10 @@ function modelSchema(name: ToolName): Record<string, unknown> {
  * The Message as the model is shown it: the Run's bearings, then the person's words, last and
  * alone. `personsWords` reads them back, so the format has one owner.
  */
-function presented(words: string, bearings: Bearings): string {
+function presented(words: string, bearings: Bearings, spoken: boolean): string {
   // The Standing Entries are bearings too, so the person's words come last and alone.
   return `<bearings>
-${placePresented(bearings)}${bearings.lastRunCutShort ? `\n\nYour last Run was cut short at the limit of ${RUN_ROUNDS.message} model rounds, before you had finished: the person may want you to carry on.` : ""}
+${spoken ? `${HEARD}\n\n` : ""}${placePresented(bearings)}${bearings.lastRunCutShort ? `\n\nYour last Run was cut short at the limit of ${RUN_ROUNDS.message} model rounds, before you had finished: the person may want you to carry on.` : ""}
 
 ${standingPresented(bearings.standing)}
 
@@ -443,12 +459,23 @@ export class ContextAgent {
   /** Set once the runtime has failed to open its tables, so that is logged once. */
   #unopened = false;
 
+  /**
+   * The person's words in the Message a Run answers, read from the runtime's record of it, or null
+   * once it is not there, as after the Conversation is cleared. Never kept beyond the record.
+   */
+  async #wordsAnswered(run: RunRow): Promise<string | null> {
+    if (run.message === null || this.#opened === null) return null;
+    const { root } = await this.#opened;
+    const record = await runtimeRecordStarting(root, run.message);
+    return record?.kind === MESSAGE_KIND ? (record.data as MessageData).words : null;
+  }
+
   async #open(storage: DurableObjectStorage) {
     const registry = createRegistry();
     registry.install(
       defineExtension({
         name: "praxis",
-        tools: agentTools(this.#host),
+        tools: agentTools(this.#host, (run) => this.#wordsAnswered(run)),
         sections: [section("preamble", () => PREAMBLE, { tag: false })],
         // Praxis supplies the summary that stands in for the older Conversation (section 5.5).
         hooks: [
@@ -617,7 +644,7 @@ export class ContextAgent {
     const submission = await root.submit(
       {
         type: "input",
-        content: presented(message.words, bearings),
+        content: presented(message.words, bearings, message.spoken),
         entry: { kind: MESSAGE_KIND, data },
         requestId: data.id,
       },
@@ -899,7 +926,10 @@ export class ContextAgent {
   }
 
   /** The Conversation, newest Message first, from the start of a page the cursor names. */
-  async messages(storage: DurableObjectStorage, cursor: string | undefined): Promise<MessagesPage> {
+  async messages(
+    storage: DurableObjectStorage,
+    cursor: string | undefined,
+  ): Promise<Omit<MessagesPage, "voice">> {
     const { root } = await this.open(storage);
     return this.page(root, cursor, PAGE_MESSAGES);
   }
@@ -909,7 +939,11 @@ export class ContextAgent {
    * what the Agent said in it, its calls folded under it; a page ends only at a Message from the
    * person, so a Run is never split across two pages.
    */
-  async page(root: Conversation, cursor: string | undefined, size: number): Promise<MessagesPage> {
+  async page(
+    root: Conversation,
+    cursor: string | undefined,
+    size: number,
+  ): Promise<Omit<MessagesPage, "voice">> {
     const before = cursor === undefined ? undefined : Number(cursor);
     const items: Message[] = [];
     let said: { words: string[]; calls: RunCall[] } = { words: [], calls: [] };
@@ -1007,6 +1041,7 @@ export class ContextAgent {
             .join("\n\n");
         }
         shown.id = run.id;
+        shown.answers = message;
         shown.run = {
           ...shown.run,
           id: run.id,
@@ -1133,6 +1168,7 @@ function agentMessage(words: string[], calls: RunCall[]): AgentMessage {
     from: "agent",
     words: words.join("\n\n"),
     run: { id, calls, ended: null, cost: null },
+    answers: null,
     clock: null,
   };
 }

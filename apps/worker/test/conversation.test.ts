@@ -1,6 +1,7 @@
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import type { LiveMessage, MessagesPage, PersonMessage } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
+import { HEARD } from "../src/agent.ts";
 import { marked } from "./markers.ts";
 import { answering, calling, lastWords, noModel, scriptModel, textOf } from "./model-fake.ts";
 import { hand, newContext, newDeployment, value } from "./seam.ts";
@@ -70,6 +71,71 @@ describe("send_message: the Agent acts at once", () => {
     });
   });
 
+  test("an Entry of the person's words, filler and punctuation aside, has the person as its Author", async () => {
+    const said = marked("Um, so I need to call the plumber, like, about the boiler on Friday");
+    // The words the Agent keeps: the same words in the same order, some dropped, none added.
+    const kept = said.replace("Um, so I", "I").replace(", like,", "").replace("Friday", "Friday.");
+    scriptModel(calling([() => ["record_entry", { words: kept }]]));
+    const context = newContext();
+
+    await context.callAny(hand, "send_message", { words: said });
+    await context.runsEnded();
+
+    const [entry] = value(await context.call(hand, "list_entries", {})).items;
+    expect(entry).toMatchObject({
+      words: kept,
+      author: { kind: "person" },
+      through_conversation: true,
+    });
+  });
+
+  test("an Entry the Agent composed, with a word the person never said, is the Agent's", async () => {
+    const said = marked("Note that the boiler is broken");
+    scriptModel(calling([() => ["record_entry", { words: `${said} again` }]]));
+    const context = newContext();
+
+    await context.callAny(hand, "send_message", { words: said });
+    await context.runsEnded();
+
+    const [entry] = value(await context.call(hand, "list_entries", {})).items;
+    expect(entry?.author).toEqual({ kind: "agent" });
+  });
+
+  test("the person's words in another order are the Agent's: it rewrote them", async () => {
+    const marker = marked("").trim();
+    scriptModel(calling([() => ["record_entry", { words: `${marker} broken boiler the` }]]));
+    const context = newContext();
+
+    await context.callAny(hand, "send_message", { words: `${marker} the boiler broken` });
+    await context.runsEnded();
+
+    const [entry] = value(await context.call(hand, "list_entries", {})).items;
+    expect(entry?.author).toEqual({ kind: "agent" });
+  });
+
+  test("the Agent's change to an Entry it recorded of the person's words is held for their tap", async () => {
+    const said = marked("Pay the gas bill");
+    let recorded: { id: string; version: number } | undefined;
+    scriptModel(
+      calling([
+        () => ["record_entry", { words: said }],
+        ([made = ""]) => {
+          recorded = (JSON.parse(made) as { value: { record: { id: string; version: number } } })
+            .value.record;
+          return ["edit_entry", { id: recorded.id, version: recorded.version, words: "Paid" }];
+        },
+      ]),
+    );
+    const context = newContext();
+
+    await context.callAny(hand, "send_message", { words: said });
+    await context.runsEnded();
+
+    const entry = value(await context.call(hand, "get_entry", { id: recorded?.id ?? "" }));
+    expect(entry).toMatchObject({ words: said, author: { kind: "person" } });
+    expect(value(await context.call(hand, "list_held_changes", {})).items).toHaveLength(1);
+  });
+
   test("a call the Agent is not offered is refused, and changes nothing", async () => {
     scriptModel(calling([() => ["set_time_zone", { time_zone: "Europe/Paris" }]]));
     const context = newContext();
@@ -116,6 +182,52 @@ describe("send_message: what the Agent is told at the start of a Run", () => {
   });
 });
 
+describe("send_message spoken in a Call", () => {
+  test("tells the Agent it is being heard, and a typed Message does not; the words are the same", async () => {
+    const seen: string[] = [];
+    const read: string[] = [];
+    scriptModel((context) => {
+      seen.push(textOf(context.messages.findLast((message) => message.role === "user")));
+      read.push(lastWords(context));
+      return fauxAssistantMessage("Noted.");
+    });
+    const context = newContext();
+    const spoken = marked("What is due today");
+
+    const sent = value(
+      await context.callAny(hand, "send_message", { words: spoken, spoken: true }),
+    ) as { message: PersonMessage };
+    await context.callAny(hand, "send_message", { words: "Typed" });
+    await context.runsEnded();
+
+    expect(sent.message).toMatchObject({ words: spoken, spoken: true });
+    expect(seen[0]).toContain(HEARD);
+    expect(seen[1]).not.toContain(HEARD);
+    expect(read).toEqual([spoken, "Typed"]);
+  });
+
+  test("the Agent's Message names the Message it answers, as read back and as carried live", async () => {
+    const context = newContext();
+    const channel = await context.listen();
+    await channel.next();
+
+    const sent = value(
+      await context.callAny(hand, "send_message", { words: "First", spoken: true }),
+    ) as { message: PersonMessage };
+    await context.runsEnded();
+
+    let carried: LiveMessage | undefined;
+    while (!(carried?.kind === "message" && carried.message.from === "agent")) {
+      carried = await channel.next();
+    }
+    channel.close();
+    expect(carried).toMatchObject({ message: { answers: sent.message.id } });
+    const [answer] = (value(await context.callAny(hand, "list_messages", {})) as MessagesPage)
+      .items;
+    expect(answer).toMatchObject({ from: "agent", answers: sent.message.id });
+  });
+});
+
 describe("send_message: the person's words as a scripted model reads them", () => {
   test("come last and alone, whatever the bearings hold", async () => {
     const read: string[] = [];
@@ -146,7 +258,7 @@ describe("list_messages without the model's key", () => {
     const page = value(await context.callAny(hand, "list_messages", {})) as MessagesPage;
 
     expect(sent).toMatchObject({ ok: false, error: { code: "refused" } });
-    expect(page).toEqual({ items: [], next_cursor: null, agent: "no_key" });
+    expect(page).toEqual({ items: [], next_cursor: null, agent: "no_key", voice: "available" });
   });
 });
 

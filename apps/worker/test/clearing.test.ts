@@ -27,7 +27,12 @@ describe("clear_conversation", () => {
     const cleared = value(await context.call(hand, "clear_conversation", {}));
 
     expect(cleared).toEqual({ conversation: "cleared" });
-    expect(await messages(context)).toEqual({ items: [], next_cursor: null, agent: "available" });
+    expect(await messages(context)).toEqual({
+      items: [],
+      next_cursor: null,
+      agent: "available",
+      voice: "available",
+    });
     expect(value(await context.call(hand, "list_entries", {}))).toEqual(journal);
     expect(value(await context.call(hand, "list_changes", {}))).toEqual(changes);
     expect(value(await context.call(hand, "list_runs", {}))).toEqual(runs);
@@ -94,6 +99,11 @@ describe("clear_conversation", () => {
     expect(value(await context.call(hand, "clear_conversation", {}))).toEqual({
       conversation: "cleared",
     });
-    expect(await messages(context)).toEqual({ items: [], next_cursor: null, agent: "available" });
+    expect(await messages(context)).toEqual({
+      items: [],
+      next_cursor: null,
+      agent: "available",
+      voice: "available",
+    });
   });
 });

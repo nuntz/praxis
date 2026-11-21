@@ -11,6 +11,7 @@ import type {
 import { runTranscriptName } from "@praxis/domain";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
+import { DeviceCall, type DeviceCallEnd } from "./call.ts";
 import { Peer } from "./design/Peer.tsx";
 import { download } from "./Export.tsx";
 import { HeldChangeItem, useHeldChanges } from "./HeldChanges.tsx";
@@ -44,6 +45,8 @@ export { unread as unreadBriefs };
  * Conversation says so in place of its composer; at the spend cap, the cap's Notice and a way to
  * the cap in settings take the composer's place, and without a network a Notice saying so. A
  * person's Message whose Run failed keeps a Notice under it, and the newest a way to try again.
+ * With the voice key a Call can be started from the composer, and on this Device while it goes on
+ * the composer gives way to the Call's controls (section 6).
  */
 export function Conversation(props: {
   contextId: string;
@@ -62,6 +65,13 @@ export function Conversation(props: {
   // The answer being written in the Run going now, all of it so far.
   const [writing, setWriting] = createSignal<string | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
+  const [voice, setVoice] = createSignal<MessagesPage["voice"]>("no_key");
+  // The Call going on this Device in this Context, and while one is being set up.
+  const [call, setCall] = createSignal<DeviceCall | null>(null);
+  const [calling, setCalling] = createSignal(false);
+  const [muted, setMuted] = createSignal(false);
+  // Why the last Call ended, when it was not the person's tap: a Notice, never a Message.
+  const [callEnded, setCallEnded] = createSignal<string | null>(null);
 
   /**
    * The newest page, read afresh, the last read's answer winning: a burst of changes to Tasks
@@ -75,6 +85,7 @@ export function Conversation(props: {
       if (!current()) return;
       if (!result.ok) return setProblem(result.error.message);
       setAgent(result.value.agent);
+      setVoice(result.value.voice);
       const page = result.value.items.toReversed();
       if (cursor === undefined) {
         // The newest page, read afresh: what the live channel brought meanwhile is kept once.
@@ -179,9 +190,7 @@ export function Conversation(props: {
     try {
       const result = await callTool("retry_run", { run: failed });
       if (!result.ok) {
-        if (result.error.in_the_way?.some((thing) => thing.kind === "spend_cap")) {
-          void readSpend();
-        }
+        readSpendIfCapped(result.error);
         setProblem(result.error.message);
         return;
       }
@@ -207,6 +216,50 @@ export function Conversation(props: {
     return capReached() ? "cap_reached" : "composer";
   };
 
+  /**
+   * Start a Call in this Context. What the person says is sent as spoken Messages, each placed as
+   * a typed one is, and the Agent's answers are passed back to be spoken.
+   */
+  async function startCall(): Promise<void> {
+    if (calling() || call()) return;
+    setCalling(true);
+    setCallEnded(null);
+    setProblem(null);
+    try {
+      const started = await DeviceCall.start(callTool, {
+        ask: async (words) => {
+          try {
+            const result = await callTool("send_message", { words, spoken: true });
+            if (!result.ok) {
+              readSpendIfCapped(result.error);
+              setProblem(result.error.message);
+              return null;
+            }
+            placeAnswered(result.value.message);
+            return result.value.message.id;
+          } catch (error) {
+            setProblem(unreachableMessage(error));
+            return null;
+          }
+        },
+        ended: ({ ended, reason }) => {
+          setCall(null);
+          setMuted(false);
+          setCallEnded(callEndedWords(ended, reason));
+        },
+      });
+      if (typeof started === "string") setProblem(started);
+      else setCall(started);
+    } catch (error) {
+      setProblem(unreachableMessage(error));
+    } finally {
+      setCalling(false);
+    }
+  }
+
+  // A Call belongs to the Context it was started in: switching away, or leaving, ends it.
+  onCleanup(() => void call()?.hangUp());
+
   // Read once the live channel is open, so a Message added meanwhile is either read or brought.
   onMount(async () => {
     await live.ready;
@@ -215,7 +268,10 @@ export function Conversation(props: {
   onCleanup(
     live.listen({
       answer: setWriting,
-      message: place,
+      message: (message) => {
+        place(message);
+        if (message.from === "agent") call()?.answer(message);
+      },
       gone: (id) => setMessages((shown) => shown.filter((message) => message.id !== id)),
       // Cleared, from this Device or another: every Message is gone, and the Conversation starts
       // afresh from the newest page, read again.
@@ -330,7 +386,28 @@ export function Conversation(props: {
             </button>
           </div>
         </Show>
-        <Show when={foot() === "composer"}>
+        <Show when={callEnded()}>
+          {(why) => (
+            <p class="notice" role="status">
+              {why()}
+            </p>
+          )}
+        </Show>
+        {/* A Call going keeps its controls, offline or at the cap too, so it can always be ended. */}
+        <Show when={call()}>
+          {(going) => (
+            <CallControls
+              contextName={props.contextName}
+              muted={muted()}
+              onMute={(on) => {
+                going().mute(on);
+                setMuted(going().muted);
+              }}
+              onEnd={() => void going().hangUp()}
+            />
+          )}
+        </Show>
+        <Show when={foot() === "composer" && !call()}>
           <MessageComposer
             contextName={props.contextName}
             onSent={(message) => {
@@ -339,10 +416,74 @@ export function Conversation(props: {
             }}
             onProblem={setProblem}
           />
+          <Show when={voice() === "available"}>
+            <button
+              type="button"
+              class="quiet start-call"
+              disabled={calling()}
+              onClick={() => void startCall()}
+            >
+              {calling() ? "Starting a Call…" : "Start a Call"}
+            </button>
+          </Show>
         </Show>
       </div>
     </Peer>
   );
+}
+
+/**
+ * Why a Call ended, as the Notice in the Conversation's foot says it, or null for the person's own
+ * tap, which needs none. The provider's reason is its own word for it.
+ */
+function callEndedWords(ended: DeviceCallEnd, reason: string | null): string | null {
+  if (ended === "hung_up") return null;
+  if (ended === "lost") return "The Call ended: the connection to the voice provider was lost.";
+  switch (reason) {
+    case "expired":
+      return "The Call ended: it reached the voice provider's two-hour limit.";
+    case "content":
+      return "The Call ended: the voice provider's safety filter ended it.";
+    default:
+      return "The Call ended: the voice provider ended it.";
+  }
+}
+
+/**
+ * The Call's controls, which the Conversation's composer gives way to on the Device in the Call
+ * (section 6): end it, and mute, which turns the microphone off while the Call goes on.
+ */
+function CallControls(props: {
+  contextName: string | undefined;
+  muted: boolean;
+  onMute: (muted: boolean) => void;
+  onEnd: () => void;
+}) {
+  return (
+    <section
+      class="call-controls"
+      aria-label={props.contextName ? `Call in ${props.contextName}` : "Call"}
+    >
+      <p class="call-status" role="status">
+        {props.muted ? "In a Call, muted" : "In a Call: speak to the Agent"}
+      </p>
+      <div class="call-buttons">
+        <button type="button" aria-pressed={props.muted} onClick={() => props.onMute(!props.muted)}>
+          Mute
+        </button>
+        <button type="button" class="end-call" onClick={() => props.onEnd()}>
+          End the Call
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * A call refused for the spend cap: read the spend, so the cap's Notice takes the composer's place.
+ */
+function readSpendIfCapped(error: { in_the_way?: { kind: string }[] }): void {
+  if (error.in_the_way?.some((thing) => thing.kind === "spend_cap")) void readSpend();
 }
 
 /** Why a Run failed, as the Notice under the person's Message says it. */
@@ -643,10 +784,7 @@ function MessageComposer(props: {
     try {
       const result = await callTool("send_message", { words: words() });
       if (!result.ok) {
-        // Refused for the cap: read the spend, so the Notice takes the composer's place.
-        if (result.error.in_the_way?.some((thing) => thing.kind === "spend_cap")) {
-          void readSpend();
-        }
+        readSpendIfCapped(result.error);
         return props.onProblem(result.error.message);
       }
       setWords("");

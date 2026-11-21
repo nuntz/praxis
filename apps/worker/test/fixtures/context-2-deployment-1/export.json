@@ -1,0 +1,288 @@
+{
+ "format_version": 2,
+ "made_at": "2026-11-22T10:02:00.000Z",
+ "files": [
+  {
+   "path": "deployment.json",
+   "content": {
+    "format": "praxis-export",
+    "format_version": 2,
+    "made_at": "2026-11-22T10:02:00.000Z",
+    "kind": "deployment",
+    "contexts": [
+     {
+      "id": "b518cb9e176147df8c1c56376cc7d861c8b5934b03ce96f670e829e673a323b8",
+      "name": "Personal",
+      "accent": "blue",
+      "retired": false,
+      "file": "contexts/b518cb9e176147df8c1c56376cc7d861c8b5934b03ce96f670e829e673a323b8.json"
+     }
+    ],
+    "spend_cap": 30,
+    "deleted_contexts_spend": [],
+    "connections": [
+     {
+      "id": "dnVSdIBdlhs9uHEzr7cNHA",
+      "name": "Claude",
+      "context_id": "b518cb9e176147df8c1c56376cc7d861c8b5934b03ce96f670e829e673a323b8"
+     }
+    ]
+   }
+  },
+  {
+   "path": "contexts/b518cb9e176147df8c1c56376cc7d861c8b5934b03ce96f670e829e673a323b8.json",
+   "content": {
+    "format": "praxis-export",
+    "format_version": 2,
+    "made_at": "2026-11-22T10:02:00.000Z",
+    "kind": "context",
+    "context": {
+     "id": "b518cb9e176147df8c1c56376cc7d861c8b5934b03ce96f670e829e673a323b8",
+     "name": "Personal",
+     "time_zone": "Europe/Paris",
+     "brief_time": "07:00",
+     "review_day": "sunday",
+     "review_time": "17:00",
+     "notifications": true
+    },
+    "entries": [
+     {
+      "id": "14e57136-3df1-40ad-b3cd-7154cf4a6477",
+      "words": "MARKER-415fab48-1506-4f17-a999-85ab90a979d2 The boiler is making that noise again",
+      "at": "2026-11-20T09:00:00.000Z",
+      "author": {
+       "kind": "person"
+      },
+      "through_conversation": false,
+      "follow_up_to": null,
+      "links": [
+       {
+        "to": {
+         "kind": "person",
+         "id": "8d704433-c196-4572-a757-6472a2174428"
+        },
+        "anchor": null
+       }
+      ],
+      "standing": true,
+      "versions": []
+     },
+     {
+      "id": "efa75780-965b-40da-90ae-d1347a241cb8",
+      "words": "MARKER-f50fdfaa-549a-498c-9141-02825772f930 Quote for the new tiles came in, a little high",
+      "at": "2026-11-20T09:00:00.000Z",
+      "author": {
+       "kind": "person"
+      },
+      "through_conversation": false,
+      "follow_up_to": "14e57136-3df1-40ad-b3cd-7154cf4a6477",
+      "links": [],
+      "standing": false,
+      "versions": [
+       {
+        "version": 0,
+        "words": "MARKER-f2456aff-648e-4e65-a7f4-0bdf80878d0f Quote for the new tiles came in",
+        "changed": {
+         "by": {
+          "kind": "person"
+         },
+         "at": "2026-11-20T09:00:00.000Z"
+        }
+       }
+      ]
+     },
+     {
+      "id": "913ff792-7e05-419a-8b49-67c8b7208c24",
+      "words": "MARKER-8ec4d849-fe91-4b1f-a05b-ff001752edd2 Nothing to keep",
+      "at": "2026-11-20T09:00:00.000Z",
+      "author": {
+       "kind": "person"
+      },
+      "through_conversation": false,
+      "follow_up_to": null,
+      "links": [],
+      "standing": false,
+      "versions": []
+     },
+     {
+      "id": "01693598-fc3a-48ba-bb43-78e7d04521a6",
+      "words": "MARKER-9c96d3cf-099f-4441-b98e-964777ceebca Noted from elsewhere",
+      "at": "2026-11-21T09:00:00.000Z",
+      "author": {
+       "kind": "connection",
+       "name": "Claude"
+      },
+      "through_conversation": false,
+      "follow_up_to": null,
+      "links": [],
+      "standing": false,
+      "versions": []
+     }
+    ],
+    "tasks": [
+     {
+      "id": "f56a8077-4407-4f17-9b58-986b2035c747",
+      "title": "MARKER-5fe13e21-2c03-4690-a65c-a51b07d11b93 Call the plumber",
+      "origin_entry": "14e57136-3df1-40ad-b3cd-7154cf4a6477",
+      "at": "2026-11-20T09:00:00.000Z",
+      "author": {
+       "kind": "person"
+      },
+      "project": null,
+      "due_date": "2026-11-23",
+      "defer_date": "2026-11-21",
+      "recurrence": null,
+      "events": [
+       {
+        "what": "waited_on",
+        "at": "2026-11-20T09:00:00.000Z",
+        "on": {
+         "kind": "project",
+         "id": "ef11ed48-f624-4022-b1fe-a93b99f92416"
+        }
+       },
+       {
+        "what": "finished",
+        "at": "2026-11-21T09:00:00.000Z"
+       }
+      ]
+     },
+     {
+      "id": "a2137402-04fa-46ca-ae2b-73681222e0af",
+      "title": "MARKER-9e37f7f6-02a6-430d-af38-836fed2a4d1e Find the warranty",
+      "origin_entry": "14e57136-3df1-40ad-b3cd-7154cf4a6477",
+      "at": "2026-11-20T09:00:00.000Z",
+      "author": {
+       "kind": "person"
+      },
+      "project": null,
+      "due_date": null,
+      "defer_date": null,
+      "recurrence": null,
+      "events": [
+       {
+        "what": "delegated",
+        "at": "2026-11-20T09:00:00.000Z",
+        "person": "8d704433-c196-4572-a757-6472a2174428"
+       }
+      ]
+     },
+     {
+      "id": "4562bc74-7f1d-40c1-b361-7b44202ac855",
+      "title": "MARKER-6b95fab5-90dd-49b8-8fde-3f435a713a96 Choose the tiles",
+      "origin_entry": "efa75780-965b-40da-90ae-d1347a241cb8",
+      "at": "2026-11-20T09:00:00.000Z",
+      "author": {
+       "kind": "person"
+      },
+      "project": "ef11ed48-f624-4022-b1fe-a93b99f92416",
+      "due_date": null,
+      "defer_date": null,
+      "recurrence": null,
+      "events": []
+     },
+     {
+      "id": "65e1c301-a34f-4561-be91-4161c259035b",
+      "title": "MARKER-f4746fea-a14b-486d-818d-f9e6ef0a7d95 A Task gone with it",
+      "origin_entry": "913ff792-7e05-419a-8b49-67c8b7208c24",
+      "at": "2026-11-20T09:00:00.000Z",
+      "author": {
+       "kind": "person"
+      },
+      "project": null,
+      "due_date": null,
+      "defer_date": null,
+      "recurrence": null,
+      "events": []
+     },
+     {
+      "id": "031fb1f2-acc2-46c8-8b92-5fbe33b348b9",
+      "title": "MARKER-5fe13e21-2c03-4690-a65c-a51b07d11b93 Call the plumber",
+      "origin_entry": "14e57136-3df1-40ad-b3cd-7154cf4a6477",
+      "at": "2026-11-21T09:00:00.000Z",
+      "author": {
+       "kind": "person"
+      },
+      "project": null,
+      "due_date": "2026-11-30",
+      "defer_date": "2026-11-28",
+      "recurrence": {
+       "kind": "weeks",
+       "every": 1,
+       "on": [
+        "monday"
+       ],
+       "from": "2026-11-23"
+      },
+      "events": []
+     }
+    ],
+    "projects": [
+     {
+      "id": "ef11ed48-f624-4022-b1fe-a93b99f92416",
+      "name": "MARKER-06c00f38-8246-4001-b44a-4d5c469eec37 Kitchen",
+      "at": "2026-11-20T09:00:00.000Z",
+      "due_date": null,
+      "events": []
+     }
+    ],
+    "persons": [
+     {
+      "id": "8d704433-c196-4572-a757-6472a2174428",
+      "name": "MARKER-7352bb82-35f0-4e34-a2a4-d5b85ea448a4 Sam",
+      "at": "2026-11-20T09:00:00.000Z"
+     }
+    ],
+    "trash": [
+     {
+      "deleted": {
+       "kind": "entry",
+       "id": "913ff792-7e05-419a-8b49-67c8b7208c24"
+      },
+      "went_with": [
+       {
+        "kind": "task",
+        "id": "65e1c301-a34f-4561-be91-4161c259035b"
+       }
+      ],
+      "at": "2026-11-21T09:00:00.000Z",
+      "dormant_links": []
+     }
+    ],
+    "runs": [
+     {
+      "id": "4f6f5b6c-36d6-4b3d-a7d7-e1db55e828a5",
+      "started_by": "message",
+      "at": "2026-11-21T09:00:00.000Z",
+      "model": "claude-sonnet-5-5",
+      "tokens": {
+       "input": 0,
+       "output": 2,
+       "cache_read": 0,
+       "cache_write": 9738
+      },
+      "cost": 0.024365,
+      "ended": "answered",
+      "failure": null
+     },
+     {
+      "id": "8ce7c6ad-bad6-4a09-9325-bc1abd7f75e7",
+      "started_by": "message",
+      "at": "2026-11-21T09:00:00.000Z",
+      "model": "claude-sonnet-5-5",
+      "tokens": {
+       "input": 0,
+       "output": 2,
+       "cache_read": 9738,
+       "cache_write": 220
+      },
+      "cost": 0.0015438000000000001,
+      "ended": "answered",
+      "failure": null
+     }
+    ],
+    "moving": []
+   }
+  }
+ ]
+}

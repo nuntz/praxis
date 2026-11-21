@@ -29,6 +29,11 @@ export type ToolCall<N extends ToolName> = {
   /** The day the call arrived on in the Context's time zone, by which a Task's state is read. */
   today: Day;
   sql: SqlStorage;
+  /**
+   * The person's words in the Message the Agent's Run answers, for a call the Agent makes in one,
+   * and null for any other call: an Entry the Agent records of them is the person's (section 3.2).
+   */
+  wordsAnswered: string | null;
 };
 
 /**
@@ -69,6 +74,8 @@ export type ToolRequest = {
    * Device, if listed, was seen then (section 8.10).
    */
   device?: string;
+  /** For a call the Agent makes in a Run, the person's words in the Message it answers. */
+  wordsAnswered?: string;
 };
 
 /**
@@ -119,6 +126,7 @@ function runTool<N extends Exclude<ToolName, ObjectToolName>>(
     arrivedAt: request.arrivedAt,
     today: dayIn(request.arrivedAt, timeZoneOf(storage.sql)),
     sql: storage.sql,
+    wordsAnswered: request.wordsAnswered ?? null,
   };
   return storage.transactionSync(() =>
     isWrite(tool)
