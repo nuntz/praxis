@@ -328,3 +328,40 @@ test("a write made while another is still Unsent goes after it, in the order mad
   const { items } = await callContextTool(page, id, "list_entries", {});
   expect(items).toHaveLength(2);
 });
+
+test("an Unsent Entry edited after its answer was lost is put to the person, not dropped", async ({
+  page,
+}, testInfo) => {
+  const { id } = await contextWith(page, testInfo, []);
+  await page.goto("/");
+  const { journal, composer } = await openJournal(page, testInfo);
+  await expect(composer).toHaveAccessibleName(/^Record an Entry in Lift /);
+
+  // The server makes the Entry, and its answer never reaches the Device.
+  await page.route(/\/tools\/record_entry$/, async (route) => {
+    await route.fetch();
+    await route.abort("internetdisconnected");
+  });
+  await composer.fill("Met the plumber");
+  await journal.getByRole("button", { name: "Record" }).click();
+  const unsent = journal.getByTestId("unsent-entry");
+  await expect(unsent).toHaveCount(1);
+  await unsent.getByRole("button", { name: "Edit" }).click();
+  await unsent.getByRole("textbox", { name: "The Entry's words" }).fill("Met the plumber at nine");
+  await unsent.getByRole("button", { name: "Save" }).click();
+
+  // Sent again with its key, it gives back the Entry as first made.
+  const answered = page.waitForResponse(/\/tools\/record_entry$/);
+  await page.unroute(/\/tools\/record_entry$/);
+  expect((await (await answered).json()).value.record.words).toBe("Met the plumber");
+
+  await expect(journal.getByTestId("entry").getByTestId("words")).toHaveText(["Met the plumber"]);
+  const attention = await openAttention(page, testInfo);
+  const notAccepted = attention.getByRole("region", { name: "Not accepted", exact: true });
+  await expect(notAccepted.getByText(/already reached Praxis before your edit/)).toBeVisible();
+  await expect(notAccepted.getByRole("textbox", { name: "The Entry's words" })).toHaveValue(
+    "Met the plumber at nine",
+  );
+  const { items } = await callContextTool(page, id, "list_entries", {});
+  expect(items).toEqual([expect.objectContaining({ words: "Met the plumber" })]);
+});

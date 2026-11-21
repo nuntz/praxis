@@ -132,6 +132,9 @@ const KEY_REMEMBERED = KEY_DAYS * 24 * 60 * 60 * 1000;
 
 const TOO_OLD = `It was made more than ${KEY_DAYS} days ago, so Praxis can no longer tell whether it was already received. It was not sent.`;
 
+const EDITED_TOO_LATE =
+  "This Entry had already reached Praxis before your edit, so it is kept there with the words it had then. Copy your edit to make it in the Journal, or discard it here.";
+
 /** What a sent write gave back, heard by whatever shows its Context. */
 export type Sent =
   | { kind: "entry"; context: string; entry: Entry }
@@ -317,6 +320,12 @@ export async function sendUnsent(): Promise<void> {
           ? { kind: "entry", context: next.context, entry: result.value.record as Entry }
           : { kind: "finish", context: next.context, task: result.value.record as Task };
       for (const listener of sentListeners) listener(sent);
+      // An Entry whose answer was lost reached Praxis before the person edited it here: its key
+      // gave back the first words, so the edit is put to them rather than dropped (section 8.8).
+      if (sent.kind === "entry" && next.kind === "entry" && sent.entry.words !== next.words) {
+        update(next.id, (write) => ({ ...write, refused: EDITED_TOO_LATE }));
+        continue;
+      }
       discardUnsent(next.id);
     }
   } finally {
