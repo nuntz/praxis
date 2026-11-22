@@ -75,8 +75,11 @@ type DeviceEvent =
 /** A Call going on this Device, in one Context. */
 export class DeviceCall {
   readonly id: string;
-  /** When the object set the Call up, by this Device's clock: the time so far is counted from it. */
-  readonly since = Date.now();
+  /**
+   * When the object set the Call up, by this Device's clock, as `start_call` answered: the time so
+   * far is counted from it.
+   */
+  readonly since: number;
   readonly #callTool: CallTool;
   readonly #hooks: CallHooks;
   readonly #connection: RTCPeerConnection;
@@ -109,6 +112,7 @@ export class DeviceCall {
 
   private constructor(
     started: CallStarted,
+    since: number,
     callTool: CallTool,
     hooks: CallHooks,
     parts: {
@@ -119,6 +123,7 @@ export class DeviceCall {
     },
   ) {
     this.id = started.id;
+    this.since = since;
     this.#callTool = callTool;
     this.#hooks = hooks;
     this.#connection = parts.connection;
@@ -154,10 +159,12 @@ export class DeviceCall {
       connection.close();
     };
     let started: CallStarted;
+    let since: number;
     try {
       await connection.setLocalDescription(await connection.createOffer());
       const offer = await gathered(connection);
       const result = await callTool("start_call", { offer });
+      since = Date.now();
       if (!result.ok) {
         stop();
         return result.error.message;
@@ -168,7 +175,7 @@ export class DeviceCall {
       stop();
       return "The Call could not be connected. Try again in a while.";
     }
-    const call = new DeviceCall(started, callTool, hooks, {
+    const call = new DeviceCall(started, since, callTool, hooks, {
       connection,
       channel,
       microphone,
