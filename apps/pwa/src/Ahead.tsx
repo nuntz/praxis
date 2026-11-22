@@ -98,7 +98,7 @@ function AheadEntry(props: {
       <li class="task attention-project">
         <span class="task-title">{item.project.name}</span>
         <span class="task-mark">Project</span>
-        <DueMark due={item.on} overdue={false} />
+        <DueMark due={item.on} overdue={false} timeZone={props.timeZone} />
       </li>
     );
   }
@@ -107,7 +107,7 @@ function AheadEntry(props: {
     <li class="task future-occurrence">
       <span class="task-title">{item.occurrence.title}</span>
       <span class="task-mark">Not made yet</span>
-      <DueMark due={item.occurrence.due_date} overdue={false} />
+      <DueMark due={item.occurrence.due_date} overdue={false} timeZone={props.timeZone} />
       <Show when={item.occurrence.defer_date}>
         {(defer) => <span class="task-mark">Defer Date {formatDay(defer())}</span>}
       </Show>

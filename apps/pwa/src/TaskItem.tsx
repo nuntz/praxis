@@ -1,4 +1,12 @@
-import { type Day, type Task, type TaskDates, utcMidnight, waitedOnName } from "@praxis/domain";
+import {
+  type Day,
+  dayIn,
+  type Task,
+  type TaskDates,
+  utcMidnight,
+  waitedOnName,
+} from "@praxis/domain";
+import Calendar from "lucide-solid/icons/calendar";
 import { createMemo, createSignal, type JSX, Show } from "solid-js";
 import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { discardUnsent, finishTask, unsentFinishOf } from "./unsent.ts";
@@ -96,7 +104,9 @@ export function TaskItem(props: {
         <span class="task-mark">Dropped</span>
       </Show>
       <Show when={props.task.due_date}>
-        {(due) => <DueMark due={due()} overdue={open()?.overdue != null} />}
+        {(due) => (
+          <DueMark due={due()} overdue={open()?.overdue != null} timeZone={props.timeZone} />
+        )}
       </Show>
       <Show when={props.task.recurrence}>
         <span class="task-mark">Recurring</span>
@@ -122,13 +132,16 @@ export function TaskItem(props: {
       <Show when={open()?.deferred}>
         {(deferred) => <span class="task-mark">Deferred until {formatDay(deferred().until)}</span>}
       </Show>
+      {/* A well-known action, so its icon stands alone, named for the Task (section 8.11). */}
       <button
         type="button"
-        class="quiet"
+        class="task-dates-toggle"
+        aria-label={`Dates for ${props.task.title}`}
+        title={`Dates for ${props.task.title}`}
         aria-expanded={editingDates()}
         onClick={() => setEditingDates((shown) => !shown)}
       >
-        Dates
+        <Calendar size={18} aria-hidden="true" />
       </button>
       <Show when={editingDates()}>
         <TaskDatesEditor task={props.task} onTask={props.onTask} onProblem={props.onProblem} />
@@ -137,11 +150,15 @@ export function TaskItem(props: {
   );
 }
 
-/** A Due Date, a Task's or a Project's, with Overdue marked on it. */
-export function DueMark(props: { due: Day; overdue: boolean }) {
+/**
+ * A Due Date, a Task's or a Project's, with Overdue marked on it, and today's said as today, in
+ * the Context's time zone. Both are bold, and only Overdue is in `warn` (section 8.11).
+ */
+export function DueMark(props: { due: Day; overdue: boolean; timeZone: string }) {
+  const today = () => !props.overdue && props.due === dayIn(Date.now(), props.timeZone);
   return (
-    <span class="task-mark" classList={{ overdue: props.overdue }}>
-      Due {formatDay(props.due)}
+    <span class="task-mark" classList={{ overdue: props.overdue, "due-today": today() }}>
+      Due {today() ? "today" : formatDay(props.due)}
       <Show when={props.overdue}>, Overdue</Show>
     </span>
   );

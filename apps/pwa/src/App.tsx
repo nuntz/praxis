@@ -1,4 +1,7 @@
 import { type ContextListing, conversationOpened, type Settings } from "@praxis/domain";
+import BookOpen from "lucide-solid/icons/book-open";
+import Inbox from "lucide-solid/icons/inbox";
+import MessageCircle from "lucide-solid/icons/message-circle";
 import SettingsIcon from "lucide-solid/icons/settings";
 import {
   createEffect,
@@ -531,15 +534,18 @@ export function App() {
                       </main>
                       <nav class="tabs" aria-label="Columns">
                         <TabButton tab="attention" shown={tab()} onShow={setTab}>
+                          <Inbox size={20} aria-hidden="true" />
                           Attention
                           <AttentionCount count={count()} />
                         </TabButton>
                         <TabButton tab="journal" shown={tab()} onShow={setTab}>
+                          <BookOpen size={20} aria-hidden="true" />
                           Journal
                         </TabButton>
                         <TabButton tab="conversation" shown={tab()} onShow={setTab}>
+                          <MessageCircle size={20} aria-hidden="true" />
                           Agent
-                          <Badge count={unreadBriefs()} label="unread" />
+                          <UnreadMark kinds={unreadBriefs()} />
                         </TabButton>
                       </nav>
                     </CurrentMoveTargets.Provider>
@@ -569,6 +575,20 @@ function TabButton(props: {
     >
       {props.children}
     </button>
+  );
+}
+
+/**
+ * A dot on the Agent tab while a Brief or a Review is unread, read out as which (section 8.5).
+ */
+function UnreadMark(props: { kinds: ("brief" | "review")[] }) {
+  const named = () =>
+    props.kinds.map((kind) => (kind === "brief" ? "Brief" : "Review")).join(" and ");
+  return (
+    <Show when={props.kinds.length > 0}>
+      <span class="unread-mark" aria-hidden="true" />
+      <span class="visually-hidden"> {named()} unread</span>
+    </Show>
   );
 }
 

@@ -5,6 +5,13 @@ import type {
   ProjectInAttention,
   Task,
 } from "@praxis/domain";
+import Calendar from "lucide-solid/icons/calendar";
+import Circle from "lucide-solid/icons/circle";
+import Clock from "lucide-solid/icons/clock";
+import Folder from "lucide-solid/icons/folder";
+import Hand from "lucide-solid/icons/hand";
+import Sparkles from "lucide-solid/icons/sparkles";
+import UserRound from "lucide-solid/icons/user-round";
 import { createEffect, createSignal, For, type JSX, Show } from "solid-js";
 import { WeeksAhead } from "./Ahead.tsx";
 import { followAttentionView } from "./attention-read.ts";
@@ -91,7 +98,12 @@ export function Attention(props: {
           </p>
         )}
       </Show>
-      <Section id="held-changes" title="Held Changes" items={heldChanges.all()}>
+      <Section
+        id="held-changes"
+        title="Held Changes"
+        icon={<Hand size={16} aria-hidden="true" />}
+        items={heldChanges.all()}
+      >
         {(held) => (
           <li>
             <HeldChangeItem held={held} anchor={heldAnchor(held.id)} />
@@ -104,6 +116,7 @@ export function Attention(props: {
             <Section
               id="due"
               title="Due"
+              icon={<Clock size={16} aria-hidden="true" />}
               items={shown().due}
               shownEmpty
               aside={
@@ -114,6 +127,7 @@ export function Attention(props: {
                   aria-controls="weeks-ahead"
                   onClick={() => setAheadOpen((open) => !open)}
                 >
+                  <Calendar size={16} aria-hidden="true" />
                   The weeks ahead
                 </button>
               }
@@ -130,7 +144,7 @@ export function Attention(props: {
                   <li class="task attention-project">
                     <span class="task-title">{item.project.name}</span>
                     <span class="task-mark">Project</span>
-                    <ProjectDue project={item.project} />
+                    <ProjectDue project={item.project} timeZone={props.timeZone} />
                   </li>
                 )
               }
@@ -138,17 +152,40 @@ export function Attention(props: {
             <Section
               id="newly-actionable"
               title="Newly actionable"
+              icon={<Sparkles size={16} aria-hidden="true" />}
               items={shown().newly_actionable}
             >
               {(item) => taskItem(item.task, cameUpMark(item.came_up))}
             </Section>
-            <Section id="delegated" title="Delegated" items={shown().delegated}>
+            <Section
+              id="delegated"
+              title="Delegated"
+              icon={<UserRound size={16} aria-hidden="true" />}
+              items={shown().delegated}
+            >
               {(task) => taskItem(task)}
             </Section>
-            <Section id="projects" title="Projects" items={shown().projects}>
-              {(item) => <ProjectItem item={item} taskItem={taskItem} onMoved={setMoved} />}
+            <Section
+              id="projects"
+              title="Projects"
+              icon={<Folder size={16} aria-hidden="true" />}
+              items={shown().projects}
+            >
+              {(item) => (
+                <ProjectItem
+                  item={item}
+                  timeZone={props.timeZone}
+                  taskItem={taskItem}
+                  onMoved={setMoved}
+                />
+              )}
             </Section>
-            <Section id="loose" title="Loose" items={shown().loose}>
+            <Section
+              id="loose"
+              title="Loose"
+              icon={<Circle size={16} aria-hidden="true" />}
+              items={shown().loose}
+            >
               {(task) => taskItem(task)}
             </Section>
             <Show
@@ -193,6 +230,8 @@ function withoutUnsentFinishes(
 function Section<T>(props: {
   id: string;
   title: string;
+  /** Beside its title, as every heading of Attention carries one (section 8.11). */
+  icon: JSX.Element;
   items: T[];
   shownEmpty?: boolean;
   /** Beside its title. */
@@ -206,6 +245,7 @@ function Section<T>(props: {
       <section class="attention-section" aria-labelledby={`attention-${props.id}`}>
         <div class="attention-section-head">
           <h3 id={`attention-${props.id}`} class="attention-section-title">
+            {props.icon}
             {props.title}
           </h3>
           {props.aside}
@@ -222,13 +262,14 @@ function Section<T>(props: {
 }
 
 /** A Project's Due Date, with Overdue marked on it. */
-function ProjectDue(props: { project: Project }) {
+function ProjectDue(props: { project: Project; timeZone: string }) {
   return (
     <Show when={props.project.due_date}>
       {(due) => (
         <DueMark
           due={due()}
           overdue={props.project.state.is === "open" && props.project.state.overdue !== null}
+          timeZone={props.timeZone}
         />
       )}
     </Show>
@@ -241,6 +282,8 @@ function ProjectDue(props: { project: Project }) {
  */
 function ProjectItem(props: {
   item: ProjectInAttention;
+  /** The Context's time zone, in which a Due Date is today. */
+  timeZone: string;
   taskItem: (task: Task) => JSX.Element;
   /** The Project moved to another Context, with its unit, as said. */
   onMoved: (said: string) => void;
@@ -261,7 +304,7 @@ function ProjectItem(props: {
         <span class="task-title">{project().name}</span>
         <span class="task-mark">{props.item.actionable_tasks} actionable</span>
       </button>
-      <ProjectDue project={project()} />
+      <ProjectDue project={project()} timeZone={props.timeZone} />
       <Show when={props.item.no_open_task}>
         <span class="task-mark flag">Needs a next Task or finishing</span>
       </Show>

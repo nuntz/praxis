@@ -11,6 +11,7 @@ import {
   pickLink,
   type Task,
 } from "@praxis/domain";
+import Check from "lucide-solid/icons/check";
 import { createEffect, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import { keepDraft, type Pick, takeCaret, takeDraft, takeShared, withShared } from "./draft.ts";
 import { latestRead } from "./latest-read.ts";
@@ -308,7 +309,8 @@ export function Composer(props: {
             onClick={look}
             onBlur={shutPicker}
           />
-          <button type="submit" disabled={!canRecord()}>
+          <button type="submit" class="record-button" disabled={!canRecord()}>
+            <Check size={16} aria-hidden="true" />
             Record
           </button>
         </div>

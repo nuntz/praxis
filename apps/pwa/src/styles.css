@@ -749,16 +749,45 @@ button.jump-to-latest {
     background: var(--surface);
   }
 
+  /* Each tab its icon over its name, the count or the unread mark at the icon's shoulder. */
   .tabs button {
-    min-height: 48px;
+    position: relative;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 56px;
     padding: 0 var(--space-2);
     background: none;
     color: var(--muted);
+    font: var(--type-caption);
+  }
+
+  .tabs .badge {
+    position: absolute;
+    top: 4px;
+    left: calc(50% + 6px);
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 11px;
+    line-height: 18px;
+  }
+
+  .tabs .unread-mark {
+    position: absolute;
+    top: 6px;
+    left: calc(50% + 6px);
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+    background: var(--accent);
+    box-sizing: content-box;
   }
 
   .tabs button[aria-current="true"] {
     background: var(--inset);
     color: var(--ink);
+    font-weight: 700;
   }
 }
 
@@ -1081,9 +1110,37 @@ button.jump-to-latest {
   font-weight: 600;
 }
 
+/* Due today and Overdue are bold, and only Overdue takes warn: red always means late. */
+.task-mark.overdue,
+.task-mark.due-today {
+  font-weight: 700;
+}
+
 .task-mark.overdue {
   color: var(--warn);
-  font-weight: 600;
+}
+
+/* A Task's dates: the calendar alone, at the end of its row. */
+button.task-dates-toggle {
+  width: 36px;
+  min-height: 36px;
+  margin-left: auto;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+}
+
+button.task-dates-toggle:hover,
+button.task-dates-toggle[aria-expanded="true"] {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+@media (width < 720px) {
+  button.task-dates-toggle {
+    width: 44px;
+    min-height: 44px;
+  }
 }
 
 .task-dates {
@@ -1114,6 +1171,9 @@ button.jump-to-latest {
 }
 
 .attention-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: var(--space-2) 0 0;
   color: var(--muted);
   font: var(--type-meta);
@@ -1230,6 +1290,23 @@ button.quiet.attention-project-toggle {
 
 .composer textarea:focus-visible {
   outline: none;
+}
+
+/* The two sends: Record a pill with its check and its word, Send a round button with its arrow. */
+button.record-button {
+  padding: 0 var(--space-4);
+}
+
+button.send-button {
+  flex-shrink: 0;
+  width: 40px;
+  padding: 0;
+}
+
+@media (width < 720px) {
+  button.send-button {
+    width: 44px;
+  }
 }
 
 /* A Call starts from a primary pill in the Conversation's header, beside what the column is about. */

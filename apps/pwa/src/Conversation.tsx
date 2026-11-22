@@ -10,6 +10,7 @@ import type {
   RunFailure,
 } from "@praxis/domain";
 import { runTranscriptName } from "@praxis/domain";
+import ArrowUp from "lucide-solid/icons/arrow-up";
 import MicIcon from "lucide-solid/icons/mic";
 import MicOffIcon from "lucide-solid/icons/mic-off";
 import PhoneIcon from "lucide-solid/icons/phone";
@@ -36,10 +37,10 @@ const moneyFormat = new Intl.NumberFormat(undefined, {
 });
 
 /**
- * How many Briefs and Reviews the current Context's Conversation shows that are not yet read: the
- * Agent tab carries it as a badge on a phone (section 8.5).
+ * The kinds of the Briefs and Reviews the current Context's Conversation shows that are not yet
+ * read, at most one of each: the Agent tab carries a mark for them on a phone (section 8.5).
  */
-const [unread, setUnread] = createSignal(0);
+const [unread, setUnread] = createSignal<ClockFold["kind"][]>([]);
 
 export { unread as unreadBriefs };
 
@@ -168,13 +169,13 @@ export function Conversation(props: {
     }
   }
 
-  createEffect(() =>
-    setUnread(
-      messages.filter((message) => message.from === "agent" && message.clock?.read === false)
-        .length,
-    ),
-  );
-  onCleanup(() => setUnread(0));
+  createEffect(() => {
+    const kinds = messages.flatMap((message) =>
+      message.from === "agent" && message.clock?.read === false ? [message.clock.kind] : [],
+    );
+    setUnread((["brief", "review"] as const).filter((kind) => kinds.includes(kind)));
+  });
+  onCleanup(() => setUnread([]));
 
   /**
    * The person's Message as a tool answered with it, sent or tried again. The live channel may
@@ -983,8 +984,15 @@ function MessageComposer(props: {
               }
             }}
           />
-          <button type="submit" disabled={!canSend()}>
-            Send
+          {/* A well-known action, so its icon stands alone (section 8.11). */}
+          <button
+            type="submit"
+            class="send-button"
+            aria-label="Send"
+            title="Send"
+            disabled={!canSend()}
+          >
+            <ArrowUp size={20} aria-hidden="true" />
           </button>
         </div>
       </form>

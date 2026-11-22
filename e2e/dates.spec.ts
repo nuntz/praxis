@@ -15,7 +15,7 @@ test("the person gives a Task a Due Date and a Defer Date and sees it Overdue an
     .filter({ has: page.getByText(title) })
     .last();
 
-  await task.getByRole("button", { name: "Dates" }).click();
+  await task.getByRole("button", { name: `Dates for ${title}`, exact: true }).click();
   // Days far enough off that today, in whatever zone the Context is in, is between them.
   await task.getByLabel("Due Date", { exact: true }).fill("2020-01-06");
   await expect(task.getByText(/^Due .+, Overdue$/)).toBeVisible();
@@ -33,7 +33,7 @@ test("the person gives a Task a Due Date and a Defer Date and sees it Overdue an
   await expect(kept.getByText(/^Deferred until .+2099/)).toBeVisible();
 
   // Emptying a date clears it.
-  await kept.getByRole("button", { name: "Dates" }).click();
+  await kept.getByRole("button", { name: `Dates for ${title}`, exact: true }).click();
   await kept.getByLabel("Due Date", { exact: true }).fill("");
   await expect(kept.getByText(/^Due .*2020/)).toHaveCount(0);
   await expect(kept.getByText(/^Deferred until .+2099/)).toBeVisible();
