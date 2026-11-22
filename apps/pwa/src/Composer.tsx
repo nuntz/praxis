@@ -1,5 +1,4 @@
 import {
-  type Anchor,
   type End,
   type Entry,
   type EntryNamed,
@@ -12,14 +11,12 @@ import {
   pickLink,
   type Task,
 } from "@praxis/domain";
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, Show, untrack } from "solid-js";
+import { keepDraft, type Pick, takeCaret, takeDraft, takeShared, withShared } from "./draft.ts";
 import { latestRead } from "./latest-read.ts";
 import { personsHeld, referencesHeld } from "./offline-copy.ts";
 import { Unreachable, unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { recordEntry } from "./unsent.ts";
-
-/** A link picked in the draft, followed through what is typed after it. */
-type Pick = { to: NewLink["to"]; anchor: Anchor };
 
 /** One choice in a picker: a record there is, or a new one made from what was typed. */
 type Choice = { name: string; detail: string | null; to: NewLink["to"] };
@@ -47,13 +44,19 @@ export function Composer(props: {
    * its links or the Entry it followed up were left off for that.
    */
   onUnsent: (leftOff: boolean) => void;
+  /** The draft came from another Context, and its links stayed there. */
+  onLinksLeftOff: () => void;
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();
   const contextId = useContextId();
   let field!: HTMLTextAreaElement;
-  const [words, setWords] = createSignal("");
-  const [picks, setPicks] = createSignal<Pick[]>([]);
+  // The draft outlives this Context's screen: the person may change the Context before sending.
+  const draft = takeDraft(contextId);
+  let { leftOff } = draft;
+  if (leftOff) props.onLinksLeftOff();
+  const [words, setWords] = createSignal(draft.words);
+  const [picks, setPicks] = createSignal<Pick[]>(draft.picks);
   const [query, setQuery] = createSignal<LinkQuery | null>(null);
   // Where the picker the person shut with Escape starts, so it stays shut as they type on.
   const [shut, setShut] = createSignal<number | null>(null);
@@ -64,6 +67,23 @@ export function Composer(props: {
   const [sending, setSending] = createSignal(false);
   const canRecord = () => !sending() && words().trim() !== "";
   const open = () => query() !== null && choices().length > 0;
+  // A draft on its way is no longer the draft: kept, it would show again in the next Context and
+  // could be sent twice.
+  onCleanup(() => {
+    if (!sending()) keepDraft({ context: contextId, words: words(), picks: picks(), leftOff });
+  });
+  // Opened by the shortcut or the share sheet, the composer has the caret, after what was shared
+  // (section 8.9). Nothing is recorded until the person sends it.
+  // What is shared while an Entry is on its way waits for it, so clearing the words sent once it
+  // is made or kept Unsent keeps what was shared.
+  createEffect(() => {
+    if (sending()) return;
+    const text = takeShared();
+    if (text !== null) untrack(() => changeWords(withShared(words(), text)));
+    if (!takeCaret()) return;
+    field.focus();
+    field.setSelectionRange(field.value.length, field.value.length);
+  });
 
   /** The words changed by one edit: each pick follows it, and one the edit typed into is lost. */
   function changeWords(after: string) {
@@ -171,6 +191,7 @@ export function Composer(props: {
       else props.onUnsent(outcome.leftOff);
       setWords("");
       setPicks([]);
+      leftOff = false;
       shutPicker();
     } catch (error) {
       props.onProblem(unreachableMessage(error));

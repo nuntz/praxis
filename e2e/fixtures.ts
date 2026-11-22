@@ -58,6 +58,14 @@ export async function openJournal(page: Page, testInfo: TestInfo) {
   return { journal, composer: journal.getByRole("textbox", { name: /^Record an Entry in / }) };
 }
 
+/** Switch Context in the top bar, as the person does, and wait until it is current. */
+export async function switchTo(page: Page, name: string) {
+  const switcher = page.getByRole("banner").getByRole("button", { name: /^Context: / });
+  await switcher.click();
+  await page.getByRole("list", { name: "Contexts" }).getByRole("button", { name }).click();
+  await expect(switcher).toHaveAccessibleName(`Context: ${name}`);
+}
+
 /** Call a tool as the screen does, at the Deployment's address or at a Context's. */
 async function post(page: Page, path: string, input: unknown) {
   const result = await (await page.request.post(path, { data: input })).json();

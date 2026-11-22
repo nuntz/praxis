@@ -21,6 +21,7 @@ import { Devices } from "./Devices.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
+import { receiveShared, wantComposer } from "./draft.ts";
 import { ExportSettings, RestoreExport } from "./Export.tsx";
 import { CurrentHeldChanges, followHeldChanges } from "./HeldChanges.tsx";
 import { Journal } from "./Journal.tsx";
@@ -46,6 +47,7 @@ import {
 } from "./tools.ts";
 import { ClearingCopy, knowShownContexts, refusedIn, UnsentStatus } from "./Unsent.tsx";
 import { keepSending } from "./unsent.ts";
+import { type ComposerOpening, composerOpened, followLaunches } from "./ways-in.ts";
 
 /**
  * How long the screen waits for the live channel before reading anyway, as behind a proxy that
@@ -78,6 +80,14 @@ export function App() {
     store(LAST_SHOWN, opened);
     history.replaceState(null, "", "/");
   }
+  // The home-screen shortcut and the share sheet open Praxis on the Journal's composer, with what
+  // was shared, or launch it into the window open (section 8.9).
+  const openedAt = location.href;
+  const openedOnComposer = composerOpened(new URL(openedAt));
+  if (openedOnComposer) {
+    openComposer(openedOnComposer);
+    history.replaceState(null, "", "/");
+  }
   const [chosen, setChosen] = createSignal<string | null>(opened ?? readStored(LAST_SHOWN));
   const current = createMemo(() => {
     const shown = (contexts() ?? []).filter((context) => !context.retired);
@@ -88,7 +98,9 @@ export function App() {
   const [settings, setSettings] = createSignal<Settings | null>(null);
   const [showSettings, setShowSettings] = createSignal(false);
   const [problem, setProblem] = createSignal<string | null>(null);
-  const [tab, setTab] = createSignal<PeerId>(opened === null ? "attention" : "conversation");
+  const [tab, setTab] = createSignal<PeerId>(
+    opened !== null ? "conversation" : openedOnComposer ? "journal" : "attention",
+  );
   const [attentionOpen, setAttentionOpen] = createSignal(false);
   // Without the settings the Journal is still shown, its times in the Context's zone as the
   // Offline Copy holds it, or with no copy in the Device's zone.
@@ -143,6 +155,23 @@ export function App() {
       shown?.focus();
     });
   }
+
+  /** Give the composer the caret, with what was shared if anything was. */
+  function openComposer(opening: ComposerOpening) {
+    if (opening.shared === null) wantComposer();
+    else receiveShared(opening.shared);
+  }
+
+  // Launched into this window, the Journal is shown first: on a phone the composer takes the caret
+  // only once its tab is shown.
+  onMount(() =>
+    followLaunches(openedAt, (address) => {
+      const opening = composerOpened(address);
+      if (!opening) return;
+      setTab("journal");
+      openComposer(opening);
+    }),
+  );
 
   function switchTo(id: string) {
     setChosen(id);

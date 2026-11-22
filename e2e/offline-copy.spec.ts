@@ -8,6 +8,7 @@ import {
   makeContext,
   onPhone,
   openJournal,
+  switchTo,
   test,
 } from "./fixtures.ts";
 
@@ -87,13 +88,6 @@ function tasksOf(context: string): RegExp {
 }
 
 /** Switch to another Context from the top bar. */
-async function switchTo(page: Page, name: string) {
-  const switcher = page.getByRole("banner").getByRole("button", { name: /^Context: / });
-  await switcher.click();
-  await page.getByRole("list", { name: "Contexts" }).getByRole("button", { name }).click();
-  await expect(switcher).toHaveAccessibleName(`Context: ${name}`);
-}
-
 /** This browser's id as a Device. */
 async function thisDevice(page: Page): Promise<string> {
   const id = await page.evaluate(() => localStorage.getItem("praxis.device"));

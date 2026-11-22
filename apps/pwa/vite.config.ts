@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 import { defineConfig, type Plugin, type ResolvedConfig, type Rolldown } from "vite";
 import solid from "vite-plugin-solid";
 import { colors, tokensCss } from "./src/design/tokens.ts";
+import { NEW_ENTRY, SHARED_FIELDS } from "./src/ways-in.ts";
 
 const TOKENS = "virtual:tokens.css";
 
@@ -83,6 +84,17 @@ function tokens(): Plugin {
             display: "standalone",
             background_color: colors.ground.light,
             theme_color: colors.ground.light,
+            // Opens straight onto the Journal's composer, in the Context the Device last showed
+            // (section 8.9): the manifest is static, so there is one, never one per Context.
+            shortcuts: [{ name: "Record an Entry", short_name: "Record", url: NEW_ENTRY }],
+            // Text and links only, never files: a share is an address, so it carries no body.
+            share_target: {
+              action: NEW_ENTRY,
+              method: "GET",
+              params: Object.fromEntries(SHARED_FIELDS.map((field) => [field, field])),
+            },
+            // A share or the shortcut goes to the window open, whose draft it is added to.
+            launch_handler: { client_mode: "focus-existing" },
             // The hammer on a dark neutral tile, which never takes a Context's accent.
             icons: [
               { src: "/icon.svg", sizes: "any", type: "image/svg+xml" },

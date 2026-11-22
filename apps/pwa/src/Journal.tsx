@@ -369,22 +369,29 @@ export function Journal(props: {
           onStopFollowingUp={() => setFollowingUp(null)}
           onUnsent={(leftOff) => {
             setProblem(null);
+            if (told() === LINKS_LEFT_OFF) setTold(null);
             setFollowingUp(null);
             // Nothing is dropped silently (section 8.8).
             if (leftOff) setTold(contextCopy(contextId) ? LEFT_OFF_WITH_COPY : LEFT_OFF);
           }}
           onRecorded={(entry) => {
             setProblem(null);
+            if (told() === LINKS_LEFT_OFF) setTold(null);
             setFollowingUp(null);
             showEntry(entry);
             if (entry.follow_up_to) void refreshEntry(entry.follow_up_to.id);
           }}
+          onLinksLeftOff={() => setTold(LINKS_LEFT_OFF)}
           onProblem={setProblem}
         />
       </div>
     </>
   );
 }
+
+/** Said when the composer's draft comes from another Context, whose records its links were to. */
+const LINKS_LEFT_OFF =
+  "The draft came from another Context, and its links were left off: each was to a record there, so pick them again here.";
 
 /** Said when an Entry kept Unsent leaves off what it cannot take with no Offline Copy. */
 const LEFT_OFF =

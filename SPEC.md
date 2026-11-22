@@ -598,6 +598,7 @@ Three peers, none hosting the others: **Attention**, the **Journal** and the **C
 - The Journal's composer records an Entry with no Run. The Conversation's composer sends a Message to the Agent. Where the person types decides what happens. No composer offers both sends.
 - Attention has no composer.
 - The Journal's composer names its Context. Both composers carry the Context's accent colour (section 8.11).
+- The Journal's composer keeps its draft when the person switches Context, so the Context can be changed before sending. A link in it is to a record of the Context it was picked in and stays there, and the composer says so. A draft is not stored: it goes with the screen, and one on its way is not kept.
 
 ### 8.3 Attention
 
@@ -735,6 +736,7 @@ From [Other ways in](https://github.com/nuntz/praxis/issues/28). Something reach
 - **Share sheet.** The installed PWA is a share target for text and links, never files. It works on Android and desktop Chromium. iOS Safari does not support it, so on an iPhone the person pastes.
 - **Home-screen shortcut.** An app shortcut opens straight onto the Journal's composer.
 - For both: nothing is recorded until the person sends it. The composer opens in the Context that Device last showed, which can be changed before sending. A shared link is text; Praxis fetches nothing. Shared text is added to a draft already in the composer and never replaces it.
+- Both open the composer's own address, which the screen leaves for its usual one. Where the browser has a launch handler (Chromium), a share or the shortcut goes to the window of Praxis already open, so the draft there is added to; elsewhere it opens the screen afresh. The share is a GET of that address with the title, text and link as given, each on a line of its own, a link the text already holds given once.
 
 ### 8.10 Devices
 

@@ -7,6 +7,7 @@ import {
   makeContext,
   onPhone,
   openJournal,
+  switchTo,
   test,
 } from "./fixtures.ts";
 
@@ -19,12 +20,6 @@ const MOSS = "rgb(76, 106, 20)";
 
 const switcher = (page: Page) =>
   page.getByRole("banner").getByRole("button", { name: /^Context: / });
-
-async function switchTo(page: Page, name: string) {
-  await switcher(page).click();
-  await page.getByRole("list", { name: "Contexts" }).getByRole("button", { name }).click();
-  await expect(switcher(page)).toHaveAccessibleName(`Context: ${name}`);
-}
 
 test("the person switches Context in the top bar, and sees and records only in the one switched to", async ({
   page,
