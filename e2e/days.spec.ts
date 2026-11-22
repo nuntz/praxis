@@ -181,3 +181,106 @@ test("the Conversation is parted into days in the Context's time zone, as the Jo
   await expect(days).toHaveText([await dated(page, dayIn(now, zone))]);
   expect(dayIn(now, zone)).not.toBe(dayIn(now, device));
 });
+
+/** The Conversation, in view: on a phone, by its tab. */
+async function conversationShown(page: Page, testInfo: TestInfo) {
+  if (onPhone(testInfo)) {
+    await page
+      .getByRole("navigation", { name: "Columns" })
+      .getByRole("button", { name: "Agent", exact: true })
+      .click();
+  }
+  return page.getByRole("region", { name: "Conversation" });
+}
+
+test("a Brief says when it was taken in the Context's time zone, under its day", async ({
+  page,
+}, testInfo) => {
+  // The Brief comes at the next minute on the clock, which can be most of two away.
+  test.setTimeout(150_000);
+  const device = deviceZone(testInfo);
+  const zone = zoneApartFrom(device, Date.now());
+  // A Context named so, the journeys' scripted model leaves a Brief with something to raise.
+  const context = await makeContext(page, {
+    name: `Briefed ${testInfo.project.name}-${crypto.randomUUID().slice(0, 8)}`,
+    time_zone: zone,
+    accent: "plum",
+  });
+  // At least a minute off, so the Brief cannot come between its time and the setting of it, as
+  // the Context's zone tells the time.
+  const time = new Intl.DateTimeFormat("en-GB", { timeStyle: "short", timeZone: zone }).format(
+    Date.now() + 70_000,
+  );
+  await callContextTool(page, context.id, "set_brief_time", { time });
+  await lastShown(page, context.id);
+
+  await page.goto("/");
+  const conversation = await conversationShown(page, testInfo);
+  const taken = conversation.getByText(/^Brief, taken /);
+  await expect(taken).toBeVisible({ timeout: 120_000 });
+
+  // Its time alone, in the Context's zone, as the Device's locale writes it: the caption above it
+  // says its day.
+  const { items } = await callContextTool(page, context.id, "list_messages", {});
+  const brief = (items as { clock: { taken: string } | null }[]).find((message) => message.clock);
+  if (!brief?.clock) throw new Error("The Conversation shows a Brief its read does not hold");
+  const shown = await page.evaluate(
+    ([instant, Context]) =>
+      new Intl.DateTimeFormat(undefined, { timeStyle: "short", timeZone: Context }).format(
+        Date.parse(instant),
+      ),
+    [brief.clock.taken, zone],
+  );
+  await expect(taken).toHaveText(`Brief, taken ${shown}`);
+  const days = conversation.getByRole("list", { name: "Messages" }).getByRole("heading");
+  await expect(days).toHaveText(["Today"]);
+});
+
+test("an answer being written falls on the day of the Message it answers, as it does once written", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const name = `Writing ${tag}`;
+  const context = await makeContext(page, { name, time_zone: "UTC", accent: "teal" });
+  await lastShown(page, context.id);
+  // The Device's clock a day on: the Message sent now is on the Context's yesterday by it, and so
+  // is the answer to it, being written or written.
+  await page.clock.setFixedTime(Date.now() + DAY);
+  // The Agent's Message is held on the live channel, and the screen is told its words are being
+  // written, as the Worker tells it while a model writes: the journeys' scripted model writes the
+  // whole of it at once, so the Worker sends none of what is being written.
+  const held: string[] = [];
+  let toScreen: ((message: string) => void) | undefined;
+  await page.routeWebSocket(/\/live$/, (socket) => {
+    const server = socket.connectToServer();
+    toScreen = (message) => socket.send(message);
+    server.onMessage((message) => {
+      const heard = JSON.parse(String(message));
+      if (heard.kind !== "message" || heard.message.from !== "agent") return socket.send(message);
+      held.push(String(message));
+      socket.send(JSON.stringify({ kind: "answer", words: heard.message.words }));
+    });
+  });
+
+  await page.goto("/");
+  const conversation = await conversationShown(page, testInfo);
+  const list = conversation.getByRole("list", { name: "Messages" });
+  const days = list.getByRole("heading");
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true })
+    .fill(`Say: Being written ${tag}`);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+
+  const writing = list.locator("li[aria-busy=true]").filter({ hasText: `Being written ${tag}` });
+  await expect(writing).toBeVisible();
+  await expect(days).toHaveText(["Yesterday"]);
+  expect(await captionOver(days, writing)).toBe("Yesterday");
+
+  // Written, it stays under the same day.
+  await expect.poll(() => held.length).toBe(1);
+  for (const message of held.splice(0)) toScreen?.(message);
+  const messages = list.getByTestId("message");
+  await expect(messages).toHaveCount(2);
+  await expect(days).toHaveText(["Yesterday"]);
+  expect(await captionOver(days, messages.last())).toBe("Yesterday");
+});

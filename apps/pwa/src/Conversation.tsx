@@ -93,7 +93,8 @@ export function Conversation(props: {
   /**
    * When the Message at this place was made, for its day: the person's when sent, a Brief's or a
    * Review's when taken. An answer carries no time of its own and falls on the day of what it
-   * answers, the Message before it; none is known before the first one that has a time.
+   * answers, the Message before it; none is known before the first one that has a time. The place
+   * after the last is the answer being written, which falls on the day of the last that has one.
    */
   function madeAt(index: number): string | undefined {
     for (let at = index; at >= 0; at--) {
@@ -417,6 +418,7 @@ export function Conversation(props: {
                     <AgentMessageItem
                       contextId={props.contextId}
                       message={said()}
+                      timeZone={props.timeZone}
                       onShowRecord={props.onShowRecord}
                       onShown={shown}
                     />
@@ -428,7 +430,8 @@ export function Conversation(props: {
           <Show when={writing()}>
             {(words) => (
               <>
-                <DayStart at={Date.now()} before={madeAt(messages.length - 1)} />
+                {/* Being written, it falls on the day of what it answers, as it will once written. */}
+                <DayStart at={madeAt(messages.length)} before={madeAt(messages.length - 1)} />
                 <li class="message from-agent writing" aria-busy="true">
                   <span class="message-from">Agent</span>
                   <Words words={words()} images="never" />
@@ -760,23 +763,22 @@ function whenShown(element: Element, then: () => void): () => void {
   };
 }
 
-const takenFormat = new Intl.DateTimeFormat(undefined, {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
 const CLOCK_NAMED: Record<ClockFold["kind"], string> = { brief: "Brief", review: "Review" };
 
-/** What a Brief or a Review says of itself: when it was taken, and what has been finished since. */
-function ClockHeading(props: { clock: ClockFold }) {
+/**
+ * What a Brief or a Review says of itself: when it was taken, and what has been finished since. Its
+ * time is the time of day alone, in the Context's zone, as the caption above it says its day there.
+ */
+function ClockHeading(props: { clock: ClockFold; timeZone: string | undefined }) {
   const finished = () => props.clock.finished_since;
+  const taken = () =>
+    new Intl.DateTimeFormat(undefined, { timeStyle: "short", timeZone: props.timeZone }).format(
+      new Date(props.clock.taken),
+    );
   return (
     <p class="clock-taken">
       <strong>{CLOCK_NAMED[props.clock.kind]}</strong>, taken{" "}
-      <time datetime={props.clock.taken}>{takenFormat.format(new Date(props.clock.taken))}</time>
+      <time datetime={props.clock.taken}>{taken()}</time>
       <Show when={finished() > 0}>
         .{" "}
         {finished() === 1
@@ -791,6 +793,8 @@ function ClockHeading(props: { clock: ClockFold }) {
 function AgentMessageItem(props: {
   contextId: string;
   message: AgentMessage;
+  /** The zone the Context's times are shown in. */
+  timeZone: string | undefined;
   onShowRecord: (anchor: string) => void;
   /** A Brief or Review not yet read has been shown in a focused window. */
   onShown: (message: AgentMessage) => void;
@@ -817,7 +821,9 @@ function AgentMessageItem(props: {
       data-testid="message"
     >
       <span class="message-from">Agent</span>
-      <Show when={props.message.clock}>{(clock) => <ClockHeading clock={clock()} />}</Show>
+      <Show when={props.message.clock}>
+        {(clock) => <ClockHeading clock={clock()} timeZone={props.timeZone} />}
+      </Show>
       <Show when={props.message.words}>
         <Words words={props.message.words} images="never" testId="words" />
       </Show>
