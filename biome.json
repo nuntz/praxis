@@ -48,7 +48,7 @@
     },
     {
       "includes": ["apps/pwa/src/**"],
-      "plugins": ["./lint/computed-on.grit"]
+      "plugins": ["./lint/computed-on.grit", "./lint/use-only-reads.grit"]
     },
     {
       "includes": ["apps/pwa/src/**", "!apps/pwa/src/latest-read.ts"],

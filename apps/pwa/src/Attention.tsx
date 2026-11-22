@@ -172,17 +172,17 @@ function withoutUnsentFinishes(
   view: AttentionView,
   finishedUnsent: (task: Task) => boolean,
 ): AttentionView {
-  const open = (task: Task) => !finishedUnsent(task);
+  const stillShown = (task: Task) => !finishedUnsent(task);
   return {
     ...view,
-    due: view.due.filter((item) => item.kind !== "task" || open(item.task)),
-    newly_actionable: view.newly_actionable.filter((item) => open(item.task)),
-    delegated: view.delegated.filter(open),
+    due: view.due.filter((item) => item.kind !== "task" || stillShown(item.task)),
+    newly_actionable: view.newly_actionable.filter((item) => stillShown(item.task)),
+    delegated: view.delegated.filter(stillShown),
     projects: view.projects.map((item) => ({
       ...item,
-      project: { ...item.project, tasks: item.project.tasks.filter(open) },
+      project: { ...item.project, tasks: item.project.tasks.filter(stillShown) },
     })),
-    loose: view.loose.filter(open),
+    loose: view.loose.filter(stillShown),
   };
 }
 

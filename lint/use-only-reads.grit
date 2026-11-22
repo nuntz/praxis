@@ -1,0 +1,19 @@
+language js
+
+or {
+  JsFunctionDeclaration(id=$name, body=$body),
+  JsVariableDeclarator(id=$name, initializer=$body) where {
+    $body <: contains or {
+      JsArrowFunctionExpression(),
+      JsFunctionExpression()
+    }
+  }
+} where {
+  $name <: r"use[A-Z].*",
+  $body <: contains or {
+    `onCleanup($_)`,
+    `onMount($_)`,
+    `$_.listen($_)`
+  },
+  register_diagnostic(span=$name, message="A use* function only reads a context, as useLive() and useHeldChanges() do. One that subscribes, mounts or cleans up is a follow* function, as followHeldChanges() and followAttentionView() are.")
+}
