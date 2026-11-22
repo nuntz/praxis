@@ -1,6 +1,6 @@
 # The voice instructions' evals
 
-Run by hand in real Calls, never in CI, whenever the voice model or its instructions change (`apps/worker/src/voice/gpt-live-1.1.ts`, SPEC section 13, ADR 0021). They judge the voice model, not the Agent, whose own evals are separate (`apps/worker/test/agent.eval.ts`). Each case gets a pass or a fail, from what is heard and from what the Conversation holds afterwards. A Deployment with both keys is needed, and the Device's own microphone.
+Run by hand in real Calls, never in CI, whenever the voice model or its instructions change (`apps/worker/src/voice/gpt-live-1.1.ts`, SPEC section 13, ADR 0021). They judge the voice model, not the Agent, whose own evals are separate (`apps/worker/test/agent-evals.ts`). Each case gets a pass or a fail, from what is heard and from what the Conversation holds afterwards. A Deployment with both keys is needed, and the Device's own microphone.
 
 Before each case, start a new Call in a Context whose Journal holds a few Entries and Tasks, so there is something the voice model could wrongly claim to know.
 

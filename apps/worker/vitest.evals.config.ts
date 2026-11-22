@@ -29,6 +29,8 @@ export default defineConfig({
     // A Run on the real model takes seconds a round, and asks again for seconds when it cannot
     // be reached.
     testTimeout: 300_000,
+    // What each Run called and cost, and why a call was refused, is logged by a passing eval too.
+    silent: false,
     provide: { realModel: { key: AGENT_API_KEY, model: AGENT_MODEL ?? "" } },
   },
 });
