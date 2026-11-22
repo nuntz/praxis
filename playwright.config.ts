@@ -1,8 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // The stand-in for Access listens here and starts the Worker on the next port up, so the pair is
-// kept clear of `bun run dev`'s, 8787 and 8788, and the journeys run beside it.
-const port = 8790;
+// kept clear of `bun run dev`'s, 8787 and 8788, and the journeys run beside it. PRAXIS_E2E_PORT
+// moves the pair, so that runs in two worktrees of the repo stay apart.
+const port = Number(process.env.PRAXIS_E2E_PORT ?? 8790);
 
 // Playwright empties its output folder as a run starts, so a local run keeps its own, and a
 // failure's trace outlives the runs made after it to reproduce it. Set once here, the stamp
