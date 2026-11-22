@@ -16,7 +16,7 @@ const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
  * Every journey ends with an automated accessibility check of the screen as it was left, in light
  * and in dark (section 13). A journey that failed or was skipped is not checked on top, and none is
  * under load (`test:e2e:stress`): there the one Deployment collects every journey's Contexts, which
- * each settings screen lists, so the check of one ran past the test's time on a 4-core runner (#88),
+ * each settings screen lists, so the check of one ran past the test's time on a 4-core runner,
  * and what it would find, the push's own run finds.
  */
 export const test = base.extend<{ accessible: undefined }>({

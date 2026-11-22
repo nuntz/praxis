@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { failureOf, grouped, slowSteps } from "./journey-failures";
 
-/** The head of an `error-context.md` as Playwright writes it (seen in #88's runs). */
+/** The head of an `error-context.md` as Playwright writes it (as seen in the runs under load). */
 function errorContext(location: string, error: string): string {
   return [
     "# Instructions",
