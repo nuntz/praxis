@@ -3,7 +3,8 @@ import { expect, openJournal, screenKept, test } from "./fixtures.ts";
 // Every request passes Cloudflare Access first (section 7.1). Here the stand-in for Access in
 // front of the Worker (apps/worker/scripts/access-stand-in.ts) signs the browser in, and a lapsed
 // sign-in is its cookie: while the browser carries it, Access sends every request to its login
-// page on another origin, as the real one does.
+// page on another origin, as the real one does, which sends the browser back to the address it was
+// at once signed in.
 
 const LAPSED = "praxis-stand-in-signed-out";
 
@@ -92,4 +93,30 @@ test("a lapsed sign-in sends Praxis opened afresh to Access's login page, not to
 
   await page.getByRole("link", { name: "Sign in as the person" }).click();
   await expect((await openJournal(page, testInfo)).composer).toBeVisible();
+});
+
+test("a sign-in that lapsed on a Settings address, and is made again, lands on the main screen", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/settings/spend");
+  await expect(page.getByRole("region", { name: "Spend", exact: true })).toBeVisible();
+  await screenKept(page);
+
+  // Opened afresh at the address, as a reload or a tab put back does, the sign-in has lapsed:
+  // Access asks for it, and sends the browser back to the address it was at once it is made. The
+  // cookie is the whole Deployment's, as Access's sign-in is, not the Settings address's alone.
+  await page
+    .context()
+    .addCookies([{ name: LAPSED, value: "yes", url: new URL("/", page.url()).href }]);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Sign in as the person" }).click();
+
+  // Signed in again, the person is on the main screen, never in Settings.
+  await expect((await openJournal(page, testInfo)).composer).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/");
+  await expect(page.getByRole("navigation", { name: "Settings sections" })).toHaveCount(0);
+  // An address of Settings opened after that opens Settings, as ever.
+  await page.goto("/settings/spend");
+  await expect(page.getByRole("region", { name: "Spend", exact: true })).toBeVisible();
 });

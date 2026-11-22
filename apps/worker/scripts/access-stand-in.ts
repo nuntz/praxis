@@ -10,7 +10,8 @@ import { fakeAccess } from "../test/access-fake.ts";
 //
 //   bun scripts/access-stand-in.ts [--port 8787] [any other `wrangler dev` options]
 //
-// A lapsed sign-in is a cookie: while the browser carries SIGNED_OUT, nothing is let through.
+// A lapsed sign-in is a cookie: while the browser carries SIGNED_OUT, nothing is let through. As
+// Access does, the login page sends the browser back to the address it was asked for once signed in.
 //
 // Access's sign-in is a cookie too, so a request the browser sends without credentials, as it
 // fetches a manifest unless told otherwise, is refused. The stand-in sets SIGNED_IN on what it
@@ -62,10 +63,20 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 worker.exited.then((code) => process.exit(code));
 
-const LOGIN_PAGE = `<!doctype html>
+/** Access's login page, which signs the browser in and sends it back to the address it was at. */
+function loginPage(back: string): string {
+  const signIn = `${origin}/cdn-cgi/access/sign-in?redirect_url=${encodeURIComponent(back)}`;
+  return `<!doctype html>
 <html lang="en"><meta charset="utf-8"><title>Sign in (stand-in for Access)</title>
 <main><h1>Sign in</h1><p>A stand-in for Cloudflare Access's login page.</p>
-<p><a href="${origin}/cdn-cgi/access/sign-in">Sign in as the person</a></p></main></html>`;
+<p><a href="${signIn}">Sign in as the person</a></p></main></html>`;
+}
+
+/** The address to go back to once signed in: one of the Deployment's own, or its first. */
+function backTo(url: URL): string {
+  const back = url.searchParams.get("redirect_url") ?? "/";
+  return back.startsWith("/") && !back.startsWith("//") ? back : "/";
+}
 
 /**
  * A live channel through the stand-in: the browser's socket on one side, one to the Worker, with
@@ -127,16 +138,17 @@ Bun.serve<Piped>({
       return Response.json({ keys: await access.keySet.keys() });
     }
     if (url.pathname === "/cdn-cgi/access/login") {
-      return new Response(LOGIN_PAGE, { headers: { "content-type": "text/html" } });
+      return new Response(loginPage(backTo(url)), { headers: { "content-type": "text/html" } });
     }
     if (url.pathname === "/cdn-cgi/access/sign-in") {
       return new Response(null, {
         status: 302,
-        headers: { location: "/", "set-cookie": `${SIGNED_OUT}=; Path=/; Max-Age=0` },
+        headers: { location: backTo(url), "set-cookie": `${SIGNED_OUT}=; Path=/; Max-Age=0` },
       });
     }
     if (carries(request, SIGNED_OUT)) {
-      return Response.redirect(`${loginOrigin}/cdn-cgi/access/login`, 302);
+      const back = encodeURIComponent(url.pathname + url.search);
+      return Response.redirect(`${loginOrigin}/cdn-cgi/access/login?redirect_url=${back}`, 302);
     }
 
     // A browser names what it fetches for; Node's fetch, as an MCP client uses, sends a mode only.

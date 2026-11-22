@@ -20,6 +20,16 @@ const KEPT = `${KEPT_PREFIX}${SCREEN.release}`;
 const NEVER_KEPT = /^\/(api|mcp|cdn-cgi)(\/|$)/;
 
 /**
+ * Where the service worker notes that Access sent the browser to its login page, so the way back
+ * from it lands on the main screen (section 8.6). Not a release's, so no release clears it.
+ */
+const SIGNING_IN = "praxis-signing-in";
+const SENT_TO_SIGN_IN = "/sent-to-sign-in";
+
+/** An address of Settings, which a sign-in made again does not land on. */
+const SETTINGS = /^\/settings(\/|$)/;
+
+/**
  * A response to keep: the Worker's own, served whole. A redirect, as Access answers a lapsed
  * sign-in with, or any failure, is not the screen.
  */
@@ -70,7 +80,9 @@ self.addEventListener("activate", (event) => {
  * The screen and its files are asked of the network first, and what was kept is shown only when
  * the network cannot be reached. Whatever the network answers is shown as it answered: a lapsed
  * sign-in's redirect to Access's login page goes there, and never the kept screen in its place.
- * Nothing else passes through here, an image from another host least of all.
+ * Only the way back from that page is not: Access returns the browser to the address it was at,
+ * and one of Settings opens the main screen instead (section 8.6). Nothing else passes through
+ * here, an image from another host least of all.
  */
 self.addEventListener("fetch", (event) => {
   const request = event.request;
@@ -82,16 +94,34 @@ self.addEventListener("fetch", (event) => {
   if (request.mode !== "navigate" && !SCREEN.files.includes(kept)) return;
   event.respondWith(
     (async () => {
+      let answer;
       try {
-        return await fetch(request);
+        answer = await fetch(request);
       } catch (error) {
         const shown = await caches.match(kept, { cacheName: KEPT });
         if (shown) return shown;
         throw error;
       }
+      return request.mode === "navigate" ? backFromSignIn(url, answer) : answer;
     })(),
   );
 });
+
+/**
+ * A navigation as the network answered it, but for the one back from Access's login page to an
+ * address of Settings, which goes to the main screen. A navigation answered with a redirect, as
+ * Access sends a lapsed sign-in to its login page, is noted; the next one the Worker answers is the
+ * way back, whatever address Access returns the browser to.
+ */
+async function backFromSignIn(url, answer) {
+  const noted = await caches.open(SIGNING_IN);
+  if (answer.type === "opaqueredirect") {
+    await noted.put(SENT_TO_SIGN_IN, new Response(""));
+    return answer;
+  }
+  if (!answer.ok || !(await noted.delete(SENT_TO_SIGN_IN))) return answer;
+  return SETTINGS.test(url.pathname) ? Response.redirect("/", 303) : answer;
+}
 
 /** A Notification as the Worker pushes it: its title, its tag and the address a tap opens. */
 self.addEventListener("push", (event) => {
