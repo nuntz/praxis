@@ -10,6 +10,7 @@ import type { CompactionPolicy, JsonObject } from "@earendil-works/pi-durable";
 import type { NoAgent } from "@praxis/domain";
 import { personsWords } from "../src/agent.ts";
 import { type AgentModel, DEFAULT_MODEL, PRICES, type RunRetry } from "../src/model.ts";
+import { harnessFault } from "./harness-faults.ts";
 
 // The model is one of the faked things (section 13). The fake is pi-ai's faux provider
 // playing a script: fixed tool calls and words, through the real runtime loop in workerd. It runs
@@ -119,7 +120,7 @@ export function scriptModel(
         errorMessage: TOOL_UNRESOLVED(names[0] ?? ""),
       });
     }
-    return script(...args);
+    return asTheHarnessFault(() => script(...args));
   };
   faux.setResponses([step]);
   playingModel = {
@@ -130,6 +131,28 @@ export function scriptModel(
     ...(compaction === undefined ? {} : { compaction }),
   };
   return faux;
+}
+
+/**
+ * A script's answer, with a throw or a rejection from the script kept as the harness's fault: the
+ * runtime would take it for the model failing and end the Run so (CODING_STANDARDS.md, Outside
+ * services).
+ */
+function asTheHarnessFault(play: () => ReturnType<Script>): ReturnType<Script> {
+  const fault = (error: unknown) =>
+    harnessFault(
+      `The scripted model's script threw: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  try {
+    const answer = play();
+    return answer instanceof Promise
+      ? answer.catch((error: unknown) => {
+          throw fault(error);
+        })
+      : answer;
+  } catch (error) {
+    throw fault(error);
+  }
 }
 
 /**

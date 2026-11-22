@@ -1,5 +1,6 @@
 import type { Change, Effect, ToolResult } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
+import { takeHarnessFaults } from "./harness-faults.ts";
 import { forget, leakedMarkers, logs, marked } from "./markers.ts";
 import {
   answering,
@@ -446,5 +447,30 @@ describe("the scripted model", () => {
     expect(supersededScripts()).toEqual(["Again"]);
     // Seen, so the harness's own check after this test passes.
     forgetSuperseded();
+  });
+
+  test("keeps a script that throws as the harness's fault, not the model's failure", async () => {
+    scriptModel(() => {
+      throw new Error("A script's own mistake");
+    });
+    const context = newContext();
+
+    await context.callAny(hand, "send_message", { words: "Hello" });
+    await context.runsEnded();
+
+    // Taken, so the harness's own check after this test passes.
+    expect(takeHarnessFaults()).toEqual([expect.stringContaining("A script's own mistake")]);
+  });
+
+  test("keeps a script that rejects as the harness's fault, not the model's failure", async () => {
+    scriptModel(async () => {
+      throw new Error("A script's own late mistake");
+    });
+    const context = newContext();
+
+    await context.callAny(hand, "send_message", { words: "Hello" });
+    await context.runsEnded();
+
+    expect(takeHarnessFaults()).toEqual([expect.stringContaining("A script's own late mistake")]);
   });
 });
