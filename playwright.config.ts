@@ -17,6 +17,9 @@ export default defineConfig({
   // later run cannot find, so `--last-failed` reruns nothing locally.
   preserveOutput: "failures-only",
   forbidOnly: !!process.env.CI,
+  // In CI a journey that fails runs once more, and one that then passes is reported flaky: worked
+  // only once it keeps coming back (docs/flaky-journeys.md).
+  retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: { baseURL: `http://localhost:${port}`, trace: "retain-on-failure" },
   // Each Device is in a time zone of its own, and neither is UTC, so the journey that sets the

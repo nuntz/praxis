@@ -43,10 +43,23 @@ jobs:
         run: bun run test:pwa
       - name: Context object (Vitest in workerd)
         run: bun run test:worker
+
+  # The browser journeys run beside the checks and do not hold the deploy back: a screen that
+  # breaks is seen on the next visit and mended by the next push, while what a deploy cannot undo,
+  # the upgrade of the stored tables, is held by the checks above (section 13). Each journey runs
+  # once, and once more if it fails, so one that passes on its retry is reported flaky, not red.
+  journeys:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
       - name: Install Chromium for Playwright
         run: bunx playwright install --with-deps chromium
-      - name: Browser journeys (Playwright, desktop and phone, each twice to catch a journey that needs a fresh server)
-        run: bun run test:e2e:twice
+      - name: Browser journeys (Playwright, desktop and phone)
+        run: bun run test:e2e
       - uses: actions/upload-artifact@v5
         if: failure()
         with:

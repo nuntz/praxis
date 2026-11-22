@@ -1,11 +1,11 @@
 # Flaky journeys
 
-A journey that fails only under load, a few runs in a hundred. Every journey shares one Deployment, so the run under load is where they show, and the nightly runs it on 4 cores under 16 workers, about ten times slower than a journey alone, where a fixed wait in a journey's path counts against it (#88).
+A journey that fails now and then. Every journey shares one Deployment, so most such failures are journeys racing each other on it, not anything a person on their own Deployment meets. CI runs each journey once and retries a failed one once (`playwright.config.ts`); one that passes on its retry is reported flaky and holds nothing back, since the journeys do not gate the deploy (SPEC section 13).
 
-- A new journey is looped (step 1) before the full suite runs it, as one racing its own repeats is a full run lost.
-- A change to `e2e/fixtures.ts`, `apps/worker/test/journey-worker.ts` or a journey's timing runs under `bun run test:e2e:runner` before it is pushed: the run under load pinned to two cores, as four of a desktop's still run it 1.6 times as fast as the runner, and unpinned it passes what the nightly fails (#87, #88).
+- A journey reported flaky once is left alone: nothing is filed, nothing is rerun.
+- A journey is worked when it fails on its retry, turning the `journeys` job red, or is reported flaky in several runs of one week, which the weekly Prod Review counts. File it with the run ids, the failing line and the error, then work it with the steps below.
 - A journey that starts a Call waits for every other one that does (`e2e/one-call.ts`), as there is one Call at a time for the Deployment, so its loop runs them one at a time whatever the workers: loop it with fewer repeats, as 8 of the whole of `e2e/call.spec.ts` at both widths take a few minutes.
-- A journey that fails once in CI is filed with the run id, the failing line and the error before the job is rerun: a rerun that passes keeps no evidence.
+- The run under load (`bun run test:e2e:stress`, or `stress.yml` by hand; `bun run test:e2e:runner` pins it to two cores, as the runner has) is for a race the steps below cannot make show.
 
 1. **Loop it alone.** `bunx playwright test <file> -g "<title>" --project=desktop --repeat-each=128 --workers=16` takes about 25 seconds, and a race failing one run in twenty shows several times in each. Each failure keeps its own folder under `test-results/`. `bun scripts/journey-failures.ts <run folder>` groups a run's failures by journey, first error and repeat, and `--steps <failure folder>` lists the actions of its trace that took 800 ms or more; a CI run's folder is its artifact, `gh run download <run id> -n playwright-traces`.
 2. **Hold the answer.** A step that races a read still out (an Escape, a click or a pick made before the screen has its answer) may pass every run of the loop, as #87's did 128 times out of 128. Hold that tool's answers with `holdAnswers()` from `e2e/fixtures.ts` until the step is taken, then release them: the step then loses the race on every run, in seconds, and the held journey becomes the regression once the fix is in, as the links journey's Escape did.

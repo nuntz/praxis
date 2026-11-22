@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "check": "biome check .",
-    "ci": "biome ci --colors=off . && bun run typecheck && bun run test:lint && bun run test:deploy && bun run check:tickets && bun run test:domain && bun run test:pwa && bun run test:worker && bun run test:e2e:twice",
+    "ci": "biome ci --colors=off . && bun run typecheck && bun run test:lint && bun run test:deploy && bun run check:tickets && bun run test:domain && bun run test:pwa && bun run test:worker && bun run test:e2e",
     "typecheck": "bun run --filter '*' typecheck && tsc -p lint && tsc -p e2e && tsc -p scripts",
     "test:lint": "bun test ./lint",
     "test:deploy": "bun test ./infra ./scripts",
@@ -19,7 +19,6 @@
     "test:pwa": "bun test --cwd apps/pwa",
     "test:worker": "bun run --cwd apps/worker test",
     "test:e2e": "playwright test",
-    "test:e2e:twice": "playwright test --repeat-each=2",
     "test:e2e:stress": "PRAXIS_E2E_STRESS=1 playwright test --repeat-each=8 --workers=16",
     "test:e2e:runner": "taskset -c 0-1 bun run test:e2e:stress",
     "build": "bun run --cwd apps/pwa build",

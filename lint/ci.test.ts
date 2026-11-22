@@ -36,11 +36,16 @@ function jobIn(workflow: string, job: string): string {
 }
 
 /**
- * The checks the workflow's check job runs, in order, leaving out its setup. The deploy job runs
- * after it and checks nothing of the code.
+ * The checks the workflow's jobs run, in order, leaving out their setup: the check job's, which
+ * the deploy waits for, then the journeys', which run beside it. The deploy job checks nothing of
+ * the code.
  */
 function workflowChecks(workflow: string): string[] {
-  return [...jobIn(workflow, "check").matchAll(/^\s*(?:- )?run: (.+)$/gm)]
+  const jobs = [...workflow.matchAll(/^ {2}([a-z][\w-]*):$/gm)]
+    .map((match) => match[1] ?? "")
+    .filter((job) => job !== "deploy");
+  return jobs
+    .flatMap((job) => [...jobIn(workflow, job).matchAll(/^\s*(?:- )?run: (.+)$/gm)])
     .map((match) => (match[1] ?? "").trim())
     .filter((command) => !SETUP.some((setup) => setup.test(command)))
     .map(checkOf);
@@ -84,6 +89,10 @@ describe("the CI guard", () => {
         "      - run: bunx playwright install --with-deps chromium",
         "        run: bun run check:tickets",
         "",
+        "  journeys:",
+        "    steps:",
+        "      - run: bun run test:e2e",
+        "",
         "  deploy:",
         "    steps:",
         "      - run: bun run build",
@@ -94,6 +103,7 @@ describe("the CI guard", () => {
     expect(drift(local, workflow)).toEqual([
       expect.stringMatching(/^test:pwa runs in bun run ci but in no step/),
       expect.stringMatching(/^check:tickets runs in .*ci\.yml but not in bun run ci$/),
+      expect.stringMatching(/^test:e2e runs in .*ci\.yml but not in bun run ci$/),
     ]);
   });
 });

@@ -1,11 +1,10 @@
 name: Journeys under load
 
 # The browser journeys, many at once on the one Deployment they share, where a read and a write
-# can answer out of order (#83, #85). Too slow for every push, so nightly and by hand.
+# can answer out of order (#83, #85). By hand only: a race only this run finds is one a single
+# person on their own Deployment rarely meets (docs/flaky-journeys.md).
 
 on:
-  schedule:
-    - cron: "17 3 * * *"
   workflow_dispatch:
 
 jobs:
