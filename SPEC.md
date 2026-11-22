@@ -147,7 +147,7 @@ ADR 0011.
 - Changing the rule applies from the next Occurrence. Moving the open Occurrence's Due Date changes that Occurrence only, since the schedule still counts from its own day.
 - Dropping an Occurrence still makes the next one. Ending a Recurrence is removing the rule from the open Occurrence.
 - Reopening an earlier Occurrence gives a plain Task.
-- Future Occurrences do not exist until their turn. A view of the weeks ahead works them out from the rule.
+- Future Occurrences do not exist until each is made. A view of the weeks ahead works them out from the rule.
 
 ### 3.6 Project
 

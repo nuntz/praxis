@@ -12,7 +12,7 @@ The rule is either a schedule or an interval counted from the closing day. What 
 
 ## Consequences
 
-- Future Occurrences do not exist until their turn, so nothing can list or wait on next month's Occurrence, and a view of the weeks ahead has to work them out from the rule.
+- Future Occurrences do not exist until each is made, so nothing can list or wait on next month's Occurrence, and a view of the weeks ahead has to work them out from the rule.
 - A Task with a Recurrence must have a Due Date.
 - The next Occurrence carries the title, the Project, the rule, the delegation, the Origin Entry and the gap in days between its Defer Date and its Due Date. Waits and References stay with the Occurrence they were made on.
 - All Occurrences share one Origin Entry, so that Entry shows the whole run.
