@@ -1,4 +1,4 @@
-import { expect, openJournal, test } from "./fixtures.ts";
+import { entryAction, expect, openJournal, test } from "./fixtures.ts";
 
 test("the person searches the Journal, sees the excerpt as typed, opens the Entry and no longer finds it once deleted", async ({
   page,
@@ -36,7 +36,7 @@ test("the person searches the Journal, sees the excerpt as typed, opens the Entr
   await expect(hit).toHaveCount(0);
 
   // Sent to the Trash, it is found no more.
-  await entry.getByRole("button", { name: "Delete" }).click();
+  await (await entryAction(entry, "Delete", testInfo)).click();
   await expect(entry).toHaveCount(0);
   await search.fill(tag);
   await expect(journal.getByText("Nothing found")).toBeVisible();

@@ -1,4 +1,12 @@
-import { callContextTool, expect, lastShown, makeContext, openJournal, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  entryAction,
+  expect,
+  lastShown,
+  makeContext,
+  openJournal,
+  test,
+} from "./fixtures.ts";
 
 // The person moves an Entry to another Context, seeing everything that goes with it before
 // confirming, and it leaves this Context for that one (section 3.9). Two Contexts of the journey's
@@ -27,7 +35,7 @@ test("the person moves an Entry with its Follow-up and Task to another Context, 
   await page.goto("/");
   const { journal } = await openJournal(page, testInfo);
   const moving = journal.getByTestId("entry").filter({ hasText: words }).first();
-  await moving.getByRole("button", { name: "Move", exact: true }).click();
+  await (await entryAction(moving, "Move", testInfo)).click();
   const form = moving.getByRole("form", { name: "Move this Entry to another Context" });
   await form.getByRole("combobox", { name: "Move to" }).selectOption({ label: home.name });
   const unit = form.getByRole("list", { name: "What moves" });

@@ -1,6 +1,7 @@
 import type { Page, Request, TestInfo } from "@playwright/test";
 import {
   callContextTool,
+  entryAction,
   expect,
   lastShown,
   makeContext,
@@ -80,7 +81,7 @@ test("an Entry recorded with no network sits Unsent in the Journal, can be edite
   await expect(unsent.getByRole("checkbox")).toHaveCount(0);
 
   // The person's to change, with no trace.
-  await unsent.getByRole("button", { name: "Edit" }).click();
+  await (await entryAction(unsent, "Edit", testInfo)).click();
   await unsent
     .getByRole("textbox", { name: "The Entry's words" })
     .fill("Thought of in the lift\n[] Ring the bank about the loan");
@@ -346,7 +347,7 @@ test("an Unsent Entry edited after its answer was lost is put to the person, not
   await journal.getByRole("button", { name: "Record" }).click();
   const unsent = journal.getByTestId("unsent-entry");
   await expect(unsent).toHaveCount(1);
-  await unsent.getByRole("button", { name: "Edit" }).click();
+  await (await entryAction(unsent, "Edit", testInfo)).click();
   await unsent.getByRole("textbox", { name: "The Entry's words" }).fill("Met the plumber at nine");
   await unsent.getByRole("button", { name: "Save" }).click();
 

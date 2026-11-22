@@ -1,4 +1,12 @@
-import { callContextTool, expect, lastShown, makeContext, openJournal, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  entryAction,
+  expect,
+  lastShown,
+  makeContext,
+  openJournal,
+  test,
+} from "./fixtures.ts";
 
 test("the person records Entries in the Journal's composer and sees them in time order", async ({
   page,
@@ -30,7 +38,7 @@ test("the person records Entries in the Journal's composer and sees them in time
   await expect(ours.nth(1).getByTestId("words").locator("p")).toHaveCount(1);
   // Found by its id from here on, since editing it hides its words.
   const renewal = journal.locator(`[id="${await ours.nth(1).getAttribute("id")}"]`);
-  await renewal.getByRole("button", { name: "Edit", exact: true }).click();
+  await (await entryAction(renewal, "Edit", testInfo)).click();
   await expect(
     renewal.getByRole("textbox", { name: "The Entry's words", exact: true }),
   ).toHaveValue(second);
@@ -130,7 +138,7 @@ test("the person sees an Entry's words rendered as Markdown, and edits them as t
   expect(widths.words[0]).toBe(widths.words[1]);
 
   // The editor shows the words as typed, with no preview.
-  await entry.getByRole("button", { name: "Edit", exact: true }).click();
+  await (await entryAction(entry, "Edit", testInfo)).click();
   await expect(entry.getByRole("textbox", { name: "The Entry's words", exact: true })).toHaveValue(
     words,
   );
@@ -215,7 +223,7 @@ test("an image loads by itself only in an Entry the person wrote by hand, and wa
   await expect(agents.getByRole("img")).toHaveCount(0);
 
   // The person's edit makes the Entry theirs, and its image then loads by itself.
-  await agents.getByRole("button", { name: "Edit", exact: true }).click();
+  await (await entryAction(agents, "Edit", testInfo)).click();
   const editor = agents.getByRole("textbox", { name: "The Entry's words", exact: true });
   await editor.fill(`Floor ${tag}, checked\n\n![Floor plan ${tag}](${floorPlan})`);
   await agents.getByRole("button", { name: "Save", exact: true }).click();

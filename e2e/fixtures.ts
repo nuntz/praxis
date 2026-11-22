@@ -3,6 +3,7 @@ import {
   type APIResponse,
   test as base,
   expect,
+  type Locator,
   type Page,
   type Route,
   type TestInfo,
@@ -56,6 +57,30 @@ export async function openJournal(page: Page, testInfo: TestInfo) {
   }
   const journal = page.getByRole("region", { name: "Journal" });
   return { journal, composer: journal.getByRole("textbox", { name: /^Record an Entry in / }) };
+}
+
+/** An Entry's actions its toolbar shows, where the Device has a pointer that hovers. */
+const FREQUENT = ["Edit", "Follow up", "Mark Standing", "Unmark Standing"];
+
+/**
+ * One of an Entry's actions, reached as the person reaches it (section 8.4): on the desktop, in
+ * the toolbar the Entry shows under the pointer, Move, Delete and Discard behind its More; on the
+ * phone, in the menu behind its one button. The toolbar or the menu is left showing it.
+ */
+export async function entryAction(
+  entry: Locator,
+  name: "Edit" | "Follow up" | "Mark Standing" | "Unmark Standing" | "Move" | "Delete" | "Discard",
+  testInfo: TestInfo,
+): Promise<Locator> {
+  if (onPhone(testInfo)) {
+    await entry.getByRole("button", { name: "Actions for this Entry", exact: true }).click();
+    return entry.getByRole("menu").getByRole("menuitem", { name, exact: true });
+  }
+  await entry.hover();
+  const toolbar = entry.getByRole("toolbar", { name: "Entry actions", exact: true });
+  if (FREQUENT.includes(name)) return toolbar.getByRole("button", { name, exact: true });
+  await toolbar.getByRole("button", { name: /^More: / }).click();
+  return toolbar.getByRole("menu").getByRole("menuitem", { name, exact: true });
 }
 
 /** Switch Context in the top bar, as the person does, and wait until it is current. */

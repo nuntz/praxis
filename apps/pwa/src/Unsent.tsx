@@ -1,4 +1,7 @@
+import Pencil from "lucide-solid/icons/pencil";
+import Trash from "lucide-solid/icons/trash";
 import { createSignal, For, Show } from "solid-js";
+import { EntryActions } from "./EntryActions.tsx";
 import { clearCopy, clearing, copyFetchedAt } from "./offline-copy.ts";
 import { online } from "./online.ts";
 import type { Unsent, UnsentEntry } from "./stored.ts";
@@ -145,24 +148,21 @@ export function UnsentEntryItem(props: { write: UnsentEntry; formatTime: (at: st
           {props.formatTime(props.write.made_at)}
         </time>
         <span class="entry-mark unsent-mark">Unsent</span>
-        <Show when={!editing()}>
-          <button
-            type="button"
-            class="quiet entry-mark"
-            disabled={out()}
-            onClick={() => setEditing(true)}
-          >
-            Edit
-          </button>
-        </Show>
-        <button
-          type="button"
-          class="quiet entry-mark"
-          disabled={out()}
-          onClick={() => discardUnsent(props.write.id)}
-        >
-          Discard
-        </button>
+        <EntryActions
+          frequent={
+            editing()
+              ? []
+              : [{ label: "Edit", icon: Pencil, disabled: out(), onSelect: () => setEditing(true) }]
+          }
+          rest={[
+            {
+              label: "Discard",
+              icon: Trash,
+              disabled: out(),
+              onSelect: () => discardUnsent(props.write.id),
+            },
+          ]}
+        />
       </div>
       <Show when={props.write.follow_up_to}>
         {(to) => <p class="entry-follows">Follows up “{to().summary}”</p>}

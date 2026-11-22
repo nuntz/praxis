@@ -1,4 +1,12 @@
-import { callContextTool, expect, lastShown, makeContext, openJournal, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  entryAction,
+  expect,
+  lastShown,
+  makeContext,
+  openJournal,
+  test,
+} from "./fixtures.ts";
 
 // Deleting sends a record to the Trash, with what cannot exist without it, and restoring brings
 // it all back (sections 3.8 and 8.6). A Context of the journey's own, so its Trash is its own.
@@ -33,7 +41,7 @@ test("the person deletes an Entry, sees it and its Task in the Trash, and restor
 
   // No asking first: what is deleted is put back from the Trash.
   const deleting = page.waitForResponse(/\/tools\/delete_entry$/);
-  await deleted.getByRole("button", { name: "Delete", exact: true }).click();
+  await (await entryAction(deleted, "Delete", testInfo)).click();
   expect((await (await deleting).json()).ok).toBe(true);
   await expect(deleted).toHaveCount(0);
   await expect(journal.getByRole("checkbox", { name: title })).toHaveCount(0);

@@ -1,4 +1,4 @@
-import { expect, openJournal, test } from "./fixtures.ts";
+import { entryAction, expect, openJournal, test } from "./fixtures.ts";
 
 test("the person edits an Entry, restores an earlier Version and records a Follow-up to it", async ({
   page,
@@ -21,7 +21,7 @@ test("the person edits an Entry, restores an earlier Version and records a Follo
   await expect(entry.getByRole("button", { name: /^Edited/ })).toHaveCount(0);
 
   // The editor shows the words as typed, and a marked line it adds makes a Task.
-  await entry.getByRole("button", { name: "Edit", exact: true }).click();
+  await (await entryAction(entry, "Edit", testInfo)).click();
   const editor = entry.getByRole("textbox", { name: "The Entry's words", exact: true });
   await expect(editor).toHaveValue(first);
   await editor.fill(edited);
@@ -57,7 +57,7 @@ test("the person edits an Entry, restores an earlier Version and records a Follo
 
   // A Follow-up continues it, and the Journal shows the Entry with its Follow-ups.
   const second = `Second quote came ${tag}`;
-  await entry.getByRole("button", { name: "Follow up", exact: true }).click();
+  await (await entryAction(entry, "Follow up", testInfo)).click();
   await expect(journal.getByText(`Following up “${first}”`)).toBeVisible();
   await composer.fill(second);
   await composer.press("ControlOrMeta+Enter");

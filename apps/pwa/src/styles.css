@@ -1676,11 +1676,140 @@ button.quiet.entry-mark {
   font-weight: 600;
 }
 
-/* A Standing Entry's mark is pressed, in ink, where the others stay muted. */
-button.quiet.entry-mark[aria-pressed="true"] {
+/* A Standing Entry's mark, always shown, in ink where the others stay muted. */
+.entry-mark.standing-mark {
+  display: inline-flex;
+  align-self: center;
+  gap: var(--space-1);
+  align-items: center;
   color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+/* A menu of actions, opened under its button, at its right edge. */
+.menu {
+  position: relative;
+}
+
+.menu-list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  padding: var(--space-1);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.menu-list [role="menuitem"] {
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font: var(--type-row-title);
+  text-align: left;
+}
+
+.menu-list [role="menuitem"]:hover,
+.menu-list [role="menuitem"]:focus-visible {
+  background: var(--inset);
+}
+
+/*
+ * An Entry's actions (section 8.4). With a pointer that hovers, a toolbar at the Entry's top right,
+ * a surface pill with a hairline, shown while the Entry is hovered or holds the focus: kept in the
+ * order of the keyboard, so Tab shows it. On a touch screen, one button at the end of the meta line.
+ */
+.entry {
+  position: relative;
+}
+
+.entry-head {
+  min-height: 32px;
+}
+
+.entry-head > .menu {
+  align-self: center;
+  margin-left: auto;
+}
+
+.entry-actions {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  opacity: 0;
+}
+
+.entry:hover .entry-actions,
+.entry:focus-within .entry-actions {
+  opacity: 1;
+}
+
+.entry-actions .icon-button {
+  width: 32px;
+  min-height: 32px;
+  background: none;
+}
+
+.entry-actions .icon-button:hover,
+.entry-head > .menu > .icon-button:hover {
+  background: var(--inset);
+  color: var(--ink);
+}
+
+/* A touch target is at least 44px (section 8.11). */
+.entry-head > .menu > .icon-button {
+  width: 44px;
+  min-height: 44px;
+  background: none;
+}
+
+/* Beyond a phone, a hairline parts one Entry from the next, and the one hovered or focused sits on inset. */
+@media (width >= 720px) {
+  .entry-list {
+    gap: 0;
+  }
+
+  .entry {
+    padding: var(--space-4) var(--space-3);
+    border-radius: var(--radius-md);
+  }
+
+  .entry + .entry:not(.unsent) {
+    border-top: 1px solid var(--rule);
+  }
+
+  .entry:hover,
+  .entry:focus-within {
+    background: var(--inset);
+  }
+
+  .entry:hover:not(.unsent),
+  .entry:focus-within:not(.unsent),
+  .entry:hover + .entry:not(.unsent),
+  .entry:focus-within + .entry:not(.unsent) {
+    border-top-color: transparent;
+  }
+
+  .entry:hover .task,
+  .entry:focus-within .task {
+    background: var(--surface);
+  }
 }
 
 .entry-follows,

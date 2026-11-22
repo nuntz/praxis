@@ -7,10 +7,16 @@ import {
   type Task,
 } from "@praxis/domain";
 import { imageLoadingIn } from "@praxis/domain/markdown";
+import ArrowRightLeft from "lucide-solid/icons/arrow-right-left";
+import CornerDownRight from "lucide-solid/icons/corner-down-right";
+import Pencil from "lucide-solid/icons/pencil";
+import Pin from "lucide-solid/icons/pin";
+import Trash from "lucide-solid/icons/trash";
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile, unwrap } from "solid-js/store";
 import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
+import { EntryActions } from "./EntryActions.tsx";
 import { EntryEditor } from "./EntryEditor.tsx";
 import { followNewest } from "./follow-newest.tsx";
 import { heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
@@ -412,6 +418,9 @@ const LEFT_OFF =
 const LEFT_OFF_WITH_COPY =
   "Kept Unsent without what this Device does not hold: a new Person or Project, or a link or Follow-up to a record not in its Offline Copy, needs the network, so add it once it is sent.";
 
+/** What Standing means, on the mark a Standing Entry always shows. */
+const STANDING = "A Standing Entry is given to the Agent at the start of every Run";
+
 /** Whether what the Journal shows is an Entry still Unsent on this Device. */
 function isUnsent(item: Entry | UnsentEntry): item is UnsentEntry {
   return "made_at" in item;
@@ -496,6 +505,12 @@ function EntryItem(props: {
             </button>
           )}
         </Show>
+        <Show when={props.entry.standing}>
+          <span class="entry-mark standing-mark" title={STANDING}>
+            <Pin size={13} aria-hidden="true" />
+            Standing
+          </span>
+        </Show>
         <Show when={held()}>
           {(left) => (
             <a
@@ -510,40 +525,29 @@ function EntryItem(props: {
             </a>
           )}
         </Show>
-        <Show when={!editing()}>
-          <button type="button" class="quiet entry-mark" onClick={() => setEditing(true)}>
-            Edit
-          </button>
-        </Show>
-        <button type="button" class="quiet entry-mark" onClick={() => props.onFollowUp()}>
-          Follow up
-        </button>
-        <button
-          type="button"
-          class="quiet entry-mark"
-          aria-pressed={props.entry.standing}
-          title="A Standing Entry is given to the Agent at the start of every Run"
-          disabled={marking()}
-          onClick={() => void toggleStanding()}
-        >
-          Standing
-        </button>
-        <button
-          type="button"
-          class="quiet entry-mark"
-          aria-expanded={moving()}
-          onClick={() => setMoving((shown) => !shown)}
-        >
-          Move
-        </button>
-        <button
-          type="button"
-          class="quiet entry-mark"
-          disabled={deleting()}
-          onClick={() => void deleteEntry()}
-        >
-          Delete
-        </button>
+        <EntryActions
+          frequent={[
+            ...(editing()
+              ? []
+              : [{ label: "Edit", icon: Pencil, onSelect: () => setEditing(true) }]),
+            { label: "Follow up", icon: CornerDownRight, onSelect: () => props.onFollowUp() },
+            {
+              label: props.entry.standing ? "Unmark Standing" : "Mark Standing",
+              icon: Pin,
+              disabled: marking(),
+              onSelect: () => void toggleStanding(),
+            },
+          ]}
+          rest={[
+            { label: "Move", icon: ArrowRightLeft, onSelect: () => setMoving((shown) => !shown) },
+            {
+              label: "Delete",
+              icon: Trash,
+              disabled: deleting(),
+              onSelect: () => void deleteEntry(),
+            },
+          ]}
+        />
       </div>
       <Show when={moving()}>
         <MoveRecord

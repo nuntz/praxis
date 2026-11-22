@@ -1,4 +1,12 @@
-import { callContextTool, expect, lastShown, makeContext, openJournal, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  entryAction,
+  expect,
+  lastShown,
+  makeContext,
+  openJournal,
+  test,
+} from "./fixtures.ts";
 
 // The person marks an Entry standing from the Journal, sees the full list for the Context in its
 // settings, and unmarks it there (sections 5.5 and 8.6). A Context of the journey's own, so its
@@ -20,13 +28,15 @@ test("the person marks an Entry standing, sees it with the Standing Entries, and
   await page.goto("/");
   const { journal } = await openJournal(page, testInfo);
   const entry = journal.getByTestId("entry").filter({ hasText: kept });
-  const toggle = entry.getByRole("button", { name: "Standing", exact: true });
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  // Its Standing mark is always shown, and its action says what a tap does to it.
+  const mark = entry.getByText("Standing", { exact: true });
+  await expect(mark).toHaveCount(0);
 
   const marking = page.waitForResponse(/\/tools\/mark_standing$/);
-  await toggle.click();
+  await (await entryAction(entry, "Mark Standing", testInfo)).click();
   expect((await (await marking).json()).ok).toBe(true);
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(mark).toBeVisible();
+  await expect(await entryAction(entry, "Unmark Standing", testInfo)).toBeVisible();
 
   await page.getByRole("button", { name: "Settings" }).click();
   const standing = page.getByRole("region", { name: "Standing Entries", exact: true });
@@ -46,5 +56,6 @@ test("the person marks an Entry standing, sees it with the Standing Entries, and
   await page.getByRole("button", { name: "Settings" }).click();
   await openJournal(page, testInfo);
   await expect(entry).toHaveCount(1);
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(mark).toHaveCount(0);
+  await expect(await entryAction(entry, "Mark Standing", testInfo)).toBeVisible();
 });

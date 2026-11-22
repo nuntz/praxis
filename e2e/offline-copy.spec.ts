@@ -2,6 +2,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import {
   callContextTool,
   callDeploymentTool,
+  entryAction,
   expect,
   holdNext,
   lastShown,
@@ -224,7 +225,7 @@ test("the Offline Copy is read with no network, as last fetched, in any Context,
     .press("Escape");
 
   // A Follow-up to an Entry the copy holds, Mentioning a Person it holds, kept Unsent.
-  await entry.getByRole("button", { name: "Follow up", exact: true }).click();
+  await (await entryAction(entry, "Follow up", testInfo)).click();
   await composer.pressSequentially(`Asked @${ana.slice(0, 3)}`);
   const persons = page.getByRole("listbox", { name: "Persons" });
   await expect(persons.getByRole("option")).toHaveText([ana]);
