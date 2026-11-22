@@ -1,10 +1,7 @@
-import { type Ahead, type AheadItem, type Change, type Task, utcMidnight } from "@praxis/domain";
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { latestRead } from "./latest-read.ts";
-import { useLive } from "./live-context.ts";
+import { type AheadItem, type Task, utcMidnight } from "@praxis/domain";
+import { For, Show } from "solid-js";
+import { followAttentionView } from "./attention-read.ts";
 import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
-import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
-import { onSent, toSend, unsent, unsentFinishOf } from "./unsent.ts";
 
 /** A day as the weeks ahead head it, with its weekday, in the Device's locale. */
 const dayHeading = new Intl.DateTimeFormat(undefined, {
@@ -22,51 +19,15 @@ const dayHeading = new Intl.DateTimeFormat(undefined, {
  * settings is answered by reading it again.
  */
 export function WeeksAhead(props: { id: string; timeZone: string }) {
-  const callTool = useCallTool();
-  const contextId = useContextId();
-  const live = useLive();
-  const [answered, setView] = createSignal<Ahead | null>(null);
   // A Task finished Unsent leaves it at once, as it leaves the rest of Attention (section 8.8).
-  const view = createMemo(() => {
-    const shown = answered();
-    // Left as read when there is none, so nothing shown in it is made afresh.
-    if (!shown || !unsent().some((write) => write.kind === "finish" && toSend(write))) {
-      return shown;
-    }
-    const items = shown.items.filter(
-      (item) => item.kind !== "task" || unsentFinishOf(item.task.id) === null,
-    );
-    return { ...shown, items };
-  });
-  const [problem, setProblem] = createSignal<string | null>(null);
-  const { read } = latestRead(async (current) => {
-    try {
-      const result = await callTool("view_ahead", {});
-      if (!current()) return;
-      if (!result.ok) return setProblem(result.error.message);
-      setProblem(null);
-      setView(result.value);
-    } catch (error) {
-      // It is not in the Offline Copy: with no network it says so.
-      if (current()) setProblem(unreachableMessage(error));
-    }
-  });
-
-  /** As for Attention: an Entry's words move nothing in it. */
-  async function changed(change: Change) {
-    if (change.effects.some((effect) => effect.kind !== "entry")) await read();
-  }
-
-  onMount(async () => {
-    await live.ready;
-    await read();
-  });
-  onCleanup(live.listen({ changed, readAfresh: read }));
-  onCleanup(
-    onSent((sent) => {
-      if (sent.context === contextId && sent.kind === "finish") void read();
+  // It is not in the Offline Copy: with no network it says so.
+  const { view, problem, setProblem, read } = followAttentionView({
+    tool: "view_ahead",
+    without: (shown, finishedUnsent) => ({
+      ...shown,
+      items: shown.items.filter((item) => item.kind !== "task" || !finishedUnsent(item.task)),
     }),
-  );
+  });
 
   const days = () => {
     const items = view()?.items ?? [];

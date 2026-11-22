@@ -1,32 +1,20 @@
 import type {
   Attention as AttentionView,
   CameUp,
-  Change,
   Project,
   ProjectInAttention,
   Task,
 } from "@praxis/domain";
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  type JSX,
-  onCleanup,
-  onMount,
-  Show,
-} from "solid-js";
+import { createEffect, createSignal, For, type JSX, Show } from "solid-js";
 import { WeeksAhead } from "./Ahead.tsx";
+import { followAttentionView } from "./attention-read.ts";
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
-import { latestRead } from "./latest-read.ts";
-import { useLive } from "./live-context.ts";
 import { MoveRecord } from "./Move.tsx";
 import { StandingNotices } from "./Notices.tsx";
 import { contextCopy, readingCopy } from "./offline-copy.ts";
 import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
-import { Unreachable, unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import { useContextId } from "./tools.ts";
 import { RefusedWrites, refusedIn } from "./Unsent.tsx";
-import { onSent, toSend, unsent, unsentFinishOf } from "./unsent.ts";
 
 /**
  * What the Attention column holds: the standing Notices, the Held Changes left for the
@@ -40,70 +28,24 @@ export function Attention(props: {
   /** The Due section's count, each time the view is read. */
   onDueCount: (count: number) => void;
 }) {
-  const callTool = useCallTool();
   const contextId = useContextId();
-  const live = useLive();
   const heldChanges = useHeldChanges();
-  const [answered, setView] = createSignal<AttentionView | null>(null);
   // A Task finished Unsent leaves Attention at once, before the server has heard (section 8.8).
-  const view = createMemo(() => {
-    const shown = answered();
-    return shown && withoutUnsentFinishes(shown);
+  const { view, problem, setProblem, read } = followAttentionView({
+    tool: "view_attention",
+    without: withoutUnsentFinishes,
+    // With no network, Attention is shown as the Offline Copy last fetched it (section 8.8).
+    offline: () => contextCopy(contextId)?.attention ?? null,
+    onShown: (offline) => readingCopy(contextId, offline),
   });
   createEffect(() => {
     const shown = view();
     if (shown) props.onDueCount(shown.due.length);
   });
-  const [problem, setProblem] = createSignal<string | null>(null);
   // The weeks ahead, opened from the Due section and shown under it (section 8.3).
   const [aheadOpen, setAheadOpen] = createSignal(false);
   // What the last move of a Project said, once it has left Attention (section 3.9).
   const [moved, setMoved] = createSignal<string | null>(null);
-  // The last read wins: an answer a later read overtook is dropped.
-  const { read } = latestRead(async (current) => {
-    try {
-      const result = await callTool("view_attention", {});
-      if (!current()) return;
-      if (!result.ok) {
-        setProblem(result.error.message);
-        return;
-      }
-      setProblem(null);
-      readingCopy(contextId, false);
-      setView(result.value);
-    } catch (error) {
-      if (!current()) return;
-      // With no network, Attention is shown as the Offline Copy last fetched it (section 8.8).
-      const held = error instanceof Unreachable ? contextCopy(contextId) : null;
-      if (held === null) return setProblem(unreachableMessage(error));
-      setProblem(null);
-      readingCopy(contextId, true);
-      setView(held.attention);
-    }
-  });
-
-  /**
-   * A change to a Task, a Project, a Person a Task is Delegated to, or the Context, whose time
-   * zone moves today, moves Attention. An Entry's words move nothing in it.
-   */
-  async function changed(change: Change) {
-    if (change.effects.some((effect) => effect.kind !== "entry")) {
-      await read();
-    }
-  }
-
-  // Read once the live channel is open, so a change made meanwhile is either read or brought.
-  onMount(async () => {
-    await live.ready;
-    await read();
-  });
-  onCleanup(live.listen({ changed, readAfresh: read }));
-  // A finish sent from this Device moves Attention as any change to a Task does.
-  onCleanup(
-    onSent((sent) => {
-      if (sent.context === contextId && sent.kind === "finish") void read();
-    }),
-  );
 
   const dayOf = (at: string) =>
     new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: props.timeZone }).format(
@@ -225,15 +167,11 @@ export function Attention(props: {
   );
 }
 
-/** Whether a Task is finished Unsent on this Device, to be sent. */
-function finishedUnsent(task: Task): boolean {
-  return unsentFinishOf(task.id) !== null;
-}
-
 /** Attention as read, without the Tasks finished Unsent on this Device. */
-function withoutUnsentFinishes(view: AttentionView): AttentionView {
-  // Left as read when there is none, so nothing shown in it is made afresh.
-  if (!unsent().some((write) => write.kind === "finish" && toSend(write))) return view;
+function withoutUnsentFinishes(
+  view: AttentionView,
+  finishedUnsent: (task: Task) => boolean,
+): AttentionView {
   const open = (task: Task) => !finishedUnsent(task);
   return {
     ...view,
