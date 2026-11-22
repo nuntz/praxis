@@ -665,7 +665,11 @@ button.quiet {
     width: auto;
   }
 
-  .peer {
+  /* The column shown fills the width: the widths Attention and the Conversation keep beside the
+   * Journal do not hold here, or one spills past the right edge and the other stops short of it. */
+  .peer,
+  .peer.attention,
+  .peer.conversation {
     display: none;
     flex: 1;
     border-radius: 0;
