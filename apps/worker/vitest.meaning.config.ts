@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     include: ["test/meaning-index.test.ts"],
     setupFiles: ["./test/setup.ts"],
-    testTimeout: 120_000,
+    // A test may wait on the index twice, each three minutes of sleeps and its reads besides
+    // (test/meaning-index.test.ts), and should fail on what it waited for, not on its time.
+    testTimeout: 480_000,
   },
 });

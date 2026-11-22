@@ -171,10 +171,11 @@ if (real !== null) {
     index: real,
     meanAlike: () => {},
     async eventually(read, done) {
-      // Vectorize takes in a change within some seconds; a minute is past any it should take.
+      // Vectorize takes in a change in batches, and a run by hand has seen one take well over a
+      // minute, so three minutes is the wait.
       for (let tries = 0; ; tries += 1) {
         const answer = await read();
-        if (done(answer) || tries === 30) return answer;
+        if (done(answer) || tries === 90) return answer;
         await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     },
