@@ -65,6 +65,20 @@ function callButton(conversation: Locator, name: string) {
   });
 }
 
+/**
+ * Why the Call button cannot be pressed, in words on the screen, as a sighted person on a touch
+ * screen reads it, with no tooltip to hover for: more than read out by a screen reader.
+ */
+async function reasonShown(conversation: Locator, reason: string) {
+  const words = conversation.getByText(reason, { exact: true });
+  await expect(words).toBeVisible();
+  const box = await words.boundingBox();
+  if (!box) throw new Error(`"${reason}" is not shown`);
+  // Words hidden but for a screen reader take a pixel.
+  expect(box.width).toBeGreaterThan(1);
+  expect(box.height).toBeGreaterThan(1);
+}
+
 /** Start a Call from the Conversation, once the object has set it up. */
 async function startCall(page: Page, conversation: Locator, name: string) {
   const started = page.waitForResponse(/\/tools\/start_call$/);
@@ -202,6 +216,7 @@ test("with the network cut, the Call button is shown but cannot be pressed, and 
   await expect(button).toBeVisible();
   await expect(button).toBeDisabled();
   await expect(button).toHaveAccessibleDescription("Calls need the network.");
+  await reasonShown(conversation, "Calls need the network.");
 });
 
 test("at the cap, the Call button is shown but cannot be pressed, and says the cap stops it", async ({
@@ -226,6 +241,7 @@ test("at the cap, the Call button is shown but cannot be pressed, and says the c
   await expect(button).toHaveAccessibleDescription(
     "No Call can start: this month's spend reached its cap.",
   );
+  await reasonShown(conversation, "No Call can start: this month's spend reached its cap.");
 });
 
 test("what the voice model answers by itself is not kept, and the next Message holds everything said since", async ({

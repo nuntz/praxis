@@ -261,6 +261,11 @@ export function Conversation(props: {
     if (!online()) return "offline";
     return capReached() ? "cap_reached" : "ready";
   };
+  /** Why the Call button cannot be pressed, shown under it in words. */
+  const noCall = () => {
+    const offer = callOffer();
+    return offer === null || offer === "ready" ? null : NO_CALL[offer];
+  };
 
   /**
    * Start a Call in this Context. What the person says is sent as spoken Messages, each placed as
@@ -373,6 +378,13 @@ export function Conversation(props: {
         </>
       }
     >
+      <Show when={noCall()}>
+        {(why) => (
+          <p id={CALL_UNAVAILABLE} class="call-unavailable">
+            {why()}
+          </p>
+        )}
+      </Show>
       <Show when={call()}>
         {(going) => <CallBar contextName={props.contextName} since={going().since} />}
       </Show>
@@ -538,16 +550,19 @@ function callEndedWords(ended: CallEnd, reason: string | null): string | null {
   }
 }
 
-/** Why the Call button cannot be pressed, in the words it is described by. */
+/** Why the Call button cannot be pressed, in the words it is described by and shown under it. */
 const NO_CALL = {
   offline: "Calls need the network.",
   cap_reached: "No Call can start: this month's spend reached its cap.",
 } as const;
 
+/** The id of the words under the Call button saying why it cannot be pressed. */
+const CALL_UNAVAILABLE = "call-unavailable";
+
 /**
  * The Call button in the Conversation's header (section 8.5): the phone icon and "Call", the icon
  * alone on a phone. Offline or at the cap it is shown but cannot be pressed, and is described by
- * why, in words: it stays focusable, so the reason is heard as well as seen in its tooltip.
+ * why, in the words shown under it: it stays focusable, so the reason is heard as well as seen.
  */
 function CallButton(props: {
   contextName: string | undefined;
@@ -559,30 +574,21 @@ function CallButton(props: {
     props.contextName ? `Start a Call with the Agent in ${props.contextName}` : "Start a Call";
   const why = () => (props.offer === "ready" ? null : NO_CALL[props.offer]);
   return (
-    <>
-      <button
-        type="button"
-        class="call-button"
-        aria-label={name()}
-        title={why() ?? name()}
-        aria-disabled={why() !== null || props.starting ? "true" : undefined}
-        aria-busy={props.starting ? "true" : undefined}
-        aria-describedby={why() === null ? undefined : "call-unavailable"}
-        onClick={() => {
-          if (why() === null && !props.starting) props.onStart();
-        }}
-      >
-        <PhoneIcon size={18} aria-hidden="true" />
-        <span class="call-button-word">Call</span>
-      </button>
-      <Show when={why()}>
-        {(words) => (
-          <span id="call-unavailable" class="visually-hidden">
-            {words()}
-          </span>
-        )}
-      </Show>
-    </>
+    <button
+      type="button"
+      class="call-button"
+      aria-label={name()}
+      title={why() ?? name()}
+      aria-disabled={why() !== null || props.starting ? "true" : undefined}
+      aria-busy={props.starting ? "true" : undefined}
+      aria-describedby={why() === null ? undefined : CALL_UNAVAILABLE}
+      onClick={() => {
+        if (why() === null && !props.starting) props.onStart();
+      }}
+    >
+      <PhoneIcon size={18} aria-hidden="true" />
+      <span class="call-button-word">Call</span>
+    </button>
   );
 }
 

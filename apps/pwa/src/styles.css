@@ -1648,6 +1648,14 @@ button.call-button[aria-disabled="true"] {
   cursor: default;
 }
 
+/* Why it cannot be pressed, in words under it: a touch screen has no tooltip to show. */
+.call-unavailable {
+  margin: calc(-1 * var(--space-2)) var(--space-5) var(--space-2);
+  color: var(--muted);
+  font: var(--type-meta);
+  text-align: right;
+}
+
 /* On the Device in a Call, a status bar on the accent's tint takes the header's place. */
 .peer.conversation:has(> .call-bar) > .peer-header {
   display: none;
@@ -1729,6 +1737,10 @@ button.call-control {
 
   .call-button-word {
     display: none;
+  }
+
+  .call-unavailable {
+    margin: calc(-1 * var(--space-1)) var(--space-4) var(--space-2);
   }
 
   .call-bar {
