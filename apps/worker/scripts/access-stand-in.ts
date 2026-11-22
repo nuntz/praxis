@@ -1,6 +1,6 @@
 import type { Server, ServerWebSocket } from "bun";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
-import { fakeAccess } from "../test/access-fake.ts";
+import { fakeAccess, THE_PERSONS_EMAIL } from "../test/access-fake.ts";
 
 // Praxis on this machine, behind a stand-in for Cloudflare Access: `wrangler dev` on the next
 // port up, and in front of it what Access does for a Deployment. It signs every request in as the
@@ -51,6 +51,8 @@ const worker = Bun.spawn(
     `ACCESS_TEAM_DOMAIN:${application.teamDomain}`,
     "--var",
     `ACCESS_AUD:${application.audience}`,
+    "--var",
+    `SIGN_IN_EMAIL:${THE_PERSONS_EMAIL}`,
     ...passed,
   ],
   { stdio: ["inherit", "inherit", "inherit"] },

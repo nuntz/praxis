@@ -294,15 +294,16 @@ write_env GOOGLE_CLIENT_SECRET "$GOOGLE_CLIENT_SECRET"
 note "An External app in 'Testing' only lets in the test users you list on its Audience page."
 
 # ── 5 ─────────────────────────────────────────────────────────────────────
-stage "Who may sign in"
-say "A Deployment is one person's. Give your Google account, or a Google Workspace domain."
-ask ALLOWED_EMAILS "Allowed emails, comma-separated (blank for none):" || true
-ask ALLOWED_EMAIL_DOMAIN "Allowed Workspace domain (blank for none):" || true
-if [[ -z "${ALLOWED_EMAILS:-}" && -z "${ALLOWED_EMAIL_DOMAIN:-}" ]]; then
-  warn "With neither, no one could sign in. Re-run and enter at least one."; exit 1
-fi
-write_env ALLOWED_EMAILS "${ALLOWED_EMAILS:-}"
-write_env ALLOWED_EMAIL_DOMAIN "${ALLOWED_EMAIL_DOMAIN:-}"
+stage "Your Google address"
+say "A Deployment is one person's: your Google address is the only one that signs in."
+# The same pattern as ONE_ADDRESS in infra/sign-in.ts, which the deploy holds it to.
+one_address='^[^@[:space:],]+@[^@[:space:],]+\.[^@[:space:],]+$'
+ask SIGN_IN_EMAIL "Your Google address:"
+until [[ "$SIGN_IN_EMAIL" =~ $one_address ]]; do
+  warn "Give one address, such as person@example.com: no domain and no list."
+  ask SIGN_IN_EMAIL "Your Google address:"
+done
+write_env SIGN_IN_EMAIL "$SIGN_IN_EMAIL"
 
 # ── 6 ─────────────────────────────────────────────────────────────────────
 stage "The Agent and a Call: your keys and the model"
@@ -380,12 +381,7 @@ definition=$(mktemp); trap 'rm -f "$definition"' EXIT
   printf '    praxis:zone: %s\n' "$(yaml_str "$CF_ZONE")"
   printf '    praxis:hostname: %s\n' "$(yaml_str "$PRAXIS_HOSTNAME")"
   printf '    praxis:accessTeamDomain: %s\n' "$(yaml_str "$ACCESS_TEAM_DOMAIN")"
-  if [[ -n "${ALLOWED_EMAILS:-}" ]]; then
-    printf '    praxis:allowedEmails:\n'
-    IFS=',' read -ra emails <<< "$ALLOWED_EMAILS"
-    for email in "${emails[@]}"; do printf '      - %s\n' "$(yaml_str "$(echo "$email" | xargs)")"; done
-  fi
-  [[ -n "${ALLOWED_EMAIL_DOMAIN:-}" ]] && printf '    praxis:allowedEmailDomain: %s\n' "$(yaml_str "$ALLOWED_EMAIL_DOMAIN")"
+  printf '    praxis:signInEmail: %s\n' "$(yaml_str "$SIGN_IN_EMAIL")"
   printf '    praxis:googleClientId: %s\n' "$(yaml_str "$GOOGLE_CLIENT_ID")"
   printf '    praxis:googleClientSecret:\n      fn::secret: %s\n' "$(yaml_str "$GOOGLE_CLIENT_SECRET")"
   [[ -n "${AGENT_API_KEY:-}" ]] && printf '    praxis:agentApiKey:\n      fn::secret: %s\n' "$(yaml_str "$AGENT_API_KEY")"
@@ -466,7 +462,7 @@ if (( started )); then
   fi
 fi
 open_url "https://$PRAXIS_HOSTNAME"
-step "Sign in with an allowed Google account: Praxis asks you to make your first Context."
+step "Sign in as $SIGN_IN_EMAIL: Praxis asks you to make your first Context."
 step "Give it a name, your time zone and an accent colour, then record an Entry in its Journal."
 note "Coming back from an Export or a Backup? Choose 'Restore an Export' there instead, and give it"
 note "the zip: the whole Deployment it holds comes back, each Connection ended. A Backup is in the"

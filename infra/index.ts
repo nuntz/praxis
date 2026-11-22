@@ -9,6 +9,7 @@ import * as cloudflare from "@pulumi/cloudflare";
 import * as pulumi from "@pulumi/pulumi";
 import { deployedJurisdiction, jurisdictionRefusal } from "./jurisdiction.ts";
 import { MeaningIndex } from "./meaning-index.ts";
+import { LETTING_IN_MORE, signInRefusal } from "./sign-in.ts";
 
 // Copies, as Node cannot read wrangler.jsonc's comments: copies.test.ts keeps them in step.
 const WORKER_NAME = "praxis";
@@ -35,8 +36,8 @@ const accountId = config.require("accountId");
 const zone = config.require("zone");
 const hostname = config.require("hostname");
 const accessTeamDomain = config.require("accessTeamDomain");
-const allowedEmails = config.getObject<string[]>("allowedEmails") ?? [];
-const allowedEmailDomain = config.get("allowedEmailDomain");
+// The person's Google address, the only one that signs in (section 7.1).
+const signInEmail = config.get("signInEmail")?.trim() ?? "";
 // Both optional: without a key there is no Agent, and without a model the Worker's default.
 const agentApiKey = config.getSecret("agentApiKey");
 const agentModel = config.get("agentModel");
@@ -49,11 +50,11 @@ const pushPrivateKey = config.getSecret("pushPrivateKey");
 // Optional, and chosen once: none when left out.
 const jurisdiction = config.get("jurisdiction") ?? "";
 
-if (allowedEmails.length === 0 && !allowedEmailDomain) {
-  throw new Error(
-    "Set praxis:allowedEmails or praxis:allowedEmailDomain: otherwise no one can sign in.",
-  );
-}
+const signInRefused = signInRefusal({
+  signInEmail,
+  lettingInMore: LETTING_IN_MORE.filter((key) => config.get(key) !== undefined),
+});
+if (signInRefused !== null) throw new Error(signInRefused);
 
 const deployed = await deployedWorkerSettings();
 const refusal = jurisdictionRefusal({
@@ -77,10 +78,7 @@ const person = new cloudflare.ZeroTrustAccessPolicy("person", {
   accountId,
   name: "Praxis: the person",
   decision: "allow",
-  includes: [
-    ...allowedEmails.map((email) => ({ email: { email } })),
-    ...(allowedEmailDomain ? [{ emailDomain: { domain: allowedEmailDomain } }] : []),
-  ],
+  includes: [{ email: { email: signInEmail } }],
 });
 
 // One application for the whole hostname: the screen, the tool endpoint and MCP (section 7.1).
@@ -148,6 +146,7 @@ export const workerVars = pulumi.secret(
   application.aud.apply((aud) => ({
     ACCESS_TEAM_DOMAIN: `https://${accessTeamDomain}`,
     ACCESS_AUD: aud,
+    SIGN_IN_EMAIL: signInEmail,
     JURISDICTION: jurisdiction,
     AGENT_MODEL: agentModel ?? "",
     PUSH_PUBLIC_KEY: pushPublicKey,

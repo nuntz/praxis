@@ -12,6 +12,9 @@ export const TEST_APPLICATION: AccessApplication = {
   audience: "praxis-test-audience",
 };
 
+/** The person's Google address, which the fake's tokens carry unless a test gives another. */
+export const THE_PERSONS_EMAIL = "the.person@praxis.test";
+
 type SigningKey = { kid: string; pair: CryptoKeyPair };
 
 async function makeKey(): Promise<SigningKey> {
@@ -79,7 +82,7 @@ export async function fakeAccess(application: AccessApplication) {
       const seconds = Math.floor(at / 1000);
       return signToken(current, {
         aud: [application.audience],
-        email: "the.person@praxis.test",
+        email: THE_PERSONS_EMAIL,
         exp: seconds + TOKEN_LIFE / 1000,
         iat: seconds,
         nbf: seconds,

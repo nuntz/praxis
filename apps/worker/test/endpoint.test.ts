@@ -13,7 +13,8 @@ import { DEVICE_HEADER, type Device } from "@praxis/domain";
 import { beforeEach, describe, expect, test } from "vitest";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
 import { praxis } from "../src/worker.ts";
-import { fakeAccess, TEST_APPLICATION, TOKEN_LIFE } from "./access-fake.ts";
+import { fakeAccess, TEST_APPLICATION, THE_PERSONS_EMAIL, TOKEN_LIFE } from "./access-fake.ts";
+import { logs } from "./markers.ts";
 import { subscribe } from "./push-fake.ts";
 
 /** The Worker behind a fake Access, and a token Access put on the person's requests. */
@@ -23,7 +24,11 @@ let token: string;
 
 beforeEach(async () => {
   access = await fakeAccess(TEST_APPLICATION);
-  worker = praxis(() => ({ keySet: access.keySet, application: TEST_APPLICATION }));
+  worker = praxis(() => ({
+    keySet: access.keySet,
+    application: TEST_APPLICATION,
+    signInEmail: THE_PERSONS_EMAIL,
+  }));
   // The Worker reads the real clock when a request arrives, so the token is signed at it.
   token = await access.sign(Date.now());
 });
@@ -35,8 +40,12 @@ function send(path: string, init: RequestInit = {}, signedWith: string | null = 
   return worker.fetch(new Request(`https://praxis.test${path}`, { ...init, headers }), env);
 }
 
-function post(path: string, body: string) {
-  return send(path, { method: "POST", headers: { "content-type": "application/json" }, body });
+function post(path: string, body: string, signedWith: string | null = token) {
+  return send(
+    path,
+    { method: "POST", headers: { "content-type": "application/json" }, body },
+    signedWith,
+  );
 }
 
 async function callTool(path: string, input: unknown) {
@@ -129,6 +138,76 @@ describe("the Access sign-in every request needs", () => {
     );
 
     expect(response.status).toBe(401);
+  });
+});
+
+describe("whose address a signed-in request carries", () => {
+  /** The results the Worker logged of whose address each request carried, in order. */
+  const noted = () =>
+    logs().flatMap((line) => {
+      const parsed = JSON.parse(line.startsWith("{") ? line : "null") as {
+        access?: string;
+        result?: string;
+      } | null;
+      return parsed?.access === "email" ? [parsed.result] : [];
+    });
+
+  test("is noted as the person's, another's or none, and the request still reaches what it is for", async () => {
+    const other = await access.sign(Date.now(), { email: "someone.else@praxis.test" });
+    const none = await access.sign(Date.now(), { email: undefined });
+
+    for (const signedWith of [token, other, none]) {
+      expect(
+        await (await post("/api/deployment/tools/list_contexts", "{}", signedWith)).json(),
+      ).toMatchObject({ ok: true });
+    }
+
+    expect(noted()).toEqual(["person", "other", "none"]);
+  });
+
+  test("is the person's whatever the case of the address and the spaces around it", async () => {
+    await post(
+      "/api/deployment/tools/list_contexts",
+      "{}",
+      await access.sign(Date.now(), { email: ` ${THE_PERSONS_EMAIL.toUpperCase()} ` }),
+    );
+    worker = praxis(() => ({
+      keySet: access.keySet,
+      application: TEST_APPLICATION,
+      signInEmail: ` ${THE_PERSONS_EMAIL.toUpperCase()} `,
+    }));
+    await post("/api/deployment/tools/list_contexts", "{}");
+
+    expect(noted()).toEqual(["person", "person"]);
+  });
+
+  test("is noted as unset while the Deployment names no address of the person's", async () => {
+    worker = praxis(() => ({
+      keySet: access.keySet,
+      application: TEST_APPLICATION,
+      signInEmail: "",
+    }));
+
+    await post("/api/deployment/tools/list_contexts", "{}");
+
+    expect(noted()).toEqual(["unset"]);
+  });
+
+  test("is never logged as the address itself", async () => {
+    await post("/api/deployment/tools/list_contexts", "{}");
+    await post(
+      "/api/deployment/tools/list_contexts",
+      "{}",
+      await access.sign(Date.now(), { email: "someone.else@praxis.test" }),
+    );
+
+    expect(logs().filter((line) => line.includes("@"))).toEqual([]);
+  });
+
+  test("is not noted for a request that is not signed in", async () => {
+    await post("/api/deployment/tools/list_contexts", "{}", null);
+
+    expect(noted()).toEqual([]);
   });
 });
 

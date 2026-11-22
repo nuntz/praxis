@@ -12,10 +12,8 @@
 #        praxis:hostname: praxis.example.com
 #        # Your Zero Trust team domain (Zero Trust → Settings → Team name and domain).
 #        praxis:accessTeamDomain: example.cloudflareaccess.com
-#        # Who may sign in: your Google account, or a Google Workspace domain.
-#        praxis:allowedEmails:
-#          - person@example.com
-#        # praxis:allowedEmailDomain: example.com
+#        # Your Google address, the only one that signs in: one address, no domain or list.
+#        praxis:signInEmail: person@example.com
 #        # A Google OAuth client for Access's Google login.
 #        praxis:googleClientId: 000000000000-example.apps.googleusercontent.com
 #        praxis:googleClientSecret:

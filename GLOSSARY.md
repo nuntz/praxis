@@ -5,8 +5,8 @@ A journal-centric personal task manager for one person, where an Agent and the p
 ## Language
 
 **The person**:
-The one human a Deployment belongs to. Always written with "the" and no capital.
-_Avoid_: User, owner, deployer, account
+The one human a Deployment belongs to, and the only one who signs in to it. Always written with "the" and no capital.
+_Avoid_: User, owner, deployer, account (for the person or for their sign-in)
 
 **Deployment**:
 One installation of Praxis, on one person's own Cloudflare account, holding all of that person's Contexts.

@@ -21,8 +21,9 @@ export const ContextObject = contextObject(anthropicModel, workersAiMeaning, (en
 );
 export type ContextObject = InstanceType<typeof ContextObject>;
 
-/** Praxis as deployed: behind the Access application its configuration names. */
+/** Praxis as deployed: behind the Access application its configuration names, for the person it names. */
 export default praxis((env) => ({
   keySet: publishedKeySet(env.ACCESS_TEAM_DOMAIN),
   application: { teamDomain: env.ACCESS_TEAM_DOMAIN, audience: env.ACCESS_AUD },
+  signInEmail: env.SIGN_IN_EMAIL,
 }));

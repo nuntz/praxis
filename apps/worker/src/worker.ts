@@ -5,7 +5,13 @@ import {
   type ToolResult,
   UPGRADE_HEADER,
 } from "@praxis/domain";
-import { ACCESS_TOKEN_HEADER, type Access, type AccessApplication, AccessGate } from "./access.ts";
+import {
+  ACCESS_TOKEN_HEADER,
+  type Access,
+  type AccessApplication,
+  AccessGate,
+  whose,
+} from "./access.ts";
 import { arrivalTime } from "./arrival.ts";
 import { type StuckUpgrade, stuckIn, stuckWords } from "./ladder.ts";
 import { connectionCaller, connectionIdIn, noConnection, serveConnection } from "./mcp.ts";
@@ -31,14 +37,14 @@ const MCP_PATH = /^\/mcp(\/|$)/;
 const HAND: Caller = { kind: "hand" };
 
 /**
- * Praxis behind Access. Every request is checked before anything else, whatever it is for: the
+ * Praxis behind Access, for the person whose Google address it is given, the only one that signs
+ * in to it (section 7.1). Every request is checked before anything else, whatever it is for: the
  * screen and its files, the tool endpoint and MCP. A refused request reaches nothing.
  */
-export function praxis(accessOf: (env: Env) => Access) {
+export function praxis(accessOf: (env: Env) => Access & { signInEmail: string }) {
   // One gate per isolate, so the keys are read once and kept, unless the application changes.
   let held: { application: AccessApplication; gate: AccessGate } | null = null;
-  const gateFor = (env: Env) => {
-    const access = accessOf(env);
+  const gateFor = (access: Access) => {
     const { teamDomain, audience } = access.application;
     const same =
       held?.application.teamDomain === teamDomain && held.application.audience === audience;
@@ -49,9 +55,16 @@ export function praxis(accessOf: (env: Env) => Access) {
   return {
     async fetch(request: Request, env: Env): Promise<Response> {
       const arrivedAt = arrivalTime();
-      const signIn = await gateFor(env).check(request.headers.get(ACCESS_TOKEN_HEADER), arrivedAt);
+      const access = accessOf(env);
+      const token = request.headers.get(ACCESS_TOKEN_HEADER);
+      const signIn = await gateFor(access).check(token, arrivedAt);
       if (signIn === "signed_out") return signedOut();
       if (signIn === "unavailable") return unavailable();
+      // Only noted for now, never the address itself: until every client's token is seen to carry
+      // the person's address, a request is let through whoever's it carries.
+      if (token !== null) {
+        console.log(JSON.stringify({ access: "email", result: whose(token, access.signInEmail) }));
+      }
       try {
         return await route(request, env, arrivedAt);
       } catch (error) {

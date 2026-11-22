@@ -554,6 +554,7 @@ ADR 0003, 0005, 0007, 0009, 0010. Glossary: Connection.
 
 - Every caller signs in through Cloudflare Access managed OAuth: the person's browser, a hosted client and a local one. Web and MCP share one hostname behind one Access application. The Worker holds no OAuth code and no keys, and verifies the Access token on every request.
 - There is no static credential. A caller with no browser to sign in through cannot connect.
+- Only the person's Google address signs in: one address, never a list or a Workspace domain. The Access policy lets in that address alone, and the Worker is given it too. For now the Worker only notes, on each request, whether its token carries the person's address, another, or none, or that it was given no address of the person's, as a result code and never the address itself.
 - The clients the spec promises are Claude's apps, ChatGPT and Claude Code. Another hosted client works only once the person lists its redirect address.
 - Praxis serves only the stateless 2026-07-28 protocol over Streamable HTTP. No sessions, no HTTP+SSE. Older clients are refused.
 
@@ -940,7 +941,7 @@ ADR 0009, 0017, 0018, 0021, 0026. The mechanics follow [mise](https://github.com
 The setup wizard:
 
 - Creates the Worker, the Durable Object classes, the R2 bucket for Backups and the meaning index.
-- Creates one Access application for the hostname, with Google as the way in for the person's own address or Workspace domain, switches on managed OAuth, lists the redirect addresses of Claude and ChatGPT (the latter with a wildcard), and allows clients on localhost and loopback.
+- Creates one Access application for the hostname, with Google as the way in for the person's own address and no other, switches on managed OAuth, lists the redirect addresses of Claude and ChatGPT (the latter with a wildcard), and allows clients on localhost and loopback.
 - Offers the jurisdiction, once: `eu`, `us`, `fedramp` or none. A deploy that would change it fails before changing anything.
 - Takes the Agent's provider key and the model's name, both optional, and says to set a spend limit with the provider.
 - Takes the voice provider key, optional, and says what reaches that provider.

@@ -69,13 +69,30 @@ export const ACCESS_SIGNING = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" } as 
 /** The Access a Deployment sits behind: its application, and the keys its team signs with. */
 export type Access = { keySet: AccessKeySet; application: AccessApplication };
 
+/**
+ * Whose address a signed-in token carries: the person's, another's, none, or unset when the
+ * Deployment names no address of the person's to tell.
+ */
+export type Whose = "person" | "other" | "none" | "unset";
+
+/** An email as compared: neither its case nor the spaces around it tell two apart. */
+const comparable = (email: string) => email.trim().toLowerCase();
+
+/** Whose address a token the gate signed in carries, against the person's. */
+export function whose(token: string, signInEmail: string): Whose {
+  if (!comparable(signInEmail)) return "unset";
+  const email = tokenParts(token)?.claims.email;
+  if (typeof email !== "string" || !comparable(email)) return "none";
+  return comparable(email) === comparable(signInEmail) ? "person" : "other";
+}
+
 /** The shortest time between two reads of the keys, so a stranger's tokens cannot make it fetch on every request. */
 const REREAD_AFTER = 10_000;
 
 /** How long keys once read are trusted, so a key Access has withdrawn stops working. */
 const KEYS_KEPT_FOR = 60 * 60_000;
 
-type Claims = { aud?: unknown; iss?: unknown; exp?: unknown; nbf?: unknown };
+type Claims = { aud?: unknown; iss?: unknown; exp?: unknown; nbf?: unknown; email?: unknown };
 
 function base64urlBytes(part: string): Uint8Array<ArrayBuffer> {
   const base64 = part.replaceAll("-", "+").replaceAll("_", "/");
