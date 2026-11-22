@@ -27,6 +27,8 @@ const pairings: [ColorToken, ColorToken[]][] = [
   ["ink", ["ground", "surface", "inset", "notice", ...tints]],
   ["muted", ["ground", "surface", "inset"]],
   ["warn", ["surface", "inset"]],
+  // The "Jump to latest" pill, the reverse of ink on surface.
+  ["surface", ["ink"]],
   ...ACCENTS.map((accent): [ColorToken, ColorToken[]] => [accent, ["surface", `${accent}-tint`]]),
   ...ACCENTS.map((accent): [ColorToken, ColorToken[]] => ["on-accent", [accent]]),
 ];

@@ -587,9 +587,32 @@ button.quiet {
 
 .peer-foot {
   display: flex;
+  position: relative;
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-5) var(--space-5);
+}
+
+/* Scrolled away from the newest, a pill above the composer takes the person back (section 8.1). */
+button.jump-to-latest {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 50%;
+  z-index: 1;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 var(--space-4) 0 var(--space-3);
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+@media (width < 720px) {
+  button.jump-to-latest {
+    min-height: 44px;
+  }
 }
 
 .tabs,

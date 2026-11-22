@@ -12,6 +12,7 @@ import { createStore, reconcile, unwrap } from "solid-js/store";
 import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
 import { EntryEditor } from "./EntryEditor.tsx";
+import { followNewest } from "./follow-newest.tsx";
 import { heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { useLive } from "./live-context.ts";
 import { MoveRecord } from "./Move.tsx";
@@ -73,11 +74,15 @@ export function Journal(props: {
     try {
       const result = await callTool("list_entries", cursor === undefined ? {} : { cursor });
       if (!result.ok) return setProblem(result.error.message);
-      // An Entry the live channel brought while the page was read is shown once.
-      setEntries((shown) => {
-        const page = result.value.items.filter((read) => !shown.some((e) => e.id === read.id));
-        return [...page.toReversed(), ...shown];
-      });
+      // An Entry the live channel brought while the page was read is shown once. An earlier page
+      // goes above, keeping what is in view where it was.
+      const show = () =>
+        setEntries((shown) => {
+          const page = result.value.items.filter((read) => !shown.some((e) => e.id === read.id));
+          return [...page.toReversed(), ...shown];
+        });
+      if (cursor === undefined) show();
+      else column.keepPlace(show);
       setEarlierCursor(result.value.next_cursor);
     } catch (error) {
       // With no network the Journal is the Offline Copy's, as last fetched (section 8.8): the
@@ -294,11 +299,13 @@ export function Journal(props: {
     onShowInJournal: (entry, anchor) => void bringIntoView(entry, anchor),
   });
   const searching = search.shown;
+  // The Entries open at their newest, beside the composer; what was found keeps its own order.
+  const column = followNewest({ items: withUnsent, anchored: () => !searching() });
 
   return (
     <>
       <search.Field />
-      <div class="peer-body">
+      <div class="peer-body" ref={column.scroller}>
         <search.Found />
         <Show when={!searching() && earlierCursor()}>
           {(cursor) => (
@@ -310,7 +317,7 @@ export function Journal(props: {
         <Show when={!searching() && fromCopy()}>
           <p class="peer-note">Older Entries need the network.</p>
         </Show>
-        <ol class="entry-list" aria-label="Entries" hidden={searching()}>
+        <ol class="entry-list" aria-label="Entries" hidden={searching()} ref={column.content}>
           <For each={withUnsent()}>
             {(entry) =>
               isUnsent(entry) ? (
@@ -349,6 +356,7 @@ export function Journal(props: {
         </ol>
       </div>
       <div class="peer-foot">
+        <column.JumpToLatest />
         <Show when={told()}>
           {(said) => (
             <p class="moved" role="status">
@@ -373,12 +381,15 @@ export function Journal(props: {
             setFollowingUp(null);
             // Nothing is dropped silently (section 8.8).
             if (leftOff) setTold(contextCopy(contextId) ? LEFT_OFF_WITH_COPY : LEFT_OFF);
+            // Kept Unsent, it is in the Journal all the same, and the person's own.
+            column.toNewest();
           }}
           onRecorded={(entry) => {
             setProblem(null);
             if (told() === LINKS_LEFT_OFF) setTold(null);
             setFollowingUp(null);
             showEntry(entry);
+            column.toNewest();
             if (entry.follow_up_to) void refreshEntry(entry.follow_up_to.id);
           }}
           onLinksLeftOff={() => setTold(LINKS_LEFT_OFF)}

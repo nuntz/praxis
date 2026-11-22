@@ -15,6 +15,7 @@ import { createStore, reconcile } from "solid-js/store";
 import { DeviceCall } from "./call.ts";
 import { Peer } from "./design/Peer.tsx";
 import { download } from "./Export.tsx";
+import { followNewest } from "./follow-newest.tsx";
 import { HeldChangeItem, useHeldChanges } from "./HeldChanges.tsx";
 import { recordAnchor } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
@@ -73,6 +74,9 @@ export function Conversation(props: {
   const [muted, setMuted] = createSignal(false);
   // Why the last Call ended, when it was not the person's tap: a Notice, never a Message.
   const [callEnded, setCallEnded] = createSignal<string | null>(null);
+  // The Messages open at their newest, beside the composer (section 8.1). With no network none
+  // is shown, and the column is back where it was once one is.
+  const column = followNewest({ items: () => messages, anchored: online });
 
   /**
    * The newest page, read afresh, the last read's answer winning: a burst of changes to Tasks
@@ -95,10 +99,13 @@ export function Conversation(props: {
           ...shown.filter((message) => !page.some((read) => read.id === message.id)),
         ]);
       } else {
-        setMessages((shown) => [
-          ...page.filter((read) => !shown.some((message) => message.id === read.id)),
-          ...shown,
-        ]);
+        // An earlier page goes above, keeping what is in view where it was.
+        column.keepPlace(() =>
+          setMessages((shown) => [
+            ...page.filter((read) => !shown.some((message) => message.id === read.id)),
+            ...shown,
+          ]),
+        );
       }
       setEarlierCursor(result.value.next_cursor);
     } catch (error) {
@@ -238,6 +245,7 @@ export function Conversation(props: {
               return { refused: result.error.message };
             }
             placeAnswered(result.value.message);
+            column.toNewest();
             return { message: result.value.message.id };
           } catch (error) {
             const why = unreachableMessage(error);
@@ -314,7 +322,7 @@ export function Conversation(props: {
       title="Conversation"
       aside={<span class="peer-note">with the Agent, in {props.contextName}</span>}
     >
-      <div class="peer-body">
+      <div class="peer-body" ref={column.scroller}>
         <Show when={online() && earlierCursor()}>
           {(cursor) => (
             <button type="button" class="quiet" onClick={() => loadPage(cursor())}>
@@ -323,7 +331,7 @@ export function Conversation(props: {
           )}
         </Show>
         {/* With no network nothing of the Conversation is shown, an unread Brief included. */}
-        <ol class="message-list" aria-label="Messages" hidden={!online()}>
+        <ol class="message-list" aria-label="Messages" hidden={!online()} ref={column.content}>
           <For each={messages}>
             {(message) => (
               <Show
@@ -359,6 +367,7 @@ export function Conversation(props: {
         </ol>
       </div>
       <div class="peer-foot">
+        <column.JumpToLatest />
         {/* With no network the notice below says what a call that could not be made would. */}
         <Show when={foot() !== "offline" && problem()}>
           {(message) => (
@@ -427,6 +436,7 @@ export function Conversation(props: {
             onSent={(message) => {
               setProblem(null);
               placeAnswered(message);
+              column.toNewest();
             }}
             onProblem={setProblem}
           />
