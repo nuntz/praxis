@@ -11,9 +11,21 @@ import { fakeAccess } from "../test/access-fake.ts";
 //   bun scripts/access-stand-in.ts [--port 8787] [any other `wrangler dev` options]
 //
 // A lapsed sign-in is a cookie: while the browser carries SIGNED_OUT, nothing is let through.
+//
+// Access's sign-in is a cookie too, so a request the browser sends without credentials, as it
+// fetches a manifest unless told otherwise, is refused. The stand-in sets SIGNED_IN on what it
+// lets through, and refuses a subresource a browser asks for without it; a navigation, or a client
+// that is no browser, is signed in as before.
 
-/** The cookie that stands for a lapsed Access session. */
+/** The cookie that stands for a lapsed Access sign-in. */
 const SIGNED_OUT = "praxis-stand-in-signed-out";
+/** The cookie that stands for Access's sign-in, which a browser sends only with credentials. */
+const SIGNED_IN = "praxis-stand-in-signed-in";
+
+/** Whether the request carries the stand-in's cookie of that name. */
+function carries(request: Request, cookie: string): boolean {
+  return request.headers.get("cookie")?.includes(`${cookie}=yes`) ?? false;
+}
 
 const options = process.argv.slice(2);
 const portAt = options.indexOf("--port");
@@ -123,8 +135,22 @@ Bun.serve<Piped>({
         headers: { location: "/", "set-cookie": `${SIGNED_OUT}=; Path=/; Max-Age=0` },
       });
     }
-    if (request.headers.get("cookie")?.includes(`${SIGNED_OUT}=yes`)) {
+    if (carries(request, SIGNED_OUT)) {
       return Response.redirect(`${loginOrigin}/cdn-cgi/access/login`, 302);
+    }
+
+    // A browser names what it fetches for; Node's fetch, as an MCP client uses, sends a mode only.
+    const fetchedFor = request.headers.get("sec-fetch-dest");
+    const subresource = fetchedFor !== null && fetchedFor !== "document";
+    if (subresource && !carries(request, SIGNED_IN)) {
+      // As Access answers a request that carries no sign-in.
+      return Response.json(
+        { error: "invalid_token" },
+        {
+          status: 401,
+          headers: { "www-authenticate": 'Bearer realm="OAuth", error="invalid_token"' },
+        },
+      );
     }
 
     if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
@@ -138,12 +164,15 @@ Bun.serve<Piped>({
     // then decode again, so the Worker is asked for none.
     headers.set("accept-encoding", "identity");
     try {
-      return await fetch(`http://localhost:${workerPort}${url.pathname}${url.search}`, {
+      const answer = await fetch(`http://localhost:${workerPort}${url.pathname}${url.search}`, {
         method: request.method,
         headers,
         body: request.body,
         redirect: "manual",
       });
+      const signedIn = new Response(answer.body, answer);
+      signedIn.headers.append("set-cookie", `${SIGNED_IN}=yes; Path=/; HttpOnly; SameSite=Lax`);
+      return signedIn;
     } catch {
       return new Response("The Worker is not up yet.", { status: 502 });
     }

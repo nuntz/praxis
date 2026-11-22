@@ -13,9 +13,26 @@ import {
   test,
 } from "./fixtures.ts";
 
-/** The manifest the installed PWA was installed from. */
+/**
+ * The manifest the installed PWA was installed from, as the browser fetched it for the page itself,
+ * through Access, which refuses one that comes without credentials.
+ */
 async function manifestOf(page: Page) {
-  return (await page.request.get("/manifest.webmanifest")).json();
+  // In a tab of its own, so whatever the journey's page holds, such as a draft, stays as it is.
+  const screen = await page.context().newPage();
+  try {
+    await screen.goto("/");
+    const devtools = await page.context().newCDPSession(screen);
+    const { data, errors } = await devtools.send("Page.getAppManifest");
+    expect(
+      errors.filter(({ critical }) => critical),
+      "what the browser could not take of the manifest",
+    ).toEqual([]);
+    expect(data, "the manifest the browser fetched").toBeTruthy();
+    return JSON.parse(data ?? "");
+  } finally {
+    await screen.close();
+  }
 }
 
 // Two ways of opening the Journal's composer from outside Praxis (section 8.9): the home-screen
