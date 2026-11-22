@@ -26,7 +26,7 @@ It walks you through each step in the browser and keeps what you enter in `~/.co
 7. Offers the jurisdiction, once (below).
 8. Writes the ESC environment `<org>/praxis/production` and the stack `<org>/praxis/production`, whose gitignored stack file only imports the environment.
 9. Sets up CI's sign-in to Pulumi Cloud (below), and the `CLOUDFLARE_API_TOKEN` and `PULUMI_CI_USER` secrets and the `PULUMI_STACK` and `PULUMI_ESC_ENVIRONMENT` variables.
-10. Starts a deploy and watches it, then opens Praxis. You sign in through Access, make your first Context (its name, time zone and accent colour) and record an Entry. The monthly spend cap starts at 20 US dollars: Settings → Spend changes it.
+10. Starts a deploy and watches it, then opens Praxis. You sign in through Access, make your first Context (its name, time zone and accent colour) and record an Entry, or restore an Export or a Backup in its place (below). The monthly spend cap starts at 20 US dollars: Settings → Spend changes it.
 
 `infra/Pulumi.example.yaml` names every setting, for editing the ESC environment by hand.
 
@@ -53,6 +53,14 @@ workerd does not implement jurisdictions, so no test runs with one. Every object
 ## Backups
 
 Once a day, at 03:00 UTC, the Worker's trigger makes a Backup: the same zip as an Export, `praxis-export-YYYY-MM-DD.zip`, in the `praxis-backups` bucket on your own account. The Worker deletes each one 30 days after it was made, on a day whose Backup failed too. Settings shows when the last one was made, and after three days with none made a standing Notice says so in Attention and in settings. A Backup is downloaded from the bucket in the Cloudflare dashboard (R2 → `praxis-backups`), and is restored as an Export is: whole, into a new Deployment, during setup.
+
+## Restoring an Export
+
+A Deployment comes back from an Export, or a Backup, in one way only: whole, into a new Deployment that holds nothing yet (SPEC section 10.2, ADR 0018). Set the new Deployment up with the wizard, and when Praxis asks you to make your first Context, choose **Restore an Export** below it instead and give it the zip, as downloaded or as kept in the bucket. Every Context comes back with its Journal, its Versions, its Trash and its Run records; each Connection comes back ended, to be made again at the new address; Devices, Conversations and the change log do not come back, since the file holds none of them. A Deployment that holds a Context, a Connection or a spend cap refuses it: there is no merge, and no restoring one Context.
+
+### Point-in-time recovery, the operator's escape hatch
+
+The platform keeps each object's storage for 30 days back, and can return one object to any moment in them. That is not a feature of Praxis, and nothing on the screen reaches it: it takes code deployed for the purpose, which asks that object's storage for the bookmark of the moment (`ctx.storage.getBookmarkForTime(time)`, or the one an upgrade noted, below), calls `ctx.storage.onNextSessionRestoreBookmark(bookmark)` and aborts the object, then a release without that code. The object loses whatever it did since that moment, and nothing else is returned with it: the Deployment object's list, the meaning index and the Backups stay as they are, so a Context returned past a move or a rename disagrees with them. It does not survive a deleted object, a lost account or a mistake noticed after 30 days, which is what an Export and the daily Backup are for.
 
 ## Upgrades
 

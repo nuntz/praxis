@@ -376,7 +376,10 @@ export function judgeDeployment(seen: SeenDeployment): string[] {
   for (const [id, { before, after, logged }] of seen.contexts) {
     if (before === null) {
       const made = differences(new Map(), after);
-      if (!same(made, [{ kind: "context", id, what: "made" }])) {
+      // A Context a restore made holds what its file brought, which no Effect names: its records
+      // are read back through `make_export`, as restore.test.ts does (section 10.2).
+      const restored = request.tool === "restore_export";
+      if (!restored && !same(made, [{ kind: "context", id, what: "made" }])) {
         problems.push(`The Context made holds more than its settings: ${canonical(made)}`);
       }
       if (!effects.some((e) => e.kind === "context" && e.id === id && e.what === "made")) {

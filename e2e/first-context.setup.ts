@@ -18,6 +18,9 @@ test("the person makes the first Context, in the Device's time zone, from a scre
   );
   await expect(page.getByRole("region", { name: "Journal" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Context: / })).toHaveCount(0);
+  // Restoring an Export is offered in its place (section 10.2), and goes once one is made.
+  const restore = page.getByRole("form", { name: "Restore an Export" });
+  await expect(restore.getByLabel("Export or Backup", { exact: true })).toBeVisible();
 
   await form.getByLabel("Name", { exact: true }).fill("Personal");
   // The time zone left as this Device's; the accent left as the first, Blue.
@@ -25,4 +28,5 @@ test("the person makes the first Context, in the Device's time zone, from a scre
 
   await expect(page.getByRole("button", { name: "Context: Personal" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Journal" })).toBeVisible();
+  await expect(restore).toHaveCount(0);
 });

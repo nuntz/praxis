@@ -34,6 +34,7 @@ import type { Move, MovedBy } from "./move-rows.ts";
 import { type KeyReport, standingNotices, takeKeyReport } from "./notice-rows.ts";
 import type { PushSender } from "./push.ts";
 import type { ToolRequest } from "./registry.ts";
+import { restoreHandlers } from "./restore.ts";
 import { readSpend, type SpendReport, takeSpendReport } from "./spend-rows.ts";
 import { DEPLOYMENT_LADDER, type Step } from "./steps/index.ts";
 import { noteUpgrade } from "./upgrade-rows.ts";
@@ -43,6 +44,7 @@ const handlers: DeploymentHandlers = {
   ...deploymentHandlers,
   ...deviceHandlers,
   ...backupHandlers,
+  ...restoreHandlers,
 };
 
 /**

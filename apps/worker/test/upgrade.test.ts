@@ -1,6 +1,12 @@
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { EXPORT_FORMAT_VERSION, type Export, type MessagesPage } from "@praxis/domain";
+import {
+  DEPLOYMENT_FILE,
+  EXPORT_FORMAT_VERSION,
+  type Export,
+  type MessagesPage,
+  readExport,
+} from "@praxis/domain";
 import { describe, expect, test, vi } from "vitest";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
 import { RUNTIME_TABLES } from "../src/agent.ts";
@@ -14,6 +20,7 @@ import pending from "./fixtures/pi-1.5.2-pending/pending.json";
 import { adoptMarkers, marked } from "./markers.ts";
 import { holdMeanings } from "./meaning-fake.ts";
 import { calling, scriptModel } from "./model-fake.ts";
+import { asRestored, restore, restoredIds } from "./restoring.ts";
 import { contextWithItsDeployment, DAY, hand, newDeployment, value, wakeAgain } from "./seam.ts";
 import { addSteps, failingStep, mendSteps, wakeUnder } from "./upgrade-faults.ts";
 import { holdSessions } from "./voice-fake.ts";
@@ -49,15 +56,21 @@ type Fixture = (typeof fixtures)[number];
 
 /**
  * An Export saved by an earlier release, brought forward through the file's ladder to the format
- * this code writes (section 10.1).
+ * this code writes, as a restore reads it (section 10.1).
  */
 function broughtForward(made: Export): Export {
-  // #75 builds the file's ladder, which brings an older format forward as it is read. Until then
-  // every fixture's Export is of the format this code writes, and an older one fails here.
-  if (made.format_version !== EXPORT_FORMAT_VERSION) {
-    throw new Error(`No ladder yet brings an Export of format ${made.format_version} forward`);
-  }
-  return made;
+  const read = readExport(
+    made.files.map(({ path, content }) => ({ path, text: JSON.stringify(content) })),
+  );
+  if (!read.ok) throw new Error(`The fixture's Export cannot be read: ${read.error.message}`);
+  return {
+    format_version: EXPORT_FORMAT_VERSION,
+    made_at: made.made_at,
+    files: [
+      { path: DEPLOYMENT_FILE, content: read.value.deployment },
+      ...read.value.contexts.map(({ listed, file }) => ({ path: listed.file, content: file })),
+    ],
+  };
 }
 
 function contextObjectOf(fixture: Fixture) {
@@ -171,6 +184,18 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
 
       expect(value(await deployment.call(hand, "make_export", {}))).toEqual(
         broughtForward(fixture.made),
+      );
+    });
+
+    test("restores from the Export it made into a new Deployment, which makes that Export again", async () => {
+      adoptMarkers(JSON.stringify(fixture.made));
+      const made = broughtForward(fixture.made);
+      const after = newDeployment(fixture.ids.at);
+
+      value(await restore(after, fixture.made));
+
+      expect(value(await after.call(hand, "make_export", {}))).toEqual(
+        asRestored(made, await restoredIds(made, after), fixture.ids.at),
       );
     });
 

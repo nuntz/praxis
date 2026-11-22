@@ -79,7 +79,13 @@ A **Recurrence** is only on the open Occurrence. It is a schedule counted from t
 
 **A unit moving** is an Entry or a Project with its whole unit (SPEC section 3.9), taken out of this Context and not yet taken in by the one it moves to: `id`, the move's, under which that Context takes it once; `to`, that Context's id; `at`, when the person asked; and `entries`, `tasks` and `projects`, its records as they go, each as above and with whatever linked across the boundary already dropped. Since the files of one Export are not one instant, a restore settles a unit by its records' ids: found in the Context it moves to as well, that one keeps them; found nowhere else, they stay in this one.
 
-**A Run record** holds no words: `id`, `started_by` (`"message"`, or `"brief"` or `"review"` for one the clock started), `at`, `model`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `cost` in US dollars by the price table of the code that ran it, `ended` (`"answered"`, `"cut_short"` for one that reached the limit of model rounds, `"failed"`, `"cap_reached"`, or `null` for one still going) and `failure` (`"model_unavailable"`, `"key_refused"` or `null`). Which changes it made is not kept, since the file holds no change log.
+**A Run record** holds no words: `id`, `started_by` (`"message"`, or `"brief"` or `"review"` for one the clock started), `at`, `model`, `tokens` (`input`, `output`, `cache_read`, `cache_write`), `cost` in US dollars by the price table of the code that ran it, `ended` (`"answered"`, `"cut_short"` for one that reached the limit of model rounds, `"failed"`, `"cap_reached"`, or `null` for one still going, which a restore brings back `failed`, since it cannot go on without its Conversation) and `failure` (`"model_unavailable"`, `"key_refused"` or `null`). Which changes it made is not kept, since the file holds no change log.
+
+## Restoring
+
+A restore takes the zip whole into a new Deployment that holds nothing yet, during setup (SPEC section 10.2). It reads the zip as Praxis writes it, and one a system's archiver made again of the unpacked files, deflated. Each file is read alone: one of an earlier `format_version` is brought forward step by step to the version the code writes, and one of a later version is refused, since only a newer release can read it. A file that is not as this page has it, or does not hold together, such as a Task whose `origin_entry` is no Entry of its file, restores nothing.
+
+Every record, Run record and Connection keeps its `id`. A Context does not, since its id is its object's and the new Deployment's objects are new: each comes back under a new id, its file's other fields as they were, and a Connection's `context_id` follows it. A Trash item past its 30 days from `at` is removed for good as it comes back.
 
 ## What is not in it
 

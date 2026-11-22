@@ -177,7 +177,7 @@ An Entry, Task, Project or Person: one of the things a Context keeps, each with 
 _Avoid_: Object, row
 
 **Effect**:
-One thing a change brought about: a record made, changed or deleted, a Context's settings changed, a Held Change left, made, cancelled or lapsed, a Connection made, changed, ended or deleted with its Context, a Device listed, changed or gone from the list, or the spend cap changed, whether directly or by a rule that followed from the change. A record sent to the Trash is deleted, one restored from it is made again, and one removed for good from it is deleted, with no summary. A record moved to another Context is deleted from the one it left, with no summary, and made in the other. Every change reports all of its Effects, and says so when there are none.
+One thing a change brought about: a record made, changed or deleted, a Context's settings changed, a Held Change left, made, cancelled or lapsed, a Connection made, changed, ended or deleted with its Context, a Device listed, changed or gone from the list, or the spend cap changed, whether directly or by a rule that followed from the change. A record sent to the Trash is deleted, one restored from it is made again, and one removed for good from it is deleted, with no summary. A record moved to another Context is deleted from the one it left, with no summary, and made in the other. Every change reports all of its Effects, and says so when there are none. A restore of an Export reports each Context and Connection it makes and the spend cap, and not the records the file brought back whole.
 _Avoid_: Side effect, consequence, cascade
 
 **Trash**:

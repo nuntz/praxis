@@ -112,6 +112,7 @@ import {
 } from "./move-rows.ts";
 import { sessionRequest, type VoiceRefusal } from "./provider-session.ts";
 import { admit, dispatch, type Handlers, isObjectTool, type ToolRequest } from "./registry.ts";
+import { putBack, type Restoring } from "./restore-rows.ts";
 import { deploymentOf } from "./routing.ts";
 import {
   forgetConversation,
@@ -403,6 +404,34 @@ export function contextObject(
       startSchedule(sql, at);
       await this.keepAlarm();
       return success(null);
+    }
+
+    /**
+     * Make this Context from its file of an Export, which the Deployment object asks on
+     * `restore_export` before it lists the Context (section 10.2): everything the file holds, every
+     * record under its id, and what has been in the Trash 30 days by `at` removed for good. Its id
+     * is its object's, new, and it keeps the name the Deployment lists it by. Refused, with nothing
+     * changed, when the file does not hold together. Answers
+     * what its Run records spent in the month of `at`, which counts against the cap.
+     */
+    async makeFromExport(file: ContextFile, as: Restoring): Promise<ToolResult<{ spent: number }>> {
+      if (this.#stuck !== null) return stuckRefusal(this.#stuck);
+      const sql = this.ctx.storage.sql;
+      this.#clockSkew = as.at - arrivalTime();
+      try {
+        this.ctx.storage.transactionSync(() => putBack(sql, this.ctx.id.toString(), as, file));
+      } catch (error) {
+        return failure(
+          "invalid_input",
+          `This is not an Export Praxis can restore: the file of ${as.name} does not hold together (${error instanceof Error ? error.message : "it could not be put in"}).`,
+        );
+      }
+      // Its Entries wait queued for the meaning index, as on waking under a new model: embedding
+      // asks the Deployment object, which waits on this call, and a restore undone deletes this
+      // object, which waits on embedding. The alarm, the first search or the first write starts it.
+      this.#meaningStopped = true;
+      await this.keepAlarm();
+      return success({ spent: spentInMonth(sql, as.at) });
     }
 
     /**

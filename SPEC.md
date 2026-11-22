@@ -784,7 +784,7 @@ ADR 0006, 0010, 0017, 0023, 0024.
   - a Call is starting here, or has ended;
   - carry a unit it holds on its way out to the Context it moves to, for a move interrupted (section 3.9);
   - it is stuck on its upgrade, or no longer (section 11).
-- The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to rename it, to delete it, for an Export or a Backup, a move, a Run Transcript, and ending a Call there when another starts elsewhere. For an Export, a Backup or a Run Transcript it carries the file the Context's object writes and reads none of it.
+- The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to make it from its file of an Export on a restore, to rename it, to delete it, for an Export or a Backup, a move, a Run Transcript, and ending a Call there when another starts elsewhere. For an Export, a Backup or a Run Transcript it carries the file the Context's object writes and reads none of it.
 - A Context's object keeps its own name, for its settings and the summary of an Effect on it. The Deployment object is its only writer, writes it before its own list, and runs its writes one at a time, so the two never disagree (ADR 0006).
 - Revoking a Connection or retiring a Context takes effect on the next request.
 - Each Context has its own alarm, which schedules its Brief and Review, expires its Trash, prunes its change log and finishes an interrupted move.
@@ -847,12 +847,14 @@ ADR 0018.
 
 ### 10.2 Restore
 
-- One way only: whole, with ids kept, into a Deployment that holds nothing yet, by the person's hand during setup. No merge, and no restoring one Context into a live Deployment.
+- One way only: whole, with ids kept, into a Deployment that holds nothing yet, by the person's hand during setup. No merge, and no restoring one Context into a live Deployment. The screen offers it in place of making the first Context, through `restore_export`, which takes the zip as it was downloaded or as a Backup is kept, and is refused once the Deployment holds a Context, a Connection, a cap the person set or any spend.
+- Every record, Run record and Connection keeps its id. A Context comes back under a new id, since a Context's id is its object's and only the platform mints one: its name, accent, time zone, Brief and Review times and Notification switch are as they were, and a retired one comes back retired. Each Context's object is made from its file before the Deployment lists it, and a file that does not hold together restores nothing.
 - A Connection comes back ended. Its name stays as an Author.
 - The Trash's clock counts from the original delete. Anything past its 30 days is removed during the restore.
-- The files of one Export are not one instant. A record caught moving between Contexts is settled by id: found in both, the destination keeps it; marked as moving with no copy elsewhere, it stays in the source.
-- A restore reads a file whose format version is older than the code's, however old, and refuses one that is newer.
-- Point-in-time recovery of an object is an operator's escape hatch described in the docs, not a feature.
+- The files of one Export are not one instant. A record caught moving between Contexts is settled by id: found in both, the destination keeps it; marked as moving with no copy elsewhere, it stays in the source. No move is left going after a restore.
+- A Context restored starts with an empty change log, since the file holds none, and the restore's Effects are each Context and Connection made and the spend cap, and not the records, which the file brought whole. A Run the file holds as going cannot go on without its Conversation, and comes back failed. The month's spend against the cap starts again from the Run records the file holds, since what Calls and embedding spent is not in it. Its first Brief and Review are the first to come after the restore, and its Entries are queued for the meaning index, which search answers without until its alarm, first search or first write has built it.
+- A restore reads a file whose format version is older than the code's, however old, and refuses one that is newer. It reads the zip Praxis writes, and one a system's archiver made again of its files, deflated.
+- Point-in-time recovery of an object is an operator's escape hatch described in the docs (`docs/deployment.md`), not a feature.
 
 ### 10.3 Backups on the screen
 
@@ -920,7 +922,7 @@ The setup wizard:
 - Takes the voice provider key, optional, and says what reaches that provider.
 - Says the monthly spend cap starts at 20 US dollars, and where on the screen to change it.
 - Makes the Web Push signing key pair.
-- Either leads the person to the screen, signed in through Access, to make the first Context with its name, time zone and accent colour, through `create_context`, or restores an Export.
+- Leads the person to the screen, signed in through Access, to make the first Context with its name, time zone and accent colour, through `create_context`, or, in its place, to restore an Export or a Backup there (section 10.2).
 
 Changing a key or the model is a change to the configuration and a deploy, never something done in Praxis.
 
@@ -939,7 +941,7 @@ ADR 0015, 0019, 0020, 0021.
 **At the tool seam.**
 
 - A test calls a tool through the registry as one of the five callers against a real Context object, and asserts only the result, the Effects and later reads. Tests never read tables and never seed by writing rows.
-- **The oracle**: the harness wraps every write, snapshots the domain tables before and after, and fails unless the difference is exactly the Effects returned and the change log holds the same Effects with the right caller. A refused, stale or repeated-key call changes nothing. A held call changes nothing but its Held Change. It sees a record as a caller does: one sent to the Trash, or removed from it for good, is deleted, and one restored is made. It remembers each record that leaves a Context, removed for good or moved away once the move has finished, and when the Context's alarm wakes it 30 days on, fails if any text in any of its tables still holds that record's words or summary, reading every table without naming one, except the Conversation's, kept until the person clears it (section 5.8).
+- **The oracle**: the harness wraps every write, snapshots the domain tables before and after, and fails unless the difference is exactly the Effects returned and the change log holds the same Effects with the right caller. A refused, stale or repeated-key call changes nothing. A Context made by `restore_export` holds what its file held, which no Effect names: it starts with an empty change log, and its test reads the file back through `make_export`. A held call changes nothing but its Held Change. It sees a record as a caller does: one sent to the Trash, or removed from it for good, is deleted, and one restored is made. It remembers each record that leaves a Context, removed for good or moved away once the move has finished, and when the Context's alarm wakes it 30 days on, fails if any text in any of its tables still holds that record's words or summary, reading every table without naming one, except the Conversation's, kept until the person clears it (section 5.8).
 - **Offering**: checked against the tables of sections 4.10 and 4.11, kept by hand in the repo. A generic test calls every tool as every caller.
 - **Guard**: CI fails when a tool has no row in the offering table or no seam test naming it. No line-coverage threshold.
 - **No words leave**: tests seed Entries and Messages with marker strings, and the harness fails any test where a marker appears in anything logged, in a Notification or in a Run record, as kept or as `list_runs` and `get_run` give it. Once `clear_conversation` succeeds, it fails any marker left in the runtime's tables: the Conversation is dropped, not hidden.

@@ -31,6 +31,7 @@ import type { DeviceToolName } from "./devices.ts";
 import type { StuckUpgrade } from "./ladder.ts";
 import type { Move, MovedBy } from "./move-rows.ts";
 import type { PushSender } from "./push.ts";
+import type { RestoreToolName } from "./restore.ts";
 import { newContextObject } from "./routing.ts";
 import { capChosen, deletedContextsSpend, readCap, readSpend, writeCap } from "./spend-rows.ts";
 import { noteUpgrade } from "./upgrade-rows.ts";
@@ -64,8 +65,11 @@ type ConnectionRow = {
   ended: number;
 };
 
-/** The Deployment tools but the Device tools and the Backup's, which are in their own files. */
-export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | BackupToolName> = {
+/** The Deployment tools but the Device tools, the Backup's and the restore, in their own files. */
+export const deploymentHandlers: Omit<
+  DeploymentHandlers,
+  DeviceToolName | BackupToolName | RestoreToolName
+> = {
   async list_contexts({ sql }) {
     return success({ items: everyContext(sql) });
   },
@@ -80,16 +84,15 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
     );
     // A new object stuck on its upgrade is a release that cannot make a Context at all.
     if (!madeThere.ok) return madeThere;
-    const id = object.id.toString();
-    sql.exec(
-      `INSERT INTO contexts (id, name, accent, retired) VALUES (?, ?, ?, 0)`,
-      id,
-      input.name,
-      input.accent,
-    );
+    const made: ContextListing = {
+      id: object.id.toString(),
+      name: input.name,
+      accent: input.accent,
+      retired: false,
+    };
+    listContext(sql, made);
     // A Deployment holding a Context has something to back up from now on (section 10.3).
     countBackupsFrom(sql, arrivedAt);
-    const made: ContextListing = { id, name: input.name, accent: input.accent, retired: false };
     return success(written(made, [effectOnContext(made, "made")]));
   },
 
@@ -226,13 +229,6 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
   async create_connection({ input, sql }) {
     if (!isReachable(sql, input.context_id)) return noSuchContext();
     const id = opaqueId();
-    sql.exec(
-      `INSERT INTO connections (id, name, context_id, reading_only, ended) VALUES (?, ?, ?, ?, 0)`,
-      id,
-      input.name,
-      input.context_id,
-      input.reading_only ? 1 : 0,
-    );
     const made: Connection = {
       id,
       name: input.name,
@@ -241,6 +237,7 @@ export const deploymentHandlers: Omit<DeploymentHandlers, DeviceToolName | Backu
       address: connectionAddress(id),
       ended: false,
     };
+    keepConnection(sql, made);
     return success(written(made, [effectOnConnection(made, "made")]));
   },
 
@@ -367,6 +364,29 @@ export async function exportOf(
     stuck,
     filed: [...filed],
   };
+}
+
+/** List a Context the Deployment now holds, once its object is made. */
+export function listContext(sql: SqlStorage, context: ContextListing): void {
+  sql.exec(
+    `INSERT INTO contexts (id, name, accent, retired) VALUES (?, ?, ?, ?)`,
+    context.id,
+    context.name,
+    context.accent,
+    context.retired ? 1 : 0,
+  );
+}
+
+/** Keep a Connection the Deployment now holds, made or restored. */
+export function keepConnection(sql: SqlStorage, connection: Connection): void {
+  sql.exec(
+    `INSERT INTO connections (id, name, context_id, reading_only, ended) VALUES (?, ?, ?, ?, ?)`,
+    connection.id,
+    connection.name,
+    connection.context_id,
+    connection.reading_only ? 1 : 0,
+    connection.ended ? 1 : 0,
+  );
 }
 
 /**

@@ -416,6 +416,18 @@ button.quiet {
   font: var(--type-label);
 }
 
+/* Restoring an Export, offered below making the first Context, in its place. */
+.first-context .new-context + .new-context {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--rule);
+}
+
+.new-context .settings-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .new-context label {
   display: flex;
   flex-direction: column;

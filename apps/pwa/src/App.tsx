@@ -21,7 +21,7 @@ import { Devices } from "./Devices.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
-import { ExportSettings } from "./Export.tsx";
+import { ExportSettings, RestoreExport } from "./Export.tsx";
 import { CurrentHeldChanges, followHeldChanges } from "./HeldChanges.tsx";
 import { Journal } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
@@ -171,6 +171,14 @@ export function App() {
     contextsRead.changed();
     setContexts((shown) => [...(shown ?? []), made]);
     switchTo(made.id);
+  }
+
+  /** Show the Contexts an Export brought back, on the first not retired. */
+  function restored(listed: ContextListing[]) {
+    contextsRead.changed();
+    setContexts(listed);
+    const shown = listed.find((context) => !context.retired);
+    if (shown) switchTo(shown.id);
   }
 
   /** Open the settings at the spend cap, from the Notice that says it is reached. */
@@ -389,6 +397,7 @@ export function App() {
       <Show when={contexts()?.length === 0}>
         <main class="first-context">
           <NewContext heading="Make your first Context" onMade={addContext} />
+          <RestoreExport onRestored={restored} />
         </main>
       </Show>
       {/* Keyed on the Context, so switching shows only the new one's and calls go only to it. */}

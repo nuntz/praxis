@@ -438,7 +438,7 @@ set_var PULUMI_ESC_ENVIRONMENT "$ESC_ENV"
 pause
 
 # ── 10 ────────────────────────────────────────────────────────────────────
-stage "Deploy, sign in, and make your first Context"
+stage "Deploy, sign in, and make your first Context or restore an Export"
 say "The deploy job runs on every push to master."
 started=0
 git fetch --quiet origin master 2>/dev/null || true
@@ -468,9 +468,12 @@ fi
 open_url "https://$PRAXIS_HOSTNAME"
 step "Sign in with an allowed Google account: Praxis asks you to make your first Context."
 step "Give it a name, your time zone and an accent colour, then record an Entry in its Journal."
+note "Coming back from an Export or a Backup? Choose 'Restore an Export' there instead, and give it"
+note "the zip: the whole Deployment it holds comes back, each Connection ended. A Backup is in the"
+note "old account's R2 bucket praxis-backups. It restores only into a Deployment holding nothing."
 step "Settings → Spend shows the monthly cap: 20 US dollars, until you change it there."
 step "In a private window, sign in with an account that is not allowed: Access refuses it."
-pause "Press Enter once your Entry is recorded and the stranger is refused"
+pause "Press Enter once your Entry is recorded, or your Export restored, and the stranger is refused"
 
 finish
 }

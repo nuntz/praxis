@@ -46,6 +46,12 @@ export type Connection = {
   ended: boolean;
 };
 
+/**
+ * What `restore_export` brought back (section 10.2): each Context as the Deployment now lists it,
+ * under its new id, and each Connection, ended.
+ */
+export type Restored = { contexts: ContextListing[]; connections: Connection[] };
+
 /** The path a Connection is reached at over MCP, holding its id and nothing else. */
 export function connectionAddress(id: string): string {
   return `/mcp/${id}`;
@@ -230,6 +236,14 @@ export const deploymentTools = {
       "Make an Export: the whole Deployment as files in Praxis's own JSON format, stamped with its format version, one for the Deployment and one per Context, retired ones too. It holds each Context's Journal with its Versions, the Trash with each item's clock and the Run records; never a Conversation, the change log, the record of a Connection's calls, a Device or a provider key. There is no Export of one Context.",
     input: z.strictObject({}),
   },
+  restore_export: {
+    kind: "write",
+    description:
+      "Restore an Export, or a Backup, during setup: the whole Deployment it holds comes back into this one, which must hold nothing yet, every record under its id. Give `file` as the zip's bytes in base64. Each Context comes back with its Journal, its Versions, its Trash and its Run records, under a new id, since its object is new; each Connection comes back ended, its name staying as an Author. What has been in the Trash 30 days since its delete is removed for good as it comes back. A file of an older format is brought forward as it is read, and one of a newer format is refused. There is no merge, and no restoring one Context.",
+    input: writeInput({
+      file: z.string().min(1, { message: "An Export's file is its zip, in base64." }),
+    }),
+  },
   get_last_backup: {
     kind: "read",
     description:
@@ -288,6 +302,7 @@ export type DeploymentToolOutput = {
   get_spend: Spend;
   set_spend_cap: Written<SpendCap>;
   make_export: Export;
+  restore_export: Written<Restored>;
   get_last_backup: LastBackup;
   save_run_transcript: RunTranscript;
 };

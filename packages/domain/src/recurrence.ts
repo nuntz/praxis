@@ -41,7 +41,8 @@ export const weekdays = [
 export type Weekday = (typeof weekdays)[number];
 
 /** How many days, weeks, months or years a Recurrence steps by. */
-const every = z.int().min(1).max(1000);
+export const recurrenceStep = z.int().min(1).max(1000);
+const every = recurrenceStep;
 
 /**
  * A Recurrence in tool input. Weekdays are kept once each, in the order of the week, so the same
