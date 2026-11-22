@@ -13,7 +13,7 @@ const EDIT = "Change it with `pulumi env edit <org>/praxis/production` (docs/dep
  * One address: something before one @, a domain after it, and no space or comma anywhere. The
  * wizard asks again until its answer passes the same pattern (scripts/setup-deployment.sh).
  */
-const ONE_ADDRESS = /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/;
+export const ONE_ADDRESS = /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/;
 
 /**
  * Why a deploy may not run with the configured sign-in, or null when it may: given the address
