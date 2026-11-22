@@ -166,7 +166,10 @@ export async function underChangedDeclaration(
  */
 export async function wakeAgain(stub: DurableObjectStub): Promise<void> {
   try {
-    await runInDurableObject(stub, (_, state) => state.abort("Woken again"));
+    // The reason the Vitest pool gives when it disposes of an instance itself, whose line workerd
+    // logs for each task the abort breaks the pool leaves out. Any other reason is logged as an
+    // uncaught exception, over a hundred lines a run of upgrade.test.ts that say nothing.
+    await runInDurableObject(stub, (_, state) => state.abort("Instance dispose"));
   } catch {
     // Thrown by the abort itself.
   }

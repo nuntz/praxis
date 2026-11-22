@@ -10,6 +10,7 @@ import {
   EXPORT_FORMAT_VERSION,
   type ExportedContext,
 } from "./export.ts";
+import { FORMAT_STEPS } from "./format-steps/index.ts";
 import { recurrenceStep, weekdays } from "./recurrence.ts";
 import { failure, refusal, success, type ToolResult } from "./results.ts";
 import { clockTime } from "./settings.ts";
@@ -23,15 +24,6 @@ import { clockTime } from "./settings.ts";
 
 /** A file of an Export as JSON reads it, before it is known to be one. */
 type Unread = Record<string, unknown>;
-
-/**
- * The format's ladder: the step at place n brings a file of format n + 1 to format n + 2, as it is
- * read. Like the tables' ladder it goes forward only, and a released step is never edited.
- */
-const FORMAT_STEPS: readonly ((file: Unread) => Unread)[] = [
-  // Format 2 added `moving` to a Context's file: a file of format 1 had no unit on its way out.
-  (file) => (file.kind === "context" ? { ...file, moving: [] } : file),
-];
 
 if (FORMAT_STEPS.length !== EXPORT_FORMAT_VERSION - 1) {
   throw new Error("The Export's format ladder does not reach the format this code writes.");
