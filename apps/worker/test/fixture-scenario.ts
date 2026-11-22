@@ -2,7 +2,7 @@ import type { CallStarted, Export } from "@praxis/domain";
 import { CONTEXT_LADDER, DEPLOYMENT_LADDER } from "../src/steps/index.ts";
 import { marked } from "./markers.ts";
 import { subscribe } from "./push-fake.ts";
-import { agent, DAY, hand, left, newDeployment, value } from "./seam.ts";
+import { agent, contextIn, DAY, hand, left, newDeployment, value } from "./seam.ts";
 import { setVoiceRefusing } from "./voice-fake.ts";
 
 // The fixed scenario each release's fixture is filled by (section 13, ADR 0019), run through the
@@ -42,14 +42,9 @@ export type FixtureIds = {
 /** Fill a Deployment and one Context by the scenario. Returns their ids and the Export made last. */
 export async function fillFixture(): Promise<{ ids: FixtureIds; made: Export }> {
   const deployment = newDeployment(FIXTURE_TIME);
-  const listed = value(
-    await deployment.call(hand, "create_context", {
-      name: "Personal",
-      time_zone: "Europe/Paris",
-      accent: "blue",
-    }),
-  ).record;
-  const context = deployment.context(listed.id);
+  const { record: listed, context } = await contextIn(deployment, "Personal", {
+    time_zone: "Europe/Paris",
+  });
 
   const boiler = value(
     await context.call(hand, "record_entry", {

@@ -1,0 +1,14 @@
+language js
+
+or {
+  or {
+    `$_.call($_, "create_context", $_)`,
+    `$_.callAny($_, "create_context", $_)`
+  } as $made where {
+    register_diagnostic(span=$made, message="Make a Context the way every seam test does, from apps/worker/test/seam.ts: newContext, contextWithItsDeployment with its Deployment and id, or contextIn for one in a Deployment the test holds already.")
+  },
+  `answering($words)` as $costed where {
+    $words <: contains `$_.repeat($_)`,
+    register_diagnostic(span=$costed, message="Give a Run a cost with answeringAtCost in apps/worker/test/model-fake.ts, rather than working it out from the scripted model's token count.")
+  }
+}

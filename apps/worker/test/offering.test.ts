@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { deploymentOffering, deploymentRunsWith, offering, runsWith } from "./offering.ts";
-import { everyCaller, hand, newContext, newDeployment, value } from "./seam.ts";
+import { contextIn, everyCaller, hand, newContext, newDeployment, value } from "./seam.ts";
 
 // The generic test of ADR 0015: every tool, as every caller, against the table kept by hand.
 // The oracle holds a call that is not offered to changing nothing.
@@ -42,13 +42,9 @@ describe("the Deployment tools' offering table", () => {
           `${tool} needs an input it runs with: add one to deploymentRunsWith in apps/worker/test/offering.ts`,
         ).toBeDefined();
         const deployment = newDeployment();
-        const made = value(
-          await deployment.call(hand, "create_context", {
-            name: "Work",
-            time_zone: "Europe/Paris",
-            accent: "blue",
-          }),
-        ).record;
+        const { record: made } = await contextIn(deployment, "Work", {
+          time_zone: "Europe/Paris",
+        });
 
         const result = await deployment.callAny(caller, tool, input?.(made.id));
 

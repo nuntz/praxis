@@ -43,6 +43,15 @@
       "plugins": ["./lint/fresh-marker.grit"]
     },
     {
+      "includes": [
+        "apps/worker/test/**",
+        "!apps/worker/test/seam.ts",
+        "!apps/worker/test/contexts.test.ts",
+        "!apps/worker/test/model-fake.ts"
+      ],
+      "plugins": ["./lint/shared-seam-helpers.grit"]
+    },
+    {
       "includes": ["**/test/**", "**/*.test.ts", "e2e/**"],
       "plugins": ["./lint/assert-what-comes-back.grit"]
     },

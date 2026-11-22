@@ -9,7 +9,17 @@ import {
   setMeaningFailing,
   setMeaningPresent,
 } from "./meaning-fake.ts";
-import { agent, atOnce, DAY, everyCaller, hand, newContext, newDeployment, value } from "./seam.ts";
+import {
+  agent,
+  atOnce,
+  contextIn,
+  DAY,
+  everyCaller,
+  hand,
+  newContext,
+  newDeployment,
+  value,
+} from "./seam.ts";
 
 // Search by meaning (section 9.4, ADR 0023): the Entries whose words mean what was searched for,
 // in the one ranked list `search` gives every caller, from a meaning index outside the Context's
@@ -157,13 +167,7 @@ describe("search by meaning", () => {
   test("never finds what is in the Trash: a deleted Entry leaves at once and comes back on restore, and one removed for good leaves the index", async () => {
     meanAlike("dentist", "molar");
     const deployment = newDeployment();
-    const made = await deployment.call(hand, "create_context", {
-      name: "Personal",
-      time_zone: "UTC",
-      accent: "blue",
-    });
-    const id = value(made).record.id;
-    const context = deployment.context(id);
+    const { id, context } = await contextIn(deployment, "Personal");
     const entry = atOnce(
       await context.call(hand, "record_entry", { words: marked("The molar aches") }),
     ).record;
@@ -230,12 +234,7 @@ describe("search from words alone, and saying so", () => {
   test("at the cap: cap_reached, embedding stops, and it catches up once the cap is raised", async () => {
     meanAlike("dentist", "molar");
     const deployment = newDeployment();
-    const made = await deployment.call(hand, "create_context", {
-      name: "Personal",
-      time_zone: "UTC",
-      accent: "blue",
-    });
-    const context = deployment.context(value(made).record.id);
+    const { context } = await contextIn(deployment, "Personal");
     // A cap so small the first embedding reaches it.
     value(await deployment.call(hand, "set_spend_cap", { cap: 1e-9 }));
     const first = atOnce(
@@ -310,12 +309,7 @@ describe("rebuild_search_index", () => {
 describe("embedding's spend", () => {
   test("counts toward the month's spend, with the Run records", async () => {
     const deployment = newDeployment();
-    const made = await deployment.call(hand, "create_context", {
-      name: "Personal",
-      time_zone: "UTC",
-      accent: "blue",
-    });
-    const context = deployment.context(value(made).record.id);
+    const { context } = await contextIn(deployment, "Personal");
     expect(value(await deployment.call(hand, "get_spend", {})).spent).toBe(0);
 
     atOnce(await context.call(hand, "record_entry", { words: marked("Weeded the garden") }));

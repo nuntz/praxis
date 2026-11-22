@@ -21,7 +21,15 @@ import { adoptMarkers, marked } from "./markers.ts";
 import { holdMeanings } from "./meaning-fake.ts";
 import { calling, scriptModel } from "./model-fake.ts";
 import { asRestored, restore, restoredIds } from "./restoring.ts";
-import { contextWithItsDeployment, DAY, hand, newDeployment, value, wakeAgain } from "./seam.ts";
+import {
+  contextIn,
+  contextWithItsDeployment,
+  DAY,
+  hand,
+  newDeployment,
+  value,
+  wakeAgain,
+} from "./seam.ts";
 import { addSteps, failingStep, mendSteps, wakeUnder } from "./upgrade-faults.ts";
 import { holdSessions } from "./voice-fake.ts";
 
@@ -130,15 +138,9 @@ function ladderOf(stub: DurableObjectStub) {
 /** A new Context and its Deployment, made under the current code, to compare shapes against. */
 async function freshObjects() {
   const deployment = newDeployment();
-  const made = value(
-    await deployment.call(hand, "create_context", {
-      name: "Fresh",
-      time_zone: "UTC",
-      accent: "teal",
-    }),
-  ).record;
+  const { id } = await contextIn(deployment, "Fresh", { accent: "teal" });
   return {
-    context: env.CONTEXT.get(env.CONTEXT.idFromString(made.id)),
+    context: env.CONTEXT.get(env.CONTEXT.idFromString(id)),
     deployment: env.DEPLOYMENT.get(env.DEPLOYMENT.idFromString(deployment.id)),
   };
 }
@@ -255,13 +257,7 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
       expect(await context.callAny(hand, "list_messages", {})).toMatchObject({ ok: false });
 
       // The other Contexts work, and name it.
-      const other = value(
-        await deployment.call(hand, "create_context", {
-          name: "Work",
-          time_zone: "UTC",
-          accent: "rust",
-        }),
-      ).record;
+      const { record: other } = await contextIn(deployment, "Work", { accent: "rust" });
       const stuckNotice = {
         kind: "context_stuck",
         context: "Personal",
@@ -426,13 +422,7 @@ describe("step 1, on a Context's object made before the ladder", () => {
   /** A new Context's object, made as one before the ladder was, by `before`, and woken again. */
   async function madeBeforeTheLadder(before: (sql: SqlStorage) => void) {
     const deployment = newDeployment();
-    const id = value(
-      await deployment.call(hand, "create_context", {
-        name: "Old",
-        time_zone: "UTC",
-        accent: "teal",
-      }),
-    ).record.id;
+    const { id } = await contextIn(deployment, "Old", { accent: "teal" });
     // Taken afresh each time: one held across the object woken again is broken.
     const stub = () => env.CONTEXT.get(env.CONTEXT.idFromString(id));
     await runInDurableObject(stub(), (_, state) => {
@@ -542,13 +532,7 @@ describe("step 1, on a Context's object made before the ladder", () => {
 describe("step 1, on the Deployment object made before the ladder", () => {
   test("keeps the last Backup made as the one holding each Context, since every Backup held them all", async () => {
     const deployment = newDeployment("2026-11-15T03:00:00.000Z");
-    const made = value(
-      await deployment.call(hand, "create_context", {
-        name: "Old",
-        time_zone: "UTC",
-        accent: "teal",
-      }),
-    ).record;
+    const { record: made } = await contextIn(deployment, "Old", { accent: "teal" });
     await deployment.backUp();
     const stub = () => env.DEPLOYMENT.get(env.DEPLOYMENT.idFromString(deployment.id));
     await runInDurableObject(stub(), (_, state) => {

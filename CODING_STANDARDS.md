@@ -53,6 +53,10 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 
 - A guard against state another write leaves behind has a test that goes red with the guard switched off. `forgetConversation` in `apps/worker/src/run-rows.ts` lets go of the Run records' handles on a cleared Conversation, since the runtime opened afresh numbers its records anew. Every test passed with it switched off until the clearing test's new Run made a change, which then landed on an old Run (#69).
 
+## Seam tests
+
+- A change to a test's setup can change what it asserts with no `expect` line changed. A value compared whole can come to hold less, as `toMatchObject({ from: work, to: home })` in `apps/worker/test/moving.test.ts` compared only an id once `twoContexts` gave `{ id }` for each Context's record. Setup the test depends on can also fall to a shared default, as `restore.test.ts`'s Contexts in Europe/Paris did when they moved onto `contextIn`, leaving the round trip only UTC to restore. Review reads each changed line of setup against what the test then checks (#90).
+
 ## The oracle
 
 - A new check in the oracle has a seam test that reaches the state it checks through the tools, and goes red when the code it guards is switched off: the check that a gone record's words are forgotten has `trash.test.ts` and `moving.test.ts` empty the Trash and move a unit with keys whose results held the words, and they go red when the alarm stops forgetting keys. A harness test on rows no code writes shows the check can fail, not that any test reaches it: every test passed the forgetting check vacuously until those were written (#89).
