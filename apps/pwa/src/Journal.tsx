@@ -16,6 +16,7 @@ import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-j
 import { createStore, reconcile, unwrap } from "solid-js/store";
 import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
+import { partIntoDays } from "./days.tsx";
 import { EntryActions } from "./EntryActions.tsx";
 import { EntryEditor } from "./EntryEditor.tsx";
 import { followNewest } from "./follow-newest.tsx";
@@ -307,6 +308,13 @@ export function Journal(props: {
   const searching = search.shown;
   // The Entries open at their newest, beside the composer; what was found keeps its own order.
   const column = followNewest({ items: withUnsent, anchored: () => !searching() });
+  // Parted into days in the zone its times are shown in, each caption inside the list so the
+  // column sees it change size.
+  const { DayStart } = partIntoDays(() => props.timeZone);
+  const madeBefore = (index: number) => {
+    const prior = withUnsent()[index - 1];
+    return prior === undefined ? undefined : madeAt(prior);
+  };
 
   return (
     <>
@@ -325,39 +333,42 @@ export function Journal(props: {
         </Show>
         <ol class="entry-list" aria-label="Entries" hidden={searching()} ref={column.content}>
           <For each={withUnsent()}>
-            {(entry) =>
-              isUnsent(entry) ? (
-                <UnsentEntryItem
-                  write={entry}
-                  formatTime={(at) => timeFormat.format(new Date(at))}
-                />
-              ) : (
-                <EntryItem
-                  entry={entry}
-                  formatTime={(at) => timeFormat.format(new Date(at))}
-                  timeZone={props.timeZone}
-                  onEntry={(changed) => {
-                    setProblem(null);
-                    showEntry(changed);
-                  }}
-                  onFollowUp={() => {
-                    setFollowingUp({ id: entry.id, summary: summarizeWords(entry.words) });
-                    document.getElementById("new-entry")?.focus();
-                  }}
-                  onTask={showTask}
-                  onShowHeldChange={props.onShowHeldChange}
-                  onDeleted={(effects) => {
-                    setProblem(null);
-                    void patch(effects);
-                  }}
-                  onMoved={(said) => {
-                    setProblem(null);
-                    setTold(said);
-                  }}
-                  onProblem={setProblem}
-                />
-              )
-            }
+            {(entry, index) => (
+              <>
+                <DayStart at={madeAt(entry)} before={madeBefore(index())} />
+                {isUnsent(entry) ? (
+                  <UnsentEntryItem
+                    write={entry}
+                    formatTime={(at) => timeFormat.format(new Date(at))}
+                  />
+                ) : (
+                  <EntryItem
+                    entry={entry}
+                    formatTime={(at) => timeFormat.format(new Date(at))}
+                    timeZone={props.timeZone}
+                    onEntry={(changed) => {
+                      setProblem(null);
+                      showEntry(changed);
+                    }}
+                    onFollowUp={() => {
+                      setFollowingUp({ id: entry.id, summary: summarizeWords(entry.words) });
+                      document.getElementById("new-entry")?.focus();
+                    }}
+                    onTask={showTask}
+                    onShowHeldChange={props.onShowHeldChange}
+                    onDeleted={(effects) => {
+                      setProblem(null);
+                      void patch(effects);
+                    }}
+                    onMoved={(said) => {
+                      setProblem(null);
+                      setTold(said);
+                    }}
+                    onProblem={setProblem}
+                  />
+                )}
+              </>
+            )}
           </For>
         </ol>
       </div>
@@ -424,6 +435,11 @@ const STANDING = "A Standing Entry is given to the Agent at the start of every R
 /** Whether what the Journal shows is an Entry still Unsent on this Device. */
 function isUnsent(item: Entry | UnsentEntry): item is UnsentEntry {
   return "made_at" in item;
+}
+
+/** When what the Journal shows was made: an Entry's time, or an Unsent one's on this Device. */
+function madeAt(item: Entry | UnsentEntry): string {
+  return isUnsent(item) ? item.made_at : item.at;
 }
 
 function EntryItem(props: {

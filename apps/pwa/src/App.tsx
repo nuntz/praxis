@@ -529,6 +529,7 @@ export function App() {
                         <Conversation
                           contextId={currentId() ?? ""}
                           contextName={current()?.name}
+                          timeZone={timeZone()}
                           onShowRecord={showRecord}
                           onShowCap={showCap}
                         />

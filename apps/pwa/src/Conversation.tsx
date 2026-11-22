@@ -17,6 +17,7 @@ import PhoneIcon from "lucide-solid/icons/phone";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { DeviceCall } from "./call.ts";
+import { partIntoDays } from "./days.tsx";
 import { Peer } from "./design/Peer.tsx";
 import { download } from "./Export.tsx";
 import { followNewest } from "./follow-newest.tsx";
@@ -58,6 +59,11 @@ export { unread as unreadBriefs };
 export function Conversation(props: {
   contextId: string;
   contextName: string | undefined;
+  /**
+   * The zone the Context's times are shown in, by which the Messages are parted into days: its
+   * own, or before its settings are read, the Offline Copy's or the Device's.
+   */
+  timeZone: string | undefined;
   /** Bring a record a Run changed into view, wherever it is shown. */
   onShowRecord: (anchor: string) => void;
   /** Open the settings at the spend cap. */
@@ -82,6 +88,22 @@ export function Conversation(props: {
   // The Messages open at their newest, beside the composer (section 8.1). With no network none
   // is shown, and the column is back where it was once one is.
   const column = followNewest({ items: () => messages, anchored: online });
+  // Parted into days in the Context's zone, each caption inside the list so the column sees it
+  // change size.
+  const { DayStart } = partIntoDays(() => props.timeZone);
+  /**
+   * When the Message at this place was made, for its day: the person's when sent, a Brief's or a
+   * Review's when taken. An answer carries no time of its own and falls on the day of what it
+   * answers, the Message before it; none is known before the first one that has a time.
+   */
+  function madeAt(index: number): string | undefined {
+    for (let at = index; at >= 0; at--) {
+      const message = messages[at];
+      if (message?.from === "person") return message.at;
+      if (message?.clock) return message.clock.taken;
+    }
+    return undefined;
+  }
 
   /**
    * The newest page, read afresh, the last read's answer winning: a burst of changes to Tasks
@@ -366,35 +388,41 @@ export function Conversation(props: {
         {/* With no network nothing of the Conversation is shown, an unread Brief included. */}
         <ol class="message-list" aria-label="Messages" hidden={!online()} ref={column.content}>
           <For each={messages}>
-            {(message) => (
-              <Show
-                when={message.from === "agent" ? (message as AgentMessage) : null}
-                fallback={
-                  <PersonMessageItem
-                    contextId={props.contextId}
-                    message={message as PersonMessage}
-                    canRetry={message.id === newestOfPerson()?.id && foot() === "composer"}
-                    onRetry={retry}
-                  />
-                }
-              >
-                {(said) => (
-                  <AgentMessageItem
-                    contextId={props.contextId}
-                    message={said()}
-                    onShowRecord={props.onShowRecord}
-                    onShown={shown}
-                  />
-                )}
-              </Show>
+            {(message, index) => (
+              <>
+                <DayStart at={madeAt(index())} before={madeAt(index() - 1)} />
+                <Show
+                  when={message.from === "agent" ? (message as AgentMessage) : null}
+                  fallback={
+                    <PersonMessageItem
+                      contextId={props.contextId}
+                      message={message as PersonMessage}
+                      canRetry={message.id === newestOfPerson()?.id && foot() === "composer"}
+                      onRetry={retry}
+                    />
+                  }
+                >
+                  {(said) => (
+                    <AgentMessageItem
+                      contextId={props.contextId}
+                      message={said()}
+                      onShowRecord={props.onShowRecord}
+                      onShown={shown}
+                    />
+                  )}
+                </Show>
+              </>
             )}
           </For>
           <Show when={writing()}>
             {(words) => (
-              <li class="message from-agent writing" aria-busy="true">
-                <span class="message-from">Agent</span>
-                <Words words={words()} images="never" />
-              </li>
+              <>
+                <DayStart at={Date.now()} before={madeAt(messages.length - 1)} />
+                <li class="message from-agent writing" aria-busy="true">
+                  <span class="message-from">Agent</span>
+                  <Words words={words()} images="never" />
+                </li>
+              </>
             )}
           </Show>
         </ol>

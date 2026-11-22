@@ -1637,6 +1637,37 @@ button.call-control {
   font: var(--type-meta);
 }
 
+/*
+ * A day in the Journal or the Conversation (section 8.1): a caption in muted with a hairline
+ * running to the column's edge, in the Conversation on both sides of it.
+ */
+.day {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0 0;
+}
+
+.day::after,
+.message-list .day::before {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--rule);
+}
+
+.day-label {
+  margin: 0;
+  color: var(--muted);
+  font: var(--type-caption);
+}
+
+/* Beyond a phone, where no gap parts the Entries, the caption lines up with their words. */
+@media (width >= 720px) {
+  .entry-list .day {
+    padding: var(--space-4) var(--space-3) var(--space-2);
+  }
+}
+
 /* The Conversation: the person's Messages as typed, the Agent's as an Entry's words are. */
 
 .message-list {
