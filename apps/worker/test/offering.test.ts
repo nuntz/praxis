@@ -32,7 +32,7 @@ describe("the offering table", () => {
 
 // The same table's agent and clock columns, through the Agent's runtime: a Run's calls reach the
 // registry by its tools and the host's call, a path a call to the object straight never takes,
-// and on which every search the Agent made was refused while the table above passed (#106).
+// and on which every search the Agent made was refused while the table above passed.
 
 /** A refusal that says the call never reached the tool: the caller or its input was turned away. */
 const TURNED_AWAY = ["not_offered", "invalid_input"];
