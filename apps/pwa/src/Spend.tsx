@@ -2,6 +2,7 @@ import type { Spend } from "@praxis/domain";
 import { createSignal, Show } from "solid-js";
 import { latestRead } from "./latest-read.ts";
 import { capWords, money, readNotices } from "./Notices.tsx";
+import { CAP_FIELD } from "./SettingsLink.tsx";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
 
 /**
@@ -34,16 +35,9 @@ export function followSpend(): () => void {
   return () => document.removeEventListener("visibilitychange", again);
 }
 
-/** Bring the cap's field into view in the settings, and put the person there. */
-export function focusCapField(): void {
-  const field = document.getElementById("spend-cap");
-  field?.scrollIntoView({ block: "center" });
-  field?.focus();
-}
-
 /**
  * The cap's Notice in the Conversation, in place of its composer at the cap, as the spend last
- * read says. Attention and settings show it among the standing Notices, from `list_notices`.
+ * read says. Attention shows it among the standing Notices, from `list_notices`.
  */
 export function CapNotice() {
   return (
@@ -103,9 +97,9 @@ export function SpendSettings() {
           void save();
         }}
       >
-        <label for="spend-cap">Monthly cap, US dollars</label>
+        <label for={CAP_FIELD}>Monthly cap, US dollars</label>
         <input
-          id="spend-cap"
+          id={CAP_FIELD}
           type="number"
           inputmode="decimal"
           min="0.01"

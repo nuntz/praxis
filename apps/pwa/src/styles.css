@@ -1769,6 +1769,14 @@ button.call-control {
   margin-top: var(--space-2);
 }
 
+/* A way to the section of Settings that deals with a Notice: words in ink, as a quiet button. */
+.settings-link {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* At the spend cap, the cap's Notice in place of the Conversation's composer, and a way to it. */
 .cap-reached {
   display: flex;

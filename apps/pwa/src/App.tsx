@@ -34,7 +34,7 @@ import { contextCopy, copyFetchedAt, fetchIfMissing, keepCopyFresh } from "./off
 import { online } from "./online.ts";
 import { followAddress, leaveSettings, openSettings, place } from "./place.ts";
 import { SettingsBar, SettingsScreen } from "./Settings.tsx";
-import { focusCapField, followSpend } from "./Spend.tsx";
+import { followSpend } from "./Spend.tsx";
 import { readStored, store } from "./stored.ts";
 import {
   CurrentContextId,
@@ -212,12 +212,6 @@ export function App() {
     setContexts(listed);
     const shown = listed.find((context) => !context.retired);
     if (shown) switchTo(shown.id);
-  }
-
-  /** Open Settings at the spend cap, from the Notice that says it is reached. */
-  function showCap() {
-    openSettings("spend");
-    requestAnimationFrame(focusCapField);
   }
 
   // Settings shows only over a Context, in place of its main screen, which stays as it was left
@@ -531,7 +525,6 @@ export function App() {
                           contextName={current()?.name}
                           timeZone={timeZone()}
                           onShowRecord={showRecord}
-                          onShowCap={showCap}
                         />
                       </main>
                       <nav class="tabs" aria-label="Columns" hidden={inSettings()}>

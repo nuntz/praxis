@@ -27,6 +27,7 @@ import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { readNotices } from "./Notices.tsx";
 import { online } from "./online.ts";
+import { CapLink } from "./SettingsLink.tsx";
 import { CapNotice, readSpend, spend } from "./Spend.tsx";
 import { callDeploymentTool, unreachableMessage, useCallTool } from "./tools.ts";
 import { Words } from "./Words.tsx";
@@ -66,8 +67,6 @@ export function Conversation(props: {
   timeZone: string | undefined;
   /** Bring a record a Run changed into view, wherever it is shown. */
   onShowRecord: (anchor: string) => void;
-  /** Open the settings at the spend cap. */
-  onShowCap: () => void;
 }) {
   const callTool = useCallTool();
   const live = useLive();
@@ -465,9 +464,7 @@ export function Conversation(props: {
         <Show when={foot() === "cap_reached"}>
           <div class="cap-reached">
             <CapNotice />
-            <button type="button" class="quiet" onClick={() => props.onShowCap()}>
-              Raise the cap in settings
-            </button>
+            <CapLink />
           </div>
         </Show>
         <Show when={callEnded()}>

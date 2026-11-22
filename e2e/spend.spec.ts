@@ -1,9 +1,20 @@
 import type { Spend, StandingNotice } from "@praxis/domain";
-import { expect, lastShown, makeContext, onPhone, openSettings, test } from "./fixtures.ts";
+import {
+  closeSettings,
+  expect,
+  lastShown,
+  makeContext,
+  onPhone,
+  openSettings,
+  test,
+} from "./fixtures.ts";
 
 // The spend cap (section 5.7, ADR 0017): one cap for the whole Deployment, set in its settings,
 // with the month's spend against it. At the cap the Conversation's composer is replaced by a
-// Notice that links to the cap in settings.
+// Notice that links to the cap in settings, and Attention's standing Notice of it leads there too
+// (section 8.6).
+
+const capReached = /This month's spend has reached its cap/;
 
 const money = (amount: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
@@ -34,7 +45,7 @@ test("the person sets the monthly cap in settings, and sees the month's spend ag
   );
 });
 
-test("at the cap, the Conversation's composer gives way to a Notice that opens the cap in settings", async ({
+test("at the cap, the Conversation's composer gives way to a Notice that opens the cap in settings, as Attention's Notice of it does", async ({
   page,
 }, testInfo) => {
   const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
@@ -76,15 +87,30 @@ test("at the cap, the Conversation's composer gives way to a Notice that opens t
   }
   const conversation = page.getByRole("region", { name: "Conversation" });
 
-  await expect(conversation.getByText(/This month's spend has reached its cap/)).toBeVisible();
+  await expect(conversation.getByText(capReached)).toBeVisible();
   await expect(conversation.getByRole("textbox", { name: /^Message the Agent/ })).toHaveCount(0);
 
-  await conversation.getByRole("button", { name: "Raise the cap in settings" }).click();
-  await expect(page.getByLabel("Monthly cap, US dollars", { exact: true })).toBeFocused();
-  await expect(
-    page
-      .getByRole("region", { name: "Notices" })
-      .getByTestId("standing-notice")
-      .filter({ hasText: /This month's spend has reached its cap/ }),
-  ).toBeVisible();
+  const capField = page.getByLabel("Monthly cap, US dollars", { exact: true });
+  await conversation.getByRole("link", { name: "Raise the cap in settings", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/spend$/);
+  await expect(capField).toBeFocused();
+  // A standing Notice shows in Attention only: Settings shows none of them.
+  await expect(page.getByRole("region", { name: "Notices" })).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: capReached })).toHaveCount(0);
+
+  // Attention's standing Notice of the cap leads to the same field.
+  await closeSettings(page);
+  if (onPhone(testInfo)) {
+    await page
+      .getByRole("navigation", { name: "Columns" })
+      .getByRole("button", { name: "Attention" })
+      .click();
+  }
+  const notice = page
+    .getByRole("region", { name: "Attention", exact: true })
+    .getByTestId("standing-notice")
+    .filter({ hasText: capReached });
+  await notice.getByRole("link", { name: "Raise the cap in settings", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/spend$/);
+  await expect(capField).toBeFocused();
 });

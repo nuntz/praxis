@@ -1,12 +1,13 @@
 import type { SpendNotice, StandingNotice } from "@praxis/domain";
-import { createSignal, For } from "solid-js";
+import { createSignal, For, type JSX } from "solid-js";
 import { latestRead } from "./latest-read.ts";
+import { CapLink, SettingsLink } from "./SettingsLink.tsx";
 import { type CallTool, unreachableMessage } from "./tools.ts";
 
 /**
  * The standing Notices (section 8.3), as `list_notices` last gave them in the current Context:
  * Praxis telling the person about its own condition until its cause is gone. Attention shows them
- * above the Held Changes, and settings shows them too. They are not counted.
+ * above the Held Changes, and nothing else does (section 8.6). They are not counted.
  */
 const [notices, setNotices] = createSignal<StandingNotice[]>([]);
 
@@ -43,22 +44,40 @@ export function followNotices(callTool: CallTool): () => void {
   };
 }
 
-/** Whether there are standing Notices to show. */
-export function hasNotices(): boolean {
-  return notices().length > 0;
-}
-
-/** Each standing Notice, as a line of its own. */
+/**
+ * Each standing Notice, as a line of its own, leading to the section of Settings that deals with
+ * it, where there is one.
+ */
 export function StandingNotices() {
   return (
     <For each={notices()}>
       {(notice) => (
         <p class="notice" role="status" data-testid="standing-notice">
-          {noticeWords(notice)}
+          {noticeWords(notice)} {noticeLink(notice)}
         </p>
       )}
     </For>
   );
+}
+
+/**
+ * Where a standing Notice leads (section 8.6): the cap to Spend, put in its field, and no good
+ * Backup to Backups and Export. A refused key is set in the Deployment's configuration, and the
+ * others have no section to deal with them either, so they lead nowhere.
+ */
+function noticeLink(notice: StandingNotice): JSX.Element {
+  switch (notice.kind) {
+    case "cap_reached":
+    case "nearing_cap":
+      return <CapLink />;
+    case "no_backup":
+      return <SettingsLink section="backups">See Backups and Export</SettingsLink>;
+    case "key_refused":
+    case "voice_key_refused":
+    case "clock_failed":
+    case "context_stuck":
+      return null;
+  }
 }
 
 export const money = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" });

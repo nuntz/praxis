@@ -96,3 +96,12 @@ export function leaveSettings() {
   if (back > 0) history.go(-back);
   else history.replaceState(null, "", "/");
 }
+
+/** Follow a link as the screen does, unless the person asked the browser for a tab of its own. */
+export function followed(event: MouseEvent, go: () => void) {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return;
+  }
+  event.preventDefault();
+  go();
+}

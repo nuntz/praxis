@@ -21,8 +21,14 @@ import { BriefAndReview, ConversationAndSearch, GeneralSettings } from "./Contex
 import { Contexts } from "./Contexts.tsx";
 import { Devices } from "./Devices.tsx";
 import { ExportSettings } from "./Export.tsx";
-import { hasNotices, StandingNotices } from "./Notices.tsx";
-import { leaveSettings, openSettings, SECTIONS, type Section, sectionAddress } from "./place.ts";
+import {
+  followed,
+  leaveSettings,
+  openSettings,
+  SECTIONS,
+  type Section,
+  sectionAddress,
+} from "./place.ts";
 import { SpendSettings } from "./Spend.tsx";
 import { Standing } from "./Standing.tsx";
 import { Trash } from "./Trash.tsx";
@@ -53,15 +59,6 @@ const NAMED: Record<Section, { name: string; icon: Icon; ofContext: boolean }> =
 const phoneWidth = window.matchMedia("(width < 720px)");
 const [onPhone, setOnPhone] = createSignal(phoneWidth.matches);
 phoneWidth.addEventListener("change", (event) => setOnPhone(event.matches));
-
-/** Follow a link as the screen does, unless the person asked the browser for a tab of its own. */
-function followed(event: MouseEvent, go: () => void) {
-  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-    return;
-  }
-  event.preventDefault();
-  go();
-}
 
 /**
  * Settings' end of the top bar: the way back to the main screen, and on a phone in a section, the
@@ -184,16 +181,6 @@ export function SettingsScreen(props: {
       <Show when={shown()}>
         {(section) => (
           <div class="settings-shown">
-            {/* The standing Notices, above whichever section is shown, until #114 shows them in
-              Attention only, each leading to its section. */}
-            <Show when={hasNotices()}>
-              <section class="settings" aria-labelledby="notices-heading">
-                <h2 id="notices-heading" class="column-heading">
-                  Notices
-                </h2>
-                <StandingNotices />
-              </section>
-            </Show>
             <Switch>
               <Match when={section() === "general"}>
                 <Show when={props.settings} fallback={needsNetwork()}>
