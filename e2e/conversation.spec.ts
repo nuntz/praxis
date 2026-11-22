@@ -1,5 +1,14 @@
 import { readFile } from "node:fs/promises";
-import { expect, lastShown, makeContext, onPhone, openJournal, test } from "./fixtures.ts";
+import {
+  closeSettings,
+  expect,
+  lastShown,
+  makeContext,
+  onPhone,
+  openJournal,
+  openSettings,
+  test,
+} from "./fixtures.ts";
 
 test("asking the Agent for a change, the Journal shows it as it is made", async ({
   page,
@@ -173,8 +182,8 @@ test("the person saves a Run's transcript, then clears the Conversation from the
   expect(saved).toMatchObject({ kind: "run_transcript", context: { id: context.id } });
   expect(JSON.stringify(saved.messages)).toContain(words);
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("region", { name: `Settings for Cleared ${tag}` });
+  const settings = await openSettings(page, "Conversation and search");
+  await expect(settings).toContainText(`Cleared ${tag}`);
   await settings.getByRole("button", { name: "Clear the Conversation", exact: true }).click();
   const clearing = page.waitForResponse(/\/tools\/clear_conversation$/);
   await settings.getByRole("button", { name: "Clear it for good", exact: true }).click();
@@ -182,6 +191,7 @@ test("the person saves a Run's transcript, then clears the Conversation from the
   await expect(settings.getByText(/^The Conversation is cleared/)).toBeVisible();
 
   // Every screen open on the Conversation hears it was cleared: it holds no Message.
+  await closeSettings(page);
   await toConversation();
   await expect(messages).toHaveCount(0);
 });

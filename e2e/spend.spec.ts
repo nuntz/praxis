@@ -1,5 +1,5 @@
 import type { Spend, StandingNotice } from "@praxis/domain";
-import { expect, lastShown, makeContext, onPhone, test } from "./fixtures.ts";
+import { expect, lastShown, makeContext, onPhone, openSettings, test } from "./fixtures.ts";
 
 // The spend cap (section 5.7, ADR 0017): one cap for the whole Deployment, set in its settings,
 // with the month's spend against it. At the cap the Conversation's composer is replaced by a
@@ -12,8 +12,7 @@ test("the person sets the monthly cap in settings, and sees the month's spend ag
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
-  const spend = page.getByRole("region", { name: "Spend" });
+  const spend = await openSettings(page, "Spend");
 
   // Always far past anything the other journeys spend, so none of them reaches it.
   const cap = 1000 + Math.floor(Math.random() * 1000) + 0.25;

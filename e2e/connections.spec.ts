@@ -1,5 +1,5 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import { expect, lastShown, makeContext, test } from "./fixtures.ts";
+import { expect, lastShown, makeContext, openSettings, test } from "./fixtures.ts";
 
 // The person makes a Connection in the Deployment's settings, for an outside agent to work in one
 // Context, and pastes its address into the agent (sections 7.2 and 8.6, ADR 0009).
@@ -44,7 +44,7 @@ test("the person makes a Connection to one Context, and its address reaches that
     { times: 1 },
   );
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
+  await openSettings(page, "Connections");
 
   const form = connections.getByRole("form", { name: "New Connection" });
   await form.getByLabel("Name", { exact: true }).fill(name);

@@ -1,4 +1,4 @@
-import { expect, lastShown, makeContext, openJournal, test } from "./fixtures.ts";
+import { expect, lastShown, makeContext, openJournal, openSettings, test } from "./fixtures.ts";
 
 test("the person gives a Task a Due Date and a Defer Date and sees it Overdue and Deferred", async ({
   page,
@@ -57,8 +57,8 @@ test("a Context's settings show the Device's other time zone beside its own, wit
   await expect(page.getByRole("button", { name: `Use ${device}` })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("region", { name: /^Settings for Abroad/ });
+  const settings = await openSettings(page, "General");
+  await expect(settings).toContainText("Abroad");
   await expect(settings.getByTestId("device-time-zone")).toHaveText(device);
   await expect(settings.getByTestId("time-zone")).not.toHaveText(device);
 

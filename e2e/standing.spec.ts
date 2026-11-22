@@ -1,10 +1,12 @@
 import {
   callContextTool,
+  closeSettings,
   entryAction,
   expect,
   lastShown,
   makeContext,
   openJournal,
+  openSettings,
   test,
 } from "./fixtures.ts";
 
@@ -38,8 +40,7 @@ test("the person marks an Entry standing, sees it with the Standing Entries, and
   await expect(mark).toBeVisible();
   await expect(await entryAction(entry, "Unmark Standing", testInfo)).toBeVisible();
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  const standing = page.getByRole("region", { name: "Standing Entries", exact: true });
+  const standing = await openSettings(page, "Standing Entries");
   const listed = standing.getByTestId("standing-entry");
   await expect(listed).toHaveCount(1);
   await expect(listed).toContainText(kept);
@@ -53,7 +54,7 @@ test("the person marks an Entry standing, sees it with the Standing Entries, and
   await expect(standing.getByText("No Entry is standing.")).toBeVisible();
 
   // The Journal hears of it on the live channel: the Entry stays, no longer standing.
-  await page.getByRole("button", { name: "Settings" }).click();
+  await closeSettings(page);
   await openJournal(page, testInfo);
   await expect(entry).toHaveCount(1);
   await expect(mark).toHaveCount(0);

@@ -8,96 +8,55 @@ export function deviceTimeZone(): string {
 }
 
 /**
- * The current Context's settings. Travel changes nothing by itself: when this Device is in another
- * time zone, both are shown here with one tap to switch, and nowhere else is it raised.
+ * A change to the current Context's settings as it is sent: whether one is out, what was refused,
+ * and a way to send one, showing the settings as it answered. Every tool that changes them answers
+ * as `set_time_zone` does.
  */
-export function ContextSettings(props: {
-  settings: Settings;
-  onChanged: (settings: Settings) => void;
-}) {
+function settingsChange(onChanged: (settings: Settings) => void) {
   const callTool = useCallTool();
   const [sending, setSending] = createSignal(false);
   const [problem, setProblem] = createSignal<string | null>(null);
-  const device = deviceTimeZone();
-  // Named as this browser names it, so one zone known by two names is not told apart.
-  const differs = () => namedZone(props.settings.time_zone) !== device;
 
-  /** Send a change to the settings, and show them as it answered. */
   async function change(send: () => ReturnType<typeof callTool<"set_time_zone">>) {
     setSending(true);
     try {
       const result = await send();
       if (!result.ok) return setProblem(result.error.message);
       setProblem(null);
-      props.onChanged(result.value.record);
+      onChanged(result.value.record);
     } catch (error) {
       setProblem(unreachableMessage(error));
     } finally {
       setSending(false);
     }
   }
+  return { callTool, sending, problem, change };
+}
+
+/**
+ * General, in Settings: the current Context's time zone (section 8.6). Travel changes nothing by
+ * itself: when this Device is in another time zone, both are shown here with one tap to switch,
+ * and nowhere else is it raised.
+ */
+export function GeneralSettings(props: {
+  settings: Settings;
+  onChanged: (settings: Settings) => void;
+}) {
+  const { callTool, sending, problem, change } = settingsChange(props.onChanged);
+  const device = deviceTimeZone();
+  // Named as this browser names it, so one zone known by two names is not told apart.
+  const differs = () => namedZone(props.settings.time_zone) !== device;
 
   const useDeviceZone = () => change(() => callTool("set_time_zone", { time_zone: device }));
 
-  // The time each comes at, kept while it is off so switching it on brings it back.
-  const [briefTime, setBriefTime] = createSignal(
-    props.settings.brief_time ?? FIRST_TIMES.brief_time,
-  );
-  const [reviewTime, setReviewTime] = createSignal(
-    props.settings.review_time ?? FIRST_TIMES.review_time,
-  );
-  const briefOn = () => props.settings.brief_time !== null;
-  const reviewOn = () => props.settings.review_time !== null;
-
-  // What the last rebuild of the meaning index said, until the screen is left.
-  const [rebuilding, setRebuilding] = createSignal<string | null>(null);
-
-  async function rebuild() {
-    setSending(true);
-    try {
-      const result = await callTool("rebuild_search_index", {});
-      if (!result.ok) return setProblem(result.error.message);
-      setProblem(null);
-      const count = result.value.entries_to_embed;
-      setRebuilding(
-        `Rebuilding from ${count} ${count === 1 ? "Entry" : "Entries"}. Search finds by words alone until it is done.`,
-      );
-    } catch (error) {
-      setProblem(unreachableMessage(error));
-    } finally {
-      setSending(false);
-    }
-  }
-
-  // Whether the person has asked to clear the Conversation and is being asked to be sure, and what
-  // the last clear said, until the screen is left.
-  const [confirming, setConfirming] = createSignal(false);
-  const [cleared, setCleared] = createSignal<string | null>(null);
-
-  async function clear() {
-    setSending(true);
-    try {
-      const result = await callTool("clear_conversation", {});
-      if (!result.ok) return setProblem(result.error.message);
-      setProblem(null);
-      setConfirming(false);
-      setCleared("The Conversation is cleared. The next Message starts it afresh.");
-    } catch (error) {
-      setProblem(unreachableMessage(error));
-    } finally {
-      setSending(false);
-    }
-  }
-
-  const setBrief = (time: string | null) => change(() => callTool("set_brief_time", { time }));
-  const setReview = (input: { day?: Weekday; time: string | null }) =>
-    change(() => callTool("set_review_time", input));
-
   return (
-    <section id="context-settings" class="settings" aria-labelledby="settings-heading">
-      <h2 id="settings-heading" class="column-heading">
-        Settings for {props.settings.name}
+    <section id="general" class="settings" aria-labelledby="general-heading">
+      <h2 id="general-heading" class="column-heading">
+        General
       </h2>
+      <p class="settings-note">
+        Today, due dates and every time shown in {props.settings.name} are in its time zone.
+      </p>
       <dl class="setting">
         <dt>Time zone</dt>
         <dd data-testid="time-zone">{props.settings.time_zone}</dd>
@@ -111,7 +70,44 @@ export function ContextSettings(props: {
           Use {device}
         </button>
       </Show>
-      {/* The Brief and the Review: when each comes, in the Context's time zone, or off. */}
+      <Problem message={problem()} />
+    </section>
+  );
+}
+
+/**
+ * Brief and Review, in Settings: when each comes, in the Context's time zone, or off, and the one
+ * Notification switch for both (sections 5.4, 8.6 and 8.7).
+ */
+export function BriefAndReview(props: {
+  settings: Settings;
+  onChanged: (settings: Settings) => void;
+}) {
+  const { callTool, sending, problem, change } = settingsChange(props.onChanged);
+
+  // The time each comes at, kept while it is off so switching it on brings it back.
+  const [briefTime, setBriefTime] = createSignal(
+    props.settings.brief_time ?? FIRST_TIMES.brief_time,
+  );
+  const [reviewTime, setReviewTime] = createSignal(
+    props.settings.review_time ?? FIRST_TIMES.review_time,
+  );
+  const briefOn = () => props.settings.brief_time !== null;
+  const reviewOn = () => props.settings.review_time !== null;
+
+  const setBrief = (time: string | null) => change(() => callTool("set_brief_time", { time }));
+  const setReview = (input: { day?: Weekday; time: string | null }) =>
+    change(() => callTool("set_review_time", input));
+
+  return (
+    <section id="brief-and-review" class="settings" aria-labelledby="brief-and-review-heading">
+      <h2 id="brief-and-review-heading" class="column-heading">
+        Brief and Review
+      </h2>
+      <p class="settings-note">
+        The Agent looks over {props.settings.name} on its own and leaves what it finds in the
+        Conversation. Times are in {props.settings.time_zone}, this Context's time zone.
+      </p>
       <fieldset class="clock-setting">
         <legend>Brief, each day</legend>
         <label>
@@ -197,6 +193,73 @@ export function ContextSettings(props: {
           Tell my Devices when the Brief or the Review is ready
         </label>
       </fieldset>
+      <Problem message={problem()} />
+    </section>
+  );
+}
+
+/**
+ * Conversation and search, in Settings: the rare, heavy actions on the current Context, clearing
+ * its Conversation and rebuilding its search index (section 8.6).
+ */
+export function ConversationAndSearch(props: { contextName: string }) {
+  const callTool = useCallTool();
+  const [sending, setSending] = createSignal(false);
+  const [problem, setProblem] = createSignal<string | null>(null);
+
+  // What the last rebuild of the meaning index said, until the screen is left.
+  const [rebuilding, setRebuilding] = createSignal<string | null>(null);
+
+  async function rebuild() {
+    setSending(true);
+    try {
+      const result = await callTool("rebuild_search_index", {});
+      if (!result.ok) return setProblem(result.error.message);
+      setProblem(null);
+      const count = result.value.entries_to_embed;
+      setRebuilding(
+        `Rebuilding from ${count} ${count === 1 ? "Entry" : "Entries"}. Search finds by words alone until it is done.`,
+      );
+    } catch (error) {
+      setProblem(unreachableMessage(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // Whether the person has asked to clear the Conversation and is being asked to be sure, and what
+  // the last clear said, until the screen is left.
+  const [confirming, setConfirming] = createSignal(false);
+  const [cleared, setCleared] = createSignal<string | null>(null);
+
+  async function clear() {
+    setSending(true);
+    try {
+      const result = await callTool("clear_conversation", {});
+      if (!result.ok) return setProblem(result.error.message);
+      setProblem(null);
+      setConfirming(false);
+      setCleared("The Conversation is cleared. The next Message starts it afresh.");
+    } catch (error) {
+      setProblem(unreachableMessage(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <section
+      id="conversation-and-search"
+      class="settings"
+      aria-labelledby="conversation-and-search-heading"
+    >
+      <h2 id="conversation-and-search-heading" class="column-heading">
+        Conversation and search
+      </h2>
+      <p class="settings-note">
+        The Conversation with the Agent in {props.contextName}, and the index its search finds by
+        meaning with.
+      </p>
       {/* The Conversation's text is kept until the person clears it, all at once (section 5.8). */}
       <fieldset class="clock-setting">
         <legend>Conversation</legend>
@@ -244,14 +307,20 @@ export function ContextSettings(props: {
           {rebuilding() ?? ""}
         </p>
       </fieldset>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
+      <Problem message={problem()} />
     </section>
+  );
+}
+
+function Problem(props: { message: string | null }) {
+  return (
+    <Show when={props.message}>
+      {(message) => (
+        <p class="problem" role="alert">
+          {message()}
+        </p>
+      )}
+    </Show>
   );
 }
 

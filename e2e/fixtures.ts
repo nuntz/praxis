@@ -83,6 +83,35 @@ export async function entryAction(
   return toolbar.getByRole("menu").getByRole("menuitem", { name, exact: true });
 }
 
+/**
+ * Open Settings from the top bar's gear at one of its sections, as the person does: from the
+ * sections beside the one shown on a desktop, from the list of them on a phone (section 8.6).
+ */
+export async function openSettings(page: Page, section: string) {
+  await page.getByRole("banner").getByRole("button", { name: "Settings", exact: true }).click();
+  return showSection(page, section);
+}
+
+/** Show another section of Settings open, from the list of sections, back to it first on a phone. */
+export async function showSection(page: Page, section: string) {
+  const sections = page.getByRole("navigation", { name: "Settings sections" });
+  const toList = page.getByRole("banner").getByRole("link", { name: "Settings", exact: true });
+  await expect(sections.or(toList)).toBeVisible();
+  if (await toList.isVisible()) await toList.click();
+  await sections.getByRole("link", { name: section, exact: true }).click();
+  const shown = page.getByRole("region", { name: section, exact: true });
+  await expect(shown).toBeVisible();
+  return shown;
+}
+
+/** Put Settings away with Escape, back to the main screen as it was left. */
+export async function closeSettings(page: Page) {
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("banner").getByRole("button", { name: "Settings", exact: true }),
+  ).toBeVisible();
+}
+
 /** Switch Context in the top bar, as the person does, and wait until it is current. */
 export async function switchTo(page: Page, name: string) {
   const switcher = page.getByRole("banner").getByRole("button", { name: /^Context: / });

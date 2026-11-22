@@ -20,10 +20,10 @@ export function download(blob: Blob, name: string): void {
  */
 export function ExportSettings() {
   return (
-    <section id="export" class="settings" aria-labelledby="export-heading">
-      <h2 id="export-heading" class="column-heading">
+    <section id="export" class="settings-group" aria-labelledby="export-heading">
+      <h3 id="export-heading" class="settings-part">
         Export
-      </h2>
+      </h3>
       <MakeExport />
       <p class="settings-note">
         The whole Deployment, every Context in it, retired ones too: the Journal with its Versions,

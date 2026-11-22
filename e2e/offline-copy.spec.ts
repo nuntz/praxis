@@ -2,6 +2,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import {
   callContextTool,
   callDeploymentTool,
+  closeSettings,
   entryAction,
   expect,
   holdNext,
@@ -9,6 +10,7 @@ import {
   makeContext,
   onPhone,
   openJournal,
+  openSettings,
   switchTo,
   test,
 } from "./fixtures.ts";
@@ -38,8 +40,7 @@ function contextOfOwn(page: Page, testInfo: TestInfo, name: string) {
 
 /** The Deployment's settings, opened from the top bar, and its Devices there. */
 async function openDevices(page: Page) {
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  return page.getByRole("region", { name: "Devices", exact: true });
+  return openSettings(page, "Devices");
 }
 
 /** What this browser keeps as its Offline Copy, as stored. */
@@ -168,7 +169,7 @@ test("the Offline Copy is read with no network, as last fetched, in any Context,
   await expect(devices.getByTestId("device-row").filter({ hasText: "This Device" })).toContainText(
     "Offline Copy",
   );
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await closeSettings(page);
   // A Context switched to is fetched into the copy at once, if it holds nothing of it yet.
   await switchTo(page, away.name);
   // Under load it waits behind the copy's fetch of every other journey's Contexts.
@@ -237,14 +238,14 @@ test("the Offline Copy is read with no network, as last fetched, in any Context,
   await expect(unsent.getByRole("list", { name: "Mentions and References" })).toHaveText(`@${ana}`);
 
   // The Standing Entries are the copy's; the Trash and the settings need the network.
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await openSettings(page, "Standing Entries");
   await expect(
     page.getByText("This Context's settings and its Trash need the network.", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("list", { name: "Standing Entries" })).toContainText(
     `Always ask first ${tag}`,
   );
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await closeSettings(page);
 
   // Another Context is read from the copy too.
   await switchTo(page, away.name);
@@ -272,7 +273,7 @@ test("switching the Offline Copy off here asks first about the Unsent writes, an
   await lastShown(page, context.id);
   await page.goto("/");
   await keepCopyHere(page, [context.id]);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await closeSettings(page);
 
   // The network fails on the way, so the Entry stays Unsent though the Device is online.
   await page.route(/\/tools\/record_entry$/, (route) => route.abort());
@@ -304,7 +305,7 @@ test("switching the Offline Copy off here asks first about the Unsent writes, an
   ).toBeVisible();
   const { items } = await callDeploymentTool(page, "list_devices", {});
   expect(items.filter((device: { id: string }) => device.id === here)).toEqual([]);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await closeSettings(page);
   await expect(journal.getByTestId("unsent-entry")).toHaveCount(1);
 
   // Kept, it is sent once Praxis can be reached.
@@ -323,7 +324,7 @@ test("a Device removed from elsewhere clears its Offline Copy on its next contac
   await lastShown(page, context.id);
   await page.goto("/");
   await keepCopyHere(page, [context.id]);
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await closeSettings(page);
   await page.route(/\/tools\/record_entry$/, (route) => route.abort());
   const { journal, composer } = await openJournal(page, testInfo);
   await composer.fill("Written before the removal");
@@ -364,6 +365,7 @@ test("an older Entry opened while the copy is being fetched stays in it once the
   await lastShown(page, context.id);
   await page.goto("/");
   await keepCopyHere(page, [context.id]);
+  await closeSettings(page);
   const first = await partOf(page, context.id);
   if (first === null) throw new Error("The copy holds nothing of the Context");
   // Older than 30 days and never opened here, it is not held.

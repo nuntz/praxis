@@ -1,10 +1,12 @@
 import {
   callContextTool,
+  closeSettings,
   entryAction,
   expect,
   lastShown,
   makeContext,
   openJournal,
+  openSettings,
   test,
 } from "./fixtures.ts";
 
@@ -50,8 +52,7 @@ test("the person deletes an Entry, sees it and its Task in the Trash, and restor
     `#${title}, deleted`,
   );
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  const trash = page.getByRole("region", { name: "Trash", exact: true });
+  const trash = await openSettings(page, "Trash");
   const item = trash.getByTestId("trash-item");
   await expect(item).toHaveCount(1);
   await expect(item).toContainText(`Entry ${words}`);
@@ -72,7 +73,7 @@ test("the person deletes an Entry, sees it and its Task in the Trash, and restor
   await expect(trash.getByText("The Trash is empty.")).toBeVisible();
 
   // Back together: the Entry with its Task, and the link to it no longer deleted.
-  await page.getByRole("button", { name: "Settings" }).click();
+  await closeSettings(page);
   await openJournal(page, testInfo);
   await expect(deleted).toHaveCount(1);
   await expect(deleted.getByRole("checkbox", { name: title, exact: true })).toBeVisible();

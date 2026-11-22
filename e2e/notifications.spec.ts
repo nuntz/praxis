@@ -1,5 +1,14 @@
 import { conversationAddress } from "@praxis/domain";
-import { callContextTool, expect, lastShown, makeContext, onPhone, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  expect,
+  lastShown,
+  makeContext,
+  onPhone,
+  openSettings,
+  showSection,
+  test,
+} from "./fixtures.ts";
 
 // Notifications (sections 8.7 and 8.10, ADR 0013). A browser cannot be pushed to in a journey, so
 // what is sent is tested at the seam, and delivery by hand per Deployment (section 13). A journey
@@ -17,8 +26,8 @@ test("a Context's settings turn its one Notification switch, and the Deployment'
   await lastShown(page, id);
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("region", { name: `Settings for ${name}` });
+  const settings = await openSettings(page, "Brief and Review");
+  await expect(settings).toContainText(name);
   const notifications = settings.getByRole("checkbox", { name: /Brief or the Review is ready/ });
   await expect(notifications).toBeChecked();
 
@@ -32,7 +41,7 @@ test("a Context's settings turn its one Notification switch, and the Deployment'
   expect(await callContextTool(page, id, "get_settings", {})).toMatchObject({
     notifications: false,
   });
-  const devices = page.getByRole("region", { name: "Devices" });
+  const devices = await showSection(page, "Devices");
   await expect(devices.getByText(/no key to send Notifications with/)).toBeVisible();
 });
 

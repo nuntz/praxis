@@ -1,5 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { callContextTool, callDeploymentTool, expect, makeContext, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  callDeploymentTool,
+  expect,
+  makeContext,
+  openSettings,
+  test,
+} from "./fixtures.ts";
 
 // An Export (section 10.1, ADR 0018): the person makes one in the Deployment's settings and keeps
 // a zip of Praxis's own JSON files, one for the Deployment and one per Context. A Backup is the
@@ -32,8 +39,9 @@ test("the person makes an Export in settings and keeps a zip of the whole Deploy
   await callContextTool(page, work.id, "record_entry", { words });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
-  const section = page.getByRole("region", { name: "Export" });
+  const section = (await openSettings(page, "Backups and Export")).getByRole("region", {
+    name: "Export",
+  });
   const downloaded = page.waitForEvent("download");
   await section.getByRole("button", { name: "Make an Export" }).click();
   const download = await downloaded;
@@ -58,7 +66,7 @@ test("the Deployment's settings say when the last Backup was made", async ({ pag
     .not.toBeNull();
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
+  await openSettings(page, "Backups and Export");
 
   await expect(page.getByRole("region", { name: "Backups" }).getByTestId("last-backup")).toHaveText(
     /^The last Backup was made .+\.$/,

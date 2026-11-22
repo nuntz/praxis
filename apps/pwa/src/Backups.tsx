@@ -31,10 +31,10 @@ export function BackupSettings() {
   });
 
   return (
-    <section id="backups" class="settings" aria-labelledby="backups-heading">
-      <h2 id="backups-heading" class="column-heading">
+    <section id="backups" class="settings-group" aria-labelledby="backups-heading">
+      <h3 id="backups-heading" class="settings-part">
         Backups
-      </h2>
+      </h3>
       <Show when={last()} fallback={<p class="settings-note">Reading the last Backup…</p>}>
         {(read) => <p data-testid="last-backup">{lastBackupWords(read())}</p>}
       </Show>

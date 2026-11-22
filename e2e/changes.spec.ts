@@ -6,6 +6,7 @@ import {
   holdNext,
   lastShown,
   makeContext,
+  openSettings,
   test,
 } from "./fixtures.ts";
 
@@ -47,8 +48,7 @@ test("the person sees what changed and who changed it, with a Connection's reads
   await agent.callTool({ name: "list_entries", arguments: {} });
   await agent.callTool({ name: "record_entry", arguments: { words: theirs } });
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  const changes = page.getByRole("region", { name: "Changes", exact: true });
+  const changes = await openSettings(page, "Changes");
   const list = changes.getByRole("list", { name: "Changes and reads" });
 
   // Newest first: the Connection's Entry, its read before it, then the person's own.

@@ -14,32 +14,28 @@ import {
   Show,
 } from "solid-js";
 import { Attention } from "./Attention.tsx";
-import { BackupSettings } from "./Backups.tsx";
-import { Changes } from "./Changes.tsx";
-import { Connections } from "./Connections.tsx";
-import { ContextSettings, deviceTimeZone } from "./ContextSettings.tsx";
+import { deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
-import { Contexts, NewContext } from "./Contexts.tsx";
+import { NewContext } from "./Contexts.tsx";
 import { Conversation, unreadBriefs } from "./Conversation.tsx";
-import { Devices } from "./Devices.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
 import { receiveShared, wantComposer } from "./draft.ts";
-import { ExportSettings, RestoreExport } from "./Export.tsx";
+import { RestoreExport } from "./Export.tsx";
 import { CurrentHeldChanges, followHeldChanges } from "./HeldChanges.tsx";
 import { Journal } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
 import { Live, socketOpener } from "./live.ts";
 import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
 import { CurrentMoveTargets } from "./Move.tsx";
-import { followNotices, hasNotices, StandingNotices } from "./Notices.tsx";
+import { followNotices } from "./Notices.tsx";
 import { contextCopy, copyFetchedAt, fetchIfMissing, keepCopyFresh } from "./offline-copy.ts";
 import { online } from "./online.ts";
-import { focusCapField, followSpend, SpendSettings } from "./Spend.tsx";
-import { Standing } from "./Standing.tsx";
+import { followAddress, leaveSettings, openSettings, place } from "./place.ts";
+import { SettingsBar, SettingsScreen } from "./Settings.tsx";
+import { focusCapField, followSpend } from "./Spend.tsx";
 import { readStored, store } from "./stored.ts";
-import { Trash } from "./Trash.tsx";
 import {
   CurrentContextId,
   CurrentContextTools,
@@ -72,7 +68,8 @@ const CONTEXTS_LAST_READ = "praxis.contexts";
  * peers (section 8.1, ADR 0022). Three columns on a desktop; in between, the Journal and the
  * Conversation, with Attention opened from the top bar; on a phone, three tabs, opening on
  * Attention. The widths are the stylesheet's; this holds which Context is current, which tab is
- * shown and whether Attention is open.
+ * shown and whether Attention is open. Settings takes the main screen's place at its own address
+ * (section 8.6), with the main screen kept underneath as it was left.
  */
 export function App() {
   // The Deployment's Contexts, once read. One is current: the one this browser last showed, or
@@ -92,6 +89,9 @@ export function App() {
     openComposer(openedOnComposer);
     history.replaceState(null, "", "/");
   }
+  // Read only now, once both are put back to `/`: Settings, or one of its sections, has an address
+  // of its own, which the browser's back and forward move between (section 8.6).
+  onCleanup(followAddress());
   const [chosen, setChosen] = createSignal<string | null>(opened ?? readStored(LAST_SHOWN));
   const current = createMemo(() => {
     const shown = (contexts() ?? []).filter((context) => !context.retired);
@@ -100,7 +100,6 @@ export function App() {
   const currentId = createMemo(() => current()?.id ?? null);
 
   const [settings, setSettings] = createSignal<Settings | null>(null);
-  const [showSettings, setShowSettings] = createSignal(false);
   const [problem, setProblem] = createSignal<string | null>(null);
   const [tab, setTab] = createSignal<PeerId>(
     opened !== null ? "conversation" : openedOnComposer ? "journal" : "attention",
@@ -172,6 +171,7 @@ export function App() {
     followLaunches(openedAt, (address) => {
       const opening = composerOpened(address);
       if (!opening) return;
+      leaveSettings();
       setTab("journal");
       openComposer(opening);
     }),
@@ -214,11 +214,35 @@ export function App() {
     if (shown) switchTo(shown.id);
   }
 
-  /** Open the settings at the spend cap, from the Notice that says it is reached. */
+  /** Open Settings at the spend cap, from the Notice that says it is reached. */
   function showCap() {
-    setShowSettings(true);
+    openSettings("spend");
     requestAnimationFrame(focusCapField);
   }
+
+  // Settings shows only over a Context, in place of its main screen, which stays as it was left
+  // underneath: its tab, where each column was scrolled and its composers' drafts.
+  const inSettings = () => place().settings && current() !== null;
+  const section = () => {
+    const at = place();
+    return at.settings ? at.section : null;
+  };
+  let gear: HTMLButtonElement | undefined;
+  // Escape returns to the main screen, unless something in Settings, such as a menu, took it first.
+  onMount(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || !inSettings()) return;
+      leaveSettings();
+    };
+    window.addEventListener("keydown", onKey);
+    onCleanup(() => window.removeEventListener("keydown", onKey));
+  });
+  // Back on the main screen, the person is where they opened Settings from.
+  createEffect(
+    on(inSettings, (shown, was) => {
+      if (was && !shown) gear?.focus();
+    }),
+  );
 
   onMount(() => onCleanup(followSpend()));
   // A refused Unsent write for a Context no longer shown is put to the person in the one that is.
@@ -243,6 +267,7 @@ export function App() {
     const onMessage = (event: MessageEvent<{ open?: string }>) => {
       const id = conversationOpened(new URL(event.data?.open ?? "/", location.origin).search);
       if (id === null) return;
+      leaveSettings();
       switchTo(id);
       setTab("conversation");
     };
@@ -376,16 +401,23 @@ export function App() {
       data-attention={attentionOpen() ? "open" : "shut"}
     >
       <header class="top-bar">
-        <h1 class="wordmark">
-          <Mark />
-          Praxis
-        </h1>
+        <Show
+          when={inSettings() ? current() : null}
+          fallback={
+            <h1 class="wordmark">
+              <Mark />
+              Praxis
+            </h1>
+          }
+        >
+          {(shown) => <SettingsBar section={section()} contextName={shown().name} />}
+        </Show>
         <Show when={current()}>
           {(shown) => (
             <ContextSwitcher current={shown()} contexts={contexts() ?? []} onSwitch={switchTo} />
           )}
         </Show>
-        <Show when={current()}>
+        <Show when={current() && !inSettings()}>
           <button
             ref={attentionButton}
             type="button"
@@ -400,14 +432,16 @@ export function App() {
           </button>
         </Show>
         <span class="top-bar-fill" />
-        <Show when={current()}>
+        <Show when={inSettings()}>
+          <span class="settings-hint">Esc closes</span>
+        </Show>
+        <Show when={current() && !inSettings()}>
           <button
+            ref={gear}
             type="button"
             class="icon-button"
             aria-label="Settings"
-            aria-expanded={showSettings()}
-            aria-controls="settings"
-            onClick={() => setShowSettings((shown) => !shown)}
+            onClick={() => openSettings()}
           >
             <SettingsIcon size={18} aria-hidden="true" />
           </button>
@@ -452,55 +486,22 @@ export function App() {
                           (contexts() ?? []).filter((each) => each.id !== id && !each.retired),
                       }}
                     >
-                      <Show when={showSettings()}>
-                        <div id="settings" class="settings-panel">
-                          <Show when={hasNotices()}>
-                            <section class="settings" aria-labelledby="notices-heading">
-                              <h2 id="notices-heading" class="column-heading">
-                                Notices
-                              </h2>
-                              <StandingNotices />
-                            </section>
-                          </Show>
-                          <Show
-                            when={settings()}
-                            fallback={
-                              // With no network the Standing Entries are the Offline Copy's.
-                              <Show when={(!online() || copyFetchedAt() !== null) && timeZone()}>
-                                {(zone) => (
-                                  <>
-                                    <p class="settings-note">
-                                      This Context's settings and its Trash need the network.
-                                    </p>
-                                    <Standing timeZone={zone()} />
-                                  </>
-                                )}
-                              </Show>
-                            }
-                          >
-                            {(read) => (
-                              <>
-                                <ContextSettings settings={read()} onChanged={setSettings} />
-                                <Standing timeZone={read().time_zone} />
-                                <Trash timeZone={read().time_zone} />
-                                <Changes timeZone={read().time_zone} />
-                              </>
-                            )}
-                          </Show>
-                          <Contexts
-                            contexts={contexts() ?? []}
-                            onChanged={showChangedContext}
-                            onMade={addContext}
-                            onDeleted={dropContext}
-                          />
-                          <Connections contexts={contexts() ?? []} />
-                          <Devices />
-                          <SpendSettings />
-                          <BackupSettings />
-                          <ExportSettings />
-                        </div>
+                      <Show when={inSettings()}>
+                        <SettingsScreen
+                          section={section()}
+                          contextName={current()?.name ?? ""}
+                          settings={settings()}
+                          onSettingsChanged={setSettings}
+                          offlineZone={
+                            (!online() || copyFetchedAt() !== null ? timeZone() : null) ?? null
+                          }
+                          contexts={contexts() ?? []}
+                          onContextChanged={showChangedContext}
+                          onContextMade={addContext}
+                          onContextDeleted={dropContext}
+                        />
                       </Show>
-                      <main class="peers">
+                      <main class="peers" hidden={inSettings()}>
                         <Peer
                           id="attention"
                           title="Attention"
@@ -532,7 +533,7 @@ export function App() {
                           onShowCap={showCap}
                         />
                       </main>
-                      <nav class="tabs" aria-label="Columns">
+                      <nav class="tabs" aria-label="Columns" hidden={inSettings()}>
                         <TabButton tab="attention" shown={tab()} onShow={setTab}>
                           <Inbox size={20} aria-hidden="true" />
                           Attention

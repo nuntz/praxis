@@ -16,9 +16,13 @@ export function ContextSwitcher(props: {
   let toggle!: HTMLButtonElement;
   const shown = () => props.contexts.filter((context) => !context.retired);
 
-  /** Put the list away, with Escape from it or its button, and go back to the button. */
+  /**
+   * Put the list away, with Escape from it or its button, and go back to the button. The Escape is
+   * spent, so Settings, whose top bar the switcher is in too, stays open.
+   */
   function putAway(event: KeyboardEvent) {
     if (event.key !== "Escape" || !open()) return;
+    event.preventDefault();
     setOpen(false);
     toggle.focus();
   }

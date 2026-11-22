@@ -7,6 +7,7 @@ import {
   makeContext,
   onPhone,
   openJournal,
+  openSettings,
   switchTo,
   test,
 } from "./fixtures.ts";
@@ -77,8 +78,7 @@ test("the Deployment's settings list the Contexts with their accents, and make, 
   const work = await makeContext(page, { name: `Work ${tag}`, time_zone: "UTC", accent: "rust" });
   await lastShown(page, work.id);
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
-  const contexts = page.getByRole("region", { name: "Contexts" });
+  const contexts = await openSettings(page, "Contexts");
   const row = (name: string) =>
     contexts.getByTestId("context-row").filter({
       has: page.getByRole("textbox", { name: `Name of ${name}` }),
@@ -134,8 +134,7 @@ test("a retired Context is deleted for good from the settings once its name is t
   await callContextTool(page, old.id, "record_entry", { words: `Old plan ${tag}` });
   await callDeploymentTool(page, "retire_context", { id: old.id });
   await page.goto("/");
-  await page.getByRole("button", { name: "Settings" }).click();
-  const contexts = page.getByRole("region", { name: "Contexts" });
+  const contexts = await openSettings(page, "Contexts");
   const row = contexts.getByTestId("context-row").filter({
     has: page.getByRole("textbox", { name: `Name of ${old.name}` }),
   });

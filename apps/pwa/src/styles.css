@@ -235,19 +235,140 @@ button.quiet {
   font: var(--type-column-title);
 }
 
-/* Settings open above the peers: the current Context's, then the Deployment's Contexts. */
-.settings-panel {
+/*
+ * Settings, a screen of its own in the main screen's place (section 8.6), which stays underneath as
+ * it was left. On a desktop its sections are listed in a sidebar beside the one shown.
+ */
+.peers[hidden],
+.tabs[hidden] {
+  display: none;
+}
+
+.settings-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-4) 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--type-button);
+  text-decoration: none;
+}
+
+.settings-title {
+  margin-left: var(--space-2);
+  font: var(--type-screen-title);
+  letter-spacing: -0.02em;
+}
+
+.settings-hint {
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.settings-screen {
   display: flex;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  flex: 1;
   gap: var(--panel-gap);
-  max-height: 50dvh;
+  min-height: 0;
+}
+
+.settings-sections {
+  flex: 0 0 300px;
+  padding: var(--space-2) var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
   overflow-y: auto;
 }
 
-.settings-panel .settings {
-  flex: 1 1 320px;
+.settings-sections ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-sections-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3) 6px;
+  color: var(--muted);
+  font: var(--type-label);
+}
+
+.settings-accent-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.settings-section-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.settings-section-link:hover {
+  background: var(--inset);
+}
+
+.settings-section-icon {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.settings-section-link[aria-current="page"] {
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.settings-section-link[aria-current="page"] .settings-section-icon {
+  color: var(--accent);
+}
+
+.settings-section-name {
+  flex: 1;
+}
+
+.settings-shown {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--panel-gap);
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.settings-shown > .settings {
+  width: 100%;
+  max-width: 720px;
+}
+
+/* A part of a section under a heading of its own, as Backups and Export are. */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.settings-part {
+  margin: 0;
+  color: var(--muted);
+  font: var(--type-label);
 }
 
 .settings input,
@@ -680,8 +801,50 @@ button.jump-to-latest {
     margin: 0 var(--space-4) var(--space-3);
   }
 
-  .settings-panel {
+  /* On a phone the list of sections and a section are each a screen of their own. */
+  .settings-hint {
+    display: none;
+  }
+
+  .settings-back {
+    min-height: 44px;
+    padding: 0 var(--space-2) 0 0;
+    background: none;
+  }
+
+  .settings-done {
+    order: 1;
+  }
+
+  .settings-title {
+    margin-left: 0;
+  }
+
+  .settings-screen {
+    flex-direction: column;
     gap: 0;
+    overflow-y: auto;
+  }
+
+  .settings-sections {
+    flex: none;
+    margin: 0 var(--space-4) var(--space-4);
+    padding: var(--space-1) var(--space-2) var(--space-2);
+    overflow-y: visible;
+  }
+
+  .settings-section-link {
+    min-height: 48px;
+  }
+
+  .settings-shown {
+    flex: none;
+    gap: 0;
+    overflow-y: visible;
+  }
+
+  .settings-shown > .settings {
+    width: auto;
   }
 
   .first-context {
