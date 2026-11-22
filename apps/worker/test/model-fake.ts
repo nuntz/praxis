@@ -142,6 +142,24 @@ export function offeredIn(context: TranscriptContext): Offered {
   };
 }
 
+/**
+ * The tools a request's system messages remove or add again while they are not offered, replayed in
+ * order: the provider refuses a request naming any (`tool_reference_unresolved`), so a request
+ * the real model would refuse names some.
+ */
+export function unresolvedTools(context: TranscriptContext): string[] {
+  const offered = new Set<string>();
+  const unresolved: string[] = [];
+  for (const message of context.messages) {
+    if (message.role !== "system") continue;
+    for (const { name } of message.toolsRemoved ?? []) {
+      if (!offered.delete(name)) unresolved.push(name);
+    }
+    for (const { name } of message.toolsAdded ?? []) offered.add(name);
+  }
+  return unresolved;
+}
+
 /** The tool results the model has been given since the newest Message. */
 function resultsSinceMessage(context: TranscriptContext): ModelMessage[] {
   const from = context.messages.findLastIndex((message) => message.role === "user");

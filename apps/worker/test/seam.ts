@@ -13,6 +13,7 @@ import {
   type ToolName,
   type ToolOutput,
   type ToolResult,
+  tools,
 } from "@praxis/domain";
 import { reachContext } from "../src/routing.ts";
 import { throughDeploymentOracle, throughOracle, wakeThroughOracle } from "./oracle.ts";
@@ -137,6 +138,25 @@ export function newDeployment(startAt = "2026-11-15T09:00:00.000Z", existing?: s
       return contextHandle(time, () => reachContext(env, deployment(), id));
     },
   };
+}
+
+/**
+ * Run `during` as under a later release that changed the declaration of the tool `name`: its
+ * description says more. An object woken meanwhile declares it so to the runtime. The declarations
+ * are fixed in the code, so this writes the one the test isolate holds, and puts it back after.
+ */
+export async function underChangedDeclaration(
+  name: ToolName,
+  during: () => Promise<void>,
+): Promise<void> {
+  const declared: { description: string } = tools[name];
+  const before = declared.description;
+  declared.description = `${before} Changed by a later release.`;
+  try {
+    await during();
+  } finally {
+    declared.description = before;
+  }
 }
 
 /**

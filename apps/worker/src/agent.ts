@@ -571,18 +571,7 @@ export class ContextAgent {
         this.#maxTurns = limit;
       }
       if (!clock) return undefined;
-      return {
-        messages: request.messages.map((message) =>
-          message.role === "system" && message.toolsAdded !== undefined
-            ? {
-                ...message,
-                toolsAdded: message.toolsAdded.filter(({ name }) =>
-                  CLOCK_TOOLS.has(name as ToolName),
-                ),
-              }
-            : message,
-        ),
-      };
+      return { messages: request.messages.flatMap(clockOffered) };
     } catch {
       console.error(JSON.stringify({ agent: "request_not_fitted" }));
       return undefined;
@@ -1118,6 +1107,28 @@ const AGENT_TOOLS = new Set<ToolName>(offeredTo("agent"));
 
 /** The tools a Brief or a Review is offered: reads only. */
 const CLOCK_TOOLS = new Set<ToolName>(offeredTo("clock"));
+
+/**
+ * A message of a Brief's or Review's request as it is sent: a system message adds and removes only
+ * the clock's reads, since the provider refuses a request naming a tool it is not offered. The
+ * runtime removes a tool whose declaration a release changed and adds it again, and removes every
+ * tool when that would change their order, so a Conversation woken under a later release removes
+ * tools the clock never had. One left changing nothing is not sent.
+ */
+function clockOffered(message: ModelMessage): ModelMessage[] {
+  if (message.role !== "system") return [message];
+  const { toolsAdded, toolsRemoved, ...rest } = message;
+  if (toolsAdded === undefined && toolsRemoved === undefined) return [message];
+  const added = (toolsAdded ?? []).filter(({ name }) => CLOCK_TOOLS.has(name as ToolName));
+  const removed = (toolsRemoved ?? []).filter(({ name }) => CLOCK_TOOLS.has(name as ToolName));
+  const fitted = {
+    ...rest,
+    ...(added.length === 0 ? {} : { toolsAdded: added }),
+    ...(removed.length === 0 ? {} : { toolsRemoved: removed }),
+  };
+  const says = contentText(fitted.content) !== "" || Object.keys(fitted.sections ?? {}).length > 0;
+  return says || added.length > 0 || removed.length > 0 ? [fitted] : [];
+}
 
 /** How many Messages a page of the Conversation holds, about. */
 const PAGE_MESSAGES = 50;

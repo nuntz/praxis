@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall, type TranscriptContext } from "@earendil-works/pi-ai";
 import {
   type AgentMessage,
   type MessagesPage,
@@ -19,8 +19,18 @@ import {
   type Script,
   scriptModel,
   UNAVAILABLE,
+  unresolvedTools,
 } from "./model-fake.ts";
-import { atOnce, DAY, hand, newContext, newDeployment, value } from "./seam.ts";
+import {
+  atOnce,
+  contextWithItsDeployment,
+  DAY,
+  hand,
+  newContext,
+  newDeployment,
+  underChangedDeclaration,
+  value,
+} from "./seam.ts";
 
 // The Brief and the Review (section 5.4, ADR 0004): once a day and once a week, at times the person
 // sets for the Context, the clock starts a Run that reads the Journal and leaves one Message. The
@@ -85,6 +95,30 @@ describe("a Clock Run", () => {
     await wake(context);
 
     expect(offered).toEqual([new Set(offeredTo("clock"))]);
+  });
+
+  test("is asked to remove no tool it is not offered, after a release changes one it is not", async () => {
+    const asked: TranscriptContext[] = [];
+    scriptModel((request) => {
+      asked.push(request);
+      return fauxAssistantMessage("Nothing is due.");
+    });
+    const { deployment, id, context } = await contextWithItsDeployment("2026-11-16T06:00:00.000Z");
+    value(await context.callAny(hand, "send_message", { words: marked("Hello") }));
+    await context.runsEnded();
+    // A release that changes a declaration the Brief is not offered: the Conversation, woken under
+    // it, removes the tool and adds it again.
+    await underChangedDeclaration("record_entry", async () => {
+      await deployment.wakeAgain(id);
+      deployment.advance(HOUR);
+      await context.fireAlarm();
+      await context.runsEnded();
+    });
+
+    const brief = asked.at(-1);
+    expect(brief && unresolvedTools(brief)).toEqual([]);
+    const [run] = value(await context.call(hand, "list_runs", {})).items;
+    expect(run).toMatchObject({ started_by: "brief", ended: "answered" });
   });
 
   test("cannot change anything or leave a Held Change: a write it calls anyway is not offered", async () => {
