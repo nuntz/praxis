@@ -23,6 +23,8 @@ let failing = false;
 let answersLeft: number | null = null;
 /** While held, embedding waits until the test lets it go. */
 let held: Promise<void> | null = null;
+/** Who waits for the next held embedding to begin. */
+let begun: (() => void)[] = [];
 
 /**
  * Say these words mean alike: an embedding of any of them carries one meaning. A word keeps the
@@ -92,6 +94,7 @@ export const fakeMeaning: MeaningIndex = {
   async embed(texts) {
     check();
     const embeddings = texts.map(fakeEmbedding);
+    if (held) for (const tell of begun.splice(0)) tell();
     await held;
     return embeddings;
   },
@@ -149,10 +152,16 @@ export function holdEmbedding(): () => void {
   held = new Promise((resolve) => {
     release = () => {
       held = null;
+      begun = [];
       resolve();
     };
   });
   return release;
+}
+
+/** Settles once an embedding held by `holdEmbedding()` begins: whatever asked for it is waiting. */
+export function embeddingHeld(): Promise<void> {
+  return new Promise((resolve) => begun.push(resolve));
 }
 
 /** Forget which words mean alike, for the next test. Each Context's part is its own. */

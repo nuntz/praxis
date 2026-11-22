@@ -1,14 +1,21 @@
-import { type SearchHit, type SearchResults, summarizeWords } from "@praxis/domain";
+import {
+  type MessagesPage,
+  type SearchHit,
+  type SearchResults,
+  summarizeWords,
+} from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { seeded } from "../../../packages/domain/test/seeded.ts";
 import { marked } from "./markers.ts";
 import {
+  embeddingHeld,
   heldEmbeddings,
   holdEmbedding,
   meanAlike,
   setMeaningFailing,
   setMeaningPresent,
 } from "./meaning-fake.ts";
+import { calling, type Script, scriptModel } from "./model-fake.ts";
 import {
   agent,
   atOnce,
@@ -28,6 +35,9 @@ import {
 
 type Context = ReturnType<typeof newContext>;
 
+/** A Context as reached in a Deployment of the test's or of its own, for calling its tools. */
+type Called = Pick<Context, "call" | "callAny">;
+
 /** What a search answered, each hit as its kind and id, best first, and why meaning was left out. */
 async function searched(context: Context, input: Record<string, unknown>) {
   const results: SearchResults = value(await context.call(hand, "search", input));
@@ -38,7 +48,7 @@ async function searched(context: Context, input: Record<string, unknown>) {
 }
 
 /** An Entry recorded by the person, with these words. */
-async function anEntry(context: Context, words: string, input: Record<string, unknown> = {}) {
+async function anEntry(context: Called, words: string, input: Record<string, unknown> = {}) {
   return atOnce(await context.call(hand, "record_entry", { words, ...input })).record;
 }
 
@@ -257,6 +267,190 @@ describe("search from words alone, and saying so", () => {
     expect(raised.words_only).toBeNull();
     expect(raised.items.map(({ id }) => id).sort()).toEqual([first.id, second.id].sort());
   });
+});
+
+/**
+ * A tool result's text as the JSON it holds, or as it is when it holds none: what the runtime
+ * hands back for a tool that threw.
+ */
+function parsed(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * A script whose every Run searches for these words, once `held` settles, then answers: `handed`
+ * holds each search's tool result as the model was handed it, parsed.
+ */
+function searching(words: string, held: Promise<void> = Promise.resolve()) {
+  const handed: unknown[] = [];
+  const script = calling([
+    () => ["search", { words }],
+    ([result]) => {
+      handed.push(parsed(result ?? ""));
+      return null;
+    },
+  ]);
+  return {
+    handed,
+    script: (async (...args) => {
+      await held;
+      return script(...args);
+    }) satisfies Script,
+  };
+}
+
+/** An Entry recorded by the person about the boiler. */
+function boiler(context: Called) {
+  return anEntry(context, marked("The boiler is making a noise"));
+}
+
+/** The calls of each of the Agent's Messages in the Conversation, as their tool and result. */
+async function callsMade(context: Called) {
+  const page = value(await context.callAny(hand, "list_messages", {})) as MessagesPage;
+  return page.items.flatMap((message) =>
+    message.from === "agent" ? [message.run.calls.map(({ tool, result }) => [tool, result])] : [],
+  );
+}
+
+describe("search in a Run, through the Agent's runtime", () => {
+  test("hands the Agent the search's hits, by words and by meaning, as the hand is given them", async () => {
+    meanAlike("boiler", "heating");
+    const { handed, script } = searching("boiler");
+    scriptModel(script);
+    const context = newContext();
+    await anEntry(context, marked("The boiler is making a noise"));
+    await anEntry(context, marked("The heating is off again"));
+    await anEntry(context, marked("Weeded the garden"));
+    await context.meaningSettled();
+
+    await context.callAny(hand, "send_message", { words: marked("What about the boiler?") });
+    await context.runsEnded();
+
+    const asHand = await context.call(hand, "search", { words: "boiler" });
+    expect(value(asHand).items).toHaveLength(2);
+    expect(handed).toEqual([asHand]);
+    expect(await callsMade(context)).toEqual([[["search", "ok"]]]);
+  });
+
+  test("hands the clock the search's hits in a Brief", async () => {
+    const { handed, script } = searching("boiler");
+    scriptModel(script);
+    // A Monday, a minute before the Brief's 07:00.
+    const context = newContext("2026-11-16T06:59:00.000Z");
+    meanAlike("boiler", "heating");
+    await boiler(context);
+    await anEntry(context, marked("The heating is off again"));
+    await context.meaningSettled();
+    context.advance(60_000);
+
+    await context.fireAlarm();
+    await context.runsEnded();
+
+    const asHand = await context.call(hand, "search", { words: "boiler" });
+    expect(value(asHand).items).toHaveLength(2);
+    expect(handed).toEqual([asHand]);
+    expect(await callsMade(context)).toEqual([[["search", "ok"]]]);
+  });
+
+  test("leaves out of the Run's changes what another caller wrote while its search waited", async () => {
+    const { handed, script } = searching("boiler");
+    scriptModel(script);
+    const context = newContext();
+    await boiler(context);
+    await context.meaningSettled();
+    const release = holdEmbedding();
+    const waiting = embeddingHeld();
+
+    await context.callAny(hand, "send_message", { words: marked("What about the boiler?") });
+    await waiting;
+    await anEntry(context, marked("Weeded the garden"));
+    release();
+    await context.runsEnded();
+
+    expect(handed).toEqual([{ ok: true, value: expect.objectContaining({ words_only: null }) }]);
+    const runs = value(await context.call(hand, "list_runs", {})).items;
+    expect(runs).toMatchObject([{ started_by: "message", changes: [] }]);
+  });
+
+  test.each([
+    {
+      why: "missing",
+      setUp: async () => {
+        setMeaningPresent(false);
+        const context = newContext();
+        return { context, entry: await boiler(context), reached: async () => {} };
+      },
+    },
+    {
+      why: "unreachable",
+      setUp: async () => {
+        const context = newContext();
+        setMeaningFailing(true);
+        const entry = await boiler(context);
+        await context.meaningSettled();
+        return { context, entry, reached: async () => {} };
+      },
+    },
+    {
+      why: "stale",
+      setUp: async () => {
+        const context = newContext();
+        const entry = await boiler(context);
+        await context.meaningSettled();
+        // The fake answers at once, so the rebuild is held up for the Run to find it under way.
+        setMeaningFailing(true);
+        value(await context.call(hand, "rebuild_search_index", {}));
+        await context.meaningSettled();
+        return { context, entry, reached: async () => {} };
+      },
+    },
+    {
+      why: "cap_reached",
+      setUp: async () => {
+        const deployment = newDeployment();
+        const { context } = await contextIn(deployment, "Personal");
+        const entry = await boiler(context);
+        await context.meaningSettled();
+        // Reached once the Run has started: the Entry's embedding has spent more than this.
+        const reached = async () => {
+          value(await deployment.call(hand, "set_spend_cap", { cap: 1e-12 }));
+        };
+        return { context, entry, reached };
+      },
+    },
+  ] as const)(
+    "answers from words when the meaning index is $why, and says so",
+    async ({ why, setUp }) => {
+      let release = () => {};
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const { handed, script } = searching("boiler", held);
+      scriptModel(script);
+      const { context, entry, reached } = await setUp();
+
+      await context.callAny(hand, "send_message", { words: marked("What about the boiler?") });
+      await reached();
+      release();
+      await context.runsEnded();
+
+      expect(handed).toEqual([
+        {
+          ok: true,
+          value: {
+            items: [expect.objectContaining({ id: entry.id })],
+            next_cursor: null,
+            words_only: why,
+          },
+        },
+      ]);
+      expect(await callsMade(context)).toEqual([[["search", "ok"]]]);
+    },
+  );
 });
 
 describe("rebuild_search_index", () => {

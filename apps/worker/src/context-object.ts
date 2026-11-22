@@ -117,7 +117,14 @@ import {
   takeOut,
 } from "./move-rows.ts";
 import { sessionRequest, type VoiceRefusal } from "./provider-session.ts";
-import { admit, dispatch, type Handlers, isObjectTool, type ToolRequest } from "./registry.ts";
+import {
+  admit,
+  dispatch,
+  type Handlers,
+  isObjectTool,
+  type ObjectToolName,
+  type ToolRequest,
+} from "./registry.ts";
 import { putBack, type Restoring } from "./restore-rows.ts";
 import { deploymentOf } from "./routing.ts";
 import {
@@ -756,27 +763,36 @@ export function contextObject(
       if (isConversationToolName(request.tool)) return this.converse(request.tool, request);
       // An object new to a release may have its whole Journal to embed: any call starts it.
       this.keepMeaning();
-      if (isObjectTool(request.tool)) {
-        const elapsed = startTimer();
-        const result =
-          request.tool === "list_notices"
-            ? await this.listNotices(request)
-            : request.tool === "search"
-              ? await this.search(request)
-              : request.tool === "clear_conversation"
-                ? await this.clearConversation(request)
-                : this.rebuildSearchIndex(request);
-        // None of them returns Effects: a write among them changes no record.
-        const write = isWrite(request.tool) && !isRecordlessWrite(request.tool);
-        logCall({ tool: request.tool, write }, result, elapsed());
-        return result;
-      }
+      if (isObjectTool(request.tool)) return this.runObjectTool(request.tool, request);
       const elapsed = startTimer();
       const before = lastChange(this.ctx.storage.sql);
       const result = dispatch(handlers, this.ctx.storage, request);
       const tool = isToolName(request.tool) ? request.tool : null;
       logCall({ tool, write: isWrite(request.tool) }, result, elapsed());
       if (isWrite(request.tool)) await this.afterWrite(before);
+      return result;
+    }
+
+    /**
+     * Run a Context tool the object runs itself, for any caller: each lets the call in as
+     * `dispatch` would, so one the caller is not offered is refused.
+     */
+    private async runObjectTool(
+      tool: ObjectToolName,
+      request: ToolRequest,
+    ): Promise<ToolResult<unknown>> {
+      const elapsed = startTimer();
+      const result =
+        tool === "list_notices"
+          ? await this.listNotices(request)
+          : tool === "search"
+            ? await this.search(request)
+            : tool === "clear_conversation"
+              ? await this.clearConversation(request)
+              : this.rebuildSearchIndex(request);
+      // None of them returns Effects: a write among them changes no record.
+      const write = isWrite(tool) && !isRecordlessWrite(tool);
+      logCall({ tool, write }, result, elapsed());
       return result;
     }
 
@@ -1476,20 +1492,33 @@ export function contextObject(
 
     /**
      * A call from the Agent in a Run, or from the clock in a Brief or a Review, through the same
-     * registry as every other caller.
+     * registry as every other caller, and the tools the object runs itself as it runs them for
+     * every other caller: `search` waits on the meaning index (ADR 0023).
      */
-    private callAsAgent(tool: string, input: unknown, caller: Caller, wordsAnswered?: string) {
+    private async callAsAgent(
+      tool: string,
+      input: unknown,
+      caller: Caller,
+      wordsAnswered?: string,
+    ): Promise<{ result: ToolResult<unknown>; change: number | null }> {
       const sql = this.ctx.storage.sql;
-      const arrivedAt = arrivalTime() + this.#clockSkew;
-      const elapsed = startTimer();
-      const before = lastChange(sql);
-      const result = dispatch(handlers, this.ctx.storage, {
+      const request: ToolRequest = {
         caller,
         tool,
         input,
-        arrivedAt,
+        arrivedAt: arrivalTime() + this.#clockSkew,
         ...(wordsAnswered === undefined ? {} : { wordsAnswered }),
-      });
+      };
+      if (isObjectTool(tool)) {
+        // A search takes up what is queued to embed, as one by any other caller does (`serve`).
+        // None of these changes a record, so the Run gains no change by it, whatever another
+        // caller wrote while it waited.
+        this.keepMeaning();
+        return { result: await this.runObjectTool(tool, request), change: null };
+      }
+      const elapsed = startTimer();
+      const before = lastChange(sql);
+      const result = dispatch(handlers, this.ctx.storage, request);
       logCall({ tool, write: isWrite(tool) }, result, elapsed());
       const after = lastChange(sql);
       if (after !== before) void this.afterWrite(before);

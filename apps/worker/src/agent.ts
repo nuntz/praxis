@@ -110,15 +110,16 @@ type CallDetails = { result: RunCall["result"]; effects: Effect[] };
 export type AgentHost = {
   /**
    * Call a Context tool as the Agent, or as the clock in a Brief or a Review, through the
-   * registry, at the time it arrives. A write is given the key the runtime gave the call. Returns
-   * the result and the change it logged, if any.
+   * registry, at the time it arrives. A write is given the key the runtime gave the call. Answers
+   * once the tool has, as `search` waits on the meaning index, with the result and the change it
+   * logged, if any.
    */
   call(
     tool: ToolName,
     input: unknown,
     caller: Caller,
     wordsAnswered?: string,
-  ): { result: ToolResult<unknown>; change: number | null };
+  ): Promise<{ result: ToolResult<unknown>; change: number | null }>;
   /** The Context's own SQLite, for the Run records. */
   sql: SqlStorage;
   /** Carry something down every live channel open on the Context. */
@@ -228,8 +229,10 @@ function agentTools(host: AgentHost, wordsAnswered: (run: RunRow) => Promise<str
         const run = runAnswering(host.sql, live?.run?.inputs[0]);
         const { result, change } =
           words === null || run === null || byClock(run)
-            ? host.call(name, input, byClock(run) ? CLOCK : AGENT)
-            : host.call(name, input, AGENT, words);
+            ? await host.call(name, input, byClock(run) ? CLOCK : AGENT)
+            : await host.call(name, input, AGENT, words);
+        // The Run read before the call is still the one answering: a tool that waits changes
+        // nothing (`change` is null), and one that changes something runs without waiting.
         if (change !== null && run) addRunChange(host.sql, run.id, change);
         const details: CallDetails = result.ok
           ? { result: "ok", effects: (result.value as { effects?: Effect[] }).effects ?? [] }

@@ -54,11 +54,11 @@ export function madeAt(given: string | undefined, arrivedAt: number): ToolResult
 }
 
 /**
- * The Context tools the Context's object runs itself, after the same checks, since they cannot run
- * inside one transaction of its SQL: `list_notices` asks the Deployment object what it answers,
- * `search` asks the meaning index, `rebuild_search_index` sets the index to be built afresh, and
- * `clear_conversation` drops the runtime's record and opens it afresh: neither changes a record
- * nor leaves an Effect.
+ * The Context tools the Context's object runs itself, after the same checks, for every caller,
+ * the Agent and the clock among them, since they cannot run inside one transaction of its SQL:
+ * `list_notices` asks the Deployment object what it answers, `search` asks the meaning index,
+ * `rebuild_search_index` sets the index to be built afresh, and `clear_conversation` drops the
+ * runtime's record and opens it afresh: none changes a record or leaves an Effect.
  */
 export type ObjectToolName =
   | "list_notices"
