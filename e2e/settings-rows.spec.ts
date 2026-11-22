@@ -1,6 +1,7 @@
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import {
   callContextTool,
+  callDeploymentTool,
   expect,
   lastShown,
   makeContext,
@@ -136,6 +137,11 @@ test("on a phone the list of sections shows each one's current value, where it i
     time_zone: "America/Argentina/Buenos_Aires",
     accent: "rust",
   });
+  // One Standing Entry, and one Entry in the Trash.
+  const standing = await callContextTool(page, id, "record_entry", { words: "Kept in mind" });
+  await callContextTool(page, id, "mark_standing", { id: standing.record.id });
+  const trashed = await callContextTool(page, id, "record_entry", { words: "Thrown away" });
+  await callContextTool(page, id, "delete_entry", { id: trashed.record.id });
   await lastShown(page, id);
   await page.goto("/settings");
   const sections = page.getByRole("navigation", { name: "Settings sections" });
@@ -146,10 +152,35 @@ test("on a phone the list of sections shows each one's current value, where it i
   await expect(row("General")).toContainText("Buenos Aires");
   // The Brief's time and the Review's day, as a new Context has them.
   await expect(row("Brief and Review")).toHaveAccessibleDescription(/^7:00\sAM · Sun$/);
+  await expect(row("Standing Entries")).toHaveAccessibleDescription("1");
+  await expect(row("Trash")).toHaveAccessibleDescription("1");
   await expect(row("Spend")).toHaveAccessibleDescription(/^\$[\d,]+\.\d\d of \$[\d,]+\.\d\d$/);
   await expect(row("Contexts")).toHaveAccessibleDescription(/^\d+$/);
+  // Every journey's Connections and Devices are the Deployment's, so only their count is known.
+  await expect(row("Connections")).toHaveAccessibleDescription(/^\d+$/);
+  await expect(row("Devices")).toHaveAccessibleDescription(/^\d+$/);
+  // The day of the last Backup on the Device, as the Deployment last answered, or that none was
+  // made.
+  const { made_at } = await callDeploymentTool(page, "get_last_backup", {});
+  await expect(row("Backups and Export")).toHaveAccessibleDescription(
+    made_at === null
+      ? "None"
+      : await page.evaluate(
+          (at) =>
+            new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
+              Date.parse(at),
+            ),
+          made_at as string,
+        ),
+  );
   // A section with no value to show says none.
   await expect(row("Changes")).toHaveAccessibleDescription("");
+  await expect(row("Conversation and search")).toHaveAccessibleDescription("");
+
+  // Emptied, the Trash says so.
+  await callContextTool(page, id, "empty_trash", {});
+  await page.reload();
+  await expect(row("Trash")).toHaveAccessibleDescription("Empty");
 
   // With the Brief switched off, the Review's day is all there is to show.
   await callContextTool(page, id, "set_brief_time", { time: null });

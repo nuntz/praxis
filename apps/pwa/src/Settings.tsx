@@ -1,6 +1,7 @@
 import {
   type ContextListing,
   type Settings as ContextSettings,
+  type Entry,
   type Weekday,
   weekdays,
 } from "@praxis/domain";
@@ -18,7 +19,8 @@ import History from "lucide-solid/icons/rotate-ccw-clock";
 import Smartphone from "lucide-solid/icons/smartphone";
 import Sunrise from "lucide-solid/icons/sunrise";
 import Trash2 from "lucide-solid/icons/trash";
-import { createSignal, createUniqueId, For, Match, Show, Switch } from "solid-js";
+import { createEffect, createSignal, createUniqueId, For, Match, Show, Switch } from "solid-js";
+import { createStore } from "solid-js/store";
 import { BackupSettings } from "./Backups.tsx";
 import { Changes } from "./Changes.tsx";
 import { Connections } from "./Connections.tsx";
@@ -26,6 +28,7 @@ import { BriefAndReview, ConversationAndSearch, GeneralSettings } from "./Contex
 import { Contexts } from "./Contexts.tsx";
 import { Devices } from "./Devices.tsx";
 import { ExportSettings } from "./Export.tsx";
+import { latestRead } from "./latest-read.ts";
 import { money } from "./Notices.tsx";
 import {
   followed,
@@ -38,6 +41,7 @@ import {
 import { SpendSettings, spend } from "./Spend.tsx";
 import { Standing } from "./Standing.tsx";
 import { Trash } from "./Trash.tsx";
+import { callDeploymentTool, useCallTool } from "./tools.ts";
 
 type Icon = typeof Globe;
 
@@ -135,6 +139,11 @@ export function SettingsScreen(props: {
 }) {
   // A desktop at /settings shows General; a phone shows the list alone.
   const shown = (): Section | null => props.section ?? (onPhone() ? null : "general");
+  // What only a read of its own tells, read each time the phone's list of sections shows.
+  const listed = readListed(useCallTool());
+  createEffect(() => {
+    if (onPhone() && shown() === null) void listed.read();
+  });
 
   /** What a section holds now, as the list of sections shows it on a phone, where it is known. */
   function valueShown(section: Section): string | null {
@@ -148,7 +157,7 @@ export function SettingsScreen(props: {
     if (section === "spend" && spent) {
       return `${money.format(spent.spent)} of ${money.format(spent.cap)}`;
     }
-    return null;
+    return listed.values[section] ?? null;
   }
 
   function SectionLink(link: { section: Section }) {
@@ -292,6 +301,72 @@ export function SettingsScreen(props: {
     </div>
   );
 }
+
+/** The sections whose value in the phone's list of sections only a read of their own gives. */
+type ReadForList = "standing" | "trash" | "connections" | "devices" | "backups";
+
+/**
+ * Read what the phone's list of sections shows of the sections a read of their own tells: how many
+ * Standing Entries and items in the Trash the Context holds, how many Connections and Devices the
+ * Deployment has, and the day of its last Backup. A value whose read fails is shown as last read,
+ * or not at all; the last read's answers win (CODING_STANDARDS.md, Reads and changes).
+ */
+function readListed(callTool: ReturnType<typeof useCallTool>) {
+  const [values, setValues] = createStore<Partial<Record<Section, string>>>({});
+  const reads: Record<ReadForList, () => Promise<string | null>> = {
+    async standing() {
+      const read: Entry[] = [];
+      let cursor: string | null | undefined;
+      do {
+        const result = await callTool("list_entries", {
+          standing: true,
+          ...(cursor ? { cursor } : {}),
+        });
+        if (!result.ok) return null;
+        read.push(...result.value.items);
+        cursor = result.value.next_cursor;
+      } while (cursor);
+      return read.length === 0 ? "None" : String(read.length);
+    },
+    async trash() {
+      const result = await callTool("list_trash", {});
+      if (!result.ok) return null;
+      const { items, next_cursor } = result.value;
+      if (items.length === 0) return "Empty";
+      return next_cursor === null ? String(items.length) : `${items.length}+`;
+    },
+    async connections() {
+      const result = await callDeploymentTool("list_connections", {});
+      return result.ok ? String(result.value.items.length) : null;
+    },
+    async devices() {
+      const result = await callDeploymentTool("list_devices", {});
+      return result.ok ? String(result.value.items.length) : null;
+    },
+    async backups() {
+      const result = await callDeploymentTool("get_last_backup", {});
+      if (!result.ok) return null;
+      const made = result.value.made_at;
+      return made === null ? "None" : backupDay.format(new Date(made));
+    },
+  };
+  const { read } = latestRead((current) =>
+    Promise.all(
+      Object.entries(reads).map(async ([section, value]) => {
+        try {
+          const shown = await value();
+          if (current() && shown !== null) setValues(section as ReadForList, shown);
+        } catch {
+          // Not reached: what was read before stays, if anything was.
+        }
+      }),
+    ),
+  );
+  return { values, read };
+}
+
+/** The day of a Backup, on this Device, as in "Nov 21". */
+const backupDay = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
 
 /** A time zone by the place it is named for, as in "Paris" for Europe/Paris. */
 function zoneCity(zone: string): string {
