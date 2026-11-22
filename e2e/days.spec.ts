@@ -61,6 +61,14 @@ async function dated(page: Page, day: string): Promise<string> {
   }).format(Date.parse(`${day}T12:00:00Z`));
 }
 
+/** How the Device's locale writes an instant in a zone, in a style such as the time of day alone. */
+function writtenIn(page: Page, at: number, zone: string, style: Intl.DateTimeFormatOptions) {
+  return page.evaluate(
+    ([instant, options]) => new Intl.DateTimeFormat(undefined, options).format(instant),
+    [at, { ...style, timeZone: zone }] as const,
+  );
+}
+
 /** The day caption something falls under: the last one above it in its list. */
 async function captionOver(captions: Locator, item: Locator): Promise<string> {
   const top = (await item.boundingBox())?.y;
@@ -126,6 +134,17 @@ test("the Journal is parted into days in the Context's time zone, an Entry under
   expect(await under(`older ${tag}`)).toBe(olderDay);
   expect(await under(`yesterday ${tag}`)).toBe("Yesterday");
   expect(await under(`today ${tag}`)).toBe("Today");
+
+  // Under its day, an Entry says its time of day alone, in the Context's zone, as the Device's
+  // locale writes it; what a search finds is parted into no days, so it says its date too.
+  await expect(entries.filter({ hasText: `older ${tag}` }).getByRole("time")).toHaveText(
+    await writtenIn(page, made.older, zone, { timeStyle: "short" }),
+  );
+  await journal.getByRole("searchbox", { name: "Search this Context" }).fill(`yesterday ${tag}`);
+  const found = journal.getByRole("list", { name: "Found" }).getByTestId("search-hit");
+  await expect(found.filter({ hasText: `yesterday ${tag}` }).getByRole("time")).toHaveText(
+    await writtenIn(page, made.yesterday, zone, { dateStyle: "medium", timeStyle: "short" }),
+  );
 });
 
 test("the Conversation is parted into days in the Context's time zone, as the Journal is", async ({
@@ -224,13 +243,7 @@ test("a Brief says when it was taken in the Context's time zone, under its day",
   const { items } = await callContextTool(page, context.id, "list_messages", {});
   const brief = (items as { clock: { taken: string } | null }[]).find((message) => message.clock);
   if (!brief?.clock) throw new Error("The Conversation shows a Brief its read does not hold");
-  const shown = await page.evaluate(
-    ([instant, Context]) =>
-      new Intl.DateTimeFormat(undefined, { timeStyle: "short", timeZone: Context }).format(
-        Date.parse(instant),
-      ),
-    [brief.clock.taken, zone],
-  );
+  const shown = await writtenIn(page, Date.parse(brief.clock.taken), zone, { timeStyle: "short" });
   await expect(taken).toHaveText(`Brief, taken ${shown}`);
   const days = conversation.getByRole("list", { name: "Messages" }).getByRole("heading");
   await expect(days).toHaveText(["Today"]);

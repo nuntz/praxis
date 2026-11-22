@@ -59,8 +59,14 @@ export function Journal(props: {
   const callTool = useCallTool();
   const contextId = useContextId();
   const live = useLive();
+  // An instant as the Context's zone tells it: with its date where nothing else says the day, as
+  // in what a search finds and an Entry's Versions, and the time of day alone under a day's caption.
   const timeFormat = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: props.timeZone,
+  });
+  const timeOfDay = new Intl.DateTimeFormat(undefined, {
     timeStyle: "short",
     timeZone: props.timeZone,
   });
@@ -339,12 +345,13 @@ export function Journal(props: {
                 {isUnsent(entry) ? (
                   <UnsentEntryItem
                     write={entry}
-                    formatTime={(at) => timeFormat.format(new Date(at))}
+                    formatTime={(at) => timeOfDay.format(new Date(at))}
                   />
                 ) : (
                   <EntryItem
                     entry={entry}
-                    formatTime={(at) => timeFormat.format(new Date(at))}
+                    formatTime={(at) => timeOfDay.format(new Date(at))}
+                    formatWhen={(at) => timeFormat.format(new Date(at))}
                     timeZone={props.timeZone}
                     onEntry={(changed) => {
                       setProblem(null);
@@ -444,8 +451,10 @@ function madeAt(item: Entry | UnsentEntry): string {
 
 function EntryItem(props: {
   entry: Entry;
-  /** An instant as shown in the Context's time zone. */
+  /** An instant's time of day in the Context's time zone, under the caption of its day. */
   formatTime: (at: string) => string;
+  /** An instant with its date, in the Context's time zone, where no caption says its day. */
+  formatWhen: (at: string) => string;
   /** The Context's time zone. */
   timeZone: string;
   /** The Entry as a change to it returned it. */
@@ -608,7 +617,7 @@ function EntryItem(props: {
       <Show when={showingVersions() && props.entry.edited}>
         <Versions
           entry={props.entry}
-          formatTime={props.formatTime}
+          formatTime={props.formatWhen}
           onEntry={props.onEntry}
           onProblem={props.onProblem}
         />

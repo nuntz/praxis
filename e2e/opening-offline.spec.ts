@@ -29,12 +29,14 @@ async function contextOfOwn(page: Page, testInfo: TestInfo) {
   return made;
 }
 
-/** A time as the Journal shows it, in this zone, or in the Device's own with none. */
+/**
+ * A time as the Journal shows it under its day's caption, the time of day alone, in this zone, or
+ * in the Device's own with none.
+ */
 function shownAt(page: Page, at: string, timeZone?: string) {
   return page.evaluate(
     ([instant, zone]) =>
       new Intl.DateTimeFormat(undefined, {
-        dateStyle: "medium",
         timeStyle: "short",
         ...(zone ? { timeZone: zone } : {}),
       }).format(new Date(instant as string)),
