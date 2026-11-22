@@ -75,6 +75,8 @@ type DeviceEvent =
 /** A Call going on this Device, in one Context. */
 export class DeviceCall {
   readonly id: string;
+  /** When the object set the Call up, by this Device's clock: the time so far is counted from it. */
+  readonly since = Date.now();
   readonly #callTool: CallTool;
   readonly #hooks: CallHooks;
   readonly #connection: RTCPeerConnection;

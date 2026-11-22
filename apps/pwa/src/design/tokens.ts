@@ -31,11 +31,14 @@ export const colors = {
   ink: { light: "#1A1D23", dark: "#EEF0F4" },
   /** Secondary text on ground, surface and inset, and the border of a Task's round control. */
   muted: { light: "#596070", dark: "#A3AAB8" },
-  /** Overdue, and a Project with no open Task. Text on surface and inset, always with words. */
+  /**
+   * Overdue, and a Project with no open Task. Text on surface and inset, always with words. Also
+   * the solid fill of the End Call button, under on-accent, its one fill.
+   */
   warn: { light: "#B42318", dark: "#FF9388" },
   /** The ground of a standing Notice. Text on it is ink. */
   notice: { light: "#FFF0CC", dark: "#3B300F" },
-  /** Text and icons on a solid accent. */
+  /** Text and icons on a solid accent, and the icon on the End Call button's solid warn. */
   "on-accent": { light: "#FFFFFF", dark: "#14161B" },
   // Each accent is solid under on-accent, or text on surface and on its tint. The tint marks where
   // the person is about to write or decide: both composers, a Held Change and a Mention.

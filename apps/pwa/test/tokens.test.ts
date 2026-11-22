@@ -31,6 +31,8 @@ const pairings: [ColorToken, ColorToken[]][] = [
   ["surface", ["ink"]],
   ...ACCENTS.map((accent): [ColorToken, ColorToken[]] => [accent, ["surface", `${accent}-tint`]]),
   ...ACCENTS.map((accent): [ColorToken, ColorToken[]] => ["on-accent", [accent]]),
+  // The End Call button's icon, on its solid warn: warn's one fill.
+  ["on-accent", ["warn"]],
 ];
 
 const cases = (["light", "dark"] as Theme[]).flatMap((theme) =>

@@ -1,5 +1,11 @@
-import type { Page, TestInfo } from "@playwright/test";
-import { SIGN_OF_LIFE_EVERY, SILENCE_ENDS_CALL, SPOKEN_PART } from "@praxis/domain";
+import type { Locator, Page, TestInfo } from "@playwright/test";
+import {
+  type MessagesPage,
+  SIGN_OF_LIFE_EVERY,
+  SILENCE_ENDS_CALL,
+  SPOKEN_PART,
+  type Spend,
+} from "@praxis/domain";
 import {
   callContextTool,
   expect,
@@ -51,10 +57,18 @@ async function inContext(page: Page, testInfo: TestInfo, name: string) {
   return { tag, id: context.id, name: `${name} ${tag}`, conversation };
 }
 
+/** The Call button in the Conversation's header, which starts a Call in the Context named. */
+function callButton(conversation: Locator, name: string) {
+  return conversation.getByRole("button", {
+    name: `Start a Call with the Agent in ${name}`,
+    exact: true,
+  });
+}
+
 /** Start a Call from the Conversation, once the object has set it up. */
-async function startCall(page: Page, conversation: ReturnType<Page["getByRole"]>, name: string) {
+async function startCall(page: Page, conversation: Locator, name: string) {
   const started = page.waitForResponse(/\/tools\/start_call$/);
-  await conversation.getByRole("button", { name: "Start a Call", exact: true }).click();
+  await callButton(conversation, name).click();
   expect((await (await started).json()).ok).toBe(true);
   const controls = conversation.getByRole("region", { name: `Call in ${name}`, exact: true });
   await expect(controls).toBeVisible();
@@ -64,9 +78,19 @@ async function startCall(page: Page, conversation: ReturnType<Page["getByRole"]>
 test("the person speaks in a Call, the Agent records it as their Entry and its answer is given to be spoken", async ({
   page,
 }, testInfo) => {
+  // The time so far is the Device's to count, so its clock is moved on.
+  await page.clock.install();
   const voice = await fakeVoice(page);
   const { tag, id, name, conversation } = await inContext(page, testInfo, "Call");
   const controls = await startCall(page, conversation, name);
+  // The header says so, with the time so far, and the Call button is gone from it.
+  const header = conversation.getByRole("status").filter({ hasText: `On a Call in ${name}` });
+  await expect(header).toBeVisible();
+  const timer = conversation.getByRole("timer");
+  await expect(timer).toHaveText(/^00:0\d$/);
+  await page.clock.fastForward("01:05");
+  await expect(timer).toHaveText(/^01:0\d$/);
+  await expect(callButton(conversation, name)).toHaveCount(0);
   // The composer gives way to the Call's controls.
   await expect(
     conversation.getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true }),
@@ -75,11 +99,21 @@ test("the person speaks in a Call, the Agent records it as their Entry and its a
   const words = `Buy oat milk ${tag}`;
   const handover = await voice.say(`Record: ${words}`);
 
-  // The person's Message is the text of what they said, and the Agent's answer is spoken.
-  const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
+  // The person's Message is the text of what they said, marked as spoken, and the Agent's answer
+  // is spoken.
+  const list = conversation.getByRole("list", { name: "Messages" });
+  const messages = list.getByTestId("message");
   await expect(messages.first()).toContainText(`Record: ${words}`);
+  await expect(messages.first().getByText("Spoken", { exact: true })).toBeVisible();
   await expect(messages.last()).toContainText("Recorded.");
+  await expect(messages.last().getByText("Spoken", { exact: true })).toHaveCount(0);
   await expect.poll(voice.spoken).toEqual([{ delegation_id: handover, content: "Recorded." }]);
+  // Mute and End are where the composer was, under the Messages.
+  const listBox = await list.boundingBox();
+  const controlsBox = await controls.boundingBox();
+  if (!listBox || !controlsBox)
+    throw new Error("The Messages or the Call's controls are not shown.");
+  expect(controlsBox.y).toBeGreaterThanOrEqual(listBox.y + listBox.height);
 
   // The Entry holds what they said, as theirs, with no mark that it was spoken.
   const { items } = await callContextTool(page, id, "list_entries", {});
@@ -99,7 +133,7 @@ test("the person speaks in a Call, the Agent records it as their Entry and its a
 
   // The tap ends it at the provider, and the Device says it heard the session close.
   const ended = page.waitForResponse(/\/tools\/end_call$/);
-  await controls.getByRole("button", { name: "End the Call", exact: true }).click();
+  await controls.getByRole("button", { name: "End Call", exact: true }).click();
   expect((await (await ended).json()).value.call).toMatchObject({
     ended: "hung_up",
     provider_reason: "close_requested",
@@ -108,12 +142,90 @@ test("the person speaks in a Call, the Agent records it as their Entry and its a
   await expect(
     conversation.getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true }),
   ).toBeVisible();
+  // The header is the Conversation's again, with its Call button.
+  await expect(header).toHaveCount(0);
+  await expect(callButton(conversation, name)).toBeEnabled();
   // The Device sent the provider the Agent's answer and the end of the Call, and nothing else.
   expect((await voice.sent()).map(({ type }) => type)).toEqual([
     "session.commentary.append",
     "session.close",
   ]);
   expect(await voice.faults()).toEqual([]);
+});
+
+/**
+ * Have the screen read the Conversation as `list_messages` would answer with these: the journeys'
+ * Worker has a voice key and an Agent for every Context, so one with neither is told it has none.
+ * The seam tests reach `no_key` for real.
+ */
+async function messagesSay(page: Page, say: Partial<Pick<MessagesPage, "agent" | "voice">>) {
+  await page.route(/\/tools\/list_messages$/, async (route) => {
+    const answer = await route.fetch();
+    const { value } = (await answer.json()) as { value: MessagesPage };
+    await route.fulfill({ response: answer, json: { ok: true, value: { ...value, ...say } } });
+  });
+}
+
+test("without a voice key, or without an Agent, the Conversation offers no Call", async ({
+  page,
+}, testInfo) => {
+  await messagesSay(page, { voice: "no_key" });
+  const { name, conversation } = await inContext(page, testInfo, "No voice");
+  // Read: the composer shows once the Conversation says there is an Agent.
+  await expect(
+    conversation.getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true }),
+  ).toBeVisible();
+  await expect(callButton(conversation, name)).toHaveCount(0);
+
+  await page.unrouteAll();
+  await messagesSay(page, { agent: "no_key" });
+  await page.reload();
+  if (onPhone(testInfo)) {
+    await page
+      .getByRole("navigation", { name: "Columns" })
+      .getByRole("button", { name: "Agent", exact: true })
+      .click();
+  }
+  await expect(conversation.getByText(/^There is no Agent here/)).toBeVisible();
+  await expect(callButton(conversation, name)).toHaveCount(0);
+});
+
+test("with the network cut, the Call button is shown but cannot be pressed, and says Calls need the network", async ({
+  page,
+}, testInfo) => {
+  const { name, conversation } = await inContext(page, testInfo, "Offline");
+  const button = callButton(conversation, name);
+  await expect(button).toBeEnabled();
+
+  await page.context().setOffline(true);
+
+  await expect(button).toBeVisible();
+  await expect(button).toBeDisabled();
+  await expect(button).toHaveAccessibleDescription("Calls need the network.");
+});
+
+test("at the cap, the Call button is shown but cannot be pressed, and says the cap stops it", async ({
+  page,
+}, testInfo) => {
+  // The shared Deployment is never at the cap, so this screen is told it is, as e2e/spend.spec.ts
+  // has it: reaching it for real would stop every other journey's Runs.
+  await page.route(/\/get_spend$/, async (route) => {
+    const answer = await route.fetch();
+    const { value } = (await answer.json()) as { value: Spend };
+    await route.fulfill({
+      response: answer,
+      json: { ok: true, value: { ...value, spent: value.cap, notice: "cap_reached" } },
+    });
+  });
+  const { name, conversation } = await inContext(page, testInfo, "Capped");
+  await expect(conversation.getByText(/This month's spend has reached its cap/)).toBeVisible();
+
+  const button = callButton(conversation, name);
+  await expect(button).toBeVisible();
+  await expect(button).toBeDisabled();
+  await expect(button).toHaveAccessibleDescription(
+    "No Call can start: this month's spend reached its cap.",
+  );
 });
 
 test("what the voice model answers by itself is not kept, and the next Message holds everything said since", async ({
@@ -206,9 +318,7 @@ test("a connection lost ends the Call with a Notice, and the object closes the s
       .getByRole("status")
       .filter({ hasText: "connection to the voice provider was lost" }),
   ).toBeVisible();
-  await expect(
-    conversation.getByRole("button", { name: "Start a Call", exact: true }),
-  ).toBeVisible();
+  await expect(callButton(conversation, name)).toBeEnabled();
 });
 
 test("starting a Call elsewhere ends this one: the object ends it at the provider, and the Device's sign of life finds it ended", async ({
@@ -238,9 +348,7 @@ test("starting a Call elsewhere ends this one: the object ends it at the provide
   await expect(
     conversation.getByRole("status").filter({ hasText: "another Call was started" }),
   ).toBeVisible();
-  await expect(
-    conversation.getByRole("button", { name: "Start a Call", exact: true }),
-  ).toBeVisible();
+  await expect(callButton(conversation, name)).toBeEnabled();
   // The object ended the session itself: the Device sent the provider nothing.
   expect(await voice.sent()).toEqual([]);
   await callContextTool(page, other.id, "end_call", {

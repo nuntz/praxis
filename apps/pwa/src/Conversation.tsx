@@ -10,6 +10,9 @@ import type {
   RunFailure,
 } from "@praxis/domain";
 import { runTranscriptName } from "@praxis/domain";
+import MicIcon from "lucide-solid/icons/mic";
+import MicOffIcon from "lucide-solid/icons/mic-off";
+import PhoneIcon from "lucide-solid/icons/phone";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { DeviceCall } from "./call.ts";
@@ -47,8 +50,9 @@ export { unread as unreadBriefs };
  * Conversation says so in place of its composer; at the spend cap, the cap's Notice and a way to
  * the cap in settings take the composer's place, and without a network a Notice saying so. A
  * person's Message whose Run failed keeps a Notice under it, and the newest a way to try again.
- * With the voice key a Call can be started from the composer, and on this Device while it goes on
- * the composer gives way to the Call's controls (section 6).
+ * With the voice key and an Agent a Call starts from the Call button in the header, shown but not
+ * pressable offline or at the cap, saying why. On this Device while a Call goes on the header is
+ * a status bar with the time so far, and the composer gives way to Mute and End (section 6).
  */
 export function Conversation(props: {
   contextId: string;
@@ -226,6 +230,17 @@ export function Conversation(props: {
   };
 
   /**
+   * What the Call button in the header shows (section 8.5): nothing without the voice key or an
+   * Agent, or while a Call goes on here, whose status bar takes the header's place; why it cannot
+   * be pressed offline or at the cap; else that a Call can start.
+   */
+  const callOffer = (): "offline" | "cap_reached" | "ready" | null => {
+    if (call() || voice() !== "available" || agent() !== "available") return null;
+    if (!online()) return "offline";
+    return capReached() ? "cap_reached" : "ready";
+  };
+
+  /**
    * Start a Call in this Context. What the person says is sent as spoken Messages, each placed as
    * a typed one is, and the Agent's answers are passed back to be spoken.
    */
@@ -320,8 +335,25 @@ export function Conversation(props: {
     <Peer
       id="conversation"
       title="Conversation"
-      aside={<span class="peer-note">with the Agent, in {props.contextName}</span>}
+      aside={
+        <>
+          <span class="peer-note">with the Agent, in {props.contextName}</span>
+          <Show when={callOffer()}>
+            {(offer) => (
+              <CallButton
+                contextName={props.contextName}
+                offer={offer()}
+                starting={calling()}
+                onStart={() => void startCall()}
+              />
+            )}
+          </Show>
+        </>
+      }
     >
+      <Show when={call()}>
+        {(going) => <CallBar contextName={props.contextName} since={going().since} />}
+      </Show>
       <div class="peer-body" ref={column.scroller}>
         <Show when={online() && earlierCursor()}>
           {(cursor) => (
@@ -440,16 +472,6 @@ export function Conversation(props: {
             }}
             onProblem={setProblem}
           />
-          <Show when={voice() === "available"}>
-            <button
-              type="button"
-              class="quiet start-call"
-              disabled={calling()}
-              onClick={() => void startCall()}
-            >
-              {calling() ? "Starting a Call…" : "Start a Call"}
-            </button>
-          </Show>
         </Show>
       </div>
     </Peer>
@@ -490,9 +512,92 @@ function callEndedWords(ended: CallEnd, reason: string | null): string | null {
   }
 }
 
+/** Why the Call button cannot be pressed, in the words it is described by. */
+const NO_CALL = {
+  offline: "Calls need the network.",
+  cap_reached: "No Call can start: this month's spend reached its cap.",
+} as const;
+
+/**
+ * The Call button in the Conversation's header (section 8.5): the phone icon and "Call", the icon
+ * alone on a phone. Offline or at the cap it is shown but cannot be pressed, and is described by
+ * why, in words: it stays focusable, so the reason is heard as well as seen in its tooltip.
+ */
+function CallButton(props: {
+  contextName: string | undefined;
+  offer: "offline" | "cap_reached" | "ready";
+  starting: boolean;
+  onStart: () => void;
+}) {
+  const name = () =>
+    props.contextName ? `Start a Call with the Agent in ${props.contextName}` : "Start a Call";
+  const why = () => (props.offer === "ready" ? null : NO_CALL[props.offer]);
+  return (
+    <>
+      <button
+        type="button"
+        class="call-button"
+        aria-label={name()}
+        title={why() ?? name()}
+        aria-disabled={why() !== null || props.starting ? "true" : undefined}
+        aria-busy={props.starting ? "true" : undefined}
+        aria-describedby={why() === null ? undefined : "call-unavailable"}
+        onClick={() => {
+          if (why() === null && !props.starting) props.onStart();
+        }}
+      >
+        <PhoneIcon size={18} aria-hidden="true" />
+        <span class="call-button-word">Call</span>
+      </button>
+      <Show when={why()}>
+        {(words) => (
+          <span id="call-unavailable" class="visually-hidden">
+            {words()}
+          </span>
+        )}
+      </Show>
+    </>
+  );
+}
+
+/** A length of time as a clock shows it, in minutes and seconds, and hours once there are any. */
+function clockTime(milliseconds: number): string {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const two = (part: number) => String(part).padStart(2, "0");
+  const hours = Math.floor(seconds / 3600);
+  const minutes = two(Math.floor(seconds / 60) % 60);
+  return hours > 0 ? `${hours}:${minutes}:${two(seconds % 60)}` : `${minutes}:${two(seconds % 60)}`;
+}
+
+/**
+ * The status bar that takes the Conversation's header's place on the Device in a Call (section
+ * 8.5): on a Call in this Context, and the time so far, counted on this Device's clock.
+ */
+function CallBar(props: { contextName: string | undefined; since: number }) {
+  const [now, setNow] = createSignal(Date.now());
+  const tick = setInterval(() => setNow(Date.now()), 1000);
+  onCleanup(() => clearInterval(tick));
+  return (
+    <div class="call-bar">
+      <span class="call-dot" aria-hidden="true" />
+      <div class="call-bar-words">
+        <p class="call-bar-title" role="status">
+          {props.contextName ? `On a Call in ${props.contextName}` : "On a Call"}
+        </p>
+        <p class="call-bar-meta">
+          {/* A timer is not read out as it changes, so the second hand says nothing. */}
+          <span role="timer">{clockTime(now() - props.since)}</span> · what you say is kept as
+          Messages
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /**
  * The Call's controls, which the Conversation's composer gives way to on the Device in the Call
- * (section 6): end it, and mute, which turns the microphone off while the Call goes on.
+ * (section 6): mute, which turns the microphone off while the Call goes on, and End, on solid
+ * `warn`, the phone icon turned, each a round button with its words under it.
  */
 function CallControls(props: {
   contextName: string | undefined;
@@ -505,17 +610,23 @@ function CallControls(props: {
       class="call-controls"
       aria-label={props.contextName ? `Call in ${props.contextName}` : "Call"}
     >
-      <p class="call-status" role="status">
-        {props.muted ? "In a Call, muted" : "In a Call: speak to the Agent"}
-      </p>
-      <div class="call-buttons">
-        <button type="button" aria-pressed={props.muted} onClick={() => props.onMute(!props.muted)}>
-          Mute
-        </button>
-        <button type="button" class="end-call" onClick={() => props.onEnd()}>
-          End the Call
-        </button>
-      </div>
+      <button
+        type="button"
+        class="call-control mute"
+        aria-pressed={props.muted}
+        onClick={() => props.onMute(!props.muted)}
+      >
+        <span class="call-control-round">
+          <MicOffIcon size={24} aria-hidden="true" />
+        </span>
+        Mute
+      </button>
+      <button type="button" class="call-control end" onClick={() => props.onEnd()}>
+        <span class="call-control-round">
+          <PhoneIcon size={26} aria-hidden="true" />
+        </span>
+        End Call
+      </button>
     </section>
   );
 }
@@ -549,7 +660,16 @@ function PersonMessageItem(props: {
   const [retrying, setRetrying] = createSignal(false);
   return (
     <li class="message from-person" data-testid="message">
-      <span class="message-from">You</span>
+      <span class="message-from">
+        You
+        {/* Said in a Call, not typed: the mark is the screen's, never part of what was said. */}
+        <Show when={props.message.spoken}>
+          <span class="message-spoken">
+            <MicIcon size={12} aria-hidden="true" />
+            Spoken
+          </span>
+        </Show>
+      </span>
       <p class="message-words">{props.message.words}</p>
       <Show when={props.message.notice}>
         {(notice) => (
