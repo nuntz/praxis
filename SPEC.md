@@ -275,6 +275,7 @@ A result is a success or an error from a closed set of codes:
 - Neither is the spend cap. `set_spend_cap` returns an Effect on it, carrying its fixed id and its new amount as the summary, and it goes in no change log.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
 - `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since the last Message it answered.
+- `list_changes` can be narrowed to one caller, a Connection by its id whatever its name or whether it reads only now, and can list from the newest change back, its cursor giving the earlier ones, which is how the Changes screen reads it (section 8.6). Narrowed or not, a page with nothing after it gives the cursor where the log stands.
 - The change log is kept 90 days, pruned by the Context's alarm. A caller whose cursor is older is told to read afresh: `list_changes` gives no changes, says so, and gives the cursor where the log now stands, to ask from once it has.
 - A connected PWA receives the Effects of each change and patches what it shows.
 
@@ -314,7 +315,7 @@ ADR 0005. Glossary: Held Change.
 
 ### 4.9 Reads
 
-- Two named views (`view_attention` and `view_ahead`), one filtered list per kind, get by id, one search, `list_changes`, `list_trash`, `list_held_changes`, and `get_move_unit`, what moving a record would take.
+- Two named views (`view_attention` and `view_ahead`), one filtered list per kind, get by id, one search, `list_changes`, `list_connection_calls`, `list_trash`, `list_held_changes`, and `get_move_unit`, what moving a record would take.
 - Lists are paged by cursor, 50 by default.
 - An Entry comes with its words in full, its links and its Tasks. A Task comes with its derived state and the reason.
 
@@ -574,7 +575,7 @@ ADR 0003, 0005, 0007, 0009, 0010. Glossary: Connection.
 - It reads and writes an Entry's words as typed. The tools' descriptions say the words are shown as Markdown and name the set. Words are never checked or refused for their Markdown.
 - Tools only: no resources, no prompts. Read-only and destructive hints come from the tool's metadata.
 - It is never offered the Conversation, Run records, a Call, Standing marks, or the cap. No tool it calls starts a Run, so it sees nothing of an outage.
-- Every call from a Connection is kept for 90 days, reads included: the tool, the time, the result code and how many records came back, never the text of its arguments or results.
+- Every call from a Connection is kept for 90 days, reads included: the tool, the time, the result code and how many records came back, never the text of its arguments or results. A name that is no tool of Praxis's is kept as none, since it is text the Connection sent. How many records came back counts the Entries, Tasks, Projects and Persons in the answer, each once: a Project in Attention's Due and in its Projects is one, and a future Occurrence in the weeks ahead is none, since it does not yet exist. The record is pruned by the Context's alarm, and `list_connection_calls` gives it to the person's hand, newest first, narrowed to one Connection or to reads if asked. A Context stuck on its upgrade serves nothing and keeps nothing of the calls it refuses (section 11).
 
 ## 8. The PWA
 
@@ -667,7 +668,7 @@ The column is composed by the screen from four sources, in this order:
 
 ### 8.6 Other screens
 
-- **Changes**: a Context's list of changes, filtered by caller, with a Connection's reads listed alongside. There is no activity screen beyond this.
+- **Changes**: a Context's list of changes, newest first, filtered by caller, with a Connection's reads listed alongside: each change's caller, time and Effects, each read's Connection, tool, time and how many records came back or the code it was answered with. It reaches back by hand, never further than both lists have been read, and a change made while it is shown comes over the live channel. A Connection's reads are as of the last read, since the live channel carries none. There is no activity screen beyond this.
 - **Trash**: each item, what went with it and when it will be removed. Restore, remove one for good, empty.
 - **Standing Entries**: the full list for the Context.
 - **Settings**, per Context: time zone, Brief time, Review day and time, the Notification switch, clear the Conversation, rebuild the search index.
@@ -775,7 +776,7 @@ ADR 0006, 0010, 0017, 0023, 0024.
 ### 9.2 Storage
 
 - All of a Deployment's data is in Durable Object SQLite. There is no D1.
-- **Each Context is its own object**, holding its Journal, Tasks, Projects, Persons, Trash, change log, Run records, words index and Conversation. The domain is in Praxis's own tables. The runtime's tables hold only the Conversation and can be dropped without losing anything true.
+- **Each Context is its own object**, holding its Journal, Tasks, Projects, Persons, Trash, change log, the record of its Connections' calls, Run records, words index and Conversation. The domain is in Praxis's own tables. The runtime's tables hold only the Conversation and can be dropped without losing anything true.
 - **One Deployment object** holds the list of Contexts with their names and accent colours, the Connections, the Devices with their push subscriptions and switches, the spend cap, the month's running spend total, the monthly spend totals of deleted Contexts, when the last Backup was made, and which Context has a Call. It holds nothing from any Journal.
 - The Worker asks the Deployment object which Context a request is for, then talks to that Context's object. A Context's object reaches the Deployment object only through a closed set of calls:
   - the other Contexts' names;
@@ -789,7 +790,7 @@ ADR 0006, 0010, 0017, 0023, 0024.
 - The Deployment object holds nothing from any Journal and never reads one. It reaches into a Context's object only to make it, to make it from its file of an Export on a restore, to rename it, to delete it, for an Export or a Backup, a move, a Run Transcript, and ending a Call there when another starts elsewhere. For an Export, a Backup or a Run Transcript it carries the file the Context's object writes and reads none of it.
 - A Context's object keeps its own name, for its settings and the summary of an Effect on it. The Deployment object is its only writer, writes it before its own list, and runs its writes one at a time, so the two never disagree (ADR 0006).
 - Revoking a Connection or retiring a Context takes effect on the next request.
-- Each Context has its own alarm, which schedules its Brief and Review, expires its Trash, prunes its change log and finishes an interrupted move.
+- Each Context has its own alarm, which schedules its Brief and Review, expires its Trash, prunes its change log and the record of its Connections' calls and finishes an interrupted move.
 - A jurisdiction (`eu`, `us` or `fedramp`) is chosen once at setup, optionally, for every object. It cannot be changed except by Export and restore into a new Deployment.
 - An Entry is text only. Nothing but Backups needs R2.
 
@@ -854,7 +855,7 @@ ADR 0018.
 - A Connection comes back ended. Its name stays as an Author.
 - The Trash's clock counts from the original delete. Anything past its 30 days is removed during the restore.
 - The files of one Export are not one instant. A record caught moving between Contexts is settled by id: found in both, the destination keeps it; marked as moving with no copy elsewhere, it stays in the source. No move is left going after a restore.
-- A Context restored starts with an empty change log, since the file holds none, and the restore's Effects are each Context and Connection made and the spend cap, and not the records, which the file brought whole. A Run the file holds as going cannot go on without its Conversation, and comes back failed. The month's spend against the cap starts again from the Run records the file holds, since what Calls and embedding spent is not in it. Its first Brief and Review are the first to come after the restore, and its Entries are queued for the meaning index, which search answers without until its alarm, first search or first write has built it.
+- A Context restored starts with an empty change log and no record of a Connection's calls, since the file holds neither, and the restore's Effects are each Context and Connection made and the spend cap, and not the records, which the file brought whole. A Run the file holds as going cannot go on without its Conversation, and comes back failed. The month's spend against the cap starts again from the Run records the file holds, since what Calls and embedding spent is not in it. Its first Brief and Review are the first to come after the restore, and its Entries are queued for the meaning index, which search answers without until its alarm, first search or first write has built it.
 - A restore reads a file whose format version is older than the code's, however old, and refuses one that is newer. It reads the zip Praxis writes, and one a system's archiver made again of its files, deflated.
 - Point-in-time recovery of an object is an operator's escape hatch described in the docs (`docs/deployment.md`), not a feature.
 
@@ -900,7 +901,7 @@ ADR 0019.
 - Each step is its own transaction. Before its first pending step an object notes the platform's point-in-time bookmark, which it keeps and logs. A new object, holding nothing, is made rather than upgraded and notes none.
 - A release is the commit CI deploys, which names it to the Worker.
 - **A step changes shape, never meaning.** It writes nothing to the change log, has no Author, makes no Version and never touches an Entry's words: a Context's object checks this around each step, and a step that does any of it fails. Reads through a tool return the same before and after, apart from what the release adds. A change in meaning to existing records is a rule of the release that this spec states.
-- A step carries across what the Export does not hold: the change log, Devices and their push subscriptions, and a Connection's standing.
+- A step carries across what the Export does not hold: the change log, the record of a Connection's calls, Devices and their push subscriptions, and a Connection's standing.
 - A step never migrates anything outside the object. When a release changes what the meaning index holds, the step marks it stale and it is rebuilt.
 - **A failed step** leaves the object whole on the earlier step, serving nothing, reads included, until a fixed release is deployed. So does an object that finds its tables newer than the code.
 - **A stuck Context** is named in a standing Notice, and the other Contexts keep working. It says so itself as it wakes, and the daily Backup finds it out too. Everything on its clock stops: no Brief or Review, no Trash expiry, no finishing of an interrupted move. It tries again only when woken under a different release, and its clock starts again at once when it comes back. The last Backup that holds it is kept past 30 days until it upgrades, and the Notice says so.

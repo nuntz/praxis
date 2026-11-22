@@ -376,6 +376,51 @@ button.quiet {
   gap: var(--space-2);
 }
 
+/* The Changes: each change or read, who made it and when, newest first. */
+.changes-by {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.change-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.change-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.change-meta {
+  margin: 0;
+  color: var(--muted);
+  font: var(--type-label);
+}
+
+.change-effects {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.change-read {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.change-kind {
+  color: var(--muted);
+}
+
 .connection-context {
   color: var(--muted);
 }

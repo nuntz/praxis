@@ -12,6 +12,7 @@ import {
 } from "solid-js";
 import { Attention } from "./Attention.tsx";
 import { BackupSettings } from "./Backups.tsx";
+import { Changes } from "./Changes.tsx";
 import { Connections } from "./Connections.tsx";
 import { ContextSettings, deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
@@ -479,6 +480,7 @@ export function App() {
                                 <ContextSettings settings={read()} onChanged={setSettings} />
                                 <Standing timeZone={read().time_zone} />
                                 <Trash timeZone={read().time_zone} />
+                                <Changes timeZone={read().time_zone} />
                               </>
                             )}
                           </Show>

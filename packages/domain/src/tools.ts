@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AHEAD_DAYS, type Ahead, MOST_AHEAD_DAYS } from "./ahead.ts";
 import type { Attention } from "./attention.ts";
 import type { CallerKind } from "./callers.ts";
+import type { ConnectionCall } from "./connection-calls.ts";
 import type { RunRecord } from "./conversation.ts";
 import { day, daysBefore, timeZone } from "./day.ts";
 import type { ChangesPage, Written } from "./effects.ts";
@@ -696,6 +697,17 @@ export const tools = {
     input: z.strictObject({ id }),
     offered: toHandOnly,
   },
+  list_connection_calls: {
+    kind: "read",
+    description:
+      "List the calls this Context's Connections made, newest first, 50 to a page, reads among them: each one's Connection, tool, time, result code and how many records came back, and none of what it sent or was given. Kept 90 days. Narrow it to one Connection by its id with `connection_id`, and to the calls of tools that read with `reads_only`.",
+    input: z.strictObject({
+      cursor,
+      connection_id: id.optional(),
+      reads_only: z.boolean().optional(),
+    }),
+    offered: toHandOnly,
+  },
   get_move_unit: {
     kind: "read",
     description:
@@ -706,8 +718,17 @@ export const tools = {
   list_changes: {
     kind: "read",
     description:
-      "List what changed in this Context since a cursor, oldest first: each write's Effects, its caller and when it arrived. Without a cursor it starts from the oldest change kept. Keep the cursor it gives to ask again later. The log keeps 90 days: when `read_afresh` is true the cursor was older than that, so read what you hold afresh and ask from the new cursor.",
-    input: z.strictObject({ cursor: z.string().min(1).optional() }),
+      "List what changed in this Context since a cursor, oldest first: each write's Effects, its caller and when it arrived. Without a cursor it starts from the oldest change kept. Keep the cursor it gives to ask again later. The log keeps 90 days: when `read_afresh` is true the cursor was older than that, so read what you hold afresh and ask from the new cursor. Narrow it to one caller with `caller`: the person's hand, the Agent, the clock, or a Connection by its id. With `newest_first` it lists from the newest change back, and its cursor gives the earlier ones.",
+    input: z.strictObject({
+      cursor: z.string().min(1).optional(),
+      caller: z
+        .union([
+          z.strictObject({ kind: z.enum(["hand", "agent", "clock"]) }),
+          z.strictObject({ kind: z.literal("connection"), id }),
+        ])
+        .optional(),
+      newest_first: z.boolean().optional(),
+    }),
     offered: toEveryCaller,
   },
 } as const satisfies Record<string, ToolDefinition>;
@@ -818,6 +839,7 @@ export type ToolOutput = {
   list_notices: { items: StandingNotice[] };
   list_runs: Page<RunRecord>;
   get_run: RunRecord;
+  list_connection_calls: Page<ConnectionCall>;
   get_move_unit: MoveUnit;
 };
 

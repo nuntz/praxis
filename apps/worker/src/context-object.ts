@@ -15,6 +15,7 @@ import {
   dollars,
   type Effect,
   failure,
+  isConnection,
   isConversationToolName,
   isRecordlessWrite,
   isToolName,
@@ -72,6 +73,11 @@ import {
   noteShown,
   startSchedule,
 } from "./clock-rows.ts";
+import {
+  holdsConnectionCalls,
+  keepConnectionCall,
+  pruneConnectionCalls,
+} from "./connection-call-rows.ts";
 import { contextFile } from "./context-file.ts";
 import { heldWaiting } from "./held-change-rows.ts";
 import { forgetOldKeys, holdsKeys, rememberKey, repeatedKey } from "./keys.ts";
@@ -146,6 +152,7 @@ import {
 } from "./tables.ts";
 import { attentionTools } from "./tools/attention.ts";
 import { changeTools } from "./tools/changes.ts";
+import { connectionCallTools } from "./tools/connection-calls.ts";
 import { entryTools, NO_SUCH_ENTRY } from "./tools/entries.ts";
 import { heldChangeTools } from "./tools/held-changes.ts";
 import { moveTools } from "./tools/moves.ts";
@@ -179,6 +186,7 @@ const handlers: Handlers = {
   ...heldChangeTools,
   ...moveTools,
   ...runTools,
+  ...connectionCallTools,
 };
 
 /** How long the alarm sleeps between wakes while it has something to do. */
@@ -726,6 +734,22 @@ export function contextObject(
         logCall({ tool: isToolName(request.tool) ? request.tool : null, write: false }, refused, 0);
         return refused;
       }
+      const result = await this.serve(request);
+      // Every call from a Connection is kept, reads included, as none of what it sent or was
+      // given (section 7.3). None reaches a Context being deleted, which is retired first, and
+      // retiring it ended its Connections. A stuck object keeps none, above, since it serves
+      // nothing and its tables may be from before the record.
+      const { caller } = request;
+      if (isConnection(caller)) {
+        const { tool, arrivedAt: at } = request;
+        keepConnectionCall(this.ctx.storage.sql, { caller, tool, at, result });
+        await this.keepAlarm();
+      }
+      return result;
+    }
+
+    /** Serve a call to a Context tool or a Conversation tool, once the object is known to serve. */
+    private async serve(request: ToolRequest): Promise<ToolResult<unknown>> {
       await this.restartClock(request.arrivedAt);
       // The object's clock runs from when this request arrived, which a test sets.
       this.#clockSkew = request.arrivedAt - arrivalTime();
@@ -1582,6 +1606,7 @@ export function contextObject(
         forgetMovesTaken(sql, at);
         expireTrash(sql, at);
         pruneChanges(sql, at);
+        pruneConnectionCalls(sql, at);
       });
       await this.finishMoves(at);
       await this.endCallsUnheard(at);
@@ -1672,7 +1697,13 @@ export function contextObject(
       const skew = this.#clockSkew;
       const now = arrivalTime() + skew;
       const wanted: number[] = [];
-      if (holdsKeys(storage.sql) || holdsChanges(storage.sql)) wanted.push(now + ALARM_GAP);
+      if (
+        holdsKeys(storage.sql) ||
+        holdsChanges(storage.sql) ||
+        holdsConnectionCalls(storage.sql)
+      ) {
+        wanted.push(now + ALARM_GAP);
+      }
       const expiry = nextExpiry(storage.sql);
       if (expiry !== null) wanted.push(expiry);
       if (this.#agentWake.active) wanted.push(now + RUN_HEARTBEAT);

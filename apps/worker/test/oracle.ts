@@ -81,6 +81,8 @@ const otherTables = [
   "run_changes",
   // Call records, which hold no words and no record (section 6).
   "calls",
+  // The record of a Connection's calls, which holds no words and no record (section 7.3).
+  "connection_calls",
   // When the clock last started a Brief and a Review, which holds no record.
   "clock_schedule",
   // What the object keeps of the meaning index, held to the index itself below, and what

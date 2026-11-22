@@ -55,17 +55,24 @@ export type Change = {
 };
 
 /**
- * A page of the change log, oldest first. Unlike other lists the cursor is always given, so a
- * caller that has read to the end can ask again later for what changed since.
+ * A page of the change log, oldest first, or newest first when asked. Unlike other lists the
+ * cursor is always given, so a caller that has read to the end can ask again later for what
+ * changed since.
  */
 export type ChangesPage = {
   items: Change[];
+  /**
+   * Where to ask from next: after the last change read, oldest first; before the oldest given,
+   * newest first.
+   */
   cursor: string;
+  /** Whether more follow the page: later ones oldest first, earlier ones newest first. */
   more: boolean;
   /**
    * True when the cursor asked from is older than the change log keeps, so some of what changed
    * since is gone from it. The page then holds nothing, and its cursor is where the log stands:
-   * the caller reads what it shows afresh and asks from there.
+   * the caller reads what it shows afresh and asks from there. Never so newest first, which only
+   * reaches back to the oldest change kept.
    */
   read_afresh: boolean;
 };

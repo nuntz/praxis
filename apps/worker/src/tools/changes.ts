@@ -1,17 +1,20 @@
-import { type Caller, type Change, failure, PAGE_SIZE, success } from "@praxis/domain";
+import { type Change, failure, isConnection, PAGE_SIZE, success } from "@praxis/domain";
 import {
   changesAfter,
+  changesBefore,
   decodeCursor,
   encodeCursor,
   lastChange,
   prunedThrough,
 } from "../change-log.ts";
+import { listCursor, listPosition } from "../newest-first.ts";
 import type { Handlers } from "../registry.ts";
 
-/** Whether a caller is an outside agent, which is shown nothing of a Held Change (section 4.7). */
-function isConnection(caller: Caller): boolean {
-  return caller.kind === "connection" || caller.kind === "read_only_connection";
-}
+/**
+ * The list a cursor of the log read newest first belongs to, so it is never taken for one that
+ * reads forward, nor the other way about.
+ */
+const NEWEST_FIRST = "changes_newest_first";
 
 /**
  * A change as a Connection reads it: without its Effects on Held Changes, and not at all when
@@ -24,6 +27,25 @@ function withoutHeldChanges(change: Change): Change[] {
 
 export const changeTools: Pick<Handlers, "list_changes"> = {
   list_changes({ caller, input, sql }) {
+    const shown = (items: Change[]) =>
+      isConnection(caller) ? items.flatMap(withoutHeldChanges) : items;
+    if (input.newest_first === true) {
+      // Without a cursor the list starts from the newest change.
+      let before = Number.MAX_SAFE_INTEGER;
+      if (input.cursor !== undefined) {
+        const position = listPosition(NEWEST_FIRST, input.cursor);
+        if (position === null)
+          return failure("invalid_input", "The cursor is not one this list gave.");
+        before = position;
+      }
+      const { items, oldest, more } = changesBefore(sql, before, PAGE_SIZE, input.caller);
+      return success({
+        items: shown(items),
+        cursor: listCursor(NEWEST_FIRST, oldest),
+        more,
+        read_afresh: false,
+      });
+    }
     const pruned = prunedThrough(sql);
     // Without a cursor the list starts from the oldest change kept.
     let after = pruned;
@@ -42,8 +64,7 @@ export const changeTools: Pick<Handlers, "list_changes"> = {
         read_afresh: true,
       });
     }
-    const { items, last, more } = changesAfter(sql, after, PAGE_SIZE);
-    const shown = isConnection(caller) ? items.flatMap(withoutHeldChanges) : items;
-    return success({ items: shown, cursor: encodeCursor(last), more, read_afresh: false });
+    const { items, last, more } = changesAfter(sql, after, PAGE_SIZE, input.caller);
+    return success({ items: shown(items), cursor: encodeCursor(last), more, read_afresh: false });
   },
 };

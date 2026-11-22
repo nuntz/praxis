@@ -4,6 +4,7 @@ import {
   changesPrunedBy,
   type Effect,
   instantToIso,
+  type ToolInput,
 } from "@praxis/domain";
 
 /** Put one write's Effects in the change log, with its caller and when it arrived. */
@@ -56,26 +57,78 @@ export function prunedThrough(sql: SqlStorage): number {
 }
 
 /**
- * The changes after `after`, oldest first, at most `limit` of them, and whether more follow. The
- * one reading of the log, for `list_changes` and for what the live channel carries.
+ * The one caller a reading of the log is narrowed to, if any: the hand, the Agent, the clock, or a
+ * Connection by its id, whether or not it reads only now and whatever its name was.
+ */
+export type ChangesBy = ToolInput<"list_changes">["caller"];
+
+/** The SQL that narrows `change_calls` to a caller, with its arguments: none for every caller. */
+function narrowedTo(by: ChangesBy): { where: string; args: string[] } {
+  if (by === undefined) return { where: "", args: [] };
+  if (by.kind === "connection") {
+    return {
+      where: `AND caller_kind IN ('connection', 'read_only_connection') AND caller_id = ?`,
+      args: [by.id],
+    };
+  }
+  return { where: `AND caller_kind = ?`, args: [by.kind] };
+}
+
+/**
+ * The changes after `after`, oldest first, at most `limit` of them, by one caller or any, and
+ * whether more follow. With none to follow, the cursor stands where the log does, so one narrowed
+ * to a caller is not read again from where that caller last changed something. The one reading of
+ * the log forward, for `list_changes` and for what the live channel carries.
  */
 export function changesAfter(
   sql: SqlStorage,
   after: number,
   limit: number,
+  by?: ChangesBy,
 ): { items: Change[]; last: number; more: boolean } {
+  const { where, args } = narrowedTo(by);
   // One more than asked for is read to learn whether more follow.
   const calls = sql
     .exec<CallRow>(
-      `SELECT * FROM change_calls WHERE seq > ? ORDER BY seq LIMIT ?`,
+      `SELECT * FROM change_calls WHERE seq > ? ${where} ORDER BY seq LIMIT ?`,
       after,
+      ...args,
+      limit + 1,
+    )
+    .toArray();
+  const page = calls.slice(0, limit);
+  const more = calls.length > limit;
+  return {
+    items: withEffects(sql, page),
+    last: more ? (page.at(-1)?.seq ?? after) : Math.max(after, lastChange(sql)),
+    more,
+  };
+}
+
+/**
+ * The changes before `before`, newest first, at most `limit` of them, by one caller or any, and
+ * whether earlier ones are kept. `oldest` is the number of the oldest change given, to ask from
+ * next. What is pruned is simply not there.
+ */
+export function changesBefore(
+  sql: SqlStorage,
+  before: number,
+  limit: number,
+  by?: ChangesBy,
+): { items: Change[]; oldest: number; more: boolean } {
+  const { where, args } = narrowedTo(by);
+  const calls = sql
+    .exec<CallRow>(
+      `SELECT * FROM change_calls WHERE seq < ? ${where} ORDER BY seq DESC LIMIT ?`,
+      before,
+      ...args,
       limit + 1,
     )
     .toArray();
   const page = calls.slice(0, limit);
   return {
-    items: withEffects(sql, page),
-    last: page.at(-1)?.seq ?? after,
+    items: withEffects(sql, page.toReversed()).toReversed(),
+    oldest: page.at(-1)?.seq ?? before,
     more: calls.length > limit,
   };
 }

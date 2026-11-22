@@ -8,7 +8,8 @@ import { setVoiceRefusing } from "./voice-fake.ts";
 // The fixed scenario each release's fixture is filled by (section 13, ADR 0019), run through the
 // tools as every caller would. It reaches every table a step could change: Entries with Versions,
 // links, Follow-ups and a Standing mark, Tasks with events, a Recurrence, a delegation and a wait,
-// a Project, a Person, the Trash, a Held Change, the change log, a Connection and what it wrote, a
+// a Project, a Person, the Trash, a Held Change, the change log, a Connection and what it wrote and
+// read, a
 // Device with its push subscription and its Offline Copy on, the spend cap, a Run and its Conversation, a Call ended and
 // one going, the voice key refused, and a Backup.
 // Words carry markers, so the upgrade test holds them to the check that no words leave.
@@ -136,6 +137,8 @@ export async function fillFixture(): Promise<{ ids: FixtureIds; made: Export }> 
   value(
     await context.call(asConnection, "record_entry", { words: marked("Noted from elsewhere") }),
   );
+  // What it read, which the record of its calls keeps beside what it wrote.
+  value(await context.call(asConnection, "list_entries", {}));
 
   const device = crypto.randomUUID();
   value(

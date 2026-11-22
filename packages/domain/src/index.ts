@@ -4,6 +4,7 @@ export * from "./call.ts";
 export * from "./callers.ts";
 export * from "./clock.ts";
 export * from "./compare.ts";
+export * from "./connection-calls.ts";
 export * from "./conversation.ts";
 export * from "./day.ts";
 export * from "./deployment.ts";

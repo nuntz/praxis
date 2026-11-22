@@ -204,3 +204,94 @@ describe("list_changes", () => {
     }
   });
 });
+
+describe("list_changes narrowed by caller", () => {
+  test("gives only the changes that caller made, a Connection by its id whatever its name", async () => {
+    const context = newContext();
+    const theirs = { ...connection, name: "Claude Code, renamed" };
+    const other = { kind: "connection", id: "chatgpt", name: "ChatGPT" } as const;
+    value(await context.call(hand, "record_entry", { words: marked("Mine") }));
+    const first = value(await context.call(connection, "record_entry", { words: marked("One") }));
+    value(await context.call(other, "record_entry", { words: marked("Elsewhere") }));
+    value(await context.call(agent, "record_entry", { words: marked("The Agent's") }));
+    const second = value(await context.call(theirs, "record_entry", { words: marked("Two") }));
+
+    const byConnection = value(
+      await context.call(hand, "list_changes", {
+        caller: { kind: "connection", id: "claude-code" },
+      }),
+    );
+    const byHand = value(await context.call(hand, "list_changes", { caller: { kind: "hand" } }));
+    const byClock = value(await context.call(hand, "list_changes", { caller: { kind: "clock" } }));
+
+    expect(byConnection.items.map((change) => change.effects)).toEqual([
+      first.effects,
+      second.effects,
+    ]);
+    expect(byHand.items.map((change) => change.caller)).toEqual([{ kind: "hand" }]);
+    expect(byClock.items).toEqual([]);
+    // Whatever it was narrowed by, the cursor stands where the log was read to.
+    const { cursor } = value(await context.call(hand, "list_changes", {}));
+    expect(byClock.cursor).toBe(cursor);
+    expect(byConnection.cursor).toBe(cursor);
+  });
+});
+
+describe("list_changes newest first", () => {
+  test("gives the newest 50 first, and its cursor the earlier ones, narrowed or not", async () => {
+    const context = newContext();
+    const ids: string[] = [];
+    for (let n = 1; n <= 53; n++) {
+      const caller = n % 2 === 0 ? connection : hand;
+      ids.push(
+        value(await context.call(caller, "record_entry", { words: marked(`${n}`) })).record.id,
+      );
+    }
+    const newest = ids.toReversed();
+
+    const first = value(await context.call(hand, "list_changes", { newest_first: true }));
+    const second = value(
+      await context.call(hand, "list_changes", { newest_first: true, cursor: first.cursor }),
+    );
+    const byHand = value(
+      await context.call(hand, "list_changes", { newest_first: true, caller: { kind: "hand" } }),
+    );
+
+    expect(first.items.map((change) => change.effects[0]?.id)).toEqual(newest.slice(0, 50));
+    expect(first.more).toBe(true);
+    expect(second.items.map((change) => change.effects[0]?.id)).toEqual(newest.slice(50));
+    expect(second.more).toBe(false);
+    expect(byHand.items.map((change) => change.effects[0]?.id)).toEqual(
+      newest.filter((_, place) => place % 2 === 0),
+    );
+    expect(byHand.more).toBe(false);
+  });
+
+  test("a cursor of the oldest-first list is not one it gave, nor the other way about", async () => {
+    const context = newContext();
+    value(await context.call(hand, "record_entry", { words: marked("One") }));
+    const oldest = value(await context.call(hand, "list_changes", {}));
+    const newest = value(await context.call(hand, "list_changes", { newest_first: true }));
+
+    expect(
+      await context.call(hand, "list_changes", { newest_first: true, cursor: oldest.cursor }),
+    ).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+    expect(await context.call(hand, "list_changes", { cursor: newest.cursor })).toMatchObject({
+      ok: false,
+      error: { code: "invalid_input" },
+    });
+  });
+
+  test("gives nothing pruned, and no page from the end of what is kept", async () => {
+    const context = newContext();
+    value(await context.call(hand, "record_entry", { words: marked("Old") }));
+    context.advance(90 * DAY);
+    const kept = value(await context.call(hand, "record_entry", { words: marked("New") }));
+    await context.fireAlarm();
+
+    const page = value(await context.call(hand, "list_changes", { newest_first: true }));
+
+    expect(page.items.map((change) => change.effects)).toEqual([kept.effects]);
+    expect(page).toMatchObject({ more: false, read_afresh: false });
+  });
+});
