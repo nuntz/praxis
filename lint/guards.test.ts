@@ -47,6 +47,27 @@ const fixtures: Record<string, string> = {
     'export const exact = form.getByLabel("Name", { exact: true });',
   ].join("\n"),
   // An effect follows a signal or a memo, so it runs when the value changes, not on every read.
+  // A time on the screen is shown in the zone it names, the Context's or the Device's.
+  "apps/pwa/src/zones.ts": [
+    "declare const zone: string;",
+    "declare const at: Date;",
+    "export const unnamed = [",
+    '  new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }),',
+    "  new Intl.DateTimeFormat(undefined),",
+    "  new Intl.DateTimeFormat(),",
+    '  at.toLocaleDateString(undefined, { month: "short" }),',
+    "  at.toLocaleTimeString(),",
+    "];",
+    "export const named = [",
+    '  new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: zone }),',
+    "  new Intl.DateTimeFormat(undefined, {",
+    '    timeStyle: "short",',
+    "    timeZone: zone,",
+    "  }),",
+    "  at.toLocaleTimeString(undefined, { timeZone: zone }),",
+    "  (3).toLocaleString(),",
+    "];",
+  ].join("\n"),
   "apps/pwa/src/on-computed.ts": [
     "declare function on<T>(deps: () => T, fn: (value: T) => void): unknown;",
     "declare const spend: () => { notice: string } | null;",
@@ -156,6 +177,7 @@ const restrictedGlobal = "lint/style/noRestrictedGlobals";
 const clockRead = "plugin";
 const inexactLabel = "plugin";
 const computedOn = "plugin";
+const zoneUnnamed = "plugin";
 const outsideJurisdiction = "plugin";
 const midnightAsked = "plugin";
 const pinned = "plugin";
@@ -206,6 +228,10 @@ describe("the lint guards", () => {
 
   test("an effect cannot follow a value computed in on(), only a signal or a memo", () => {
     expect(rulesAt("apps/pwa/src/on-computed.ts")).toEqual(Array(4).fill(computedOn));
+  });
+
+  test("a time on the screen cannot be shown without naming its zone", () => {
+    expect(rulesAt("apps/pwa/src/zones.ts")).toEqual(Array(5).fill(zoneUnnamed));
   });
 
   test("the Worker makes or names an object only in routing.ts, which finds it in the jurisdiction", () => {

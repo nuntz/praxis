@@ -5,6 +5,7 @@ import type {
   PushSubscription,
 } from "@praxis/domain";
 import { createSignal, For, onMount, Show } from "solid-js";
+import { deviceTimeZone } from "./ContextSettings.tsx";
 import { SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import {
   canNotify,
@@ -419,7 +420,9 @@ function switchedOn(device: Device): string {
 
 /** When a Device was last seen, in the Device's own locale. */
 function seenAt(seen: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(seen),
-  );
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: deviceTimeZone(),
+  }).format(new Date(seen));
 }

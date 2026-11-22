@@ -1,9 +1,14 @@
 import type { LastBackup } from "@praxis/domain";
 import { createSignal, onMount, Show } from "solid-js";
+import { deviceTimeZone } from "./ContextSettings.tsx";
 import { SettingRow, SettingsGroup } from "./design/SettingRows.tsx";
 import { callDeploymentTool, unreachableMessage } from "./tools.ts";
 
-const madeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+const madeFormat = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: deviceTimeZone(),
+});
 
 /** What settings say of the last Backup. */
 function lastBackupWords({ made_at }: LastBackup): string {

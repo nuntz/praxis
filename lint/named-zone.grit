@@ -1,0 +1,10 @@
+language js
+
+or {
+  `new Intl.DateTimeFormat($_)`,
+  `$_.toLocaleDateString($_)`,
+  `$_.toLocaleTimeString($_)`
+} as $format where {
+  $format <: not r"(?s).*\btimeZone\b.*",
+  register_diagnostic(span=$format, message="Name the zone a time is shown in: timeZone the Context's, or deviceTimeZone() where the Device's is meant. A formatter with none shows the Device's, under days and times reckoned in the Context's.")
+}

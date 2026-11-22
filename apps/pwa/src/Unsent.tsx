@@ -1,6 +1,7 @@
 import Pencil from "lucide-solid/icons/pencil";
 import Trash from "lucide-solid/icons/trash";
 import { createSignal, For, Show } from "solid-js";
+import { deviceTimeZone } from "./ContextSettings.tsx";
 import { EntryActions } from "./EntryActions.tsx";
 import { clearCopy, clearing, copyFetchedAt } from "./offline-copy.ts";
 import { online } from "./online.ts";
@@ -89,9 +90,11 @@ export function UnsentStatus() {
 
 /** When the Offline Copy was fetched, in the Device's own zone and locale. */
 function fetchedAt(at: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(at),
-  );
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: deviceTimeZone(),
+  }).format(new Date(at));
 }
 
 /** What the person is asked about the Unsent writes kept beside an Offline Copy to be cleared. */

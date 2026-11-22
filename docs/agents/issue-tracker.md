@@ -28,7 +28,9 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue. A ticket with an acceptance criterion that needs what another open ticket builds (a refusal for a state that ticket makes, a reason that ticket gives) is blocked by it: add the edge as in **Blocking** below, or write the stand-in into the criterion.
+Create a GitHub issue. A spec's tickets hold every one of its user stories between them: each ticket names the numbers of the stories its criteria hold, and a story no ticket names gets a ticket of its own before any is built. #107's stories 35 and 49 sat in no ticket, and its review found them missing only once all nine were built.
+
+A ticket with an acceptance criterion that needs what another open ticket builds (a refusal for a state that ticket makes, a reason that ticket gives) is blocked by it: add the edge as in **Blocking** below, or write the stand-in into the criterion.
 
 ## When a skill says "fetch the relevant ticket"
 

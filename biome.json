@@ -31,6 +31,10 @@
       "plugins": ["./lint/day-start.grit"]
     },
     {
+      "includes": ["apps/pwa/src/**"],
+      "plugins": ["./lint/named-zone.grit"]
+    },
+    {
       "includes": ["apps/pwa/src/**/*.css"],
       "plugins": ["./lint/pinned.grit"]
     },

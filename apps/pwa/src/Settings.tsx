@@ -22,6 +22,7 @@ import { Connections } from "./Connections.tsx";
 import {
   BriefAndReview,
   ConversationAndSearch,
+  deviceTimeZone,
   GeneralSettings,
   weekdayName,
 } from "./ContextSettings.tsx";
@@ -390,7 +391,11 @@ function readListed(callTool: CallTool) {
 }
 
 /** The day of a Backup, on this Device, as in "Nov 21". */
-const backupDay = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const backupDay = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  timeZone: deviceTimeZone(),
+});
 
 /** A time zone by the place it is named for, as in "Paris" for Europe/Paris. */
 function zoneCity(zone: string): string {

@@ -1,5 +1,6 @@
 import type { SpendNotice, StandingNotice } from "@praxis/domain";
 import { createSignal, For, type JSX } from "solid-js";
+import { deviceTimeZone } from "./ContextSettings.tsx";
 import { latestRead } from "./latest-read.ts";
 import { CapLink, SettingsLink } from "./SettingsLink.tsx";
 import { type CallTool, unreachableMessage } from "./tools.ts";
@@ -89,7 +90,12 @@ export function capWords(spend: { notice: SpendNotice; spent: number; cap: numbe
     : `This month's spend, ${money.format(spend.spent)}, has passed 80% of its cap of ${money.format(spend.cap)}.`;
 }
 
-const sinceFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+/** When a standing Notice began, on this Device: Notices are the Deployment's, across its Contexts. */
+const sinceFormat = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: deviceTimeZone(),
+});
 
 /** What a standing Notice says. */
 function noticeWords(notice: StandingNotice): string {

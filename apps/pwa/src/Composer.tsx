@@ -25,8 +25,6 @@ type Choice = { name: string; detail: string | null; to: NewLink["to"] };
 /** How many records a picker offers at once. Typing more narrows them. */
 const OFFERED = 8;
 
-const dayFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
-
 /**
  * The Journal's composer, which records an Entry with no model turn. `@` opens a picker of the
  * Context's Persons and `#` one of its Tasks and Projects. Only a pick makes a link: the editor
@@ -36,6 +34,8 @@ const dayFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 export function Composer(props: {
   /** The Context the Entry is recorded in, named on the composer once known. */
   contextName: string | undefined;
+  /** The zone the Journal's days and times are shown in, the Context's. */
+  timeZone: string;
   /** The earlier Entry the one recorded continues or corrects, if the person chose one. */
   followingUp: EntryNamed | null;
   onStopFollowingUp: () => void;
@@ -122,7 +122,7 @@ export function Composer(props: {
       if (found.kind === "mention") {
         const persons = await callTool("list_persons", named);
         if (!persons.ok) return props.onProblem(persons.error.message);
-        records = personChoices(persons.value.items).slice(0, OFFERED);
+        records = personChoices(persons.value.items, props.timeZone).slice(0, OFFERED);
       } else {
         const [projects, tasks] = await Promise.all([
           callTool("list_projects", named),
@@ -153,7 +153,7 @@ export function Composer(props: {
       if (!current() || query() !== found) return;
       // With no network the picker offers what the Offline Copy holds, and makes no new Person or
       // Project, since the Device cannot tell whether one of that name exists (section 8.8).
-      const held = heldChoices(contextId, found.kind, typed);
+      const held = heldChoices(contextId, found.kind, typed, props.timeZone);
       setChoices(held);
       setHighlight(held.length > 0 ? 0 : -1);
     }
@@ -320,8 +320,15 @@ export function Composer(props: {
 }
 
 /** The records the Offline Copy holds of a Context that a picker offers for what was typed. */
-function heldChoices(context: string, kind: LinkQuery["kind"], typed: string): Choice[] {
-  if (kind === "mention") return personChoices(personsHeld(context, typed)).slice(0, OFFERED);
+function heldChoices(
+  context: string,
+  kind: LinkQuery["kind"],
+  typed: string,
+  timeZone: string,
+): Choice[] {
+  if (kind === "mention") {
+    return personChoices(personsHeld(context, typed), timeZone).slice(0, OFFERED);
+  }
   const { projects, tasks } = referencesHeld(context, typed);
   return [...projects.map(projectChoice), ...tasks.map(taskChoice)].slice(0, OFFERED);
 }
@@ -342,19 +349,20 @@ function ChoiceLabel(props: { choice: Choice }) {
  * The Persons offered, each told apart from another with the same name by the latest Entry that
  * Mentions them. The picker never takes two such Persons to be one.
  */
-function personChoices(persons: Person[]): Choice[] {
+function personChoices(persons: Person[], timeZone: string): Choice[] {
   const named = Map.groupBy(persons, (person) => person.name);
   return persons.map((person) => ({
     name: person.name,
-    detail: (named.get(person.name)?.length ?? 0) > 1 ? latestMention(person) : null,
+    detail: (named.get(person.name)?.length ?? 0) > 1 ? latestMention(person, timeZone) : null,
     to: { kind: "person", id: person.id },
   }));
 }
 
-function latestMention(person: Person): string {
+function latestMention(person: Person, timeZone: string): string {
   const latest = person.latest_mention;
   if (!latest) return "never Mentioned";
-  return `last in “${latest.summary}”, ${dayFormat.format(new Date(latest.at))}`;
+  const day = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone });
+  return `last in “${latest.summary}”, ${day.format(new Date(latest.at))}`;
 }
 
 /** Each end as the screen names it. */

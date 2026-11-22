@@ -397,6 +397,7 @@ export function Journal(props: {
         </Show>
         <Composer
           contextName={props.contextName}
+          timeZone={props.timeZone}
           followingUp={followingUp()}
           onStopFollowingUp={() => setFollowingUp(null)}
           onUnsent={(leftOff) => {
