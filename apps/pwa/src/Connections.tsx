@@ -4,7 +4,8 @@ import type {
   DeploymentToolInput,
   DeploymentToolName,
 } from "@praxis/domain";
-import { createEffect, createSignal, For, on, Show } from "solid-js";
+import { createEffect, createSignal, createUniqueId, For, on, Show } from "solid-js";
+import { SwitchInput } from "./design/SettingRows.tsx";
 import { latestRead } from "./latest-read.ts";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
 
@@ -115,6 +116,7 @@ function ConnectionRow(props: {
   onProblem: (message: string | null) => void;
 }) {
   const [sending, setSending] = createSignal(false);
+  const readingOnly = createUniqueId();
   let nameField!: HTMLInputElement;
 
   async function send<N extends ConnectionChange>(tool: N, input: DeploymentToolInput<N>) {
@@ -158,22 +160,23 @@ function ConnectionRow(props: {
           onFocus={(event) => event.currentTarget.select()}
         />
       </label>
-      <label class="connection-reading-only">
-        <input
-          type="checkbox"
+      <div class="connection-reading-only">
+        <label for={readingOnly}>Reading only</label>
+        <SwitchInput
+          id={readingOnly}
           checked={props.connection.reading_only}
           disabled={sending()}
-          onChange={(event) =>
+          onChange={(event) => {
+            const toggle = event.currentTarget;
             void send("set_connection_reading_only", {
               id: props.connection.id,
-              reading_only: event.currentTarget.checked,
+              reading_only: toggle.checked,
             }).then((changed) => {
-              if (!changed) event.currentTarget.checked = props.connection.reading_only;
-            })
-          }
+              if (!changed) toggle.checked = props.connection.reading_only;
+            });
+          }}
         />
-        Reading only
-      </label>
+      </div>
       <button
         type="button"
         class="quiet"
@@ -193,6 +196,7 @@ function NewConnection(props: {
 }) {
   const [problem, setProblem] = createSignal<string | null>(null);
   const [sending, setSending] = createSignal(false);
+  const readingOnly = createUniqueId();
 
   async function make(event: SubmitEvent) {
     event.preventDefault();
@@ -229,10 +233,10 @@ function NewConnection(props: {
           </For>
         </select>
       </label>
-      <label class="connection-reading-only">
-        <input name="reading_only" type="checkbox" />
-        Reading only
-      </label>
+      <div class="connection-reading-only">
+        <label for={readingOnly}>Reading only</label>
+        <SwitchInput id={readingOnly} name="reading_only" />
+      </div>
       <button type="submit" disabled={sending()}>
         Make the Connection
       </button>

@@ -5,6 +5,7 @@ import type {
   PushSubscription,
 } from "@praxis/domain";
 import { createSignal, For, onMount, Show } from "solid-js";
+import { SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import {
   canNotify,
   NotificationsRefused,
@@ -64,9 +65,12 @@ export function Devices() {
     );
   }
 
-  /** Switch Notifications on here: the browser asks the person, then subscribes. */
-  async function switchOnHere(key: string) {
-    if (here === null) return;
+  /**
+   * Switch Notifications on here: the browser asks the person, then subscribes. Says whether they
+   * are on.
+   */
+  async function switchOnHere(key: string): Promise<boolean> {
+    if (here === null) return false;
     setSending(true);
     try {
       const subscription = await subscribeHere(key);
@@ -81,10 +85,13 @@ export function Devices() {
         },
         setProblem,
       );
-      if (switched !== null) show(here, switched);
+      if (switched === null) return false;
+      show(here, switched);
+      return true;
     } catch (error) {
       if (error instanceof NotificationsRefused) setProblem(error.message);
       else setProblem("This browser could not subscribe to Notifications. Try again shortly.");
+      return false;
     } finally {
       setSending(false);
     }
@@ -151,9 +158,12 @@ export function Devices() {
     else void removing();
   }
 
-  /** Switch the Offline Copy on here: it is fetched at once, and kept fresh while Praxis is open. */
-  async function switchCopyOnHere() {
-    if (here === null) return;
+  /**
+   * Switch the Offline Copy on here: it is fetched at once, and kept fresh while Praxis is open.
+   * Says whether it is on.
+   */
+  async function switchCopyOnHere(): Promise<boolean> {
+    if (here === null) return false;
     setSending(true);
     const switched = await writeToDeployment(
       "set_device_offline_copy",
@@ -161,9 +171,10 @@ export function Devices() {
       setProblem,
     );
     setSending(false);
-    if (switched === null) return;
+    if (switched === null) return false;
     show(here, switched);
     await startCopy();
+    return true;
   }
 
   function switchCopyOffHere() {
@@ -176,12 +187,14 @@ export function Devices() {
     });
   }
 
-  async function switchOffHere() {
-    if (here === null) return;
+  /** Switch Notifications off here, and give up the push subscription. Says whether they are off. */
+  async function switchOffHere(): Promise<boolean> {
+    if (here === null) return false;
     const off = await write("set_device_notifications", { id: here, on: false });
-    if (off === null) return;
+    if (off === null) return false;
     show(here, off.record);
     await unsubscribeHere().catch(() => {});
+    return true;
   }
 
   return (
@@ -200,34 +213,41 @@ export function Devices() {
         unencrypted, to read with no network. It holds no Conversation and no image.
       </p>
       <Show when={read()}>
-        <ThisDevice
-          listed={hereListed()}
-          pushKey={pushKey()}
-          sending={sending()}
-          onSwitchOn={(key) => void switchOnHere(key)}
-          onSwitchOff={() => void switchOffHere()}
-        />
-        <Show
-          when={hereListed()?.offline_copy}
-          fallback={
-            <button
-              type="button"
-              disabled={sending() || here === null}
-              onClick={() => void switchCopyOnHere()}
-            >
-              Keep an Offline Copy here
-            </button>
-          }
-        >
-          <button
-            type="button"
-            class="quiet"
-            disabled={sending() || asking() !== null}
-            onClick={switchCopyOffHere}
-          >
-            Switch off the Offline Copy here
-          </button>
-        </Show>
+        <SettingsGroup heading="This Device">
+          <ThisDevice
+            listed={hereListed()}
+            pushKey={pushKey()}
+            sending={sending()}
+            onSwitchOn={(key) => switchOnHere(key)}
+            onSwitchOff={() => switchOffHere()}
+          />
+          <SettingRow
+            title="Offline Copy on this Device"
+            description="Kept in this browser, to read with no network"
+            labels
+            control={(ids) => (
+              <SwitchInput
+                id={ids.id}
+                aria-describedby={ids.describedBy}
+                checked={hereListed()?.offline_copy ?? false}
+                disabled={sending() || here === null || asking() !== null}
+                onChange={(event) => {
+                  const toggle = event.currentTarget;
+                  if (toggle.checked) {
+                    void switchCopyOnHere().then((on) => {
+                      if (!on) toggle.checked = false;
+                    });
+                    return;
+                  }
+                  // Nothing is switched off until the person says what becomes of the Unsent
+                  // writes, if there are any, and the copy is cleared once it is.
+                  toggle.checked = true;
+                  switchCopyOffHere();
+                }}
+              />
+            )}
+          />
+        </SettingsGroup>
       </Show>
       <Show when={asking()}>
         <fieldset class="clearing-copy" aria-labelledby="clearing-copy-question">
@@ -291,54 +311,55 @@ export function Devices() {
   );
 }
 
-/** This browser's own switch, or why it has none. */
+/** This browser's own Notification switch, or why it has none. */
 function ThisDevice(props: {
   listed: Device | undefined;
   pushKey: string | null;
   sending: boolean;
-  onSwitchOn: (key: string) => void;
-  onSwitchOff: () => void;
+  onSwitchOn: (key: string) => Promise<boolean>;
+  onSwitchOff: () => Promise<boolean>;
 }) {
+  const title = "Notifications on this Device";
   return (
     <Show
       when={canNotify()}
       fallback={
-        <p class="settings-note">
-          This browser cannot receive Notifications. On an iPhone or iPad, add Praxis to the Home
-          Screen and open it from there.
-        </p>
+        <SettingRow
+          title={title}
+          description="This browser cannot receive Notifications. On an iPhone or iPad, add Praxis to the Home Screen and open it from there."
+        />
       }
     >
       <Show
         when={props.pushKey}
         fallback={
-          <p class="settings-note">
-            This Deployment has no key to send Notifications with: the setup wizard makes one.
-          </p>
+          <SettingRow
+            title={title}
+            description="This Deployment has no key to send Notifications with: the setup wizard makes one."
+          />
         }
       >
         {(key) => (
-          <Show
-            when={props.listed?.notifications}
-            fallback={
-              <button
-                type="button"
+          <SettingRow
+            title={title}
+            description="Told when the Agent leaves a Brief or a Review"
+            labels
+            control={(ids) => (
+              <SwitchInput
+                id={ids.id}
+                aria-describedby={ids.describedBy}
+                checked={props.listed?.notifications ?? false}
                 disabled={props.sending}
-                onClick={() => props.onSwitchOn(key())}
-              >
-                Switch on Notifications here
-              </button>
-            }
-          >
-            <button
-              type="button"
-              class="quiet"
-              disabled={props.sending}
-              onClick={props.onSwitchOff}
-            >
-              Switch off Notifications here
-            </button>
-          </Show>
+                onChange={(event) => {
+                  const toggle = event.currentTarget;
+                  const on = toggle.checked;
+                  void (on ? props.onSwitchOn(key()) : props.onSwitchOff()).then((done) => {
+                    if (!done) toggle.checked = !on;
+                  });
+                }}
+              />
+            )}
+          />
         )}
       </Show>
     </Show>

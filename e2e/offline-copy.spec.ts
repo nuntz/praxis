@@ -1,4 +1,4 @@
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import {
   callContextTool,
   callDeploymentTool,
@@ -43,6 +43,11 @@ async function openDevices(page: Page) {
   return openSettings(page, "Devices");
 }
 
+/** This Device's Offline Copy switch, in Devices. */
+function offlineCopySwitch(devices: Locator) {
+  return devices.getByRole("switch", { name: "Offline Copy on this Device", exact: true });
+}
+
 /** What this browser keeps as its Offline Copy, as stored. */
 function keptCopy(page: Page) {
   return page.evaluate(() => localStorage.getItem("praxis.offline"));
@@ -63,10 +68,8 @@ async function contextsHeld(page: Page): Promise<string[]> {
  */
 async function keepCopyHere(page: Page, contexts: string[]) {
   const devices = await openDevices(page);
-  await devices.getByRole("button", { name: "Keep an Offline Copy here", exact: true }).click();
-  await expect(
-    devices.getByRole("button", { name: "Switch off the Offline Copy here", exact: true }),
-  ).toBeVisible();
+  await offlineCopySwitch(devices).click();
+  await expect(offlineCopySwitch(devices)).toBeChecked();
   await expect
     .poll(async () => {
       const held = await contextsHeld(page);
@@ -283,10 +286,8 @@ test("switching the Offline Copy off here asks first about the Unsent writes, an
   await expect(journal.getByTestId("unsent-entry")).toHaveCount(1);
 
   const devices = await openDevices(page);
-  await devices
-    .getByRole("button", { name: "Switch off the Offline Copy here", exact: true })
-    .click();
-  const question = devices.getByRole("group");
+  await offlineCopySwitch(devices).click();
+  const question = devices.getByRole("group", { name: /^Switching off clears the Offline Copy/ });
   await expect(question).toContainText("1 Unsent write is kept here too");
   // Nothing is switched off or cleared until the person answers.
   expect(await keptCopy(page)).not.toBeNull();
@@ -300,9 +301,7 @@ test("switching the Offline Copy off here asks first about the Unsent writes, an
   expect((await (await switched).json()).ok).toBe(true);
 
   await expect.poll(() => keptCopy(page)).toBeNull();
-  await expect(
-    devices.getByRole("button", { name: "Keep an Offline Copy here", exact: true }),
-  ).toBeVisible();
+  await expect(offlineCopySwitch(devices)).not.toBeChecked();
   const { items } = await callDeploymentTool(page, "list_devices", {});
   expect(items.filter((device: { id: string }) => device.id === here)).toEqual([]);
   await closeSettings(page);
@@ -400,13 +399,11 @@ test("a copy switched off while it is being fetched stays cleared once the fetch
   await page.goto("/");
   const held = await holdNext(page, tasksOf(context.id));
   const devices = await openDevices(page);
-  await devices.getByRole("button", { name: "Keep an Offline Copy here", exact: true }).click();
+  await offlineCopySwitch(devices).click();
   await held.asked();
 
   const switched = page.waitForResponse(/\/tools\/set_device_offline_copy$/);
-  await devices
-    .getByRole("button", { name: "Switch off the Offline Copy here", exact: true })
-    .click();
+  await offlineCopySwitch(devices).click();
   expect((await (await switched).json()).ok).toBe(true);
   await expect.poll(() => keptCopy(page)).toBeNull();
 
@@ -421,18 +418,14 @@ test("a fetch that read the switch on before it was switched off here does not b
   await lastShown(page, context.id);
   await page.goto("/");
   const devices = await openDevices(page);
-  await expect(
-    devices.getByRole("button", { name: "Keep an Offline Copy here", exact: true }),
-  ).toBeVisible();
+  await expect(offlineCopySwitch(devices)).not.toBeChecked();
   // The fetch switching on starts asks whether the switch is on: it is, and that answer is held.
   const held = await holdNext(page, /\/api\/deployment\/tools\/list_devices$/);
-  await devices.getByRole("button", { name: "Keep an Offline Copy here", exact: true }).click();
+  await offlineCopySwitch(devices).click();
   await held.asked();
 
   const switched = page.waitForResponse(/\/tools\/set_device_offline_copy$/);
-  await devices
-    .getByRole("button", { name: "Switch off the Offline Copy here", exact: true })
-    .click();
+  await offlineCopySwitch(devices).click();
   expect((await (await switched).json()).ok).toBe(true);
   await expect.poll(() => keptCopy(page)).toBeNull();
 

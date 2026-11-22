@@ -28,7 +28,7 @@ test("a Context's settings turn its one Notification switch, and the Deployment'
   await page.goto("/");
   const settings = await openSettings(page, "Brief and Review");
   await expect(settings).toContainText(name);
-  const notifications = settings.getByRole("checkbox", { name: /Brief or the Review is ready/ });
+  const notifications = settings.getByRole("switch", { name: /Brief or the Review is ready/ });
   await expect(notifications).toBeChecked();
 
   const turned = page.waitForResponse((response) =>

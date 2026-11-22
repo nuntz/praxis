@@ -1,5 +1,6 @@
 import type { LastBackup } from "@praxis/domain";
 import { createSignal, onMount, Show } from "solid-js";
+import { SettingRow } from "./design/SettingRows.tsx";
 import { callDeploymentTool, unreachableMessage } from "./tools.ts";
 
 const madeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -32,12 +33,19 @@ export function BackupSettings() {
 
   return (
     <section id="backups" class="settings-group" aria-labelledby="backups-heading">
-      <h3 id="backups-heading" class="settings-part">
+      <h3 id="backups-heading" class="settings-rows-heading">
         Backups
       </h3>
-      <Show when={last()} fallback={<p class="settings-note">Reading the last Backup…</p>}>
-        {(read) => <p data-testid="last-backup">{lastBackupWords(read())}</p>}
-      </Show>
+      <div class="settings-box">
+        <SettingRow
+          title={
+            <Show when={last()} fallback="Reading the last Backup…">
+              {(read) => <span data-testid="last-backup">{lastBackupWords(read())}</span>}
+            </Show>
+          }
+          description="Praxis makes one each day by itself, the same file as an Export, and keeps each for 30 days in the Deployment's R2 bucket, on your own Cloudflare account. There is no switch."
+        />
+      </div>
       <Show when={problem()}>
         {(message) => (
           <p class="problem" role="alert">
@@ -45,10 +53,6 @@ export function BackupSettings() {
           </p>
         )}
       </Show>
-      <p class="settings-note">
-        Praxis makes one each day by itself, the same file as an Export, and keeps each for 30 days
-        in the Deployment's R2 bucket, on your own Cloudflare account. There is no switch.
-      </p>
     </section>
   );
 }

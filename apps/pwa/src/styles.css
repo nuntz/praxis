@@ -343,6 +343,16 @@ button.quiet {
   flex: 1;
 }
 
+/* What a section holds now, in the list of sections on a phone. */
+.settings-section-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font: var(--type-meta);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .settings-shown {
   display: flex;
   flex: 1;
@@ -352,23 +362,158 @@ button.quiet {
   overflow-y: auto;
 }
 
+/*
+ * The section shown is a column on the ground, no wider than 720px, of groups: a heading, then a
+ * `surface` box of rows parted by hairlines, each its words on the left and its control on the
+ * right. What a section lists is a box of rows the same way.
+ */
 .settings-shown > .settings {
   width: 100%;
   max-width: 720px;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-2) var(--space-5);
+  background: none;
+}
+
+.settings-shown > .settings > .column-heading {
+  font: var(--type-screen-title);
+  letter-spacing: -0.02em;
+}
+
+.settings-rows {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings-rows-heading {
+  margin: 0;
+  padding: 0 var(--space-1) var(--space-2);
+  color: var(--muted);
+  font: var(--type-label);
+}
+
+.settings-box,
+.settings-shown :is(.context-rows, .connection-rows, .trash-items, .standing-items, .change-lines) {
+  gap: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-height: 60px;
+  padding: 14px 18px;
+}
+
+.settings-shown :is(.context-row, .connection-row, .trash-item, .standing-item, .change-line) {
+  padding: 14px 18px;
+}
+
+.settings-row + .settings-row,
+.settings-shown
+  :is(.context-row, .connection-row, .trash-item, .standing-item, .change-line)
+  + :is(.context-row, .connection-row, .trash-item, .standing-item, .change-line) {
+  border-top: 1px solid var(--rule);
+}
+
+.settings-row-words {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-row-title {
+  font-weight: 600;
+}
+
+.settings-row-note {
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.settings-row-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-left: auto;
+  overflow-wrap: anywhere;
+}
+
+.settings-amount {
+  width: 9rem;
+}
+
+.settings-row-control :is(input:not(.switch), select) {
+  border-color: var(--inset);
+  background: var(--inset);
+}
+
+/* A switch, never a checkbox: a pill, `muted` when off and the accent when on, its knob `surface`. */
+input[type="checkbox"].switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 46px;
+  height: 28px;
+  min-height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--muted);
+  appearance: none;
+  cursor: pointer;
+}
+
+input[type="checkbox"].switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+
+input[type="checkbox"].switch:checked {
+  background: var(--accent);
+}
+
+input[type="checkbox"].switch:checked::after {
+  left: 21px;
+}
+
+input[type="checkbox"].switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  input[type="checkbox"].switch::after {
+    transition: left 0.15s;
+  }
 }
 
 /* A part of a section under a heading of its own, as Backups and Export are. */
 .settings-group {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: var(--space-3);
+  width: 100%;
 }
 
-.settings-part {
-  margin: 0;
-  color: var(--muted);
-  font: var(--type-label);
+.settings-group .settings-rows-heading {
+  padding-bottom: 0;
 }
 
 .settings input,
@@ -557,10 +702,11 @@ button.quiet {
   font-family: var(--font-mono);
 }
 
+/* Its words on the left, its switch on the right. */
 .connection-reading-only {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   min-height: 40px;
 }
 
@@ -580,6 +726,14 @@ button.quiet {
 
 .new-context h3 {
   font: var(--type-label);
+}
+
+/* A form that makes something, such as a new Context, is a box of its own. */
+.settings-shown .new-context {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
 }
 
 /* Restoring an Export, offered below making the first Context, in its place. */
@@ -607,39 +761,6 @@ button.quiet {
   padding: var(--space-5);
   border-radius: var(--radius-lg);
   background: var(--surface);
-}
-
-.setting {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--space-1) var(--space-4);
-  margin: 0;
-}
-
-.setting dt {
-  color: var(--muted);
-}
-
-.setting dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-/* The Brief's and the Review's times, each switched on or off beside its time. */
-.clock-setting {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-  align-items: center;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.clock-setting legend {
-  padding: 0;
-  margin-bottom: var(--space-1);
-  color: var(--muted);
 }
 
 /* The peers: panels side by side, none hosting another. */
@@ -833,8 +954,45 @@ button.jump-to-latest {
     overflow-y: visible;
   }
 
+  /* Each group of the list is a box of its own on the ground, its rows parted by hairlines. */
+  .settings-sections {
+    padding: 0;
+    background: none;
+  }
+
+  .settings-sections-heading {
+    padding: var(--space-4) 6px var(--space-2);
+  }
+
+  .settings-sections ul {
+    gap: 0;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .settings-sections li + li {
+    border-top: 1px solid var(--rule);
+  }
+
   .settings-section-link {
     min-height: 48px;
+    padding: 0 var(--space-3) 0 14px;
+    border-radius: 0;
+  }
+
+  input[type="checkbox"].switch {
+    width: 50px;
+    height: 30px;
+  }
+
+  input[type="checkbox"].switch::after {
+    width: 24px;
+    height: 24px;
+  }
+
+  input[type="checkbox"].switch:checked::after {
+    left: 23px;
   }
 
   .settings-shown {

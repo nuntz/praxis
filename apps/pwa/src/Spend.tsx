@@ -1,5 +1,6 @@
 import type { Spend } from "@praxis/domain";
 import { createSignal, Show } from "solid-js";
+import { SettingRow, SettingsGroup } from "./design/SettingRows.tsx";
 import { latestRead } from "./latest-read.ts";
 import { capWords, money, readNotices } from "./Notices.tsx";
 import { CAP_FIELD } from "./SettingsLink.tsx";
@@ -83,35 +84,54 @@ export function SpendSettings() {
       <h2 id="spend-heading" class="column-heading">
         Spend
       </h2>
-      <Show when={spend()} fallback={<p class="settings-note">Reading this month's spend…</p>}>
-        {(shown) => (
-          <p data-testid="spend-against-cap">
-            {money.format(shown().spent)} spent this month of a {money.format(shown().cap)} cap.
-          </p>
-        )}
-      </Show>
-      <form
-        class="context-rename"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save();
-        }}
-      >
-        <label for={CAP_FIELD}>Monthly cap, US dollars</label>
-        <input
-          id={CAP_FIELD}
-          type="number"
-          inputmode="decimal"
-          min="0.01"
-          step="0.01"
-          value={cap()}
-          placeholder={spend() ? String(spend()?.cap) : ""}
-          onInput={(event) => setCap(event.currentTarget.value)}
+      <SettingsGroup heading="This month">
+        <SettingRow
+          title={
+            <Show when={spend()} fallback="Reading this month's spend…">
+              {(shown) => (
+                <span data-testid="spend-against-cap">
+                  {money.format(shown().spent)} spent this month of a {money.format(shown().cap)}{" "}
+                  cap.
+                </span>
+              )}
+            </Show>
+          }
         />
-        <button type="submit" disabled={saving()}>
-          Set cap
-        </button>
-      </form>
+      </SettingsGroup>
+      <SettingsGroup heading="The cap">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          <SettingRow
+            title="Monthly cap, US dollars"
+            description="Raising it takes effect at once"
+            labels
+            id={CAP_FIELD}
+            control={(ids) => (
+              <>
+                <input
+                  id={ids.id}
+                  aria-describedby={ids.describedBy}
+                  class="settings-amount"
+                  type="number"
+                  inputmode="decimal"
+                  min="0.01"
+                  step="0.01"
+                  value={cap()}
+                  placeholder={spend() ? String(spend()?.cap) : ""}
+                  onInput={(event) => setCap(event.currentTarget.value)}
+                />
+                <button type="submit" disabled={saving()}>
+                  Set cap
+                </button>
+              </>
+            )}
+          />
+        </form>
+      </SettingsGroup>
       <Show when={problem()}>
         {(message) => (
           <p class="problem" role="alert">

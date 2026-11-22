@@ -1,5 +1,6 @@
 import { FIRST_TIMES, namedZone, type Settings, type Weekday, weekdays } from "@praxis/domain";
 import { createSignal, For, Show } from "solid-js";
+import { SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /** The time zone this Device is in, as its browser names it. */
@@ -21,11 +22,16 @@ function settingsChange(onChanged: (settings: Settings) => void) {
     setSending(true);
     try {
       const result = await send();
-      if (!result.ok) return setProblem(result.error.message);
+      if (!result.ok) {
+        setProblem(result.error.message);
+        return false;
+      }
       setProblem(null);
       onChanged(result.value.record);
+      return true;
     } catch (error) {
       setProblem(unreachableMessage(error));
+      return false;
     } finally {
       setSending(false);
     }
@@ -57,19 +63,26 @@ export function GeneralSettings(props: {
       <p class="settings-note">
         Today, due dates and every time shown in {props.settings.name} are in its time zone.
       </p>
-      <dl class="setting">
-        <dt>Time zone</dt>
-        <dd data-testid="time-zone">{props.settings.time_zone}</dd>
+      <SettingsGroup heading="Time zone">
+        <SettingRow
+          title="This Context"
+          control={() => <span data-testid="time-zone">{props.settings.time_zone}</span>}
+        />
         <Show when={differs()}>
-          <dt>This Device</dt>
-          <dd data-testid="device-time-zone">{device}</dd>
+          <SettingRow
+            title="This Device"
+            description="Where this Device is now"
+            control={() => (
+              <>
+                <span data-testid="device-time-zone">{device}</span>
+                <button type="button" disabled={sending()} onClick={() => void useDeviceZone()}>
+                  Use {device}
+                </button>
+              </>
+            )}
+          />
         </Show>
-      </dl>
-      <Show when={differs()}>
-        <button type="button" disabled={sending()} onClick={() => void useDeviceZone()}>
-          Use {device}
-        </button>
-      </Show>
+      </SettingsGroup>
       <Problem message={problem()} />
     </section>
   );
@@ -108,91 +121,126 @@ export function BriefAndReview(props: {
         The Agent looks over {props.settings.name} on its own and leaves what it finds in the
         Conversation. Times are in {props.settings.time_zone}, this Context's time zone.
       </p>
-      <fieldset class="clock-setting">
-        <legend>Brief, each day</legend>
-        <label>
-          <input
-            type="checkbox"
-            checked={briefOn()}
-            disabled={sending()}
-            onChange={(event) => void setBrief(event.currentTarget.checked ? briefTime() : null)}
-          />{" "}
-          On
-        </label>
-        <label>
-          Brief time{" "}
-          <input
-            type="time"
-            value={props.settings.brief_time ?? briefTime()}
-            disabled={sending() || !briefOn()}
-            onChange={(event) => {
-              const time = event.currentTarget.value;
-              if (time === "") return;
-              setBriefTime(time);
-              void setBrief(time);
-            }}
-          />
-        </label>
-      </fieldset>
-      <fieldset class="clock-setting">
-        <legend>Review, each week</legend>
-        <label>
-          <input
-            type="checkbox"
-            checked={reviewOn()}
-            disabled={sending()}
-            onChange={(event) =>
-              void setReview({ time: event.currentTarget.checked ? reviewTime() : null })
-            }
-          />{" "}
-          On
-        </label>
-        <label>
-          Review day{" "}
-          <select
-            value={props.settings.review_day}
-            disabled={sending()}
-            onChange={(event) =>
-              void setReview({
-                day: event.currentTarget.value as Weekday,
-                time: props.settings.review_time,
-              })
-            }
-          >
-            <For each={weekdays}>{(day) => <option value={day}>{dayNamed(day)}</option>}</For>
-          </select>
-        </label>
-        <label>
-          Review time{" "}
-          <input
-            type="time"
-            value={props.settings.review_time ?? reviewTime()}
-            disabled={sending() || !reviewOn()}
-            onChange={(event) => {
-              const time = event.currentTarget.value;
-              if (time === "") return;
-              setReviewTime(time);
-              void setReview({ time });
-            }}
-          />
-        </label>
-      </fieldset>
+      <SettingsGroup heading="Brief, each day">
+        <SettingRow
+          title="Daily Brief"
+          description="What is due and what came up, each morning"
+          labels
+          control={(ids) => (
+            <SwitchInput
+              id={ids.id}
+              aria-describedby={ids.describedBy}
+              checked={briefOn()}
+              disabled={sending()}
+              onChange={(event) =>
+                void kept(
+                  event.currentTarget,
+                  setBrief(event.currentTarget.checked ? briefTime() : null),
+                )
+              }
+            />
+          )}
+        />
+        <SettingRow
+          title="Time"
+          labels
+          control={(ids) => (
+            <input
+              id={ids.id}
+              type="time"
+              value={props.settings.brief_time ?? briefTime()}
+              disabled={sending() || !briefOn()}
+              onChange={(event) => {
+                const time = event.currentTarget.value;
+                if (time === "") return;
+                setBriefTime(time);
+                void setBrief(time);
+              }}
+            />
+          )}
+        />
+      </SettingsGroup>
+      <SettingsGroup heading="Review, each week">
+        <SettingRow
+          title="Weekly Review"
+          description="What went quiet, and what to look at next week"
+          labels
+          control={(ids) => (
+            <SwitchInput
+              id={ids.id}
+              aria-describedby={ids.describedBy}
+              checked={reviewOn()}
+              disabled={sending()}
+              onChange={(event) =>
+                void kept(
+                  event.currentTarget,
+                  setReview({ time: event.currentTarget.checked ? reviewTime() : null }),
+                )
+              }
+            />
+          )}
+        />
+        <SettingRow
+          title="Day"
+          labels
+          control={(ids) => (
+            <select
+              id={ids.id}
+              value={props.settings.review_day}
+              disabled={sending()}
+              onChange={(event) =>
+                void setReview({
+                  day: event.currentTarget.value as Weekday,
+                  time: props.settings.review_time,
+                })
+              }
+            >
+              <For each={weekdays}>{(day) => <option value={day}>{dayNamed(day)}</option>}</For>
+            </select>
+          )}
+        />
+        <SettingRow
+          title="Time"
+          labels
+          control={(ids) => (
+            <input
+              id={ids.id}
+              type="time"
+              value={props.settings.review_time ?? reviewTime()}
+              disabled={sending() || !reviewOn()}
+              onChange={(event) => {
+                const time = event.currentTarget.value;
+                if (time === "") return;
+                setReviewTime(time);
+                void setReview({ time });
+              }}
+            />
+          )}
+        />
+      </SettingsGroup>
       {/* One switch for both, beside their times (ADR 0013). A Device is sent one only while
-        Notifications are switched on there too, in the Deployment's settings. */}
-      <fieldset class="clock-setting">
-        <legend>Notifications</legend>
-        <label>
-          <input
-            type="checkbox"
-            checked={props.settings.notifications}
-            disabled={sending()}
-            onChange={(event) =>
-              void change(() => callTool("set_notifications", { on: event.currentTarget.checked }))
-            }
-          />{" "}
-          Tell my Devices when the Brief or the Review is ready
-        </label>
-      </fieldset>
+        Notifications are switched on there too, in Devices. */}
+      <SettingsGroup heading="Notifications">
+        <SettingRow
+          title="Tell my Devices when the Brief or the Review is ready"
+          description="Each Device whose Notifications are on, in Devices"
+          labels
+          control={(ids) => (
+            <SwitchInput
+              id={ids.id}
+              aria-describedby={ids.describedBy}
+              checked={props.settings.notifications}
+              disabled={sending()}
+              onChange={(event) =>
+                void kept(
+                  event.currentTarget,
+                  change(() => callTool("set_notifications", { on: event.currentTarget.checked })),
+                )
+              }
+            />
+          )}
+        />
+      </SettingsGroup>
       <Problem message={problem()} />
     </section>
   );
@@ -261,52 +309,57 @@ export function ConversationAndSearch(props: { contextName: string }) {
         meaning with.
       </p>
       {/* The Conversation's text is kept until the person clears it, all at once (section 5.8). */}
-      <fieldset class="clock-setting">
-        <legend>Conversation</legend>
-        <p class="setting-note">
-          Clearing drops every Message, and what the Agent quoted of records since removed for good
-          with them. The Journal, its changes and the Run records stay as they are. It cannot be
-          undone.
-        </p>
-        <Show
-          when={confirming()}
-          fallback={
-            <button
-              type="button"
-              disabled={sending()}
-              onClick={() => {
-                setCleared(null);
-                setConfirming(true);
-              }}
+      <SettingsGroup heading="Conversation">
+        <SettingRow
+          title="Every Message"
+          description="Clearing drops every Message, and what the Agent quoted of records since removed for good with them. The Journal, its changes and the Run records stay as they are. It cannot be undone."
+          control={() => (
+            <Show
+              when={confirming()}
+              fallback={
+                <button
+                  type="button"
+                  disabled={sending()}
+                  onClick={() => {
+                    setCleared(null);
+                    setConfirming(true);
+                  }}
+                >
+                  Clear the Conversation
+                </button>
+              }
             >
-              Clear the Conversation
-            </button>
-          }
-        >
-          <div class="clear-conversation-actions">
-            <button type="button" disabled={sending()} onClick={() => void clear()}>
-              Clear it for good
-            </button>
-            <button type="button" class="quiet" onClick={() => setConfirming(false)}>
-              Keep it
-            </button>
-          </div>
-        </Show>
-        <p class="setting-note" role="status">
-          {cleared() ?? ""}
-        </p>
-      </fieldset>
+              <div class="clear-conversation-actions">
+                <button type="button" disabled={sending()} onClick={() => void clear()}>
+                  Clear it for good
+                </button>
+                <button type="button" class="quiet" onClick={() => setConfirming(false)}>
+                  Keep it
+                </button>
+              </div>
+            </Show>
+          )}
+        />
+      </SettingsGroup>
+      <p class="setting-note" role="status">
+        {cleared() ?? ""}
+      </p>
       {/* The meaning index is derived and kept outside the Context, so it can always be thrown
         away and made again from the Journal (section 9.4). */}
-      <fieldset class="clock-setting">
-        <legend>Search by meaning</legend>
-        <button type="button" disabled={sending()} onClick={() => void rebuild()}>
-          Rebuild from the Journal
-        </button>
-        <p class="setting-note" role="status">
-          {rebuilding() ?? ""}
-        </p>
-      </fieldset>
+      <SettingsGroup heading="Search by meaning">
+        <SettingRow
+          title="The index"
+          description="Derived from the Journal, so it can always be made again from it"
+          control={() => (
+            <button type="button" disabled={sending()} onClick={() => void rebuild()}>
+              Rebuild from the Journal
+            </button>
+          )}
+        />
+      </SettingsGroup>
+      <p class="setting-note" role="status">
+        {rebuilding() ?? ""}
+      </p>
       <Problem message={problem()} />
     </section>
   );
@@ -322,6 +375,12 @@ function Problem(props: { message: string | null }) {
       )}
     </Show>
   );
+}
+
+/** Put a switch back as it was when the change it was turned for did not go through. */
+async function kept(toggle: HTMLInputElement, changed: Promise<boolean>) {
+  const turned = toggle.checked;
+  if (!(await changed)) toggle.checked = !turned;
 }
 
 /** A day of the week as the Device's language names it. */

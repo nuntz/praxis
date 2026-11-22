@@ -1,5 +1,6 @@
 import { type ContextListing, exportZip, exportZipName } from "@praxis/domain";
 import { createSignal, Show } from "solid-js";
+import { SettingRow } from "./design/SettingRows.tsx";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
 
 /** Hand the person a file to keep, as the browser saves a download. */
@@ -21,15 +22,16 @@ export function download(blob: Blob, name: string): void {
 export function ExportSettings() {
   return (
     <section id="export" class="settings-group" aria-labelledby="export-heading">
-      <h3 id="export-heading" class="settings-part">
+      <h3 id="export-heading" class="settings-rows-heading">
         Export
       </h3>
-      <MakeExport />
-      <p class="settings-note">
-        The whole Deployment, every Context in it, retired ones too: the Journal with its Versions,
-        the Trash and the Run records. Never a Conversation or a key. It is not encrypted, and once
-        downloaded it is yours: Praxis cannot reach it.
-      </p>
+      <div class="settings-box">
+        <SettingRow
+          title="The whole Deployment, as a zip"
+          description="Every Context in it, retired ones too: the Journal with its Versions, the Trash and the Run records. Never a Conversation or a key. It is not encrypted, and once downloaded it is yours: Praxis cannot reach it."
+          control={() => <MakeExport />}
+        />
+      </div>
     </section>
   );
 }

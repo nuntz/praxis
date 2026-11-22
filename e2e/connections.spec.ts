@@ -54,7 +54,7 @@ test("the person makes a Connection to one Context, and its address reaches that
   await form.getByRole("button", { name: "Make the Connection" }).click();
 
   await expect(row.getByText(`in ${work.name}`)).toBeVisible();
-  await expect(row.getByLabel("Reading only", { exact: true })).not.toBeChecked();
+  await expect(row.getByRole("switch", { name: "Reading only", exact: true })).not.toBeChecked();
   const address = await row.getByLabel(`Address of ${name}`, { exact: true }).inputValue();
   // An address under /mcp on this Deployment, holding an opaque id that never names the Context.
   expect(address).toMatch(new RegExp(`^${new URL(page.url()).origin}/mcp/[0-9A-Za-z_-]{20,}$`));
@@ -65,11 +65,11 @@ test("the person makes a Connection to one Context, and its address reaches that
   expect(await call(agent, "get_settings")).toMatchObject({ ok: true, value: { name: work.name } });
 
   // Limited to reading from its next call on.
-  // The box shows checked at the tap; the Connection is limited once the tool has answered.
+  // The switch shows on at the tap; the Connection is limited once the tool has answered.
   const switched = page.waitForResponse(/\/set_connection_reading_only$/);
-  await row.getByLabel("Reading only", { exact: true }).check();
+  await row.getByRole("switch", { name: "Reading only", exact: true }).check();
   await switched;
-  await expect(row.getByLabel("Reading only", { exact: true })).toBeChecked();
+  await expect(row.getByRole("switch", { name: "Reading only", exact: true })).toBeChecked();
   expect(await call(agent, "record_entry", { words: `Never recorded ${tag}` })).toMatchObject({
     ok: false,
     error: { code: "not_offered" },
