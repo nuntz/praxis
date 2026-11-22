@@ -104,3 +104,83 @@ test("opening a Project in Attention shows its Tasks, and one with no open Task 
   ).toBeVisible();
   await expect(projects.getByText(/^Deferred until .+2099/)).toBeVisible();
 });
+
+/** The day `days` after a day, by the calendar. */
+function after(day: string, days: number): string {
+  const [year, month, date] = day.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
+}
+
+test("the person opens the weeks ahead from Due and sees what is coming, a Recurrence's Occurrences to come among it", async ({
+  page,
+}, testInfo) => {
+  const [weekly, vet] = ["Water the plants", "Book the vet"];
+  const { id, tasks } = await contextWith(page, testInfo, [weekly, vet]);
+  const [watering, booking] = tasks;
+  const { today } = await callContextTool(page, id, "get_settings", {});
+  await callContextTool(page, id, "set_task_dates", {
+    id: watering?.id,
+    due_date: after(today, 2),
+  });
+  await callContextTool(page, id, "set_recurrence", {
+    id: watering?.id,
+    recurrence: { kind: "days", every: 7 },
+  });
+  await callContextTool(page, id, "set_task_dates", {
+    id: booking?.id,
+    defer_date: after(today, 5),
+  });
+  // Due past the 28 days the view covers.
+  await callContextTool(page, id, "create_project", { name: "Hedge", due_date: after(today, 29) });
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  // Nothing is due, and the weeks ahead still open from the Due section, in Attention itself.
+  const due = attention.getByRole("region", { name: "Due", exact: true });
+  const open = due.getByRole("button", { name: "The weeks ahead" });
+  await expect(open).toHaveAttribute("aria-expanded", "false");
+  await expect(due.getByRole("listitem")).toHaveCount(0);
+  await open.click();
+  await expect(open).toHaveAttribute("aria-expanded", "true");
+
+  const ahead = attention.getByRole("region", { name: "The weeks ahead", exact: true });
+  const items = ahead.getByRole("listitem");
+  await expect(items).toHaveText([
+    new RegExp(`^${weekly}`),
+    new RegExp(`^${vet}.*Deferred until`),
+    new RegExp(`^${weekly}.*Not made yet`),
+    new RegExp(`^${weekly}.*Not made yet`),
+    new RegExp(`^${weekly}.*Not made yet`),
+  ]);
+  await expect(ahead.getByText("Hedge")).toHaveCount(0);
+  // Only what exists is finished from here: an Occurrence to come has no checkbox.
+  await expect(ahead.getByRole("checkbox", { name: weekly, exact: true })).toHaveCount(1);
+
+  // Finished with no network, it leaves at once, as it leaves Attention (section 8.8).
+  await page.context().setOffline(true);
+  await ahead.getByRole("checkbox", { name: weekly, exact: true }).click();
+  await expect(items).toHaveText([
+    new RegExp(`^${vet}`),
+    new RegExp(`^${weekly}.*Not made yet`),
+    new RegExp(`^${weekly}.*Not made yet`),
+    new RegExp(`^${weekly}.*Not made yet`),
+  ]);
+
+  // Sent, the next Occurrence is made and the weeks ahead follow.
+  const finished = page.waitForResponse(/\/tools\/finish_task$/);
+  await page.context().setOffline(false);
+  expect((await (await finished).json()).ok).toBe(true);
+  await expect(items).toHaveText([
+    new RegExp(`^${vet}`),
+    new RegExp(`^${weekly}`),
+    new RegExp(`^${weekly}.*Not made yet`),
+    new RegExp(`^${weekly}.*Not made yet`),
+  ]);
+  await expect(ahead.getByRole("checkbox", { name: weekly, exact: true })).not.toBeChecked();
+
+  await open.click();
+  await expect(ahead).toHaveCount(0);
+  // Left open, so the accessibility check at the end sees it.
+  await open.click();
+  await expect(items).toHaveCount(4);
+});

@@ -131,7 +131,7 @@ test("a Task finished with no network leaves Attention marked Unsent, can be und
   await due.getByRole("checkbox", { name: gas, exact: true }).click();
 
   // Both leave Attention at once, and are counted as Unsent.
-  await expect(due).toHaveCount(0);
+  await expect(due.getByRole("listitem")).toHaveCount(0);
   await expect(attentionCount(page, testInfo)).not.toContainText("to act on");
   await expect(page.getByRole("status").filter({ hasText: /^2 Unsent/ })).toBeVisible();
   const { journal } = await openJournal(page, testInfo);

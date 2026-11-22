@@ -1,5 +1,6 @@
 import { type Day, dayIn, daysBetween } from "./day.ts";
 import { instantToIso } from "./entry.ts";
+import { compare, inOrder, type Sorted } from "./in-order.ts";
 import type { Project } from "./project.ts";
 import type { Task, TaskEvent } from "./task.ts";
 
@@ -49,9 +50,6 @@ export type Attention = {
 
 /** A Task with what has happened to it, oldest first, from which it came up. */
 export type TaskWithEvents = { task: Task; events: TaskEvent[] };
-
-/** Something listed in a section, with what the section is ordered by. */
-type Sorted<T> = { item: T; by: (string | number)[] };
 
 /**
  * Attention from the open Tasks and open Projects of a Context, today in its time zone. A Task
@@ -110,23 +108,6 @@ export function attention(
 /** Whether a Due Date has come: the day is today, or it has passed and the record is Overdue. */
 function isDue(dueDate: Day | null, today: Day): dueDate is Day {
   return dueDate !== null && dueDate <= today;
-}
-
-/** The items in the order of what they are sorted by, earliest first, in the order given on a tie. */
-function inOrder<T>(sorted: Sorted<T>[]): T[] {
-  return sorted.toSorted((a, b) => compare(a.by, b.by)).map(({ item }) => item);
-}
-
-/**
- * Two keys, part by part. Days and ISO 8601 instants compare as text in the order they fall, and
- * an instant held as milliseconds as a number.
- */
-function compare(a: (string | number)[], b: (string | number)[]): number {
-  for (const [index, part] of a.entries()) {
-    const other = b[index] as string | number;
-    if (part !== other) return part < other ? -1 : 1;
-  }
-  return 0;
 }
 
 /**

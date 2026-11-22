@@ -115,6 +115,33 @@ export function nextDueDate(rule: Recurrence, due: Day, closedOn: Day): Day {
   }
 }
 
+/** An Occurrence's two days, as worked out before it is made: it has a Due Date always. */
+export type OccurrenceDates = { due_date: Day; defer_date: Day | null };
+
+/**
+ * The Occurrences that would follow an open one with these dates, in order, worked out from its
+ * rule: they do not exist until each is made (section 3.5). Each is taken as closed on its Due
+ * Date, or today once that has passed: an interval's would move with a later closing. Each keeps the gap in days from the open one's Defer Date to its Due Date. The list runs to the
+ * last whose Due Date or Defer Date is on or before `to`.
+ */
+export function occurrencesAhead(
+  rule: Recurrence,
+  current: OccurrenceDates,
+  today: Day,
+  to: Day,
+): OccurrenceDates[] {
+  const gap =
+    current.defer_date === null ? null : daysBetween(current.due_date, current.defer_date);
+  const ahead: OccurrenceDates[] = [];
+  for (let due = current.due_date; ; ) {
+    due = nextDueDate(rule, due, due > today ? due : today);
+    const defer = gap === null ? null : addDays(due, gap);
+    // Both days move on with each Occurrence, so the first past `to` ends the list.
+    if (due > to && (defer === null || defer > to)) return ahead;
+    ahead.push({ due_date: due, defer_date: defer });
+  }
+}
+
 /** The closing day plus an interval, a month later falling on the last day a month has. */
 function afterInterval(closedOn: Day, { every, unit }: Interval): Day {
   if (unit === "days") return addDays(closedOn, every);

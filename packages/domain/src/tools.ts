@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AHEAD_DAYS, type Ahead, MOST_AHEAD_DAYS } from "./ahead.ts";
 import type { Attention } from "./attention.ts";
 import type { CallerKind } from "./callers.ts";
 import type { RunRecord } from "./conversation.ts";
@@ -570,6 +571,12 @@ export const tools = {
     input: z.strictObject({}),
     offered: toEveryCaller,
   },
+  view_ahead: {
+    kind: "read",
+    description: `What is coming in this Context in the days after today, derived by rule and the same for every caller: the open Tasks and Projects with a Due Date, and the open Tasks with a Defer Date, from tomorrow to \`to\`, ${AHEAD_DAYS} days after today unless \`days\` asks for 1 to ${MOST_AHEAD_DAYS}. What is due today or Overdue is not ahead: it is in view_attention's \`due\`. Each item is listed \`on\` one of its days, \`which\` says whether its Due Date or its Defer Date, and a Task with both in these days is listed on each; by day, Due Dates before Defer Dates. A Recurrence's future Occurrences are listed too as \`future_occurrence\`: they do not exist yet, so they have no id and nothing can link to them or wait on them. Each is worked out from the rule of the open Occurrence it \`follows\`, as if the one before it were closed on its Due Date, or today if that has passed; an interval's would move with a later closing.`,
+    input: z.strictObject({ days: z.int().min(1).max(MOST_AHEAD_DAYS).optional() }),
+    offered: toEveryCaller,
+  },
   search: {
     kind: "read",
     description:
@@ -795,6 +802,7 @@ export type ToolOutput = {
   set_review_time: Written<Settings>;
   set_notifications: Written<Settings>;
   view_attention: Attention;
+  view_ahead: Ahead;
   search: SearchResults;
   rebuild_search_index: SearchIndex;
   /** The Conversation is cleared: it holds no Message now. */

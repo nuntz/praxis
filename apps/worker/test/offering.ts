@@ -68,6 +68,7 @@ export const offering: Record<string, [Offer, Offer, Offer, Offer, Offer]> = {
   set_notifications: [
                    "yes", "no",  "no",  "no",       "no"  ],
   view_attention: ["yes", "yes", "yes", "yes",      "yes" ],
+  view_ahead: [    "yes", "yes", "yes", "yes",      "yes" ],
   search: [        "yes", "yes", "yes", "yes",      "yes" ],
   rebuild_search_index: [
                    "yes", "no",  "no",  "no",       "no"  ],
@@ -188,6 +189,7 @@ export const runsWith: Record<string, () => unknown> = {
   set_review_time: () => ({ day: "friday", time: "16:00" }),
   set_notifications: () => ({ on: false }),
   view_attention: () => ({}),
+  view_ahead: () => ({ days: 90 }),
   search: () => ({ words: marked("Offered") }),
   rebuild_search_index: () => ({}),
   clear_conversation: () => ({}),

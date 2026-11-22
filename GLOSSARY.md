@@ -137,7 +137,7 @@ A rule on a Task that makes the next Occurrence when this one is Finished or Dro
 _Avoid_: Repeat, series, recurring task template
 
 **Occurrence**:
-One of the Tasks a Recurrence makes, each a Task of its own.
+One of the Tasks a Recurrence makes, each a Task of its own. One still to come does not exist until it is made: the weeks ahead work it out from the rule.
 _Avoid_: Instance, repeat, copy
 
 **Attention**:

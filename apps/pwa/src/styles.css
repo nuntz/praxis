@@ -1048,6 +1048,39 @@ button.quiet {
   font-weight: 600;
 }
 
+.attention-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+/* The weeks ahead, opened from Due: each day headed, its Tasks, Projects and Occurrences to come. */
+
+.weeks-ahead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.weeks-ahead-day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.weeks-ahead-day-title {
+  margin: 0;
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+.task.future-occurrence {
+  border: 1px dashed var(--rule);
+  background: transparent;
+}
+
 .attention-project {
   display: flex;
   flex-wrap: wrap;

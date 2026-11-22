@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { type Interval, nextDueDate, type Recurrence, type Weekday } from "../src/index.ts";
+import {
+  type Interval,
+  nextDueDate,
+  occurrencesAhead,
+  type Recurrence,
+  type Weekday,
+} from "../src/index.ts";
 
 // Recurrence dates are one of the few places with direct tests (section 13): every rule, Due
 // Date and closing day is too many for scenarios at the tool seam.
@@ -120,5 +126,92 @@ describe("an interval counted from the closing day", () => {
   ])("of %s", (_, every, unit, due, closed, next) => {
     const rule = { kind: "interval", every, unit: unit as Interval["unit"] } as const;
     expect(nextDueDate(rule, due, closed)).toBe(next);
+  });
+});
+
+describe("the Occurrences ahead, worked out from the rule", () => {
+  // Today is Sunday 2026-11-15. Each Occurrence is taken as closed on its Due Date, or today once
+  // that has passed, and the list runs to the last whose Due Date or Defer Date is on or before
+  // the last day asked for.
+  const today = "2026-11-15";
+  const weekly: Recurrence = { kind: "weeks", every: 1, on: ["monday"], from: "2026-11-16" };
+  const dues = (occurrences: { due_date: string }[]) => occurrences.map((each) => each.due_date);
+
+  test("a schedule, from an open Occurrence not yet due, after it and up to the last day", () => {
+    const ahead = occurrencesAhead(
+      weekly,
+      { due_date: "2026-11-16", defer_date: null },
+      today,
+      "2026-12-13",
+    );
+    expect(ahead).toEqual([
+      { due_date: "2026-11-23", defer_date: null },
+      { due_date: "2026-11-30", defer_date: null },
+      { due_date: "2026-12-07", defer_date: null },
+    ]);
+  });
+
+  test("a schedule, from an Overdue Occurrence, as if closed today: the days missed are skipped", () => {
+    const rule = { ...weekly, from: "2026-11-02" };
+    const ahead = occurrencesAhead(
+      rule,
+      { due_date: "2026-11-02", defer_date: null },
+      today,
+      "2026-11-29",
+    );
+    expect(dues(ahead)).toEqual(["2026-11-16", "2026-11-23"]);
+  });
+
+  test("a schedule from an Occurrence due today runs from tomorrow", () => {
+    const rule = { kind: "days", every: 1, from: "2026-11-15" } as const;
+    const ahead = occurrencesAhead(
+      rule,
+      { due_date: today, defer_date: null },
+      today,
+      "2026-11-18",
+    );
+    expect(dues(ahead)).toEqual(["2026-11-16", "2026-11-17", "2026-11-18"]);
+  });
+
+  test("on the last day of the month, falling on each month's own", () => {
+    const rule = { kind: "months", every: 1, on: "last", from: "2026-11-30" } as const;
+    const ahead = occurrencesAhead(
+      rule,
+      { due_date: "2026-11-30", defer_date: null },
+      today,
+      "2027-02-13",
+    );
+    expect(dues(ahead)).toEqual(["2026-12-31", "2027-01-31"]);
+  });
+
+  // biome-ignore format: read as a table
+  test.each([
+    ["closed on its Due Date", 2, "weeks", "2026-11-20", "2026-12-13", ["2026-12-04"]],
+    ["Overdue, closed today", 3, "days", "2026-11-10", "2026-11-22", ["2026-11-18", "2026-11-21"]],
+  ])("an interval, %s", (_, every, unit, due, to, expected) => {
+    const rule = { kind: "interval", every, unit: unit as Interval["unit"] } as const;
+    expect(dues(occurrencesAhead(rule, { due_date: due, defer_date: null }, today, to))).toEqual(expected);
+  });
+
+  test("each keeps the gap from its Defer Date to its Due Date, and one whose Defer Date alone comes by the last day is listed", () => {
+    const ahead = occurrencesAhead(
+      weekly,
+      { due_date: "2026-11-16", defer_date: "2026-11-13" },
+      today,
+      "2026-12-13",
+    );
+    expect(ahead).toEqual([
+      { due_date: "2026-11-23", defer_date: "2026-11-20" },
+      { due_date: "2026-11-30", defer_date: "2026-11-27" },
+      { due_date: "2026-12-07", defer_date: "2026-12-04" },
+      { due_date: "2026-12-14", defer_date: "2026-12-11" },
+    ]);
+  });
+
+  test("none, when the next comes after the last day", () => {
+    const rule = { kind: "years", every: 1, from: "2026-11-16" } as const;
+    expect(
+      occurrencesAhead(rule, { due_date: "2026-11-16", defer_date: null }, today, "2027-02-13"),
+    ).toEqual([]);
   });
 });

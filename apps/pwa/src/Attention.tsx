@@ -16,6 +16,7 @@ import {
   onMount,
   Show,
 } from "solid-js";
+import { WeeksAhead } from "./Ahead.tsx";
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
@@ -54,6 +55,8 @@ export function Attention(props: {
     if (shown) props.onDueCount(shown.due.length);
   });
   const [problem, setProblem] = createSignal<string | null>(null);
+  // The weeks ahead, opened from the Due section and shown under it (section 8.3).
+  const [aheadOpen, setAheadOpen] = createSignal(false);
   // What the last move of a Project said, once it has left Attention (section 3.9).
   const [moved, setMoved] = createSignal<string | null>(null);
   // The last read wins: an answer a later read overtook is dropped.
@@ -156,7 +159,28 @@ export function Attention(props: {
       <Show when={view()}>
         {(shown) => (
           <>
-            <Section id="due" title="Due" items={shown().due}>
+            <Section
+              id="due"
+              title="Due"
+              items={shown().due}
+              shownEmpty
+              aside={
+                <button
+                  type="button"
+                  class="quiet"
+                  aria-expanded={aheadOpen()}
+                  aria-controls="weeks-ahead"
+                  onClick={() => setAheadOpen((open) => !open)}
+                >
+                  The weeks ahead
+                </button>
+              }
+              after={
+                <Show when={aheadOpen()}>
+                  <WeeksAhead id="weeks-ahead" timeZone={props.timeZone} />
+                </Show>
+              }
+            >
               {(item) =>
                 item.kind === "task" ? (
                   taskItem(item.task)
@@ -224,22 +248,36 @@ function withoutUnsentFinishes(view: AttentionView): AttentionView {
   };
 }
 
-/** One of Attention's sections, shown only when it holds something, in the order given. */
+/**
+ * One of Attention's sections, in the order given, shown only when it holds something unless it
+ * is `shownEmpty`, as Due is for the weeks ahead it opens.
+ */
 function Section<T>(props: {
   id: string;
   title: string;
   items: T[];
+  shownEmpty?: boolean;
+  /** Beside its title. */
+  aside?: JSX.Element;
+  /** Under its list. */
+  after?: JSX.Element;
   children: (item: T) => JSX.Element;
 }) {
   return (
-    <Show when={props.items.length > 0}>
+    <Show when={props.shownEmpty || props.items.length > 0}>
       <section class="attention-section" aria-labelledby={`attention-${props.id}`}>
-        <h3 id={`attention-${props.id}`} class="attention-section-title">
-          {props.title}
-        </h3>
-        <ul class="task-list">
-          <For each={props.items}>{(item) => props.children(item)}</For>
-        </ul>
+        <div class="attention-section-head">
+          <h3 id={`attention-${props.id}`} class="attention-section-title">
+            {props.title}
+          </h3>
+          {props.aside}
+        </div>
+        <Show when={props.items.length > 0}>
+          <ul class="task-list">
+            <For each={props.items}>{(item) => props.children(item)}</For>
+          </ul>
+        </Show>
+        {props.after}
       </section>
     </Show>
   );

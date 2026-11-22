@@ -341,7 +341,7 @@ Every **read** is offered to all five callers, except where noted:
 
 `get_settings` is offered to every caller because a Connection needs the time zone and today's date to resolve "next Friday".
 
-`view_ahead` returns the open Tasks and Projects with a Due Date, and the open Tasks with a Defer Date, in the coming days: 28 by default, 90 at most. A Recurrence's future Occurrences are worked out from its rule and marked as not yet existing.
+`view_ahead` returns the open Tasks and Projects with a Due Date, and the open Tasks with a Defer Date, in the coming days: from tomorrow, 28 by default, 90 at most. Today is not ahead: what is due today or Overdue is in Attention's Due section, and a Defer Date of today has come. Each is listed on the day it falls on, by day, and a Task with both its days ahead is listed on each. A Recurrence's future Occurrences are worked out from its rule, each as if the one before it were closed on its Due Date, or today once that has passed, and marked as not yet existing: they have no id, and name the open Occurrence they would follow.
 
 `list_entries` can be narrowed to Standing Entries, which is how the person sees the full list in one place and how a Connection reads them.
 
@@ -625,7 +625,7 @@ The column is composed by the screen from four sources, in this order:
 - A Waiting or Deferred Task that is not due is not shown. It is reached through its Project, its Entry or search, and arrives in Newly actionable when it comes up.
 - A Task comes up when the last thing keeping it from being actionable ends: a wait released or stopped, a delegation taken back, or its Defer Date coming at the start of that day. Only what ended since it was last reopened counts, and a Defer Date counts only for a Task made before it came, since one made on or after it was never Deferred. It is listed for the day it came up and the six after, with why and when.
 - Seven days is in code and is not a setting. It decides only how long a released Task is listed apart.
-- There is no "due soon" in Attention. The weeks ahead are another view, `view_ahead`, opened from the Due section. It is not a fourth peer.
+- There is no "due soon" in Attention. The weeks ahead are another view, `view_ahead`, opened from the Due section, which shows for it even with nothing due, and shown in Attention under it, a heading for each day. It is not a fourth peer. A Task is finished from it as from Attention; an Occurrence not yet existing is marked as not made yet and has nothing to finish.
 - Nothing in Attention says what has gone quiet. That is the Agent's judgment, said in a Brief or a Review (section 5.4).
 - **The count** on the Attention tab, and on the top-bar button at middle widths, is the refused Unsent writes, the Held Changes and the Due section. Nothing else is counted.
 - A Task is finished from wherever it is shown: Attention or the Entry it hangs off.
@@ -708,7 +708,7 @@ Capture never fails, and Praxis is not local-first. The server stays the only pl
 - Holds, for every Context that is not retired: the result of `view_attention`, every open Task and Project, every Person, the Standing Entries, the last 30 days of Entries, and any older Entry that Device has opened from search. It holds each Context's time zone too, so today and the Entries' times are that Context's.
 - Fetched while Praxis is open: on opening, when the network is back, on coming into view and every ten minutes, at most once a minute. First it reads whether its switch is still on. Each Context's part is kept as it arrives, the one last shown first, and a Context switched to that the copy does not hold yet is fetched at once.
 - Shown, when the network cannot be reached, as last fetched, with the time that Context's part was. The person can switch Context.
-- Search, older Entries, the Trash, Versions and the change log need the network, and say so.
+- Search, older Entries, the weeks ahead, the Trash, Versions and the change log need the network, and say so.
 - It holds no image an Entry shows, and the service worker keeps none. Without the network an image shows its description.
 - Its text sits in the browser's storage unencrypted. Turning it off or removing the Device clears it, on that Device's next contact if it is away, and the person is asked first about any Unsent writes: kept, to be sent, or discarded with the copy. Turned off here, nothing is switched off until they answer; switched off elsewhere, the copy is cleared whichever they choose.
 - A copy a later release cannot read is read as none and fetched again on the next contact, since the server holds all it holds.
