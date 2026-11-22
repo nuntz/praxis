@@ -4,8 +4,8 @@ import {
   expect,
   lastShown,
   makeContext,
-  onPhone,
   openJournal,
+  showTab,
   test,
 } from "./fixtures.ts";
 
@@ -138,12 +138,7 @@ test("the Conversation opens at its newest Message, keeps its place scrolled up,
   }
   await lastShown(page, context.id);
   await page.goto("/");
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Agent", exact: true })
-      .click();
-  }
+  await showTab(page, testInfo, "Agent");
   const conversation = page.getByRole("region", { name: "Conversation" });
   const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
   await expect(messages).toHaveCount(8);

@@ -231,18 +231,12 @@ export function Devices() {
                 aria-describedby={ids.describedBy}
                 checked={hereListed()?.offline_copy ?? false}
                 disabled={sending() || here === null || asking() !== null}
-                onChange={(event) => {
-                  const toggle = event.currentTarget;
-                  if (toggle.checked) {
-                    void switchCopyOnHere().then((on) => {
-                      if (!on) toggle.checked = false;
-                    });
-                    return;
-                  }
+                onTurn={(on) => {
+                  if (on) return switchCopyOnHere();
                   // Nothing is switched off until the person says what becomes of the Unsent
                   // writes, if there are any, and the copy is cleared once it is.
-                  toggle.checked = true;
                   switchCopyOffHere();
+                  return false;
                 }}
               />
             )}
@@ -350,13 +344,7 @@ function ThisDevice(props: {
                 aria-describedby={ids.describedBy}
                 checked={props.listed?.notifications ?? false}
                 disabled={props.sending}
-                onChange={(event) => {
-                  const toggle = event.currentTarget;
-                  const on = toggle.checked;
-                  void (on ? props.onSwitchOn(key()) : props.onSwitchOff()).then((done) => {
-                    if (!done) toggle.checked = !on;
-                  });
-                }}
+                onTurn={(on) => (on ? props.onSwitchOn(key()) : props.onSwitchOff())}
               />
             )}
           />

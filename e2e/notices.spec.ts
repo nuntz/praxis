@@ -1,6 +1,6 @@
 import type { Page, TestInfo } from "@playwright/test";
 import type { StandingNotice } from "@praxis/domain";
-import { expect, onPhone, test } from "./fixtures.ts";
+import { expect, showTab, test } from "./fixtures.ts";
 
 // A standing Notice shows in Attention only, and leads to the section of Settings that deals with
 // it, where there is one (section 8.6): no good Backup to Backups and Export. The cap's leads to
@@ -19,12 +19,7 @@ async function noticesAre(page: Page, items: StandingNotice[]) {
 
 /** Attention, brought into view on a phone, where the screen opens on it anyway. */
 async function attention(page: Page, testInfo: TestInfo) {
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Attention" })
-      .click();
-  }
+  await showTab(page, testInfo, "Attention");
   return page.getByRole("region", { name: "Attention", exact: true });
 }
 

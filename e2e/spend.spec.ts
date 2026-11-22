@@ -4,8 +4,8 @@ import {
   expect,
   lastShown,
   makeContext,
-  onPhone,
   openSettings,
+  showTab,
   test,
 } from "./fixtures.ts";
 
@@ -79,12 +79,7 @@ test("at the cap, the Conversation's composer gives way to a Notice that opens t
     await route.fulfill({ response: answer, json: { ok: true, value: { items } } });
   });
   await page.goto("/");
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Agent", exact: true })
-      .click();
-  }
+  await showTab(page, testInfo, "Agent");
   const conversation = page.getByRole("region", { name: "Conversation" });
 
   await expect(conversation.getByText(capReached)).toBeVisible();
@@ -100,12 +95,7 @@ test("at the cap, the Conversation's composer gives way to a Notice that opens t
 
   // Attention's standing Notice of the cap leads to the same field.
   await closeSettings(page);
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Attention" })
-      .click();
-  }
+  await showTab(page, testInfo, "Attention");
   const notice = page
     .getByRole("region", { name: "Attention", exact: true })
     .getByTestId("standing-notice")

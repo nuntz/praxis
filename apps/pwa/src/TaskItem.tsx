@@ -1,13 +1,7 @@
-import {
-  type Day,
-  dayIn,
-  type Task,
-  type TaskDates,
-  utcMidnight,
-  waitedOnName,
-} from "@praxis/domain";
+import { type Day, type Task, type TaskDates, utcMidnight, waitedOnName } from "@praxis/domain";
 import Calendar from "lucide-solid/icons/calendar";
 import { createMemo, createSignal, type JSX, Show } from "solid-js";
+import { todayIn } from "./days.tsx";
 import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { discardUnsent, finishTask, unsentFinishOf } from "./unsent.ts";
 
@@ -155,7 +149,7 @@ export function TaskItem(props: {
  * the Context's time zone. Both are bold, and only Overdue is in `warn` (section 8.11).
  */
 export function DueMark(props: { due: Day; overdue: boolean; timeZone: string }) {
-  const today = () => !props.overdue && props.due === dayIn(Date.now(), props.timeZone);
+  const today = () => !props.overdue && props.due === todayIn(props.timeZone);
   return (
     <span class="task-mark" classList={{ overdue: props.overdue, "due-today": today() }}>
       Due {today() ? "today" : formatDay(props.due)}

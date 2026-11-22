@@ -132,12 +132,7 @@ export function BriefAndReview(props: {
               aria-describedby={ids.describedBy}
               checked={briefOn()}
               disabled={sending()}
-              onChange={(event) =>
-                void kept(
-                  event.currentTarget,
-                  setBrief(event.currentTarget.checked ? briefTime() : null),
-                )
-              }
+              onTurn={(on) => setBrief(on ? briefTime() : null)}
             />
           )}
         />
@@ -171,12 +166,7 @@ export function BriefAndReview(props: {
               aria-describedby={ids.describedBy}
               checked={reviewOn()}
               disabled={sending()}
-              onChange={(event) =>
-                void kept(
-                  event.currentTarget,
-                  setReview({ time: event.currentTarget.checked ? reviewTime() : null }),
-                )
-              }
+              onTurn={(on) => setReview({ time: on ? reviewTime() : null })}
             />
           )}
         />
@@ -195,7 +185,9 @@ export function BriefAndReview(props: {
                 })
               }
             >
-              <For each={weekdays}>{(day) => <option value={day}>{dayNamed(day)}</option>}</For>
+              <For each={weekdays}>
+                {(day) => <option value={day}>{weekdayName(day, "long")}</option>}
+              </For>
             </select>
           )}
         />
@@ -231,12 +223,7 @@ export function BriefAndReview(props: {
               aria-describedby={ids.describedBy}
               checked={props.settings.notifications}
               disabled={sending()}
-              onChange={(event) =>
-                void kept(
-                  event.currentTarget,
-                  change(() => callTool("set_notifications", { on: event.currentTarget.checked })),
-                )
-              }
+              onTurn={(on) => change(() => callTool("set_notifications", { on }))}
             />
           )}
         />
@@ -377,17 +364,11 @@ function Problem(props: { message: string | null }) {
   );
 }
 
-/** Put a switch back as it was when the change it was turned for did not go through. */
-async function kept(toggle: HTMLInputElement, changed: Promise<boolean>) {
-  const turned = toggle.checked;
-  if (!(await changed)) toggle.checked = !turned;
-}
-
-/** A day of the week as the Device's language names it. */
-function dayNamed(day: Weekday): string {
+/** A day of the week as the Device's language names it, in full or shortened. */
+export function weekdayName(day: Weekday, width: "long" | "short"): string {
   // 2026-11-16 was a Monday, and the days run from Monday.
   const monday = Date.UTC(2026, 10, 16);
-  return new Intl.DateTimeFormat(undefined, { weekday: "long", timeZone: "UTC" }).format(
+  return new Intl.DateTimeFormat(undefined, { weekday: width, timeZone: "UTC" }).format(
     monday + weekdays.indexOf(day) * 24 * 60 * 60 * 1000,
   );
 }

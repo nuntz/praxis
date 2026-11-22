@@ -166,14 +166,9 @@ function ConnectionRow(props: {
           id={readingOnly}
           checked={props.connection.reading_only}
           disabled={sending()}
-          onChange={(event) => {
-            const toggle = event.currentTarget;
-            void send("set_connection_reading_only", {
-              id: props.connection.id,
-              reading_only: toggle.checked,
-            }).then((changed) => {
-              if (!changed) toggle.checked = props.connection.reading_only;
-            });
+          onTurn={async (on) => {
+            const input = { id: props.connection.id, reading_only: on };
+            return (await send("set_connection_reading_only", input)) !== null;
           }}
         />
       </div>

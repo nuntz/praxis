@@ -2,7 +2,7 @@ import Ellipsis from "lucide-solid/icons/ellipsis";
 import { Index, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { type Action, Menu } from "./design/Menu.tsx";
-import { pointerHovers } from "./pointer.ts";
+import { pointerHovers } from "./media.ts";
 
 /**
  * An Entry's actions, never shown as words with every Entry (section 8.4). Where the Device has a

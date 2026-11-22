@@ -851,12 +851,6 @@ button.jump-to-latest {
   white-space: nowrap;
 }
 
-@media (width < 720px) {
-  button.jump-to-latest {
-    min-height: 44px;
-  }
-}
-
 .tabs,
 .attention-toggle {
   display: none;
@@ -885,233 +879,6 @@ button.jump-to-latest {
   }
 }
 
-/* A phone: one column at a time, behind three tabs, on the ground itself. */
-@media (width < 720px) {
-  .screen {
-    gap: 0;
-    padding: 0;
-    font: var(--type-body-phone);
-  }
-
-  .top-bar {
-    gap: 10px;
-    min-height: 60px;
-    padding: 0 var(--space-4);
-  }
-
-  .wordmark {
-    gap: var(--space-2);
-  }
-
-  /* A touch target is at least 44px on a phone. A Task's control is reached through its label. */
-  .context,
-  .icon-button,
-  button,
-  button.quiet,
-  .task label {
-    min-height: 44px;
-  }
-
-  .icon-button {
-    width: 44px;
-  }
-
-  .problem,
-  .settings,
-  .first-context {
-    margin: 0 var(--space-4) var(--space-3);
-  }
-
-  /* On a phone the list of sections and a section are each a screen of their own. */
-  .settings-hint {
-    display: none;
-  }
-
-  .settings-back {
-    min-height: 44px;
-    padding: 0 var(--space-2) 0 0;
-    background: none;
-  }
-
-  .settings-done {
-    order: 1;
-  }
-
-  .settings-title {
-    margin-left: 0;
-  }
-
-  .settings-screen {
-    flex-direction: column;
-    gap: 0;
-    overflow-y: auto;
-  }
-
-  .settings-sections {
-    flex: none;
-    margin: 0 var(--space-4) var(--space-4);
-    padding: var(--space-1) var(--space-2) var(--space-2);
-    overflow-y: visible;
-  }
-
-  /* Each group of the list is a box of its own on the ground, its rows parted by hairlines. */
-  .settings-sections {
-    padding: 0;
-    background: none;
-  }
-
-  .settings-sections-heading {
-    padding: var(--space-4) 6px var(--space-2);
-  }
-
-  .settings-sections ul {
-    gap: 0;
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    overflow: hidden;
-  }
-
-  .settings-sections li + li {
-    border-top: 1px solid var(--rule);
-  }
-
-  .settings-section-link {
-    min-height: 48px;
-    padding: 0 var(--space-3) 0 14px;
-    border-radius: 0;
-  }
-
-  input[type="checkbox"].switch {
-    width: 50px;
-    height: 30px;
-  }
-
-  input[type="checkbox"].switch::after {
-    width: 24px;
-    height: 24px;
-  }
-
-  input[type="checkbox"].switch:checked::after {
-    left: 23px;
-  }
-
-  .settings-shown {
-    flex: none;
-    gap: 0;
-    overflow-y: visible;
-  }
-
-  .settings-shown > .settings {
-    width: auto;
-  }
-
-  .first-context {
-    width: auto;
-  }
-
-  /* The column shown fills the width: the widths Attention and the Conversation keep beside the
-   * Journal do not hold here, or one spills past the right edge and the other stops short of it. */
-  .peer,
-  .peer.attention,
-  .peer.conversation {
-    display: none;
-    flex: 1;
-    border-radius: 0;
-    background: none;
-  }
-
-  .screen[data-tab="attention"] .peer.attention,
-  .screen[data-tab="journal"] .peer.journal,
-  .screen[data-tab="conversation"] .peer.conversation {
-    display: flex;
-  }
-
-  .peer-header {
-    padding: var(--space-1) var(--space-4) var(--space-3);
-  }
-
-  .peer-title {
-    font: var(--type-screen-title);
-    letter-spacing: -0.02em;
-  }
-
-  .peer-body {
-    align-items: stretch;
-    gap: var(--space-3);
-    padding: 0 var(--space-4) var(--space-3);
-  }
-
-  .journal-search {
-    padding: 0 var(--space-4) var(--space-3);
-  }
-
-  .peer-foot {
-    padding: 10px var(--space-4);
-  }
-
-  .entry {
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-  }
-
-  .task {
-    background: var(--inset);
-  }
-
-  .tabs {
-    display: grid;
-    flex-shrink: 0;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-1);
-    margin: 0 var(--space-4) var(--space-3);
-    padding: 6px;
-    border-radius: var(--radius-pill);
-    background: var(--surface);
-  }
-
-  /* Each tab its icon over its name, the count or the unread mark at the icon's shoulder. */
-  .tabs button {
-    position: relative;
-    flex-direction: column;
-    gap: 2px;
-    min-height: 56px;
-    padding: 0 var(--space-2);
-    background: none;
-    color: var(--muted);
-    font: var(--type-caption);
-  }
-
-  .tabs .badge {
-    position: absolute;
-    top: 4px;
-    left: calc(50% + 6px);
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    font-size: 11px;
-    line-height: 18px;
-  }
-
-  .tabs .unread-mark {
-    position: absolute;
-    top: 6px;
-    left: calc(50% + 6px);
-    width: 10px;
-    height: 10px;
-    border: 2px solid var(--surface);
-    border-radius: 50%;
-    background: var(--accent);
-    box-sizing: content-box;
-  }
-
-  .tabs button[aria-current="true"] {
-    background: var(--inset);
-    color: var(--ink);
-    font-weight: 700;
-  }
-}
-
 /* The Journal: Entries in time order, each with its links and Tasks. */
 
 .entry-list {
@@ -1125,6 +892,7 @@ button.jump-to-latest {
 }
 
 .entry {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1457,13 +1225,6 @@ button.task-dates-toggle[aria-expanded="true"] {
   color: var(--ink);
 }
 
-@media (width < 720px) {
-  button.task-dates-toggle {
-    width: 44px;
-    min-height: 44px;
-  }
-}
-
 .task-dates {
   display: flex;
   flex-basis: 100%;
@@ -1624,12 +1385,6 @@ button.send-button {
   padding: 0;
 }
 
-@media (width < 720px) {
-  button.send-button {
-    width: 44px;
-  }
-}
-
 /* A Call starts from a primary pill in the Conversation's header, beside what the column is about. */
 .peer.conversation .peer-note {
   min-width: 0;
@@ -1725,39 +1480,6 @@ button.call-control {
   border-radius: 50%;
   background: var(--inset);
   color: var(--ink);
-}
-
-/* On a phone the Call button is the phone icon alone, round, and the Call's controls are larger. */
-@media (width < 720px) {
-  button.call-button {
-    width: 48px;
-    min-height: 48px;
-    padding: 0;
-  }
-
-  .call-button-word {
-    display: none;
-  }
-
-  .call-unavailable {
-    margin: calc(-1 * var(--space-1)) var(--space-4) var(--space-2);
-  }
-
-  .call-bar {
-    margin: var(--space-1) var(--space-4) 0;
-  }
-
-  .call-controls {
-    justify-content: space-evenly;
-    gap: var(--space-4);
-    padding: var(--space-2) var(--space-4) var(--space-4);
-  }
-
-  .call-control-round {
-    width: 72px;
-    height: 72px;
-    background: var(--surface);
-  }
 }
 
 /* Ending a Call is warn's one solid fill, under on-accent, the phone turned down. */
@@ -2040,6 +1762,7 @@ button.call-control {
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-1) var(--space-3);
+  min-height: 32px;
 }
 
 button.quiet.entry-mark {
@@ -2100,14 +1823,6 @@ button.quiet.entry-mark {
  * a surface pill with a hairline, shown while the Entry is hovered or holds the focus: kept in the
  * order of the keyboard, so Tab shows it. On a touch screen, one button at the end of the meta line.
  */
-.entry {
-  position: relative;
-}
-
-.entry-head {
-  min-height: 32px;
-}
-
 .entry-head > .menu {
   align-self: center;
   margin-left: auto;
@@ -2452,4 +2167,280 @@ a.entry-mark.held-mark {
 .not-accepted-reason {
   margin: 0;
   color: var(--warn);
+}
+
+/*
+ * A phone: one column at a time, behind three tabs, on the ground itself. Every rule for a phone is
+ * here, last in the file, so each takes the place of the rule it changes, wherever that one is.
+ */
+@media (width < 720px) {
+  .screen {
+    gap: 0;
+    padding: 0;
+    font: var(--type-body-phone);
+  }
+
+  .top-bar {
+    gap: 10px;
+    min-height: 60px;
+    padding: 0 var(--space-4);
+  }
+
+  .wordmark {
+    gap: var(--space-2);
+  }
+
+  /* A touch target is at least 44px on a phone. A Task's control is reached through its label. */
+  .context,
+  .icon-button,
+  button,
+  button.quiet,
+  .task label {
+    min-height: 44px;
+  }
+
+  .icon-button {
+    width: 44px;
+  }
+
+  .problem,
+  .settings,
+  .first-context {
+    margin: 0 var(--space-4) var(--space-3);
+  }
+
+  /* On a phone the list of sections and a section are each a screen of their own. */
+  .settings-hint {
+    display: none;
+  }
+
+  .settings-back {
+    min-height: 44px;
+    padding: 0 var(--space-2) 0 0;
+    background: none;
+  }
+
+  .settings-done {
+    order: 1;
+  }
+
+  .settings-title {
+    margin-left: 0;
+  }
+
+  .settings-screen {
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+  }
+
+  .settings-sections {
+    flex: none;
+    margin: 0 var(--space-4) var(--space-4);
+    padding: var(--space-1) var(--space-2) var(--space-2);
+    overflow-y: visible;
+  }
+
+  /* Each group of the list is a box of its own on the ground, its rows parted by hairlines. */
+  .settings-sections {
+    padding: 0;
+    background: none;
+  }
+
+  .settings-sections-heading {
+    padding: var(--space-4) 6px var(--space-2);
+  }
+
+  .settings-sections ul {
+    gap: 0;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .settings-sections li + li {
+    border-top: 1px solid var(--rule);
+  }
+
+  .settings-section-link {
+    min-height: 48px;
+    padding: 0 var(--space-3) 0 14px;
+    border-radius: 0;
+  }
+
+  input[type="checkbox"].switch {
+    width: 50px;
+    height: 30px;
+  }
+
+  input[type="checkbox"].switch::after {
+    width: 24px;
+    height: 24px;
+  }
+
+  input[type="checkbox"].switch:checked::after {
+    left: 23px;
+  }
+
+  .settings-shown {
+    flex: none;
+    gap: 0;
+    overflow-y: visible;
+  }
+
+  .settings-shown > .settings {
+    width: auto;
+  }
+
+  .first-context {
+    width: auto;
+  }
+
+  /* The column shown fills the width: the widths Attention and the Conversation keep beside the
+   * Journal do not hold here, or one spills past the right edge and the other stops short of it. */
+  .peer,
+  .peer.attention,
+  .peer.conversation {
+    display: none;
+    flex: 1;
+    border-radius: 0;
+    background: none;
+  }
+
+  .screen[data-tab="attention"] .peer.attention,
+  .screen[data-tab="journal"] .peer.journal,
+  .screen[data-tab="conversation"] .peer.conversation {
+    display: flex;
+  }
+
+  .peer-header {
+    padding: var(--space-1) var(--space-4) var(--space-3);
+  }
+
+  .peer-title {
+    font: var(--type-screen-title);
+    letter-spacing: -0.02em;
+  }
+
+  .peer-body {
+    align-items: stretch;
+    gap: var(--space-3);
+    padding: 0 var(--space-4) var(--space-3);
+  }
+
+  .journal-search {
+    padding: 0 var(--space-4) var(--space-3);
+  }
+
+  .peer-foot {
+    padding: 10px var(--space-4);
+  }
+
+  .entry {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .task {
+    background: var(--inset);
+  }
+
+  .tabs {
+    display: grid;
+    flex-shrink: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1);
+    margin: 0 var(--space-4) var(--space-3);
+    padding: 6px;
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+  }
+
+  /* Each tab its icon over its name, the count or the unread mark at the icon's shoulder. */
+  .tabs button {
+    position: relative;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 56px;
+    padding: 0 var(--space-2);
+    background: none;
+    color: var(--muted);
+    font: var(--type-caption);
+  }
+
+  .tabs .badge {
+    position: absolute;
+    top: 4px;
+    left: calc(50% + 6px);
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 11px;
+    line-height: 18px;
+  }
+
+  .tabs .unread-mark {
+    position: absolute;
+    top: 6px;
+    left: calc(50% + 6px);
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+    background: var(--accent);
+    box-sizing: content-box;
+  }
+
+  .tabs button[aria-current="true"] {
+    background: var(--inset);
+    color: var(--ink);
+    font-weight: 700;
+  }
+
+  /* The pill back to the newest, a touch target of 44px. */
+  button.jump-to-latest {
+    min-height: 44px;
+  }
+
+  /* A Task's dates, a touch target of 44px. */
+  button.task-dates-toggle {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  button.send-button {
+    width: 44px;
+  }
+
+  /* The Call button is the phone icon alone, round, and the Call's controls are larger. */
+  button.call-button {
+    width: 48px;
+    min-height: 48px;
+    padding: 0;
+  }
+
+  .call-button-word {
+    display: none;
+  }
+
+  .call-unavailable {
+    margin: calc(-1 * var(--space-1)) var(--space-4) var(--space-2);
+  }
+
+  .call-bar {
+    margin: var(--space-1) var(--space-4) 0;
+  }
+
+  .call-controls {
+    justify-content: space-evenly;
+    gap: var(--space-4);
+    padding: var(--space-2) var(--space-4) var(--space-4);
+  }
+
+  .call-control-round {
+    width: 72px;
+    height: 72px;
+    background: var(--surface);
+  }
 }

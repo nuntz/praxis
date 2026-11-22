@@ -1,11 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import {
   callContextTool,
+  contextOfOwn,
   expect,
-  lastShown,
-  makeContext,
   openJournal,
   screenKept,
   test,
@@ -17,17 +16,6 @@ import {
 
 /** The first shape of Unsent writes a release stored, as stored. */
 const FIRST_UNSENT = join(import.meta.dirname, "../apps/pwa/test/stored/praxis.unsent-0001.txt");
-
-/** A Context of this journey's own, shown on opening, in a zone that is not the Device's. */
-async function contextOfOwn(page: Page, testInfo: TestInfo) {
-  const made = await makeContext(page, {
-    name: `Tunnel ${testInfo.project.name} ${crypto.randomUUID().slice(0, 8)}`,
-    time_zone: "UTC",
-    accent: "teal",
-  });
-  await lastShown(page, made.id);
-  return made;
-}
 
 /**
  * A time as the Journal shows it under its day's caption, the time of day alone, in this zone, or
@@ -47,7 +35,7 @@ function shownAt(page: Page, at: string, timeZone?: string) {
 test("Praxis opens with no network on the Context the Device last showed, takes an Entry Unsent, and sends it once the network is back", async ({
   page,
 }, testInfo) => {
-  const { id, name } = await contextOfOwn(page, testInfo);
+  const { id, name } = await contextOfOwn(page, testInfo, "Tunnel");
   await page.goto("/");
   const first = await openJournal(page, testInfo);
   await expect(first.composer).toHaveAccessibleName(`Record an Entry in ${name}`);
@@ -116,7 +104,7 @@ test("Praxis opens with no network on the Context the Device last showed, takes 
 test("a screen kept from an earlier release is shown only with no network, and the current one sends what was left Unsent under it", async ({
   page,
 }, testInfo) => {
-  const { id, name } = await contextOfOwn(page, testInfo);
+  const { id, name } = await contextOfOwn(page, testInfo, "Tunnel");
   await page.goto("/");
   await expect(page.getByRole("button", { name: `Context: ${name}`, exact: true })).toBeVisible();
   await screenKept(page);

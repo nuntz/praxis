@@ -47,14 +47,25 @@ export function onPhone(testInfo: TestInfo): boolean {
   return testInfo.project.name === "phone";
 }
 
+/**
+ * A column brought into view by its tab on a phone, which shows one column at a time; wider, every
+ * column is in view already. A tab's name begins with its column's, and may go on with its count.
+ */
+export async function showTab(
+  page: Page,
+  testInfo: TestInfo,
+  tab: "Attention" | "Journal" | "Agent",
+) {
+  if (!onPhone(testInfo)) return;
+  await page
+    .getByRole("navigation", { name: "Columns" })
+    .getByRole("button", { name: new RegExp(`^${tab}`) })
+    .click();
+}
+
 /** The Journal column, brought into view first on a phone, where the screen opens on Attention. */
 export async function openJournal(page: Page, testInfo: TestInfo) {
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Journal" })
-      .click();
-  }
+  await showTab(page, testInfo, "Journal");
   const journal = page.getByRole("region", { name: "Journal" });
   return { journal, composer: journal.getByRole("textbox", { name: /^Record an Entry in / }) };
 }
@@ -144,6 +155,25 @@ export async function makeContext(
   made: { name: string; time_zone: string; accent: Accent },
 ): Promise<ContextListing> {
   return (await post(page, "/api/deployment/tools/create_context", made)).record;
+}
+
+/**
+ * Make a Context of this journey's own, named for what it holds and the project it runs in, in UTC
+ * unless another zone is given, and open the screen on it, as `lastShown()` does.
+ */
+export async function contextOfOwn(
+  page: Page,
+  testInfo: TestInfo,
+  named: string,
+  time_zone = "UTC",
+): Promise<ContextListing> {
+  const made = await makeContext(page, {
+    name: `${named} ${testInfo.project.name} ${crypto.randomUUID().slice(0, 8)}`,
+    time_zone,
+    accent: "teal",
+  });
+  await lastShown(page, made.id);
+  return made;
 }
 
 /** Call a Deployment tool as the screen does. */

@@ -25,7 +25,7 @@ export type Section = (typeof SECTIONS)[number];
  * Where the screen is. In Settings, `section` is the one the address names, or null at `/settings`
  * itself, which a desktop shows as General and a phone as the list of sections.
  */
-export type Place = { settings: false } | { settings: true; section: Section | null };
+type Place = { settings: false } | { settings: true; section: Section | null };
 
 const MAIN: Place = { settings: false };
 const SETTINGS = "/settings";

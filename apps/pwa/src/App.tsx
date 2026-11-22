@@ -1,4 +1,9 @@
-import { type ContextListing, conversationOpened, type Settings } from "@praxis/domain";
+import {
+  type ClockFold,
+  type ContextListing,
+  conversationOpened,
+  type Settings,
+} from "@praxis/domain";
 import BookOpen from "lucide-solid/icons/book-open";
 import Inbox from "lucide-solid/icons/inbox";
 import MessageCircle from "lucide-solid/icons/message-circle";
@@ -576,7 +581,7 @@ function TabButton(props: {
 /**
  * A dot on the Agent tab while a Brief or a Review is unread, read out as which (section 8.5).
  */
-function UnreadMark(props: { kinds: ("brief" | "review")[] }) {
+function UnreadMark(props: { kinds: ClockFold["kind"][] }) {
   const named = () =>
     props.kinds.map((kind) => (kind === "brief" ? "Brief" : "Review")).join(" and ");
   return (

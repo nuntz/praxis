@@ -18,7 +18,7 @@ export type Action = {
  */
 export function Menu(props: { label: string; icon: LucideIcon; items: Action[] }) {
   const id = createUniqueId();
-  const [open, setOpen] = createSignal(false);
+  const [shown, setShown] = createSignal(false);
   let wrapper!: HTMLDivElement;
   let button!: HTMLButtonElement;
   let list: HTMLDivElement | undefined;
@@ -28,21 +28,21 @@ export function Menu(props: { label: string; icon: LucideIcon; items: Action[] }
   ];
 
   function show() {
-    setOpen(true);
+    setShown(true);
     items()[0]?.focus();
   }
 
   function putAway() {
     button.focus();
-    setOpen(false);
+    setShown(false);
   }
 
   // A tap or a click outside the menu puts it away, wherever the focus was left: listened for only
-  // while it is open, since every Entry in the Journal has a menu.
+  // while it is shown, since every Entry in the Journal has a menu.
   createEffect(() => {
-    if (!open()) return;
+    if (!shown()) return;
     const outside = (event: PointerEvent) => {
-      if (!wrapper.contains(event.target as Node)) setOpen(false);
+      if (!wrapper.contains(event.target as Node)) setShown(false);
     };
     document.addEventListener("pointerdown", outside);
     onCleanup(() => document.removeEventListener("pointerdown", outside));
@@ -78,7 +78,7 @@ export function Menu(props: { label: string; icon: LucideIcon; items: Action[] }
       class="menu"
       onFocusOut={(event) => {
         const to = event.relatedTarget as Node | null;
-        if (open() && to && !wrapper.contains(to)) setOpen(false);
+        if (shown() && to && !wrapper.contains(to)) setShown(false);
       }}
     >
       <button
@@ -88,13 +88,13 @@ export function Menu(props: { label: string; icon: LucideIcon; items: Action[] }
         aria-label={props.label}
         title={props.label}
         aria-haspopup="menu"
-        aria-expanded={open()}
-        aria-controls={open() ? id : undefined}
-        onClick={() => (open() ? setOpen(false) : show())}
+        aria-expanded={shown()}
+        aria-controls={shown() ? id : undefined}
+        onClick={() => (shown() ? setShown(false) : show())}
       >
         <Dynamic component={props.icon} size={18} aria-hidden="true" />
       </button>
-      <Show when={open()}>
+      <Show when={shown()}>
         <div
           ref={list}
           id={id}

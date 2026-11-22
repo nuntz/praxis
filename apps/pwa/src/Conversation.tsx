@@ -257,7 +257,7 @@ export function Conversation(props: {
    * Agent, or while a Call goes on here, whose status bar takes the header's place; why it cannot
    * be pressed offline or at the cap; else that a Call can start.
    */
-  const callOffer = (): "offline" | "cap_reached" | "ready" | null => {
+  const callOffer = (): CallOffer | null => {
     if (call() || voice() !== "available" || agent() !== "available") return null;
     if (!online()) return "offline";
     return capReached() ? "cap_reached" : "ready";
@@ -553,6 +553,9 @@ function callEndedWords(ended: CallEnd, reason: string | null): string | null {
   }
 }
 
+/** What the Call button offers where it shows: a Call, or why none can start. */
+type CallOffer = "ready" | keyof typeof NO_CALL;
+
 /** Why the Call button cannot be pressed, in the words it is described by and shown under it. */
 const NO_CALL = {
   offline: "Calls need the network.",
@@ -569,7 +572,7 @@ const CALL_UNAVAILABLE = "call-unavailable";
  */
 function CallButton(props: {
   contextName: string | undefined;
-  offer: "offline" | "cap_reached" | "ready";
+  offer: CallOffer;
   starting: boolean;
   onStart: () => void;
 }) {
@@ -596,7 +599,7 @@ function CallButton(props: {
 }
 
 /** A length of time as a clock shows it, in minutes and seconds, and hours once there are any. */
-function clockTime(milliseconds: number): string {
+function timeSoFar(milliseconds: number): string {
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
   const two = (part: number) => String(part).padStart(2, "0");
   const hours = Math.floor(seconds / 3600);
@@ -621,7 +624,7 @@ function CallBar(props: { contextName: string | undefined; since: number }) {
         </p>
         <p class="call-bar-meta">
           {/* A timer is not read out as it changes, so the second hand says nothing. */}
-          <span role="timer">{clockTime(now() - props.since)}</span> · what you say is kept as
+          <span role="timer">{timeSoFar(now() - props.since)}</span> · what you say is kept as
           Messages
         </p>
       </div>

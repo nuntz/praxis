@@ -4,8 +4,8 @@ import {
   expect,
   lastShown,
   makeContext,
-  onPhone,
   openJournal,
+  showTab,
   test,
 } from "./fixtures.ts";
 
@@ -160,12 +160,7 @@ test("the Conversation is parted into days in the Context's time zone, as the Jo
   await lastShown(page, context.id);
 
   async function openConversation() {
-    if (onPhone(testInfo)) {
-      await page
-        .getByRole("navigation", { name: "Columns" })
-        .getByRole("button", { name: "Agent", exact: true })
-        .click();
-    }
+    await showTab(page, testInfo, "Agent");
     const conversation = page.getByRole("region", { name: "Conversation" });
     const list = conversation.getByRole("list", { name: "Messages" });
     return { conversation, messages: list.getByTestId("message"), days: list.getByRole("heading") };
@@ -203,12 +198,7 @@ test("the Conversation is parted into days in the Context's time zone, as the Jo
 
 /** The Conversation, in view: on a phone, by its tab. */
 async function conversationShown(page: Page, testInfo: TestInfo) {
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Agent", exact: true })
-      .click();
-  }
+  await showTab(page, testInfo, "Agent");
   return page.getByRole("region", { name: "Conversation" });
 }
 

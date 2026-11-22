@@ -41,7 +41,7 @@ test("on a desktop, an Entry's actions are a toolbar of icons, shown on hover or
   page,
 }, testInfo) => {
   test.skip(onPhone(testInfo), "A phone's screen is touched, with no pointer that hovers.");
-  const { shown } = await journalWith(page, testInfo, ["Quiet actions"]);
+  const { shown } = await journalWith(page, testInfo, ["Quiet actions", "Kept actions"]);
   const entry = shown("Quiet actions");
   const toolbar = entry.getByRole("toolbar", { name: "Entry actions", exact: true });
 
@@ -88,6 +88,18 @@ test("on a desktop, an Entry's actions are a toolbar of icons, shown on hover or
   await page.keyboard.press("Enter");
   expect((await (await deleting).json()).ok).toBe(true);
   await expect(entry).toHaveCount(0);
+
+  // The journey ends on the other Entry hovered, its toolbar shown and its More menu open, as the
+  // accessibility check sees them.
+  const kept = shown("Kept actions");
+  const keptToolbar = kept.getByRole("toolbar", { name: "Entry actions", exact: true });
+  await kept.hover();
+  await expect(keptToolbar).toHaveCSS("opacity", "1");
+  await keptToolbar.getByRole("button", { name: "More: Move, Delete", exact: true }).click();
+  await expect(
+    kept.getByRole("menu", { name: "More: Move, Delete", exact: true }).getByRole("menuitem"),
+  ).toHaveText(["Move", "Delete"]);
+  await expect(keptToolbar).toHaveCSS("opacity", "1");
 });
 
 test("on a touch screen, an Entry's one button opens a menu of its five actions", async ({

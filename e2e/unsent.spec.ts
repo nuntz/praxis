@@ -7,6 +7,7 @@ import {
   makeContext,
   onPhone,
   openJournal,
+  showTab,
   test,
 } from "./fixtures.ts";
 
@@ -40,12 +41,7 @@ function attentionCount(page: Page, testInfo: TestInfo) {
 
 /** Attention, brought into view first on a phone, where another tab may be shown. */
 async function openAttention(page: Page, testInfo: TestInfo) {
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Attention" })
-      .click();
-  }
+  await showTab(page, testInfo, "Attention");
   return page.getByRole("region", { name: "Attention", exact: true });
 }
 

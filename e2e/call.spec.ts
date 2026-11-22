@@ -12,7 +12,7 @@ import {
   test as journey,
   lastShown,
   makeContext,
-  onPhone,
+  showTab,
 } from "./fixtures.ts";
 import { holdTheCall } from "./one-call.ts";
 import { fakeVoice } from "./voice-fake.ts";
@@ -47,12 +47,7 @@ async function inContext(page: Page, testInfo: TestInfo, name: string) {
   });
   await lastShown(page, context.id);
   await page.goto("/");
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Agent", exact: true })
-      .click();
-  }
+  await showTab(page, testInfo, "Agent");
   const conversation = page.getByRole("region", { name: "Conversation" });
   return { tag, id: context.id, name: `${name} ${tag}`, conversation };
 }
@@ -194,12 +189,7 @@ test("without a voice key, or without an Agent, the Conversation offers no Call"
   await page.unrouteAll();
   await messagesSay(page, { agent: "no_key" });
   await page.reload();
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Agent", exact: true })
-      .click();
-  }
+  await showTab(page, testInfo, "Agent");
   await expect(conversation.getByText(/^There is no Agent here/)).toBeVisible();
   await expect(callButton(conversation, name)).toHaveCount(0);
 });

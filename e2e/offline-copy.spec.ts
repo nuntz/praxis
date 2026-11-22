@@ -8,9 +8,9 @@ import {
   holdNext,
   lastShown,
   makeContext,
-  onPhone,
   openJournal,
   openSettings,
+  showTab,
   switchTo,
   test,
 } from "./fixtures.ts";
@@ -102,23 +102,13 @@ async function thisDevice(page: Page): Promise<string> {
 
 /** Attention, brought into view first on a phone, where another tab may be shown. */
 async function openAttention(page: Page, testInfo: TestInfo) {
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Attention" })
-      .click();
-  }
+  await showTab(page, testInfo, "Attention");
   return page.getByRole("region", { name: "Attention", exact: true });
 }
 
 /** The Conversation, brought into view first on a phone. */
 async function openConversation(page: Page, testInfo: TestInfo) {
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Agent", exact: true })
-      .click();
-  }
+  await showTab(page, testInfo, "Agent");
   return page.getByRole("region", { name: "Conversation" });
 }
 

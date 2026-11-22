@@ -1,8 +1,8 @@
-import type { Page, TestInfo } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import {
   callContextTool,
+  contextOfOwn,
   expect,
-  lastShown,
   makeContext,
   onPhone,
   openJournal,
@@ -34,21 +34,10 @@ const section = (page: Page, name: string) => page.getByRole("region", { name, e
 const gear = (page: Page) =>
   page.getByRole("banner").getByRole("button", { name: "Settings", exact: true });
 
-/** A Context of this journey's own, shown on opening. */
-async function contextOfOwn(page: Page, testInfo: TestInfo, time_zone = "UTC") {
-  const made = await makeContext(page, {
-    name: `Kept ${testInfo.project.name} ${crypto.randomUUID().slice(0, 8)}`,
-    time_zone,
-    accent: "moss",
-  });
-  await lastShown(page, made.id);
-  return made;
-}
-
 test("the gear opens Settings at its address: General on a desktop, the list of sections on a phone", async ({
   page,
 }, testInfo) => {
-  await contextOfOwn(page, testInfo);
+  await contextOfOwn(page, testInfo, "Kept");
   await page.goto("/");
   await gear(page).click();
 
@@ -73,7 +62,7 @@ test("the gear opens Settings at its address: General on a desktop, the list of 
 test("each section opens at its own address and survives a reload, and an unknown one shows General", async ({
   page,
 }, testInfo) => {
-  await contextOfOwn(page, testInfo);
+  await contextOfOwn(page, testInfo, "Kept");
   for (const [name, address] of SECTIONS) {
     await page.goto("/settings");
     await sections(page).getByRole("link", { name, exact: true }).click();
@@ -95,7 +84,7 @@ test("each section opens at its own address and survives a reload, and an unknow
 test("the browser's Back and forward move between the main screen, Settings and its sections", async ({
   page,
 }, testInfo) => {
-  await contextOfOwn(page, testInfo);
+  await contextOfOwn(page, testInfo, "Kept");
   await page.goto("/");
   const { journal } = await openJournal(page, testInfo);
   await gear(page).click();
@@ -126,7 +115,7 @@ test("the browser's Back and forward move between the main screen, Settings and 
 test("Back or Escape from Settings returns to the main screen as it was left: its tab, its scroll and both drafts", async ({
   page,
 }, testInfo) => {
-  const { id, name } = await contextOfOwn(page, testInfo);
+  const { id, name } = await contextOfOwn(page, testInfo, "Kept");
   // More Entries than the Journal shows at once, so it scrolls.
   for (let n = 1; n <= 30; n++) {
     await callContextTool(page, id, "record_entry", { words: `Kept in place ${n}` });
@@ -198,7 +187,7 @@ test("Back or Escape from Settings returns to the main screen as it was left: it
 test("switching Context in Settings' top bar shows that Context's sections", async ({
   page,
 }, testInfo) => {
-  const first = await contextOfOwn(page, testInfo, "UTC");
+  const first = await contextOfOwn(page, testInfo, "Kept", "UTC");
   const second = await makeContext(page, {
     name: `Other ${testInfo.project.name} ${crypto.randomUUID().slice(0, 8)}`,
     time_zone: "Asia/Tokyo",
@@ -220,7 +209,7 @@ test("switching Context in Settings' top bar shows that Context's sections", asy
 test("a Settings address opened with no network shows Settings from the screen the service worker kept", async ({
   page,
 }, testInfo) => {
-  await contextOfOwn(page, testInfo);
+  await contextOfOwn(page, testInfo, "Kept");
   await page.goto("/");
   await expect(gear(page)).toBeVisible();
   await screenKept(page);

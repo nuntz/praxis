@@ -5,6 +5,7 @@ import {
   type MarkdownInline,
   renderMarkdown,
 } from "@praxis/domain/markdown";
+import type { LucideIcon } from "lucide-solid";
 import ImageIcon from "lucide-solid/icons/image";
 import ImageOffIcon from "lucide-solid/icons/image-off";
 import { createMemo, createSignal, type JSX, Match, Switch } from "solid-js";
@@ -164,7 +165,7 @@ function Image(props: { src: string; description: string; loading: ImageLoading 
 }
 
 /** An image as one line: its icon in the muted colour, its description, then what follows. */
-function ImageLine(props: { icon: typeof ImageIcon; description: string; children?: JSX.Element }) {
+function ImageLine(props: { icon: LucideIcon; description: string; children?: JSX.Element }) {
   return (
     <span class="words-image" data-testid="image-line">
       <props.icon size={18} aria-hidden="true" />

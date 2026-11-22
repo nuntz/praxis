@@ -6,6 +6,7 @@ import {
   makeContext,
   onPhone,
   openJournal,
+  showTab,
   test,
 } from "./fixtures.ts";
 
@@ -17,15 +18,6 @@ function count(page: Page, testInfo: TestInfo) {
   return onPhone(testInfo)
     ? page.getByRole("navigation", { name: "Columns" }).getByRole("button", { name: /^Attention/ })
     : page.getByRole("region", { name: "Attention", exact: true }).locator(".peer-header");
-}
-
-/** Bring a column into view: on a phone, by its tab. */
-async function showColumn(page: Page, testInfo: TestInfo, tab: "Attention" | "Agent") {
-  if (!onPhone(testInfo)) return;
-  await page
-    .getByRole("navigation", { name: "Columns" })
-    .getByRole("button", { name: new RegExp(`^${tab}`) })
-    .click();
 }
 
 test("the Agent's change to the person's words waits for their tap, which makes it", async ({
@@ -43,7 +35,7 @@ test("the Agent's change to the person's words waits for their tap, which makes 
   const { record: entry } = await callContextTool(page, id, "record_entry", { words: before });
 
   await page.goto("/");
-  await showColumn(page, testInfo, "Agent");
+  await showTab(page, testInfo, "Agent");
   const conversation = page.getByRole("region", { name: "Conversation" });
   await conversation
     .getByRole("textbox", { name: `Message the Agent in Held ${tag}`, exact: true })
@@ -82,6 +74,6 @@ test("the Agent's change to the person's words waits for their tap, which makes 
     changed.getByRole("button", { name: "Edited by the Agent", exact: true }),
   ).toBeVisible();
   await expect(changed.getByRole("link", { name: "Held Change for your tap" })).toHaveCount(0);
-  await showColumn(page, testInfo, "Agent");
+  await showTab(page, testInfo, "Agent");
   await expect(left).toHaveCount(0);
 });

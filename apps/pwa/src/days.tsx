@@ -1,5 +1,5 @@
 import { addDays, type Day, dayIn, utcMidnight } from "@praxis/domain";
-import { createMemo, createSignal, onCleanup, Show } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
 
 /** A day older than yesterday as the Device's locale writes it: its weekday and its date. */
 const dated = new Intl.DateTimeFormat(undefined, {
@@ -18,11 +18,26 @@ const datedWithYear = new Intl.DateTimeFormat(undefined, {
   timeZone: "UTC",
 });
 
+/**
+ * The time now by this Device's clock, moved on every minute, so that today, wherever the screen
+ * reckons it, moves on at midnight with nothing else changing.
+ */
+const [now, setNow] = createSignal(Date.now());
+setInterval(() => setNow(Date.now()), 60 * 1000);
+
+/** Today in a time zone, the Context's, moving on at its midnight: one today for the screen. */
+export function todayIn(zone: string): Day {
+  return dayIn(now(), zone);
+}
+
+/** The year a day falls in. */
+const yearOf = (day: Day) => new Date(utcMidnight(day)).getUTCFullYear();
+
 /** "Today", "Yesterday", or the weekday and the date, against today. A day has no zone of its own. */
 function dayLabel(day: Day, today: Day): string {
   if (day === today) return "Today";
   if (day === addDays(today, -1)) return "Yesterday";
-  const format = day.slice(0, 4) === today.slice(0, 4) ? dated : datedWithYear;
+  const format = yearOf(day) === yearOf(today) ? dated : datedWithYear;
   return format.format(utcMidnight(day));
 }
 
@@ -33,12 +48,9 @@ function dayLabel(day: Day, today: Day): string {
  * the zone is known, nothing is parted.
  */
 export function partIntoDays(timeZone: () => string | undefined) {
-  const [now, setNow] = createSignal(Date.now());
-  const ticking = setInterval(() => setNow(Date.now()), 60 * 1000);
-  onCleanup(() => clearInterval(ticking));
   const today = createMemo(() => {
     const zone = timeZone();
-    return zone === undefined ? undefined : dayIn(now(), zone);
+    return zone === undefined ? undefined : todayIn(zone);
   });
 
   function dayOf(at: string | number | undefined): Day | undefined {

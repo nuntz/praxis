@@ -2,6 +2,7 @@ import type { Locator, Page, TestInfo } from "@playwright/test";
 import {
   callContextTool,
   callDeploymentTool,
+  contextOfOwn,
   expect,
   lastShown,
   makeContext,
@@ -12,17 +13,6 @@ import {
 
 // Settings' look (section 8.6): each section's settings are rows in grouped boxes, the words on
 // the left and the control on the right, and every on/off setting is a switch, never a checkbox.
-
-/** A Context of this journey's own, shown on opening. */
-async function contextOfOwn(page: Page, testInfo: TestInfo) {
-  const made = await makeContext(page, {
-    name: `Rows ${testInfo.project.name} ${crypto.randomUUID().slice(0, 8)}`,
-    time_zone: "UTC",
-    accent: "teal",
-  });
-  await lastShown(page, made.id);
-  return made;
-}
 
 /**
  * The control sits to the right of the words that name it, in its row. Both are measured at once,
@@ -59,7 +49,7 @@ async function turn(page: Page, toggle: Locator, how: "space" | "tap", testInfo:
 test("Brief and Review shows each time with its switch, and the Notification switch, in grouped rows", async ({
   page,
 }, testInfo) => {
-  await contextOfOwn(page, testInfo);
+  await contextOfOwn(page, testInfo, "Rows");
   await page.goto("/");
   const settings = await openSettings(page, "Brief and Review");
 
@@ -94,7 +84,7 @@ test("Brief and Review shows each time with its switch, and the Notification swi
 test("each switch in Brief and Review turns with Space and with a tap", async ({
   page,
 }, testInfo) => {
-  const { id } = await contextOfOwn(page, testInfo);
+  const { id } = await contextOfOwn(page, testInfo, "Rows");
   await page.goto("/");
   const settings = await openSettings(page, "Brief and Review");
 
@@ -194,7 +184,7 @@ test("on a phone the list of sections shows each one's current value, where it i
 test("this Device's Offline Copy is a switch in Devices, turned with Space and with a tap", async ({
   page,
 }, testInfo) => {
-  await contextOfOwn(page, testInfo);
+  await contextOfOwn(page, testInfo, "Rows");
   await page.goto("/");
   const devices = await openSettings(page, "Devices");
   const here = devices.getByRole("group", { name: "This Device", exact: true });
@@ -223,7 +213,7 @@ test("this Device's Offline Copy is a switch in Devices, turned with Space and w
 test("a Connection's Reading only is a switch, in the new Connection's form too", async ({
   page,
 }, testInfo) => {
-  await contextOfOwn(page, testInfo);
+  await contextOfOwn(page, testInfo, "Rows");
   await page.goto("/");
   const connections = await openSettings(page, "Connections");
   const form = connections.getByRole("form", { name: "New Connection" });

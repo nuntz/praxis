@@ -7,6 +7,7 @@ import {
   onPhone,
   openJournal,
   openSettings,
+  showTab,
   test,
 } from "./fixtures.ts";
 
@@ -23,12 +24,7 @@ test("asking the Agent for a change, the Journal shows it as it is made", async 
   await page.goto("/");
   // On a desktop the Journal is open beside the Conversation, and patches as the Agent works.
   const { journal } = onPhone(testInfo) ? { journal: null } : await openJournal(page, testInfo);
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Agent", exact: true })
-      .click();
-  }
+  await showTab(page, testInfo, "Agent");
   const conversation = page.getByRole("region", { name: "Conversation" });
 
   const words = `Pick up the dry cleaning ${tag}`;
@@ -65,12 +61,7 @@ test("a Message from the Agent is rendered as Markdown, and the person's own is 
   });
   await lastShown(page, context.id);
   await page.goto("/");
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Agent", exact: true })
-      .click();
-  }
+  await showTab(page, testInfo, "Agent");
   const conversation = page.getByRole("region", { name: "Conversation" });
   // An image's host, which counts what the browser asks it for.
   const images: string[] = [];
@@ -114,12 +105,7 @@ test("a Run that failed keeps the Message with a Notice under it, and Try again 
   });
   await lastShown(page, context.id);
   await page.goto("/");
-  if (onPhone(testInfo)) {
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Agent", exact: true })
-      .click();
-  }
+  await showTab(page, testInfo, "Agent");
   const conversation = page.getByRole("region", { name: "Conversation" });
 
   const words = `Unreachable once: are you there ${tag}`;
@@ -156,11 +142,7 @@ test("the person saves a Run's transcript, then clears the Conversation from the
   await lastShown(page, context.id);
   await page.goto("/");
   const toConversation = async () => {
-    if (!onPhone(testInfo)) return;
-    await page
-      .getByRole("navigation", { name: "Columns" })
-      .getByRole("button", { name: "Agent", exact: true })
-      .click();
+    await showTab(page, testInfo, "Agent");
   };
   await toConversation();
   const conversation = page.getByRole("region", { name: "Conversation" });

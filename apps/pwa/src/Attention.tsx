@@ -5,6 +5,7 @@ import type {
   ProjectInAttention,
   Task,
 } from "@praxis/domain";
+import type { LucideIcon } from "lucide-solid";
 import Calendar from "lucide-solid/icons/calendar";
 import Circle from "lucide-solid/icons/circle";
 import Clock from "lucide-solid/icons/clock";
@@ -13,6 +14,7 @@ import Hand from "lucide-solid/icons/hand";
 import Sparkles from "lucide-solid/icons/sparkles";
 import UserRound from "lucide-solid/icons/user-round";
 import { createEffect, createSignal, For, type JSX, Show } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import { WeeksAhead } from "./Ahead.tsx";
 import { followAttentionView } from "./attention-read.ts";
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
@@ -98,12 +100,7 @@ export function Attention(props: {
           </p>
         )}
       </Show>
-      <Section
-        id="held-changes"
-        title="Held Changes"
-        icon={<Hand size={16} aria-hidden="true" />}
-        items={heldChanges.all()}
-      >
+      <Section id="held-changes" title="Held Changes" icon={Hand} items={heldChanges.all()}>
         {(held) => (
           <li>
             <HeldChangeItem held={held} anchor={heldAnchor(held.id)} />
@@ -116,7 +113,7 @@ export function Attention(props: {
             <Section
               id="due"
               title="Due"
-              icon={<Clock size={16} aria-hidden="true" />}
+              icon={Clock}
               items={shown().due}
               shownEmpty
               aside={
@@ -152,25 +149,15 @@ export function Attention(props: {
             <Section
               id="newly-actionable"
               title="Newly actionable"
-              icon={<Sparkles size={16} aria-hidden="true" />}
+              icon={Sparkles}
               items={shown().newly_actionable}
             >
               {(item) => taskItem(item.task, cameUpMark(item.came_up))}
             </Section>
-            <Section
-              id="delegated"
-              title="Delegated"
-              icon={<UserRound size={16} aria-hidden="true" />}
-              items={shown().delegated}
-            >
+            <Section id="delegated" title="Delegated" icon={UserRound} items={shown().delegated}>
               {(task) => taskItem(task)}
             </Section>
-            <Section
-              id="projects"
-              title="Projects"
-              icon={<Folder size={16} aria-hidden="true" />}
-              items={shown().projects}
-            >
+            <Section id="projects" title="Projects" icon={Folder} items={shown().projects}>
               {(item) => (
                 <ProjectItem
                   item={item}
@@ -180,12 +167,7 @@ export function Attention(props: {
                 />
               )}
             </Section>
-            <Section
-              id="loose"
-              title="Loose"
-              icon={<Circle size={16} aria-hidden="true" />}
-              items={shown().loose}
-            >
+            <Section id="loose" title="Loose" icon={Circle} items={shown().loose}>
               {(task) => taskItem(task)}
             </Section>
             <Show
@@ -231,7 +213,7 @@ function Section<T>(props: {
   id: string;
   title: string;
   /** Beside its title, as every heading of Attention carries one (section 8.11). */
-  icon: JSX.Element;
+  icon: LucideIcon;
   items: T[];
   shownEmpty?: boolean;
   /** Beside its title. */
@@ -245,7 +227,7 @@ function Section<T>(props: {
       <section class="attention-section" aria-labelledby={`attention-${props.id}`}>
         <div class="attention-section-head">
           <h3 id={`attention-${props.id}`} class="attention-section-title">
-            {props.icon}
+            <Dynamic component={props.icon} size={16} aria-hidden="true" />
             {props.title}
           </h3>
           {props.aside}
