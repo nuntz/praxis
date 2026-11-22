@@ -275,7 +275,7 @@ A result is a success or an error from a closed set of codes:
 - Neither is the spend cap. `set_spend_cap` returns an Effect on it, carrying its fixed id and its new amount as the summary, and it goes in no change log.
 - The same Effects go into a **change log** in the Context's object, each with its caller and the time the call arrived.
 - `list_changes` since a cursor serves the PWA catching up, a Connection polling, and the Agent, which is given a bounded digest of what changed since the last Message it answered.
-- `list_changes` can be narrowed to one caller, a Connection by its id whatever its name or whether it reads only now, and can list from the newest change back, its cursor giving the earlier ones, which is how the Changes screen reads it (section 8.6). Narrowed or not, a page with nothing after it gives the cursor where the log stands.
+- `list_changes` can be narrowed to one caller, a Connection by its id whatever its name or whether it reads only now, and can list from the newest change back, its cursor giving the earlier ones, which is how Changes in settings reads it (section 8.6). Narrowed or not, a page with nothing after it gives the cursor where the log stands.
 - The change log is kept 90 days, pruned by the Context's alarm. A caller whose cursor is older is told to read afresh: `list_changes` gives no changes, says so, and gives the cursor where the log now stands, to ask from once it has.
 - A connected PWA receives the Effects of each change and patches what it shows.
 
@@ -499,7 +499,7 @@ ADR 0017.
 - The model must be one the code ships a price for. One with no shipped price fails the deploy with the reason. The first release ships a price for one model, Claude Sonnet 5.5, which also writes the compaction summary. Another model is a release.
 - **The key is optional.** Without one there is no Agent: the Conversation says so in place of its composer. The Journal, the screen, Connections and search work as normal, and nothing is shown as broken.
 - **When the model cannot be reached**, a Run the person started retries for seconds, then ends as failed. The person's Message stays, with a Notice under it that is not a Message and a way to try again. Nothing is answered later by itself. A Message sent while that Run was going is answered in its turn, as after an answer, and keeps a Notice of its own if it fails too. Trying again is a new Run, with its own record, that answers the Conversation as it stands: what the failed Run already changed stays changed, and the new Run sees it.
-- **Two failures are told apart.** The provider being unavailable shows only on the Run that failed. The provider refusing the key (wrong, out of credit, or at the provider's own limit) is a standing Notice in Attention and in settings until a call succeeds. It is not retried, and since the key is the Deployment's, its Notice shows in every Context and a call succeeding in any ends it. The provider's own words tell the two apart, and anything not a refused key counts as unavailable.
+- **Two failures are told apart.** The provider being unavailable shows only on the Run that failed. The provider refusing the key (wrong, out of credit, or at the provider's own limit) is a standing Notice in Attention until a call succeeds. It is not retried, and since the key is the Deployment's, its Notice shows in every Context and a call succeeding in any ends it. The provider's own words tell the two apart, and anything not a refused key counts as unavailable.
 - A Brief or Review that was due retries with a growing gap during an outage. Attention shows one line with the reason, and no Notification is sent.
 
 ### 5.7 Spend
@@ -591,8 +591,10 @@ Three peers, none hosting the others: **Attention**, the **Journal** and the **C
 | In between | Journal and Conversation side by side. Attention is a column opened from a button in the top bar that carries its count. |
 | Phone | Three bottom tabs: Attention, Journal, Agent. It opens on Attention. |
 
-- The Context switcher is in the top bar at every width.
+- The Context switcher is in the top bar at every width. Settings opens from the top bar too, as a screen of its own (section 8.6).
 - A change the Agent makes shows in the other two columns as it happens, patched from its Effects.
+- **The newest is where the person types.** The Journal and the Conversation keep time order, oldest first, and open at their newest, beside their composer. They stay there as more arrives. Scrolled away from it, a column stays where the person is, and a pill above its composer, "Jump to latest" with a count of what arrived, takes them back. The person's own send always brings what they sent into view.
+- **Days.** Both are parted into days, "Today", "Yesterday", then the weekday and the date, by the Context's time zone, the zone their times are shown in.
 
 ### 8.2 Composers
 
@@ -633,7 +635,8 @@ The column is composed by the screen from four sources, in this order:
 
 ### 8.4 The Journal
 
-- Entries in time order, each with its Tasks, its links, an edited mark where its words have changed, and its Follow-ups.
+- Entries in time order, opening at the newest (section 8.1), each with its Tasks, its links, an edited mark where its words have changed, and its Follow-ups. On a desktop a hairline parts one Entry from the next. On a phone each Entry is a card.
+- **An Entry's actions**, Edit, Follow up, Standing, Move and Delete, are not shown with every Entry. Where there is a pointer they are a toolbar on the Entry while it is hovered or has the keyboard's focus, Move and Delete behind its More button. On a touch screen they are a menu behind one button on each Entry. The edited mark and the Standing mark are always shown.
 - Search sits in the Journal column (section 9.4), its field above the Entries. While it holds words, what is found shows in their place, and follows each change as the Journal does. An Entry or a Task found opens in the Journal, and Escape or opening one ends the search.
 - A link to a trashed record shows as deleted. A Follow-up of a trashed Entry shows that it continues a deleted Entry.
 - A Held Change shows as a marker on its Entry that leads to Attention.
@@ -658,7 +661,8 @@ The column is composed by the screen from four sources, in this order:
 
 ### 8.5 The Conversation
 
-- Every Message, scrollable to the start.
+- Every Message, scrollable to the start, opening at the newest (section 8.1).
+- **The Call button** sits in the Conversation's header: a phone icon and "Call", and on a phone the icon alone. It is there wherever a Call can be offered (section 6). Offline, or at the cap, it is shown but cannot be pressed, and says why. In a Call the header says so, with the time so far, and the composer gives way to Mute and End, End in `warn`.
 - A Message from the Agent, a Brief and a Review included, is rendered as an Entry's words are (section 8.4), except that an image never loads and shows as its description. The person's own Messages show as typed.
 - A Run's calls fold under the Message it left, each change linking to its record, with the Run's cost on opening it.
 - A Held Change waits where the Agent left it, as well as at the top of Attention and on its Entry. It is counted in the Attention badge.
@@ -666,14 +670,30 @@ The column is composed by the screen from four sources, in this order:
 - On a phone the Agent tab carries a badge while a Brief or Review is unread.
 - Notices that are not Messages: a failed Run with a way to try again, the cap, no key, no network.
 
-### 8.6 Other screens
+### 8.6 Settings
 
-- **Changes**: a Context's list of changes, newest first, filtered by caller, with a Connection's reads listed alongside: each change's caller, time and Effects, each read's Connection, tool, time and how many records came back or the code it was answered with. It reaches back by hand, never further than both lists have been read, and a change made while it is shown comes over the live channel. A Connection's reads are as of the last read, since the live channel carries none. There is no activity screen beyond this.
-- **Trash**: each item, what went with it and when it will be removed. Restore, remove one for good, empty.
-- **Standing Entries**: the full list for the Context.
-- **Settings**, per Context: time zone, Brief time, Review day and time, the Notification switch, clear the Conversation, rebuild the search index.
+Settings is a screen of its own, at `/settings`, each section at `/settings/<section>`. It takes the main screen's place, and Back or Escape returns to the main screen as it was left: its tab, where each column was scrolled, and the drafts in its composers. The Context switcher stays in its top bar. A sign-in that lapsed and is made again lands on `/`.
+
+Its sections are in two groups, the current Context's and the Deployment's:
+
+| Group | Section | Holds |
+|---|---|---|
+| The current Context | **General** | The time zone, and both zones when the Device's differs (section 3.1). |
+| | **Brief and Review** | The Brief's time, the Review's day and time, each with its switch, and the Notification switch. |
+| | **Standing Entries** | The full list for the Context. |
+| | **Changes** | The Context's list of changes, newest first, filtered by caller, with a Connection's reads listed alongside: each change's caller, time and Effects, each read's Connection, tool, time and how many records came back or the code it was answered with. It reaches back by hand, never further than both lists have been read, and a change made while it is shown comes over the live channel. A Connection's reads are as of the last read, since the live channel carries none. There is no activity screen beyond this. |
+| | **Trash** | Each item, what went with it and when it will be removed. Restore, remove one for good, empty. |
+| | **Conversation and search** | Clear the Conversation, rebuild the search index. |
+| Everything in Praxis | **Contexts** | Each with its accent colour. |
+| | **Connections** | Each with the registrations seen. |
+| | **Devices** | Section 8.10. |
+| | **Spend** | The spend cap and the month's spend against it. |
+| | **Backups and Export** | When the last Backup was made, and making an Export. |
+
+- On a desktop the sections are listed beside the one shown, and Settings opens on General. On a phone the list is a screen of its own, and each section opens from it.
+- A switch is a switch, not a checkbox.
+- A standing Notice shows in Attention only, and leads to the section that deals with it, where there is one: the cap to Spend, no good Backup to Backups and Export.
 - **The first Context**: a Deployment with no Context shows only the form that makes one, with `create_context`, the tool the setup wizard uses too.
-- **Settings**, Deployment: Contexts with their accent colours, Connections with the registrations seen, Devices, the spend cap and the month's spend against it, when the last Backup was made, make an Export.
 
 ### 8.7 Notifications
 
@@ -754,8 +774,9 @@ Glossary: Device.
 
 - **A design system of Praxis's own**, new and not derived from mise's. Its tokens are in code as the source, and the SolidJS components are built from them. No third-party kit.
 - **The direction is Atelier**: soft panels on a tinted ground, round controls and one type family, Figtree, with the Device's own monospace for code only. It was picked from three directions drawn on the canvas [Praxis design directions](https://claude.ai/artifact/2XWrtwoKZCBjJ6kcT3q5zS), in [Explore design directions for the main screen](https://github.com/nuntz/praxis/issues/34). Its tokens, voice and rules are captured in the [Praxis design system](https://claude.ai/artifact/1drME2ytFn9ta9seAetLuw), which the tokens in code are written from. Both are private to the person who made them.
-- The canvas draws the main screen at desktop and phone width, in light and dark, in two Contexts, with these states: an Entry with an Inline Task and a Mention, a Held Change waiting, an unread Brief, an Unsent Entry and a standing Notice. Settings, the Trash and the Changes screen are not drawn. They are built from the system.
-- **The app icon** is the Lucide hammer, kept from the predecessor, in white on a dark neutral tile. It never takes a Context's accent colour, since it stands for the whole Deployment. The same mark sits in the top bar beside the name, inverting with the theme. Interface icons are Lucide too, under the ISC licence. Lucide and the Figtree typeface, under the SIL Open Font Licence, are the only outside assets. Both ship with the app, which fetches nothing from elsewhere, and their licences ship beside it, with those of every library whose code is in the app, gathered from the bundle at build time.
+- The canvas draws the main screen at desktop and phone width, in light and dark, in two Contexts, with these states: an Entry with an Inline Task and a Mention, a Held Change waiting, an unread Brief, an Unsent Entry and a standing Notice.
+- A second canvas, [Praxis UI polish](https://claude.ai/artifact/2UgKxtc3ZoP6WhUMtdB9Cg), private like the first, draws what the first left out or got wrong, at desktop and phone width: the Journal and the Conversation opening at their newest with the "Jump to latest" pill, an Entry's actions, the Call button and a Call going, Settings with Brief and Review open, and the map of interface icons. Its directions marked as not picked were not. The other sections of Settings are built from the system.
+- **The app icon** is the Lucide hammer, kept from the predecessor, in white on a dark neutral tile. It never takes a Context's accent colour, since it stands for the whole Deployment. The same mark sits in the top bar beside the name, inverting with the theme. Interface icons are Lucide too, under the ISC licence. An icon sits beside its label, on the tabs, the sections of Settings, Attention's sections and the primary buttons; it stands alone only on a well-known action, such as Edit, Follow up, Dates, Send, Search, Close or More, and then has an accessible name and a tooltip. Lucide and the Figtree typeface, under the SIL Open Font Licence, are the only outside assets. Both ship with the app, which fetches nothing from elsewhere, and their licences ship beside it, with those of every library whose code is in the app, gathered from the bundle at build time.
 - **Fixed**:
   - the layout of section 8.1;
   - light and dark, following the Device, with no switch;
@@ -861,7 +882,7 @@ ADR 0018.
 
 ### 10.3 Backups on the screen
 
-Settings shows when the last Backup was made, from `get_last_backup`. When none has succeeded for three days a standing Notice appears in Attention and in settings. It is not a Notification.
+Settings shows when the last Backup was made, from `get_last_backup`. When none has succeeded for three days a standing Notice appears in Attention, leading to Backups and Export in settings. It is not a Notification.
 
 - The three days count from the last Backup made or, before any, from the first Context made. A day the daily trigger did not fire counts as one that failed.
 - Each day's Backup, made or failed, deletes those made 30 days or more before it, so a record removed for good outlives its 30 days in no Backup.
