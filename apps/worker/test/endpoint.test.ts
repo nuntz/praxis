@@ -9,11 +9,17 @@ import { env, exports } from "cloudflare:workers";
 // whose calls the oracle does not see. It covers only the endpoint's own work: the sign-in every
 // request needs, which object, which caller, which tool, and the body. What the tools do is
 // tested at the seam.
-import { DEVICE_HEADER, type Device } from "@praxis/domain";
+import { DEVICE_HEADER, type Device, SIGN_IN_HEADER } from "@praxis/domain";
 import { beforeEach, describe, expect, test } from "vitest";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
 import { praxis } from "../src/worker.ts";
-import { fakeAccess, TEST_APPLICATION, THE_PERSONS_EMAIL, TOKEN_LIFE } from "./access-fake.ts";
+import {
+  fakeAccess,
+  SOMEONE_ELSES_EMAIL,
+  TEST_APPLICATION,
+  THE_PERSONS_EMAIL,
+  TOKEN_LIFE,
+} from "./access-fake.ts";
 import { logs } from "./markers.ts";
 import { subscribe } from "./push-fake.ts";
 
@@ -24,11 +30,7 @@ let token: string;
 
 beforeEach(async () => {
   access = await fakeAccess(TEST_APPLICATION);
-  worker = praxis(() => ({
-    keySet: access.keySet,
-    application: TEST_APPLICATION,
-    signInEmail: THE_PERSONS_EMAIL,
-  }));
+  worker = praxis(() => access.setup());
   // The Worker reads the real clock when a request arrives, so the token is signed at it.
   token = await access.sign(Date.now());
 });
@@ -141,8 +143,8 @@ describe("the Access sign-in every request needs", () => {
   });
 });
 
-describe("whose address a signed-in request carries", () => {
-  /** The results the Worker logged of whose address each request carried, in order. */
+describe("the person's Google address, the only one let in", () => {
+  /** The results the Worker logged of whose address a request it refused carried, in order. */
   const noted = () =>
     logs().flatMap((line) => {
       const parsed = JSON.parse(line.startsWith("{") ? line : "null") as {
@@ -152,62 +154,89 @@ describe("whose address a signed-in request carries", () => {
       return parsed?.access === "email" ? [parsed.result] : [];
     });
 
-  test("is noted as the person's, another's or none, and the request still reaches what it is for", async () => {
-    const other = await access.sign(Date.now(), { email: "someone.else@praxis.test" });
-    const none = await access.sign(Date.now(), { email: undefined });
+  /** Tokens Access signed in but that carry another address, and none. */
+  const notThePersons = async () => [
+    await access.sign(Date.now(), { email: SOMEONE_ELSES_EMAIL }),
+    await access.sign(Date.now(), { email: undefined }),
+  ];
 
-    for (const signedWith of [token, other, none]) {
-      expect(
-        await (await post("/api/deployment/tools/list_contexts", "{}", signedWith)).json(),
-      ).toMatchObject({ ok: true });
+  test("a token carrying another address, or none, is refused as not the person's, wherever it is for", async () => {
+    for (const signedWith of await notThePersons()) {
+      for (const [path, init] of EVERYWHERE) {
+        expect((await send(path, init, signedWith)).status, path).toBe(403);
+      }
+    }
+  });
+
+  test("while the Deployment names no address of the person's, even the person's token is refused", async () => {
+    worker = praxis(() => access.setup({ signInEmail: "" }));
+
+    for (const [path, init] of EVERYWHERE) {
+      expect((await send(path, init)).status, path).toBe(403);
+    }
+  });
+
+  test("a request refused as not the person's reaches no tool", async () => {
+    const id = await makeContext("Home");
+
+    for (const signedWith of await notThePersons()) {
+      await post(
+        `/api/contexts/${id}/tools/record_entry`,
+        JSON.stringify({ words: "Never recorded" }),
+        signedWith,
+      );
     }
 
-    expect(noted()).toEqual(["person", "other", "none"]);
+    expect(await callTool(`/api/contexts/${id}/tools/list_entries`, {})).toMatchObject({
+      value: { items: [] },
+    });
+  });
+
+  test("the refusal says whose this Praxis is, and how to sign out of Access to sign in as the person", async () => {
+    const [other = ""] = await notThePersons();
+
+    const refused = await send("/", {}, other);
+
+    expect(refused.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(refused.headers.get("cache-control")).toBe("no-store");
+    expect(refused.headers.get(SIGN_IN_HEADER)).toBe("not-the-persons");
+    const page = await refused.text();
+    expect(page).toContain("<h1>This Praxis belongs to another Google address</h1>");
+    expect(page).toContain('<a href="/cdn-cgi/access/logout">');
+  });
+
+  test("while the Deployment names no address of the person's, the refusal says the deploy mends it, not signing out", async () => {
+    worker = praxis(() => access.setup({ signInEmail: "" }));
+
+    const refused = await send("/");
+
+    expect(refused.headers.get(SIGN_IN_HEADER)).toBe("not-the-persons");
+    const page = await refused.text();
+    expect(page).toContain("<h1>This Praxis names no Google address to let in</h1>");
+    expect(page).toContain("praxis:signInEmail");
+    expect(page).not.toContain("/cdn-cgi/access/logout");
   });
 
   test("is the person's whatever the case of the address and the spaces around it", async () => {
-    await post(
-      "/api/deployment/tools/list_contexts",
-      "{}",
-      await access.sign(Date.now(), { email: ` ${THE_PERSONS_EMAIL.toUpperCase()} ` }),
-    );
-    worker = praxis(() => ({
-      keySet: access.keySet,
-      application: TEST_APPLICATION,
-      signInEmail: ` ${THE_PERSONS_EMAIL.toUpperCase()} `,
-    }));
-    await post("/api/deployment/tools/list_contexts", "{}");
+    const shouted = await access.sign(Date.now(), {
+      email: ` ${THE_PERSONS_EMAIL.toUpperCase()} `,
+    });
+    expect((await post("/api/deployment/tools/list_contexts", "{}", shouted)).status).toBe(200);
 
-    expect(noted()).toEqual(["person", "person"]);
+    worker = praxis(() => access.setup({ signInEmail: ` ${THE_PERSONS_EMAIL.toUpperCase()} ` }));
+    expect((await post("/api/deployment/tools/list_contexts", "{}")).status).toBe(200);
   });
 
-  test("is noted as unset while the Deployment names no address of the person's", async () => {
-    worker = praxis(() => ({
-      keySet: access.keySet,
-      application: TEST_APPLICATION,
-      signInEmail: "",
-    }));
-
+  test("a refusal is logged as whose address the token carried, never the address itself", async () => {
+    await post("/api/deployment/tools/list_contexts", "{}");
+    for (const signedWith of await notThePersons()) {
+      await post("/api/deployment/tools/list_contexts", "{}", signedWith);
+    }
+    worker = praxis(() => access.setup({ signInEmail: "" }));
     await post("/api/deployment/tools/list_contexts", "{}");
 
-    expect(noted()).toEqual(["unset"]);
-  });
-
-  test("is never logged as the address itself", async () => {
-    await post("/api/deployment/tools/list_contexts", "{}");
-    await post(
-      "/api/deployment/tools/list_contexts",
-      "{}",
-      await access.sign(Date.now(), { email: "someone.else@praxis.test" }),
-    );
-
+    expect(noted()).toEqual(["other", "none", "unset"]);
     expect(logs().filter((line) => line.includes("@"))).toEqual([]);
-  });
-
-  test("is not noted for a request that is not signed in", async () => {
-    await post("/api/deployment/tools/list_contexts", "{}", null);
-
-    expect(noted()).toEqual([]);
   });
 });
 

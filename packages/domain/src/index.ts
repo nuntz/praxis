@@ -26,6 +26,7 @@ export * from "./registries.ts";
 export * from "./results.ts";
 export * from "./search.ts";
 export * from "./settings.ts";
+export * from "./sign-in.ts";
 export * from "./spend.ts";
 export * from "./task.ts";
 export * from "./tools.ts";

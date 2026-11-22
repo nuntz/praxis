@@ -1,6 +1,6 @@
 import type { Server, ServerWebSocket } from "bun";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
-import { fakeAccess, THE_PERSONS_EMAIL } from "../test/access-fake.ts";
+import { fakeAccess, SOMEONE_ELSES_EMAIL, THE_PERSONS_EMAIL } from "../test/access-fake.ts";
 
 // Praxis on this machine, behind a stand-in for Cloudflare Access: `wrangler dev` on the next
 // port up, and in front of it what Access does for a Deployment. It signs every request in as the
@@ -12,6 +12,8 @@ import { fakeAccess, THE_PERSONS_EMAIL } from "../test/access-fake.ts";
 //
 // A lapsed sign-in is a cookie: while the browser carries SIGNED_OUT, nothing is let through. As
 // Access does, the login page sends the browser back to the address it was asked for once signed in.
+// Signed in with another Google address is a cookie too: while the browser carries ANOTHER_EMAIL,
+// what is let through carries that address, as from an account the Deployment does not let in.
 //
 // Access's sign-in is a cookie too, so a request the browser sends without credentials, as it
 // fetches a manifest unless told otherwise, is refused. The stand-in sets SIGNED_IN on what it
@@ -22,10 +24,19 @@ import { fakeAccess, THE_PERSONS_EMAIL } from "../test/access-fake.ts";
 const SIGNED_OUT = "praxis-stand-in-signed-out";
 /** The cookie that stands for Access's sign-in, which a browser sends only with credentials. */
 const SIGNED_IN = "praxis-stand-in-signed-in";
+/** The cookie that stands for a sign-in with a Google address other than the person's. */
+const ANOTHER_EMAIL = "praxis-stand-in-another-email";
 
 /** Whether the request carries the stand-in's cookie of that name. */
 function carries(request: Request, cookie: string): boolean {
   return request.headers.get("cookie")?.includes(`${cookie}=yes`) ?? false;
+}
+
+/** The token Access puts on a request it lets through: the person's, or another address's. */
+function tokenFor(request: Request): Promise<string> {
+  return carries(request, ANOTHER_EMAIL)
+    ? access.sign(Date.now(), { email: SOMEONE_ELSES_EMAIL })
+    : access.sign(Date.now());
 }
 
 const options = process.argv.slice(2);
@@ -99,7 +110,7 @@ const BunWebSocket = WebSocket as unknown as new (
 
 async function pipeLive(request: Request, url: URL, server: Server<Piped>) {
   const upstream = new BunWebSocket(`ws://localhost:${workerPort}${url.pathname}${url.search}`, {
-    headers: { [ACCESS_TOKEN_HEADER]: await access.sign(Date.now()) },
+    headers: { [ACCESS_TOKEN_HEADER]: await tokenFor(request) },
   });
   const piped: Piped = { upstream, waiting: [], browser: null };
   upstream.addEventListener("message", (event) => {
@@ -172,7 +183,7 @@ Bun.serve<Piped>({
     }
 
     const headers = new Headers(request.headers);
-    headers.set(ACCESS_TOKEN_HEADER, await access.sign(Date.now()));
+    headers.set(ACCESS_TOKEN_HEADER, await tokenFor(request));
     headers.delete("host");
     // Bun's fetch decompresses a body but keeps its encoding header, which the browser would
     // then decode again, so the Worker is asked for none.

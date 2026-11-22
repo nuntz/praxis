@@ -1,7 +1,8 @@
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
-const { ACCESS_TEAM_DOMAIN, ACCESS_AUD, ACCESS_TOKEN, AGENT_API_KEY, AGENT_MODEL } = process.env;
+const { ACCESS_TEAM_DOMAIN, ACCESS_AUD, ACCESS_EMAIL, ACCESS_TOKEN, AGENT_API_KEY, AGENT_MODEL } =
+  process.env;
 const {
   PUSH_PUBLIC_KEY,
   PUSH_PRIVATE_KEY,
@@ -9,6 +10,14 @@ const {
   PUSH_SUBSCRIPTION,
   PUSH_GONE_SUBSCRIPTION,
 } = process.env;
+
+// The real Access contract checks the token carries the address it was signed in with, so a
+// token given without that address runs nothing, which is said rather than skipped unseen.
+if (ACCESS_TOKEN && !ACCESS_EMAIL) {
+  throw new Error(
+    "ACCESS_TOKEN needs ACCESS_EMAIL beside it: the Google address it was signed in with.",
+  );
+}
 
 export default defineConfig({
   plugins: [
@@ -32,8 +41,13 @@ export default defineConfig({
     // the fake (test/access.test.ts). CI gives none.
     provide: {
       realAccess:
-        ACCESS_TEAM_DOMAIN && ACCESS_AUD && ACCESS_TOKEN
-          ? { teamDomain: ACCESS_TEAM_DOMAIN, audience: ACCESS_AUD, token: ACCESS_TOKEN }
+        ACCESS_TEAM_DOMAIN && ACCESS_AUD && ACCESS_EMAIL && ACCESS_TOKEN
+          ? {
+              teamDomain: ACCESS_TEAM_DOMAIN,
+              audience: ACCESS_AUD,
+              email: ACCESS_EMAIL,
+              token: ACCESS_TOKEN,
+            }
           : null,
       // The person's own model key, given by hand, to run the model's contract against the real
       // model as well as the scripted one (test/model.test.ts). CI gives none.

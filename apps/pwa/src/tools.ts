@@ -10,7 +10,7 @@ import type {
   ToolOutput,
   ToolResult,
 } from "@praxis/domain";
-import { DEVICE_HEADER, UPGRADE_HEADER } from "@praxis/domain";
+import { DEVICE_HEADER, SIGN_IN_HEADER, UPGRADE_HEADER } from "@praxis/domain";
 import { createContext, createSignal, useContext } from "solid-js";
 import { thisDevice } from "./device.ts";
 
@@ -51,6 +51,13 @@ async function post<T>(
   if (response.type === "opaqueredirect" || response.status === 401) {
     setSignInLapsed(true);
     throw new SignInLapsed("Your sign-in has lapsed.");
+  }
+  // The Worker's page for a sign-in that is not the person's, which signing in again would not
+  // mend: opening the screen again shows that page in its place, with the way to sign out of
+  // Access (section 7.1). Only the Worker's: another 403 would open the screen onto itself again.
+  if (response.headers.get(SIGN_IN_HEADER) === "not-the-persons") {
+    location.reload();
+    throw new Unreachable("This Praxis belongs to another Google address.");
   }
   // The Worker's page for a Deployment stuck on its upgrade (section 11): opening the screen again
   // shows that page in its place, since nothing can be reached until a release mends it.

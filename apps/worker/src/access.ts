@@ -57,33 +57,36 @@ export function publishedKeySet(teamDomain: string): AccessKeySet {
 }
 
 /**
- * Whether a request is the person's: signed in; signed out, which the person mends by signing in
- * again; or unavailable, when the keys to check it with cannot be read, which signing in again
- * does not mend.
+ * A token Access signed in that is not the person's: it carries another address, or none, or the
+ * Deployment names no address of the person's to tell (unset). Signing in again as the same
+ * Google account does not mend it; signing out of Access, to sign in as the person, does.
  */
-export type SignIn = "signed_in" | "signed_out" | "unavailable";
+export type NotThePersons = "other" | "none" | "unset";
+
+/**
+ * Whether a request is the person's: signed in as the person; signed out, which the person mends
+ * by signing in again; unavailable, when the keys to check it with cannot be read, which signing in
+ * again does not mend; or signed in, but not as the person.
+ */
+export type SignIn = "signed_in" | "signed_out" | "unavailable" | NotThePersons;
 
 /** The one way Access signs its tokens: RS256. */
 export const ACCESS_SIGNING = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" } as const;
 
-/** The Access a Deployment sits behind: its application, and the keys its team signs with. */
-export type Access = { keySet: AccessKeySet; application: AccessApplication };
-
 /**
- * Whose address a signed-in token carries: the person's, another's, none, or unset when the
- * Deployment names no address of the person's to tell.
+ * The Access a Deployment sits behind: its application, the keys its team signs with, and the
+ * person's Google address, the only one let in.
  */
-export type Whose = "person" | "other" | "none" | "unset";
+export type Access = { keySet: AccessKeySet; application: AccessApplication; signInEmail: string };
 
 /** An email as compared: neither its case nor the spaces around it tell two apart. */
 const comparable = (email: string) => email.trim().toLowerCase();
 
-/** Whose address a token the gate signed in carries, against the person's. */
-export function whose(token: string, signInEmail: string): Whose {
-  if (!comparable(signInEmail)) return "unset";
-  const email = tokenParts(token)?.claims.email;
-  if (typeof email !== "string" || !comparable(email)) return "none";
-  return comparable(email) === comparable(signInEmail) ? "person" : "other";
+/** Whether claims Access signed carry the person's address, or why they are not the person's. */
+function whose(claims: Claims, signInEmail: string): "signed_in" | NotThePersons {
+  if (!signInEmail) return "unset";
+  if (typeof claims.email !== "string" || !comparable(claims.email)) return "none";
+  return comparable(claims.email) === signInEmail ? "signed_in" : "other";
 }
 
 /** The shortest time between two reads of the keys, so a stranger's tokens cannot make it fetch on every request. */
@@ -92,7 +95,16 @@ const REREAD_AFTER = 10_000;
 /** How long keys once read are trusted, so a key Access has withdrawn stops working. */
 const KEYS_KEPT_FOR = 60 * 60_000;
 
-type Claims = { aud?: unknown; iss?: unknown; exp?: unknown; nbf?: unknown; email?: unknown };
+type Claims = {
+  aud?: unknown;
+  iss?: unknown;
+  exp?: unknown;
+  nbf?: unknown;
+  // Access puts the Google address on the token of every request it lets through, a hosted
+  // client's as well as a browser's: seen in Workers Logs on 2026-11-22 for Claude on the web,
+  // ChatGPT on the web and Claude Code, though Cloudflare's docs do not say so.
+  email?: unknown;
+};
 
 function base64urlBytes(part: string): Uint8Array<ArrayBuffer> {
   const base64 = part.replaceAll("-", "+").replaceAll("_", "/");
@@ -139,21 +151,24 @@ function claimsHold(claims: Claims, application: AccessApplication, now: number)
 }
 
 /**
- * The check every request passes before anything else. It reads the keys and trusts them for an
- * hour, reading them again sooner when a token names a key it does not hold, as after Access
- * rotates its keys, but never twice in ten seconds, whether the read worked or not.
+ * The check every request passes before anything else: that Access signed its token, and that the
+ * token carries the person's address. It reads the keys and trusts them for an hour, reading them
+ * again sooner when a token names a key it does not hold, as after Access rotates its keys, but
+ * never twice in ten seconds, whether the read worked or not.
  */
 export class AccessGate {
   readonly #keySet: AccessKeySet;
   readonly #application: AccessApplication;
+  readonly #signInEmail: string;
   #keys = new Map<string, CryptoKey>();
   #readAt: number | null = null;
   #triedAt: number | null = null;
 
-  constructor({ keySet, application }: Access) {
+  constructor({ keySet, application, signInEmail }: Access) {
     this.#keySet = keySet;
     // Access names its team without a trailing slash, however the Deployment's setting is typed.
     this.#application = { ...application, teamDomain: application.teamDomain.replace(/\/+$/, "") };
+    this.#signInEmail = comparable(signInEmail);
   }
 
   async check(token: string | null, now: number): Promise<SignIn> {
@@ -178,7 +193,7 @@ export class AccessGate {
     }
 
     const verified = await crypto.subtle.verify(ACCESS_SIGNING, key, parts.signature, parts.signed);
-    return verified ? "signed_in" : "signed_out";
+    return verified ? whose(parts.claims, this.#signInEmail) : "signed_out";
   }
 
   async #read(now: number) {

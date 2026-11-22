@@ -554,7 +554,7 @@ ADR 0003, 0005, 0007, 0009, 0010. Glossary: Connection.
 
 - Every caller signs in through Cloudflare Access managed OAuth: the person's browser, a hosted client and a local one. Web and MCP share one hostname behind one Access application. The Worker holds no OAuth code and no keys, and verifies the Access token on every request.
 - There is no static credential. A caller with no browser to sign in through cannot connect.
-- Only the person's Google address signs in: one address, never a list or a Workspace domain. The Access policy lets in that address alone, and the Worker is given it too. For now the Worker only notes, on each request, whether its token carries the person's address, another, or none, or that it was given no address of the person's, as a result code and never the address itself.
+- Only the person's Google address signs in: one address, never a list or a Workspace domain. The Access policy lets in that address alone, and the Worker is given it too and refuses any request whose token carries another address, or none, and every request while it was given no address of the person's. Signing in again would hand back the same account, so this is no lapsed sign-in: the Worker answers a 403 with a page saying the Praxis belongs to another Google address and a link to sign out of Access, which the screen opens itself again onto, and an MCP client gets the same. It logs why as a result code, never the address itself.
 - The clients the spec promises are Claude's apps, ChatGPT and Claude Code. Another hosted client works only once the person lists its redirect address.
 - Praxis serves only the stateless 2026-07-28 protocol over Streamable HTTP. No sessions, no HTTP+SSE. Older clients are refused.
 
@@ -981,7 +981,7 @@ ADR 0015, 0019, 0020, 0021.
 
 **Upgrades.** Each release that adds a step commits one fixture: a Context object and a Deployment object filled by a fixed scenario run through the tools, saved as a dump beside the Export it produced, and named by the tops of its two ladders, since a release that adds no step has the tables of the one before. The upgrade test wakes every fixture under the current code and checks the tables' shape, the Export brought forward, a few reads, and a step made to fail, and fails when the current ladders have no fixture. A guard fails CI when a released step's text changes, when one is gone, or when a step imports anything, and holds the Export format's steps (`packages/domain/src/format-steps/`) the same way. What the screen stores on a Device for a later load has its own fixtures, one for each shape a release stored under each key, the text as stored; the same kind of guard fails CI when a released one changes or is gone, and the PWA's test fails when a key has none or the current screen stores a shape its last one does not have.
 
-**By hand, per Deployment.** Real Access with real hosted clients, Web Push delivery, install to the Home Screen, real Calls, and a share into Praxis already open on Android adding to the draft there, which holds only where the browser honours the launch handler (section 8.9).
+**By hand, per Deployment.** Real Access with real hosted clients, each client's token carrying the person's address, Web Push delivery, install to the Home Screen, real Calls, and a share into Praxis already open on Android adding to the draft there, which holds only where the browser honours the launch handler (section 8.9).
 
 ## 14. Out of scope
 

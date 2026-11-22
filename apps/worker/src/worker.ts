@@ -2,16 +2,11 @@ import {
   type Caller,
   DEVICE_HEADER,
   failure,
+  SIGN_IN_HEADER,
   type ToolResult,
   UPGRADE_HEADER,
 } from "@praxis/domain";
-import {
-  ACCESS_TOKEN_HEADER,
-  type Access,
-  type AccessApplication,
-  AccessGate,
-  whose,
-} from "./access.ts";
+import { ACCESS_TOKEN_HEADER, type Access, AccessGate, type NotThePersons } from "./access.ts";
 import { arrivalTime } from "./arrival.ts";
 import { type StuckUpgrade, stuckIn, stuckWords } from "./ladder.ts";
 import { connectionCaller, connectionIdIn, noConnection, serveConnection } from "./mcp.ts";
@@ -41,30 +36,26 @@ const HAND: Caller = { kind: "hand" };
  * in to it (section 7.1). Every request is checked before anything else, whatever it is for: the
  * screen and its files, the tool endpoint and MCP. A refused request reaches nothing.
  */
-export function praxis(accessOf: (env: Env) => Access & { signInEmail: string }) {
-  // One gate per isolate, so the keys are read once and kept, unless the application changes.
-  let held: { application: AccessApplication; gate: AccessGate } | null = null;
+export function praxis(accessOf: (env: Env) => Access) {
+  // One gate per isolate, so the keys are read once and kept, unless the Access it checks changes.
+  let held: { access: Access; gate: AccessGate } | null = null;
   const gateFor = (access: Access) => {
-    const { teamDomain, audience } = access.application;
     const same =
-      held?.application.teamDomain === teamDomain && held.application.audience === audience;
-    if (!held || !same) held = { application: access.application, gate: new AccessGate(access) };
+      held?.access.application.teamDomain === access.application.teamDomain &&
+      held.access.application.audience === access.application.audience &&
+      held.access.signInEmail === access.signInEmail;
+    if (!held || !same) held = { access, gate: new AccessGate(access) };
     return held.gate;
   };
 
   return {
     async fetch(request: Request, env: Env): Promise<Response> {
       const arrivedAt = arrivalTime();
-      const access = accessOf(env);
       const token = request.headers.get(ACCESS_TOKEN_HEADER);
-      const signIn = await gateFor(access).check(token, arrivedAt);
+      const signIn = await gateFor(accessOf(env)).check(token, arrivedAt);
       if (signIn === "signed_out") return signedOut();
       if (signIn === "unavailable") return unavailable();
-      // Only noted for now, never the address itself: until every client's token is seen to carry
-      // the person's address, a request is let through whoever's it carries.
-      if (token !== null) {
-        console.log(JSON.stringify({ access: "email", result: whose(token, access.signInEmail) }));
-      }
+      if (signIn !== "signed_in") return notThePersons(signIn);
       try {
         return await route(request, env, arrivedAt);
       } catch (error) {
@@ -156,24 +147,40 @@ function withPolicy(served: Response): Response {
 function stuckPage(stuck: StuckUpgrade): Response {
   const release = escapeHtml(stuck.release);
   const why = escapeHtml(stuckWords(stuck));
+  return plainPage(
+    "Praxis could not upgrade",
+    `<p>The upgrade under release <code>${release}</code> failed: for the Deployment's own object, ${why}.</p>
+<p>Nothing was changed or lost: it stays as it was before the upgrade, and serves nothing until a release that mends it is deployed.</p>`,
+    { status: 503, headers: { [UPGRADE_HEADER]: "stuck" } },
+  );
+}
+
+/**
+ * One of the plain pages the Worker shows in place of the screen when nothing can be reached: a
+ * heading saying what is wrong, the paragraphs that say what mends it, never kept by a cache.
+ */
+function plainPage(
+  heading: string,
+  paragraphs: string,
+  { status, headers }: { status: number; headers: Record<string, string> },
+): Response {
   const page = `<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Praxis could not upgrade</title>
+<title>${heading}</title>
 <body style="font-family: system-ui, sans-serif; max-width: 36rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5">
-<h1>Praxis could not upgrade</h1>
-<p>The upgrade under release <code>${release}</code> failed: for the Deployment's own object, ${why}.</p>
-<p>Nothing was changed or lost: it stays as it was before the upgrade, and serves nothing until a release that mends it is deployed.</p>
+<h1>${heading}</h1>
+${paragraphs}
 </body>
 </html>
 `;
   return new Response(page, {
-    status: 503,
+    status,
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
-      [UPGRADE_HEADER]: "stuck",
+      ...headers,
     },
   });
 }
@@ -213,6 +220,31 @@ function signedOut(): Response {
     status: 401,
     headers: { "cache-control": "no-store" },
   });
+}
+
+/**
+ * Access signed the request in, but not as the person: signing in again would hand back the same
+ * Google account, so this is no lapsed sign-in (a 401, which the screen asks to sign in again on)
+ * but a refusal, with the way out of that account; or, while the Deployment names no address of
+ * the person's, with the deploy that mends it. Logged as why, never the address itself.
+ */
+function notThePersons(why: NotThePersons): Response {
+  console.warn(JSON.stringify({ access: "email", result: why }));
+  const refused = { status: 403, headers: { [SIGN_IN_HEADER]: "not-the-persons" } };
+  if (why === "unset") {
+    return plainPage(
+      "This Praxis names no Google address to let in",
+      `<p>Its configuration names no Google address of the person's, so it lets no one in.</p>
+<p>Set <code>praxis:signInEmail</code> to the person's Google address and deploy again (docs/deployment.md).</p>`,
+      refused,
+    );
+  }
+  return plainPage(
+    "This Praxis belongs to another Google address",
+    `<p>You are signed in to Cloudflare Access with a Google address this Praxis does not let in. Only the person it belongs to signs in to it.</p>
+<p><a href="/cdn-cgi/access/logout">Sign out of Cloudflare Access</a>, then sign in with the Google address this Praxis belongs to.</p>`,
+    refused,
+  );
 }
 
 /** The keys to check the sign-in with could not be read. Signing in again would not mend it. */

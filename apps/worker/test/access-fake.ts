@@ -1,4 +1,4 @@
-import type { AccessApplication, AccessKey, AccessKeySet } from "../src/access.ts";
+import type { Access, AccessApplication, AccessKey, AccessKeySet } from "../src/access.ts";
 import { ACCESS_SIGNING, KeySetUnreachable } from "../src/access.ts";
 
 // The Access key set is one of the faked things (section 13). The fake publishes a key of
@@ -14,6 +14,9 @@ export const TEST_APPLICATION: AccessApplication = {
 
 /** The person's Google address, which the fake's tokens carry unless a test gives another. */
 export const THE_PERSONS_EMAIL = "the.person@praxis.test";
+
+/** A Google address Access might sign in that is not the person's. */
+export const SOMEONE_ELSES_EMAIL = "someone.else@praxis.test";
 
 type SigningKey = { kid: string; pair: CryptoKeyPair };
 
@@ -74,6 +77,13 @@ export async function fakeAccess(application: AccessApplication) {
 
   return {
     keySet,
+    /**
+     * The Access a Deployment behind this fake sits behind: its keys, its application and the
+     * person's address, but for what a test changes.
+     */
+    setup(changed: Partial<Access> = {}): Access {
+      return { keySet, application, signInEmail: THE_PERSONS_EMAIL, ...changed };
+    },
     /**
      * A token Access would put on a request at this time, for the person, good for a day. The
      * claims can be changed to make one Access would not.

@@ -13,7 +13,7 @@ import { RUNTIME_TABLES } from "../src/agent.ts";
 import { CONTEXT_LADDER, DEPLOYMENT_LADDER, type Step } from "../src/steps/index.ts";
 import { WORDS_INDEX } from "../src/tables.ts";
 import { praxis } from "../src/worker.ts";
-import { fakeAccess, TEST_APPLICATION, THE_PERSONS_EMAIL } from "./access-fake.ts";
+import { fakeAccess, TEST_APPLICATION } from "./access-fake.ts";
 import { type Dump, dumpObject, layDump, shapeOf } from "./dump.ts";
 import { type FixtureIds, fixtureName } from "./fixture-scenario.ts";
 import pending from "./fixtures/pi-1.5.2-pending/pending.json";
@@ -559,11 +559,7 @@ describe("step 1, on the Deployment object made before the ladder", () => {
 describe("a Deployment object stuck on its upgrade", () => {
   test("is shown as one plain page saying under which release, for every request", async () => {
     const access = await fakeAccess(TEST_APPLICATION);
-    const worker = praxis(() => ({
-      keySet: access.keySet,
-      application: TEST_APPLICATION,
-      signInEmail: THE_PERSONS_EMAIL,
-    }));
+    const worker = praxis(() => access.setup());
     const token = await access.sign(Date.now());
     const send = (path: string, init: RequestInit = {}) => {
       const headers = new Headers(init.headers);

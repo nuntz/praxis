@@ -7,6 +7,7 @@ import { expect, openJournal, screenKept, test } from "./fixtures.ts";
 // at once signed in.
 
 const LAPSED = "praxis-stand-in-signed-out";
+const ANOTHER_EMAIL = "praxis-stand-in-another-email";
 
 test("a network failure is not a lapsed sign-in, and a lapsed sign-in asks the person to sign in again", async ({
   page,
@@ -119,4 +120,36 @@ test("a sign-in that lapsed on a Settings address, and is made again, lands on t
   // An address of Settings opened after that opens Settings, as ever.
   await page.goto("/settings/spend");
   await expect(page.getByRole("region", { name: "Spend", exact: true })).toBeVisible();
+});
+
+test("signed in to Access with another Google address, the screen gives way to a page saying whose Praxis it is", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  const { journal, composer } = await openJournal(page, testInfo);
+  await expect(composer).toBeVisible();
+  await screenKept(page);
+
+  // Access lets another of the person's domain's accounts through, as it did before the
+  // Deployment let in one address alone: signing in again would hand back the same account.
+  await page.context().addCookies([{ name: ANOTHER_EMAIL, value: "yes", url: page.url() }]);
+  await composer.fill(`Written as someone else ${testInfo.project.name}`);
+  await journal.getByRole("button", { name: "Record" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "This Praxis belongs to another Google address" }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign out of Cloudflare Access" })).toHaveAttribute(
+    "href",
+    "/cdn-cgi/access/logout",
+  );
+  await expect(page.getByRole("region", { name: "Journal" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Sign in again" })).toHaveCount(0);
+
+  // Opened afresh, it is the same page, never the screen kept for no network.
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "This Praxis belongs to another Google address" }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Journal" })).toHaveCount(0);
 });

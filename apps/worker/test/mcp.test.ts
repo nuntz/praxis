@@ -22,7 +22,7 @@ import {
 import { beforeEach, describe, expect, test } from "vitest";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
 import { praxis } from "../src/worker.ts";
-import { fakeAccess, TEST_APPLICATION, THE_PERSONS_EMAIL } from "./access-fake.ts";
+import { fakeAccess, TEST_APPLICATION } from "./access-fake.ts";
 import { offering } from "./offering.ts";
 
 const ORIGIN = "https://praxis.test";
@@ -32,11 +32,7 @@ let token: string;
 
 beforeEach(async () => {
   const access = await fakeAccess(TEST_APPLICATION);
-  worker = praxis(() => ({
-    keySet: access.keySet,
-    application: TEST_APPLICATION,
-    signInEmail: THE_PERSONS_EMAIL,
-  }));
+  worker = praxis(() => access.setup());
   // The Worker reads the real clock when a request arrives, so the token is signed at it.
   token = await access.sign(Date.now());
 });
