@@ -958,7 +958,7 @@ ADR 0015, 0019, 0020, 0021.
 
 **Upgrades.** Each release that adds a step commits one fixture: a Context object and a Deployment object filled by a fixed scenario run through the tools, saved as a dump beside the Export it produced, and named by the tops of its two ladders, since a release that adds no step has the tables of the one before. The upgrade test wakes every fixture under the current code and checks the tables' shape, the Export brought forward, a few reads, and a step made to fail, and fails when the current ladders have no fixture. A guard fails CI when a released step's text changes, when one is gone, or when a step imports anything, and holds the Export format's steps (`packages/domain/src/format-steps/`) the same way. What the screen stores on a Device for a later load has its own fixtures, one for each shape a release stored under each key, the text as stored; the same kind of guard fails CI when a released one changes or is gone, and the PWA's test fails when a key has none or the current screen stores a shape its last one does not have.
 
-**By hand, per Deployment.** Real Access with real hosted clients, Web Push delivery, install to the Home Screen, real Calls.
+**By hand, per Deployment.** Real Access with real hosted clients, Web Push delivery, install to the Home Screen, real Calls, and a share into Praxis already open on Android adding to the draft there, which holds only where the browser honours the launch handler (section 8.9).
 
 ## 14. Out of scope
 

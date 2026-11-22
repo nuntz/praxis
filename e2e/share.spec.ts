@@ -3,6 +3,7 @@ import {
   callContextTool,
   expect,
   holdNext,
+  installedApp,
   lastShown,
   makeContext,
   onPhone,
@@ -103,48 +104,6 @@ test("what the share sheet shares lands in the composer as given, and is recorde
   ]);
   expect(fetched).toEqual([]);
 });
-
-/**
- * Stand in for the browser's launch queue, as the installed PWA has it: a launch the manifest's
- * launch handler sends to a window already open is given to the screen there, with the address it
- * was launched at, and the launch that opened the window is given too, as Chromium gives it.
- * Returns a way to launch Praxis at an address into the window open.
- */
-async function installedApp(page: Page) {
-  await page.addInitScript(() => {
-    type Consumer = (params: { targetURL: string }) => void;
-    const opened = location.href;
-    let consumer: Consumer | null = null;
-    const waiting: string[] = [opened];
-    const give = () => {
-      while (consumer) {
-        const next = waiting.shift();
-        if (next === undefined) return;
-        consumer({ targetURL: next });
-      }
-    };
-    // Chromium has its own queue on every page, which gives nothing outside an installed PWA.
-    Object.defineProperty(window, "launchQueue", {
-      value: {
-        setConsumer(given: Consumer) {
-          consumer = given;
-          give();
-        },
-      },
-    });
-    Object.assign(window, {
-      praxisLaunch(address: string) {
-        waiting.push(new URL(address, location.origin).href);
-        give();
-      },
-    });
-  });
-  return (address: string) =>
-    page.evaluate(
-      (at) => (window as unknown as { praxisLaunch(a: string): void }).praxisLaunch(at),
-      address,
-    );
-}
 
 test("what is shared into Praxis already open is added to the draft there, never replacing it", async ({
   page,
