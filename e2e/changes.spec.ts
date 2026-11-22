@@ -3,6 +3,7 @@ import {
   callContextTool,
   callDeploymentTool,
   expect,
+  holdNext,
   lastShown,
   makeContext,
   test,
@@ -84,20 +85,14 @@ test("the person sees what changed and who changed it, with a Connection's reads
   // A change that lands while the list is being read is shown once the read is in, and once: the
   // answer from before it is dropped, and the list read again.
   const reading = new RegExp(`/api/contexts/${id}/tools/list_changes$`);
-  const during = `Meanwhile from elsewhere ${tag}`;
-  // Only the first read's answer is held, until the agent's change has made the screen read again.
-  await page.route(
-    reading,
-    async (route) => {
-      const answer = await route.fetch();
-      const readAgain = page.waitForRequest(reading);
-      await agent.callTool({ name: "record_entry", arguments: { words: during } });
-      await readAgain;
-      await route.fulfill({ response: answer });
-    },
-    { times: 1 },
-  );
+  const held = await holdNext(page, reading);
   await madeBy.selectOption({ label: "Anyone" });
+  await held.asked();
+  const readAgain = page.waitForRequest(reading);
+  const during = `Meanwhile from elsewhere ${tag}`;
+  await agent.callTool({ name: "record_entry", arguments: { words: during } });
+  await readAgain;
+  await held.release();
   await expect(list.getByTestId("change").filter({ hasText: during })).toHaveCount(1);
   await expect(list.getByTestId("change")).toHaveCount(5);
 });

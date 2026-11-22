@@ -172,11 +172,12 @@ export async function holdAnswers(page: Page, tool: string) {
 }
 
 /**
- * Hold the answer to the calls at one address, such as one Context's `list_tasks`, so a journey
- * changes the state a guard on the screen names while the call it races is out, as
+ * Hold the answer to the next call at one address, such as one Context's `list_tasks`, so a
+ * journey changes the state a guard on the screen names while the call it races is out, as
  * `e2e/offline-copy.spec.ts` switches the Offline Copy off while its fetch waits (CODING_STANDARDS.md,
- * Reads and changes). `holdAnswers()` holds a tool's answers in every Context; this holds one
- * address, and every other call is answered as ever.
+ * Reads and changes). Only that call is held: a later one at the address, such as the read again
+ * a change makes the screen send while the first is out (`e2e/changes.spec.ts`), is answered as
+ * ever, as is every call elsewhere. `holdAnswers()` holds a tool's answers in every Context.
  */
 export async function holdNext(page: Page, address: RegExp) {
   let release!: () => void;
@@ -191,20 +192,23 @@ export async function holdNext(page: Page, address: RegExp) {
   const wasAnswered = new Promise<void>((resolve) => {
     answered = resolve;
   });
-  await page.route(address, async (route) => {
-    asked();
-    const answer = await route.fetch();
-    await released;
-    await route.fulfill({ response: answer });
-    answered();
-  });
+  await page.route(
+    address,
+    async (route) => {
+      asked();
+      const answer = await route.fetch();
+      await released;
+      await route.fulfill({ response: answer });
+      answered();
+    },
+    { times: 1 },
+  );
   return {
     asked: () => wasAsked,
     /** Let the held answer through, and wait until the screen has it. */
     async release() {
       release();
       await wasAnswered;
-      await page.unroute(address);
       await page.evaluate(() => new Promise(requestAnimationFrame));
     },
   };
