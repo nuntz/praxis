@@ -198,6 +198,18 @@ describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
       value(await context.call(asConnection, "record_entry", { words: "Still connected" }));
     });
 
+    test("has its next Brief answered, its Conversation asked of the tools this release offers", async () => {
+      const { deployment, context } = await wakeFixture(fixture);
+      deployment.advance(DAY);
+      await context.fireAlarm();
+      await context.runsEnded();
+
+      const runs = value(await context.call(hand, "list_runs", {})).items;
+      expect(runs.find(({ started_by }) => started_by === "brief")).toMatchObject({
+        ended: "answered",
+      });
+    });
+
     test("a step made to fail leaves it whole on the step before, serving nothing, until a release mends it", async () => {
       const before = rowsOutsideTheLadder(await climbed(fixture));
       addSteps(fixture.ids.context, failingStep);

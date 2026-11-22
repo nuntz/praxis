@@ -1,7 +1,15 @@
 import type { Change, Effect, ToolResult } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { forget, leakedMarkers, logs, marked } from "./markers.ts";
-import { answering, forgetSuperseded, scriptModel, supersededScripts } from "./model-fake.ts";
+import {
+  answering,
+  forgetSuperseded,
+  forgetUnresolved,
+  scriptModel,
+  supersededScripts,
+  testModel,
+  unresolvedRequests,
+} from "./model-fake.ts";
 import { judge, judgeDeployment, type Records, type Seen, type SeenDeployment } from "./oracle.ts";
 import { agent, connection, hand, newContext, value } from "./seam.ts";
 
@@ -399,6 +407,32 @@ describe("the platform's logs", () => {
 });
 
 describe("the scripted model", () => {
+  test("refuses a request removing a tool it was not offered, as the provider does, and the harness sees it", async () => {
+    scriptModel(answering("Never said."));
+    const model = testModel();
+    if (typeof model === "string") throw new Error("No scripted model");
+    const found = model.models.getModel(model.provider, model.id);
+    if (!found) throw new Error("The scripted model is not there");
+    const tool = { name: "record_entry", description: "Record.", parameters: { type: "object" } };
+
+    const answer = await model.models.completeSimple(found, {
+      messages: [
+        { role: "system", content: "Be terse.", toolsAdded: [tool], timestamp: 0 },
+        { role: "system", content: "", toolsRemoved: [{ name: "record_entry" }], timestamp: 0 },
+        { role: "system", content: "", toolsRemoved: [{ name: "edit_entry" }], timestamp: 0 },
+        { role: "user", content: "Hello", timestamp: 0 },
+      ],
+    });
+
+    expect(answer).toMatchObject({
+      stopReason: "error",
+      errorMessage: expect.stringContaining("tool_reference_unresolved"),
+    });
+    expect(unresolvedRequests()).toEqual([["edit_entry"]]);
+    // Seen, so the harness's own check after this test passes.
+    forgetUnresolved();
+  });
+
   test("is held to the script a Context was first asked with: a script given after that is seen asked out of turn", async () => {
     scriptModel(answering("First."));
     const context = newContext();

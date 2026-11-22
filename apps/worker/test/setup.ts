@@ -8,7 +8,14 @@ import {
   setMeaningFailing,
   setMeaningPresent,
 } from "./meaning-fake.ts";
-import { answering, forgetSuperseded, scriptModel, supersededScripts } from "./model-fake.ts";
+import {
+  answering,
+  forgetSuperseded,
+  forgetUnresolved,
+  scriptModel,
+  supersededScripts,
+  unresolvedRequests,
+} from "./model-fake.ts";
 import { setPushFailing, setPushKeyed } from "./push-fake.ts";
 import { clearUpgradeFaults } from "./upgrade-faults.ts";
 import { resetVoice } from "./voice-fake.ts";
@@ -32,6 +39,7 @@ beforeEach(() => {
 // Every test starts with a Deployment that has a model, playing a script that only answers.
 beforeEach(() => {
   forgetSuperseded();
+  forgetUnresolved();
   scriptModel(answering("Noted."));
 });
 
@@ -46,6 +54,13 @@ afterEach(() => {
   expect(
     supersededScripts(),
     "A Context asked a script this test had replaced: a Context keeps the model it was first asked with, so script once and switch inside the script, as heldAnswer() does",
+  ).toEqual([]);
+});
+
+afterEach(() => {
+  expect(
+    unresolvedRequests(),
+    "The model was asked to remove or add again a tool it was not offered, which the provider refuses (tool_reference_unresolved): a request filtered to fewer tools filters toolsRemoved as it does toolsAdded",
   ).toEqual([]);
 });
 

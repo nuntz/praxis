@@ -41,6 +41,27 @@ export function forgetSuperseded(): void {
   superseded.length = 0;
 }
 
+/** The tools each request in this test removed or added again while not offering them. */
+const unresolved: string[][] = [];
+
+/**
+ * The requests in this test the provider would refuse, as the tools each names that it does not
+ * offer. The scripted model refuses them as Anthropic does (`tool_reference_unresolved`), and the
+ * harness fails a test that sent one, which a Run answering the refusal would otherwise hide.
+ */
+export function unresolvedRequests(): readonly string[][] {
+  return unresolved;
+}
+
+/** Start a test with no request the provider would refuse. */
+export function forgetUnresolved(): void {
+  unresolved.length = 0;
+}
+
+/** What Anthropic answers a request naming a tool it does not offer. */
+const TOOL_UNRESOLVED = (name: string) =>
+  `400 {"type":"error","error":{"type":"invalid_request_error","message":"tool_addition/tool_removal references unknown tool '${name}'","details":{"error_code":"tool_reference_unresolved"}}}`;
+
 /**
  * The scripted model is asked again as the real one is, but at once: twice more, a millisecond
  * apart, so a test sees the asking again without waiting seconds for it.
@@ -89,6 +110,14 @@ export function scriptModel(
   const step: Script = (...args) => {
     if (playing !== mine) superseded.push(lastWords(args[0]));
     faux.appendResponses([step]);
+    const names = unresolvedTools(args[0]);
+    if (names.length > 0) {
+      unresolved.push(names);
+      return fauxAssistantMessage([], {
+        stopReason: "error",
+        errorMessage: TOOL_UNRESOLVED(names[0] ?? ""),
+      });
+    }
     return script(...args);
   };
   faux.setResponses([step]);
