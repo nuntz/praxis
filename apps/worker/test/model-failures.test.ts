@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
 import {
   answering,
+  answeringAtCost,
   failing,
   KEY_REFUSED,
   lastWords,
@@ -11,7 +12,14 @@ import {
   scriptModel,
   UNAVAILABLE,
 } from "./model-fake.ts";
-import { hand, newContext, newDeployment, value } from "./seam.ts";
+import {
+  contextIn,
+  contextWithItsDeployment,
+  hand,
+  newContext,
+  newDeployment,
+  value,
+} from "./seam.ts";
 
 // When the model cannot be reached (section 5.6, ADR 0017): a Run the person started asks again
 // for seconds, then ends as failed. The person's Message stays, with a Notice under it that is
@@ -19,17 +27,6 @@ import { hand, newContext, newDeployment, value } from "./seam.ts";
 // refusing the key is told apart: it is a standing Notice too, until a call succeeds.
 
 type Context = ReturnType<typeof newContext>;
-type Deployment = ReturnType<typeof newDeployment>;
-
-/** A Context made by the hand in this Deployment, reached as the Worker reaches one. */
-async function makeContext(deployment: Deployment, name = "Work") {
-  const made = await deployment.call(hand, "create_context", {
-    name,
-    time_zone: "UTC",
-    accent: "blue",
-  });
-  return deployment.context(value(made).record.id);
-}
 
 async function messages(context: Pick<Context, "callAny">): Promise<MessagesPage["items"]> {
   return (value(await context.callAny(hand, "list_messages", {})) as MessagesPage).items;
@@ -121,8 +118,8 @@ describe("send_message when the provider refuses the key", () => {
     let refused = true;
     scriptModel(failingWhile(() => refused, KEY_REFUSED));
     const deployment = newDeployment("2026-11-15T09:00:00.000Z");
-    const work = await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    const { context: work } = await contextIn(deployment, "Work");
+    const { context: home } = await contextIn(deployment, "Home");
 
     await sendAndSettle(work, marked("Hello"));
     const standing = value(await home.call(hand, "list_notices", {})).items;
@@ -139,8 +136,8 @@ describe("send_message when the key is taken, reported after a refusal made sinc
     let refused = false;
     scriptModel(failingWhile(() => refused, KEY_REFUSED));
     const deployment = newDeployment("2026-11-15T09:00:00.000Z");
-    const work = await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    const { context: work } = await contextIn(deployment, "Work");
+    const { context: home } = await contextIn(deployment, "Home");
 
     // Reports from two Contexts arrive in any order: a Run that took the key at 09:00 is reported
     // after one refused at 10:00.
@@ -199,8 +196,7 @@ describe("retry_run", () => {
   test("counts what it spent once, apart from what the Run that failed spent", async () => {
     let down = true;
     scriptModel(failingWhile(() => down, UNAVAILABLE));
-    const deployment = newDeployment();
-    const work = await makeContext(deployment);
+    const { deployment, context: work } = await contextWithItsDeployment();
     await sendAndSettle(work, marked("Are you there?"));
     const [failed] = await messages(work);
     if (failed?.from !== "person" || !failed.notice) throw new Error("No Run failed");
@@ -253,11 +249,10 @@ describe("retry_run", () => {
 
   test("at the cap it is refused with the cap in the way, and the Notice stays", async () => {
     // A Run that fails spends nothing: an answer before it brings the month to the cap.
-    const costly = answering("word ".repeat(4000));
+    const costly = answeringAtCost(0.05);
     const down = failing(UNAVAILABLE);
     scriptModel((...args) => (lastWords(args[0]).startsWith("Spend") ? costly : down)(...args));
-    const deployment = newDeployment();
-    const work = await makeContext(deployment);
+    const { deployment, context: work } = await contextWithItsDeployment();
     await sendAndSettle(work, "Spend something");
     await sendAndSettle(work, marked("Are you there?"));
     const [failed] = await messages(work);
@@ -300,9 +295,8 @@ describe("list_notices", () => {
   });
 
   test("past 80% of the cap, and at the cap, the month's spend against it", async () => {
-    scriptModel(answering("word ".repeat(4000)));
-    const deployment = newDeployment();
-    const work = await makeContext(deployment);
+    scriptModel(answeringAtCost(0.05));
+    const { deployment, context: work } = await contextWithItsDeployment();
     await sendAndSettle(work, "Spend something");
     const { spent } = value(await deployment.call(hand, "get_spend", {}));
 

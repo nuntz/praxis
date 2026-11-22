@@ -2,7 +2,17 @@ import type { Entry, MoveUnit, Task } from "@praxis/domain";
 import { afterEach, describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
 import { clearMoveFaults, failMovesInto } from "./move-faults.ts";
-import { agent, atOnce, DAY, everyCaller, hand, left, newDeployment, value } from "./seam.ts";
+import {
+  agent,
+  atOnce,
+  contextIn,
+  DAY,
+  everyCaller,
+  hand,
+  left,
+  newDeployment,
+  value,
+} from "./seam.ts";
 
 // Moving a record between Contexts (section 3.9, ADR 0003 and 0006): the one act that crosses the
 // boundary. Only the person's hand moves a record, and it takes a whole unit, which the person
@@ -17,18 +27,9 @@ afterEach(() => clearMoveFaults());
 /** A Deployment with two Contexts, Work and Home, each reached as the Worker reaches it. */
 async function twoContexts(startAt?: string) {
   const deployment = newDeployment(startAt);
-  const made = async (name: string) =>
-    value(await deployment.call(hand, "create_context", { name, time_zone: "UTC", accent: "blue" }))
-      .record;
-  const work = await made("Work");
-  const home = await made("Home");
-  return {
-    deployment,
-    work,
-    home,
-    from: deployment.context(work.id),
-    to: deployment.context(home.id),
-  };
+  const { record: work, context: from } = await contextIn(deployment, "Work");
+  const { record: home, context: to } = await contextIn(deployment, "Home");
+  return { deployment, work, home, from, to };
 }
 
 async function anEntry(
@@ -492,13 +493,7 @@ describe("move_record", () => {
   test("a Context retired, unknown or the same one is not a place to move to or from", async () => {
     const { deployment, work, home, from } = await twoContexts();
     const entry = await anEntry(from, marked("Garden"));
-    const third = value(
-      await deployment.call(hand, "create_context", {
-        name: "Old",
-        time_zone: "UTC",
-        accent: "rust",
-      }),
-    ).record;
+    const { record: third } = await contextIn(deployment, "Old", { accent: "rust" });
     value(await deployment.call(hand, "retire_context", { id: third.id }));
     const asked = { record: { kind: "entry", id: entry.id }, unit: [entry.id] };
 

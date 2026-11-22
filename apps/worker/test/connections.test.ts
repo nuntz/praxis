@@ -1,22 +1,18 @@
 import { describe, expect, test } from "vitest";
-import { hand, newDeployment, value } from "./seam.ts";
+import {
+  contextIn,
+  contextWithItsDeployment,
+  type Deployment,
+  hand,
+  newDeployment,
+  value,
+} from "./seam.ts";
 
 // A Connection is the person's standing permission for an outside agent to work in one Context
 // (section 7.2, ADR 0009). The Deployment object keeps them; making, renaming, switching and
 // ending one are Deployment tools, offered to the hand only (4.11). The oracle holds each write
 // to changing exactly the Connections its Effects name. What a Connection reaches over MCP is in
 // mcp.test.ts.
-
-type Deployment = ReturnType<typeof newDeployment>;
-
-async function makeContext(deployment: Deployment, name = "Work"): Promise<string> {
-  const made = await deployment.call(hand, "create_context", {
-    name,
-    time_zone: "Europe/Paris",
-    accent: "blue",
-  });
-  return value(made).record.id;
-}
 
 async function connect(deployment: Deployment, context_id: string, name = "Claude Code") {
   const made = await deployment.call(hand, "create_connection", {
@@ -33,8 +29,7 @@ async function listed(deployment: Deployment) {
 
 describe("create_connection", () => {
   test("makes a Connection to one Context, with an address under /mcp holding an opaque id", async () => {
-    const deployment = newDeployment();
-    const work = await makeContext(deployment);
+    const { deployment, id: work } = await contextWithItsDeployment();
 
     const made = value(
       await deployment.call(hand, "create_connection", {
@@ -63,8 +58,7 @@ describe("create_connection", () => {
   });
 
   test("each Connection has an address of its own, even under one name to one Context", async () => {
-    const deployment = newDeployment();
-    const work = await makeContext(deployment);
+    const { deployment, id: work } = await contextWithItsDeployment();
 
     const one = await connect(deployment, work);
     const two = await connect(deployment, work);
@@ -75,8 +69,8 @@ describe("create_connection", () => {
 
   test("reaches only a Context there is and that is not retired", async () => {
     const deployment = newDeployment();
-    const work = await makeContext(deployment, "Work");
-    await makeContext(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    await contextIn(deployment, "Home");
     value(await deployment.call(hand, "retire_context", { id: work }));
 
     for (const context_id of [work, "no-such-context"]) {
@@ -91,8 +85,7 @@ describe("create_connection", () => {
   });
 
   test("a name is one line, and whether it reads only is said", async () => {
-    const deployment = newDeployment();
-    const work = await makeContext(deployment);
+    const { deployment, id: work } = await contextWithItsDeployment();
     const good = { name: "Claude Code", context_id: work, reading_only: false };
 
     for (const input of [
@@ -113,8 +106,8 @@ describe("create_connection", () => {
 describe("list_connections", () => {
   test("lists the Connections not ended, in the order they were made, with their Contexts", async () => {
     const deployment = newDeployment();
-    const work = await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     const first = await connect(deployment, work, "Claude Code");
     const second = await connect(deployment, home, "ChatGPT");
     const third = await connect(deployment, work, "Claude");
@@ -126,8 +119,8 @@ describe("list_connections", () => {
 
 describe("rename_connection", () => {
   test("changes its name, and its address stays", async () => {
-    const deployment = newDeployment();
-    const made = await connect(deployment, await makeContext(deployment));
+    const { deployment, id } = await contextWithItsDeployment();
+    const made = await connect(deployment, id);
 
     const renamed = value(
       await deployment.call(hand, "rename_connection", { id: made.id, name: "Laptop" }),
@@ -144,8 +137,8 @@ describe("rename_connection", () => {
   });
 
   test("to the name it has changes nothing", async () => {
-    const deployment = newDeployment();
-    const made = await connect(deployment, await makeContext(deployment));
+    const { deployment, id } = await contextWithItsDeployment();
+    const made = await connect(deployment, id);
 
     const same = value(
       await deployment.call(hand, "rename_connection", { id: made.id, name: made.name }),
@@ -157,8 +150,8 @@ describe("rename_connection", () => {
 
 describe("set_connection_reading_only", () => {
   test("limits a Connection to reading, and lifts the limit", async () => {
-    const deployment = newDeployment();
-    const made = await connect(deployment, await makeContext(deployment));
+    const { deployment, id } = await contextWithItsDeployment();
+    const made = await connect(deployment, id);
 
     const limited = value(
       await deployment.call(hand, "set_connection_reading_only", {
@@ -181,8 +174,8 @@ describe("set_connection_reading_only", () => {
   });
 
   test("to what it is already changes nothing", async () => {
-    const deployment = newDeployment();
-    const made = await connect(deployment, await makeContext(deployment));
+    const { deployment, id } = await contextWithItsDeployment();
+    const made = await connect(deployment, id);
 
     const same = await deployment.call(hand, "set_connection_reading_only", {
       id: made.id,
@@ -195,8 +188,8 @@ describe("set_connection_reading_only", () => {
 
 describe("end_connection", () => {
   test("ends a Connection: it leaves the list and nothing more can change it", async () => {
-    const deployment = newDeployment();
-    const made = await connect(deployment, await makeContext(deployment));
+    const { deployment, id } = await contextWithItsDeployment();
+    const made = await connect(deployment, id);
 
     const ended = value(await deployment.call(hand, "end_connection", { id: made.id }));
 
@@ -220,8 +213,8 @@ describe("end_connection", () => {
   });
 
   test("ending one already ended changes nothing", async () => {
-    const deployment = newDeployment();
-    const made = await connect(deployment, await makeContext(deployment));
+    const { deployment, id } = await contextWithItsDeployment();
+    const made = await connect(deployment, id);
     value(await deployment.call(hand, "end_connection", { id: made.id }));
 
     const again = value(await deployment.call(hand, "end_connection", { id: made.id }));
@@ -248,8 +241,8 @@ describe("end_connection", () => {
 describe("retiring a Context", () => {
   test("ends its Connections, each an Effect of the rule, and leaves another Context's be", async () => {
     const deployment = newDeployment();
-    const work = await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     const atWork = await connect(deployment, work, "Claude Code");
     const atHome = await connect(deployment, home, "ChatGPT");
 
@@ -264,8 +257,8 @@ describe("retiring a Context", () => {
 
   test("bringing it back does not restore them", async () => {
     const deployment = newDeployment();
-    const work = await makeContext(deployment, "Work");
-    await makeContext(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    await contextIn(deployment, "Home");
     const made = await connect(deployment, work);
     value(await deployment.call(hand, "retire_context", { id: work }));
 
@@ -284,8 +277,8 @@ describe("retiring a Context", () => {
 describe("deleting a Context", () => {
   test("deletes its Connections, ended when it was retired, each an Effect by rule: an Export holds them no more", async () => {
     const deployment = newDeployment();
-    const work = await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     const first = await connect(deployment, work, "Claude Code");
     const second = await connect(deployment, work, "ChatGPT");
     const atHome = await connect(deployment, home, "Laptop");

@@ -1,7 +1,15 @@
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
-import { answering, calling, failing, heldAnswer, scriptModel, UNAVAILABLE } from "./model-fake.ts";
-import { contextWithItsDeployment, DAY, hand, newContext, value } from "./seam.ts";
+import {
+  answering,
+  answeringAtCost,
+  calling,
+  failing,
+  heldAnswer,
+  scriptModel,
+  UNAVAILABLE,
+} from "./model-fake.ts";
+import { contextIn, contextWithItsDeployment, DAY, hand, newContext, value } from "./seam.ts";
 
 // What is kept of what the Agent did (section 5.8, ADR 0010): a Run record holds no words, and is
 // read by the person's hand alone with list_runs and get_run.
@@ -64,9 +72,7 @@ describe("list_runs", () => {
   });
 
   test("a Run not started at the cap leaves a record, newest first, that spent nothing", async () => {
-    // Every answer costs about 5 cents: the scripted model counts a token for every four
-    // characters, and an output token is priced at 10 US dollars a million.
-    scriptModel(answering("word ".repeat(4_000)));
+    scriptModel(answeringAtCost(0.05));
     const { deployment, context } = await contextWithItsDeployment();
     await deployment.call(hand, "set_spend_cap", { cap: 0.01 });
     await context.callAny(hand, "send_message", { words: "Past the cap" });
@@ -245,13 +251,7 @@ describe("save_run_transcript", () => {
       ok: false,
       error: { code: "not_found" },
     });
-    const other = value(
-      await deployment.call(hand, "create_context", {
-        name: "Old",
-        time_zone: "UTC",
-        accent: "teal",
-      }),
-    ).record.id;
+    const { id: other } = await contextIn(deployment, "Old", { accent: "teal" });
     value(await deployment.call(hand, "retire_context", { id: other }));
     expect(await save(other)).toMatchObject({ ok: false, error: { code: "not_found" } });
   });

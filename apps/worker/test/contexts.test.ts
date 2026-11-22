@@ -3,23 +3,21 @@ import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
 import { failMeaningAfter, heldEmbeddings, setMeaningFailing } from "./meaning-fake.ts";
 import { heldAnswer, scriptModel } from "./model-fake.ts";
-import { agent, atOnce, everyCaller, hand, newDeployment, value } from "./seam.ts";
+import {
+  agent,
+  atOnce,
+  contextIn,
+  contextWithItsDeployment,
+  type Deployment,
+  everyCaller,
+  hand,
+  newDeployment,
+  value,
+} from "./seam.ts";
 
 // The Deployment object holds the list of Contexts, with their names and accents and nothing from
 // any Journal (section 9.2, ADR 0006). Its tools are offered to the person's hand only (4.11), and
 // nothing crosses from one Context to another (ADR 0003).
-
-type Deployment = ReturnType<typeof newDeployment>;
-
-async function make(
-  deployment: Deployment,
-  name: string,
-  accent = "blue",
-  time_zone = "Europe/Paris",
-): Promise<string> {
-  const made = await deployment.call(hand, "create_context", { name, time_zone, accent });
-  return value(made).record.id;
-}
 
 async function listed(deployment: Deployment) {
   return value(await deployment.call(hand, "list_contexts", {})).items;
@@ -79,9 +77,9 @@ describe("create_context", () => {
     const deployment = newDeployment();
 
     const ids = [
-      await make(deployment, "Work"),
-      await make(deployment, "Work"),
-      await make(deployment, "Home"),
+      (await contextIn(deployment, "Work")).id,
+      (await contextIn(deployment, "Work")).id,
+      (await contextIn(deployment, "Home")).id,
     ];
 
     expect(new Set(ids).size).toBe(3);
@@ -108,8 +106,8 @@ describe("create_context", () => {
 describe("list_contexts", () => {
   test("lists every Context in the order made, with its name, accent and whether it is retired, and nothing from its Journal", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work", "plum");
-    const home = await make(deployment, "Home", "moss");
+    const { id: work } = await contextIn(deployment, "Work", { accent: "plum" });
+    const { id: home } = await contextIn(deployment, "Home", { accent: "moss" });
     await deployment
       .context(work)
       .call(hand, "record_entry", { words: marked("Quarterly plan"), tasks: [] });
@@ -124,8 +122,7 @@ describe("list_contexts", () => {
 
 describe("rename_context", () => {
   test("renames the Context in the list and in its own settings, an Effect in its change log", async () => {
-    const deployment = newDeployment();
-    const id = await make(deployment, "Work");
+    const { deployment, id } = await contextWithItsDeployment();
     const context = deployment.context(id);
 
     const renamed = value(await deployment.call(hand, "rename_context", { id, name: "Studio" }));
@@ -145,8 +142,7 @@ describe("rename_context", () => {
   });
 
   test("the name it has changes nothing, and a Context not made is not found", async () => {
-    const deployment = newDeployment();
-    const id = await make(deployment, "Work");
+    const { deployment, id } = await contextWithItsDeployment();
 
     expect(value(await deployment.call(hand, "rename_context", { id, name: "Work" }))).toEqual({
       record: { id, name: "Work", accent: "blue", retired: false },
@@ -162,8 +158,7 @@ describe("rename_context", () => {
 
 describe("set_context_accent", () => {
   test("changes the Context's accent; the one it has changes nothing", async () => {
-    const deployment = newDeployment();
-    const id = await make(deployment, "Work", "blue");
+    const { deployment, id } = await contextWithItsDeployment();
 
     const changed = value(
       await deployment.call(hand, "set_context_accent", { id, accent: "rust" }),
@@ -179,8 +174,7 @@ describe("set_context_accent", () => {
   });
 
   test("an accent is one of the six, and a Context not made is not found", async () => {
-    const deployment = newDeployment();
-    const id = await make(deployment, "Work", "blue");
+    const { deployment, id } = await contextWithItsDeployment();
 
     expect(await deployment.call(hand, "set_context_accent", { id, accent: "pink" })).toMatchObject(
       { ok: false, error: { code: "invalid_input" } },
@@ -195,8 +189,8 @@ describe("set_context_accent", () => {
 describe("retire_context", () => {
   test("hides a Context: it is listed as retired and no request reaches it", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    await make(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    await contextIn(deployment, "Home");
 
     const retired = value(await deployment.call(hand, "retire_context", { id: work }));
 
@@ -217,8 +211,8 @@ describe("retire_context", () => {
 
   test("the last Context not retired cannot be, since there is always one", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    const home = await make(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     value(await deployment.call(hand, "retire_context", { id: home }));
 
     expect(await deployment.call(hand, "retire_context", { id: work })).toMatchObject({
@@ -229,8 +223,7 @@ describe("retire_context", () => {
   });
 
   test("a Context not made is not found", async () => {
-    const deployment = newDeployment();
-    await make(deployment, "Work");
+    const { deployment } = await contextWithItsDeployment();
 
     expect(await deployment.call(hand, "retire_context", { id: "no-such-context" })).toMatchObject({
       ok: false,
@@ -242,8 +235,8 @@ describe("retire_context", () => {
 describe("bring_back_context", () => {
   test("returns a retired Context with everything in it, since retiring deletes nothing", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    await make(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    await contextIn(deployment, "Home");
     const context = deployment.context(work);
     const { record: entry } = value(
       await context.call(hand, "record_entry", {
@@ -264,8 +257,7 @@ describe("bring_back_context", () => {
   });
 
   test("one not retired changes nothing, and a Context not made is not found", async () => {
-    const deployment = newDeployment();
-    const work = await make(deployment, "Work");
+    const { deployment, id: work } = await contextWithItsDeployment();
 
     const back = value(await deployment.call(hand, "bring_back_context", { id: work }));
 
@@ -283,8 +275,8 @@ describe("bring_back_context", () => {
 describe("delete_context", () => {
   test("deletes a retired Context for good: it leaves the list, and no request reaches it", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    const home = await make(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     value(
       await deployment
         .context(work)
@@ -322,8 +314,8 @@ describe("delete_context", () => {
 
   test("only a retired Context, and only given its name as it is listed", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    await make(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    await contextIn(deployment, "Home");
     const inTheWay = [{ kind: "context", id: work, summary: "Work" }];
 
     expect(await deployment.call(hand, "delete_context", { id: work, name: "Work" })).toMatchObject(
@@ -350,8 +342,8 @@ describe("delete_context", () => {
 
   test("takes its part of the meaning index out, an Entry in the Trash among them, and leaves every other Context's", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    const home = await make(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     const there = deployment.context(work);
     const kept = atOnce(
       await there.call(hand, "record_entry", { words: marked("Budget review") }),
@@ -377,8 +369,8 @@ describe("delete_context", () => {
 
   test("while the meaning index does not answer, it is refused and nothing is deleted", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    await make(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    await contextIn(deployment, "Home");
     const there = deployment.context(work);
     const entry = atOnce(
       await there.call(hand, "record_entry", { words: marked("Budget") }),
@@ -400,8 +392,8 @@ describe("delete_context", () => {
 
   test("an Entry taken out before the meaning index stopped answering goes back in once the Context is brought back", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    await make(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    await contextIn(deployment, "Home");
     const there = deployment.context(work);
     // More than are taken out at once, so the outage begins part-way.
     for (let n = 0; n < 101; n += 1) {
@@ -434,8 +426,8 @@ describe("delete_context", () => {
 describe("delete_context after its object was deleted and the answer lost", () => {
   test("deleting it again finishes, taking it off the list", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    const home = await make(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     value(await deployment.call(hand, "retire_context", { id: work }));
     // The object deleted its storage, and the Deployment object never heard.
     value(await deployment.deleteObjectUnheard(work));
@@ -451,8 +443,8 @@ describe("delete_context while a Run is going", () => {
     const { script, answer } = heldAnswer();
     scriptModel(script);
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    await make(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    await contextIn(deployment, "Home");
     const there = deployment.context(work);
     value(await there.callAny(hand, "send_message", { words: "Hello" }));
     value(await deployment.call(hand, "retire_context", { id: work }));
@@ -473,8 +465,8 @@ describe("delete_context while a Run is going", () => {
 describe("nothing crosses a Context", () => {
   test("a record in one Context is not found in another", async () => {
     const deployment = newDeployment();
-    const work = deployment.context(await make(deployment, "Work"));
-    const home = deployment.context(await make(deployment, "Home"));
+    const { context: work } = await contextIn(deployment, "Work");
+    const { context: home } = await contextIn(deployment, "Home");
     const { record: entry } = value(
       await work.call(hand, "record_entry", {
         words: marked("Kickoff with Ana"),
@@ -510,8 +502,8 @@ describe("nothing crosses a Context", () => {
 
   test("a link or a wait naming a record of another Context is never made", async () => {
     const deployment = newDeployment();
-    const work = deployment.context(await make(deployment, "Work"));
-    const home = deployment.context(await make(deployment, "Home"));
+    const { context: work } = await contextIn(deployment, "Work");
+    const { context: home } = await contextIn(deployment, "Home");
     const { record: there } = value(
       await work.call(hand, "record_entry", {
         words: marked("Plan"),
@@ -542,8 +534,8 @@ describe("nothing crosses a Context", () => {
 
   test("no Context tool takes a Context: the address the call arrives at decides it", async () => {
     const deployment = newDeployment();
-    const work = await make(deployment, "Work");
-    const home = deployment.context(await make(deployment, "Home"));
+    const { id: work } = await contextIn(deployment, "Work");
+    const { context: home } = await contextIn(deployment, "Home");
 
     for (const field of ["context", "context_id"]) {
       expect(
@@ -557,8 +549,8 @@ describe("nothing crosses a Context", () => {
 describe("a Context stuck on its upgrade", () => {
   test("is neither renamed nor deleted, with nothing changed, since only a release mends it", async () => {
     const deployment = newDeployment();
-    await make(deployment, "Work");
-    const home = await make(deployment, "Home");
+    await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     value(await deployment.call(hand, "retire_context", { id: home }));
     await deployment.stickOnUpgrade(home);
 

@@ -10,21 +10,13 @@ import { marked } from "./markers.ts";
 import { meanAlike } from "./meaning-fake.ts";
 import { answering, scriptModel } from "./model-fake.ts";
 import { asRestored, base64, restore, restoredIds } from "./restoring.ts";
-import { atOnce, DAY, hand, newDeployment, value } from "./seam.ts";
+import { atOnce, contextIn, DAY, hand, newDeployment, value } from "./seam.ts";
 
 // Restoring an Export (section 10.2, ADR 0018): whole, with ids kept, into a Deployment that holds
 // nothing yet, by the person's hand during setup. A Backup is the same file, restored the same way.
 
-type Deployment = ReturnType<typeof newDeployment>;
-
-async function makeContext(deployment: Deployment, name: string, accent = "blue") {
-  const made = await deployment.call(hand, "create_context", {
-    name,
-    time_zone: "Europe/Paris",
-    accent,
-  });
-  return value(made).record.id;
-}
+/** The time zone this file's Contexts are made in: not UTC, so a restore that lost it would show. */
+const PARIS = { time_zone: "Europe/Paris" };
 
 /** An Export's files as JSON, each as `edit` leaves it, in a zip Praxis would have written. */
 function edited(made: Export, edit: (file: Record<string, unknown>) => Record<string, unknown>) {
@@ -101,8 +93,8 @@ function contextFile(made: Export, id: string): ContextFile {
 describe("restore_export", () => {
   test("brings the whole Deployment back into one holding nothing, every record under its id, and it makes the same Export", async () => {
     const before = newDeployment("2026-11-15T09:00:00.000Z");
-    const work = await makeContext(before, "Work");
-    const home = await makeContext(before, "Home", "teal");
+    const { id: work } = await contextIn(before, "Work", PARIS);
+    const { id: home } = await contextIn(before, "Home", { ...PARIS, accent: "teal" });
     const journal = before.context(work);
     const boiler = atOnce(
       await journal.call(hand, "record_entry", {
@@ -151,12 +143,12 @@ describe("restore_export", () => {
 
   test("is refused, with nothing changed, in a Deployment that holds a Context or a cap already", async () => {
     const before = newDeployment();
-    const work = await makeContext(before, "Work");
+    const { id: work } = await contextIn(before, "Work", PARIS);
     atOnce(await before.context(work).call(hand, "record_entry", { words: marked("Kept") }));
     const made = value(await before.call(hand, "make_export", {}));
 
     const holdingAContext = newDeployment();
-    const home = await makeContext(holdingAContext, "Home");
+    const { id: home } = await contextIn(holdingAContext, "Home", PARIS);
     const holdingACap = newDeployment();
     value(await holdingACap.call(hand, "set_spend_cap", { cap: 40 }));
 
@@ -175,7 +167,7 @@ describe("restore_export", () => {
 
   test("brings each Connection back ended, its name staying as the Author of what it made", async () => {
     const before = newDeployment();
-    const work = await makeContext(before, "Work");
+    const { id: work } = await contextIn(before, "Work", PARIS);
     const laptop = value(
       await before.call(hand, "create_connection", {
         name: "Laptop",
@@ -215,7 +207,7 @@ describe("restore_export", () => {
 
   test("keeps each Trash item's clock from its delete, removing for good what is past its 30 days as it comes back", async () => {
     const before = newDeployment("2026-11-01T09:00:00.000Z");
-    const work = await makeContext(before, "Work");
+    const { id: work } = await contextIn(before, "Work", PARIS);
     const journal = before.context(work);
     const old = atOnce(
       await journal.call(hand, "record_entry", { words: marked("Old news") }),
@@ -259,9 +251,9 @@ describe("restore_export", () => {
      */
     async function caughtMoving() {
       const before = newDeployment();
-      const work = await makeContext(before, "Work");
-      const home = await makeContext(before, "Home");
-      const garage = await makeContext(before, "Garage");
+      const { id: work } = await contextIn(before, "Work", PARIS);
+      const { id: home } = await contextIn(before, "Home", PARIS);
+      const { id: garage } = await contextIn(before, "Garage", PARIS);
       const garden = atOnce(
         await before.context(work).call(hand, "record_entry", {
           words: marked("The garden"),
@@ -351,7 +343,7 @@ describe("restore_export", () => {
 
   test("reads a file of format 1, bringing it forward as it is read", async () => {
     const before = newDeployment();
-    const work = await makeContext(before, "Work");
+    const { id: work } = await contextIn(before, "Work", PARIS);
     atOnce(await before.context(work).call(hand, "record_entry", { words: marked("Kept") }));
     const made = value(await before.call(hand, "make_export", {}));
     // Format 1 is format 2 without `moving` on a Context's file (docs/export-format.md).
@@ -367,7 +359,7 @@ describe("restore_export", () => {
 
   test("reads a zip a system's archiver made again of the files, deflated in a folder of their own", async () => {
     const before = newDeployment();
-    const work = await makeContext(before, "Work");
+    const { id: work } = await contextIn(before, "Work", PARIS);
     atOnce(
       await before.context(work).call(hand, "record_entry", { words: marked("Café, 屋根 🏠") }),
     );
@@ -383,8 +375,8 @@ describe("restore_export", () => {
 
   test("refuses a file of a newer format, and one that is not an Export or does not hold together, restoring nothing", async () => {
     const before = newDeployment();
-    const work = await makeContext(before, "Work");
-    const home = await makeContext(before, "Home");
+    const { id: work } = await contextIn(before, "Work", PARIS);
+    const { id: home } = await contextIn(before, "Home", PARIS);
     atOnce(await before.context(work).call(hand, "record_entry", { words: marked("Kept") }));
     atOnce(
       await before.context(home).call(hand, "record_entry", {
@@ -464,7 +456,7 @@ describe("restore_export", () => {
   test("brings a Run caught going back failed, since it cannot go on without its Conversation", async () => {
     scriptModel(answering(marked("Hello")));
     const before = newDeployment();
-    const work = await makeContext(before, "Work");
+    const { id: work } = await contextIn(before, "Work", PARIS);
     value(await before.context(work).callAny(hand, "send_message", { words: marked("Hi") }));
     await before.context(work).runsEnded();
     const made = value(await before.call(hand, "make_export", {}));
@@ -488,7 +480,7 @@ describe("restore_export", () => {
   test("leaves the restored Journal to be found by meaning once its alarm has embedded it, by words meanwhile", async () => {
     meanAlike("dentist", "molar");
     const before = newDeployment();
-    const work = await makeContext(before, "Work");
+    const { id: work } = await contextIn(before, "Work", PARIS);
     const molar = atOnce(
       await before
         .context(work)

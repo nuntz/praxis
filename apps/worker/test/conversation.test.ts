@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { HEARD } from "../src/agent.ts";
 import { marked } from "./markers.ts";
 import { answering, calling, lastWords, noModel, scriptModel, textOf } from "./model-fake.ts";
-import { hand, newContext, newDeployment, value } from "./seam.ts";
+import { contextIn, hand, newContext, newDeployment, value } from "./seam.ts";
 
 describe("send_message starts a Run", () => {
   test("the person's Message is added and the Agent's answer is read back after it", async () => {
@@ -161,14 +161,10 @@ describe("send_message: what the Agent is told at the start of a Run", () => {
       return fauxAssistantMessage("Noted.");
     });
     const deployment = newDeployment("2026-11-15T23:30:00.000Z");
-    const made = async (name: string, time_zone: string) =>
-      value(await deployment.call(hand, "create_context", { name, time_zone, accent: "blue" }))
-        .record.id;
-    const work = await made("Work", "Pacific/Auckland");
-    await made("Home", "UTC");
-    const retired = await made("Old job", "UTC");
+    const { context } = await contextIn(deployment, "Work", { time_zone: "Pacific/Auckland" });
+    await contextIn(deployment, "Home");
+    const { id: retired } = await contextIn(deployment, "Old job");
     await deployment.call(hand, "retire_context", { id: retired });
-    const context = deployment.context(work);
 
     await context.callAny(hand, "send_message", { words: "What is on today?" });
     await context.runsEnded();

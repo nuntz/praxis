@@ -6,6 +6,7 @@ import { noModel } from "./model-fake.ts";
 import {
   clock,
   connection,
+  contextIn,
   contextWithItsDeployment,
   hand,
   newContext,
@@ -368,13 +369,9 @@ describe("counting", () => {
 /** Two Contexts made by the hand in one Deployment. */
 async function twoContexts() {
   const deployment = newDeployment();
-  const made = async (name: string) =>
-    deployment.context(
-      value(
-        await deployment.call(hand, "create_context", { name, time_zone: "UTC", accent: "blue" }),
-      ).record.id,
-    );
-  return { deployment, work: await made("Work"), home: await made("Home") };
+  const { context: work } = await contextIn(deployment, "Work");
+  const { context: home } = await contextIn(deployment, "Home");
+  return { deployment, work, home };
 }
 
 async function alive(context: Context, call: string): Promise<CallRecord> {

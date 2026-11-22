@@ -236,6 +236,14 @@ export function answering(words: string): Script {
 }
 
 /**
+ * A script whose every answer costs about `dollars`: the scripted model counts a token for every
+ * four characters it writes, and an output token is priced at 10 US dollars a million.
+ */
+export function answeringAtCost(dollars: number): Script {
+  return answering("word ".repeat(Math.round((dollars / 10) * 1_000_000 * 0.8)));
+}
+
+/**
  * What Anthropic answers when it cannot answer for now: overloaded. Only waiting mends it, so a
  * Run asks again.
  */

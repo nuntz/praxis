@@ -6,7 +6,15 @@ import { topicOf } from "../src/push.ts";
 import { marked } from "./markers.ts";
 import { answering, failing, lastWords, scriptModel, UNAVAILABLE } from "./model-fake.ts";
 import { received, setPushFailing, subscribe, unsubscribe } from "./push-fake.ts";
-import { DAY, hand, newDeployment, value } from "./seam.ts";
+import {
+  contextIn,
+  contextWithItsDeployment,
+  DAY,
+  type Deployment,
+  hand,
+  newDeployment,
+  value,
+} from "./seam.ts";
 
 // A Notification (section 8.7, ADR 0013) is sent by Web Push when the Agent leaves a Brief or a
 // Review, to every Device with Notifications switched on, in a Context whose own switch is on.
@@ -18,17 +26,6 @@ const HOUR = 60 * 60 * 1000;
 
 /** A Monday, an hour before a new Context's 07:00 Brief. */
 const BEFORE_THE_BRIEF = "2026-11-16T06:00:00.000Z";
-
-type Deployment = ReturnType<typeof newDeployment>;
-
-async function makeContext(deployment: Deployment, name: string): Promise<string> {
-  const made = await deployment.call(hand, "create_context", {
-    name,
-    time_zone: "UTC",
-    accent: "blue",
-  });
-  return value(made).record.id;
-}
 
 /** A Device with Notifications switched on, by the subscription its browser was given. */
 async function deviceSwitchedOn(deployment: Deployment): Promise<PushSubscription> {
@@ -59,8 +56,7 @@ async function brief(deployment: Deployment, id: string) {
 describe("a Brief's Notification", () => {
   test("goes to every Device switched on, naming the kind and the Context and carrying nothing else", async () => {
     scriptModel(answering(marked("Two Tasks are due today, among 3 waiting.")));
-    const deployment = newDeployment(BEFORE_THE_BRIEF);
-    const work = await makeContext(deployment, "Work");
+    const { deployment, id: work } = await contextWithItsDeployment(BEFORE_THE_BRIEF);
     const phone = await deviceSwitchedOn(deployment);
     const laptop = await deviceSwitchedOn(deployment);
 
@@ -84,8 +80,7 @@ describe("a Brief's Notification", () => {
     let reachable = true;
     const [nothing, unreachable] = [answering(NOTHING_TO_RAISE), failing(UNAVAILABLE)];
     scriptModel((...args) => (reachable ? nothing(...args) : unreachable(...args)));
-    const deployment = newDeployment(BEFORE_THE_BRIEF);
-    const work = await makeContext(deployment, "Work");
+    const { deployment, id: work } = await contextWithItsDeployment(BEFORE_THE_BRIEF);
     const phone = await deviceSwitchedOn(deployment);
 
     await brief(deployment, work);
@@ -103,8 +98,8 @@ describe("a Brief's Notification", () => {
   test("a Context with its switch off sends none, while another Context's still comes", async () => {
     scriptModel(answering("Something is due."));
     const deployment = newDeployment(BEFORE_THE_BRIEF);
-    const work = await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     value(await deployment.context(work).call(hand, "set_notifications", { on: false }));
     const phone = await deviceSwitchedOn(deployment);
 
@@ -119,8 +114,7 @@ describe("a Brief's Notification", () => {
 
   test("a Device switched off or removed is sent none", async () => {
     scriptModel(answering("Something is due."));
-    const deployment = newDeployment(BEFORE_THE_BRIEF);
-    const work = await makeContext(deployment, "Work");
+    const { deployment, id: work } = await contextWithItsDeployment(BEFORE_THE_BRIEF);
     const off = await deviceSwitchedOn(deployment);
     const removed = await deviceSwitchedOn(deployment);
     const [first, second] = value(await deployment.call(hand, "list_devices", {})).items;
@@ -138,8 +132,8 @@ describe("a Brief's Notification", () => {
     );
     // Sunday, an hour before the Brief, with the Review at 17:00.
     const deployment = newDeployment("2026-11-15T06:00:00.000Z");
-    const work = await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     const phone = await deviceSwitchedOn(deployment);
 
     deployment.advance(HOUR);
@@ -184,8 +178,7 @@ describe("a Brief's Notification", () => {
 describe("a Review's Notification", () => {
   test("a Review with nothing to raise leaves its one line and sends nothing", async () => {
     scriptModel(answering(NOTHING_TO_RAISE));
-    const deployment = newDeployment("2026-11-15T16:00:00.000Z");
-    const work = await makeContext(deployment, "Work");
+    const { deployment, id: work } = await contextWithItsDeployment("2026-11-15T16:00:00.000Z");
     const phone = await deviceSwitchedOn(deployment);
 
     await brief(deployment, work);
@@ -197,8 +190,7 @@ describe("a Review's Notification", () => {
 describe("a Device whose subscription is gone", () => {
   test("is switched off once the push service says so, and leaves the list", async () => {
     scriptModel(answering("Something is due."));
-    const deployment = newDeployment(BEFORE_THE_BRIEF);
-    const work = await makeContext(deployment, "Work");
+    const { deployment, id: work } = await contextWithItsDeployment(BEFORE_THE_BRIEF);
     const kept = await deviceSwitchedOn(deployment);
     const given = await deviceSwitchedOn(deployment);
     const [listedKept] = value(await deployment.call(hand, "list_devices", {})).items;
@@ -212,8 +204,7 @@ describe("a Device whose subscription is gone", () => {
 
   test("keeps it listed with Notifications off while its Offline Copy is on", async () => {
     scriptModel(answering("Something is due."));
-    const deployment = newDeployment(BEFORE_THE_BRIEF);
-    const work = await makeContext(deployment, "Work");
+    const { deployment, id: work } = await contextWithItsDeployment(BEFORE_THE_BRIEF);
     const given = await deviceSwitchedOn(deployment);
     const [phone] = value(await deployment.call(hand, "list_devices", {})).items;
     if (!phone) throw new Error("Expected the Device listed");
@@ -237,8 +228,7 @@ describe("a Device whose subscription is gone", () => {
 describe("a push service that fails", () => {
   test("costs only that Notification: the Device stays switched on for the next", async () => {
     scriptModel(answering("Something is due."));
-    const deployment = newDeployment(BEFORE_THE_BRIEF);
-    const work = await makeContext(deployment, "Work");
+    const { deployment, id: work } = await contextWithItsDeployment(BEFORE_THE_BRIEF);
     const phone = await deviceSwitchedOn(deployment);
     const listed = value(await deployment.call(hand, "list_devices", {})).items;
 

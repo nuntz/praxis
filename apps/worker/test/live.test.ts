@@ -1,7 +1,16 @@
 import { NOTHING_GOES_UP } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
-import { agent, connection, hand, newContext, newDeployment, value } from "./seam.ts";
+import {
+  agent,
+  connection,
+  contextIn,
+  contextWithItsDeployment,
+  hand,
+  newContext,
+  newDeployment,
+  value,
+} from "./seam.ts";
 
 describe("the live channel", () => {
   test("on opening, it says where the change log stands", async () => {
@@ -56,14 +65,8 @@ describe("the live channel", () => {
 
   test("carries only its own Context's changes", async () => {
     const deployment = newDeployment();
-    const made = async (name: string) =>
-      value(
-        await deployment.call(hand, "create_context", { name, time_zone: "UTC", accent: "blue" }),
-      ).record.id;
-    const [work, home] = [
-      deployment.context(await made("Work")),
-      deployment.context(await made("Home")),
-    ];
+    const { context: work } = await contextIn(deployment, "Work");
+    const { context: home } = await contextIn(deployment, "Home");
     const channel = await work.listen();
     await channel.nextChanges();
 
@@ -76,14 +79,7 @@ describe("the live channel", () => {
   });
 
   test("carries a rename of its Context, which the Deployment object makes", async () => {
-    const deployment = newDeployment();
-    const { record } = value(
-      await deployment.call(hand, "create_context", {
-        name: "Work",
-        time_zone: "UTC",
-        accent: "blue",
-      }),
-    );
+    const { deployment, record } = await contextWithItsDeployment();
     const channel = await deployment.context(record.id).listen();
     await channel.nextChanges();
 

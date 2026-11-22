@@ -2,26 +2,23 @@ import { exportZip } from "@praxis/domain";
 import { beforeEach, describe, expect, test } from "vitest";
 import { emptyBucket, holdKeeping, keptBackups, setBucketRefusing } from "./bucket.ts";
 import { marked } from "./markers.ts";
-import { atOnce, DAY, hand, newDeployment, value } from "./seam.ts";
+import {
+  atOnce,
+  contextIn,
+  contextWithItsDeployment,
+  DAY,
+  hand,
+  newDeployment,
+  value,
+} from "./seam.ts";
 import { mendSteps, wakeUnder } from "./upgrade-faults.ts";
 
 // The daily Backup (sections 10.1, 10.3 and 10.5, ADR 0018): the Export's file, made by the system
 // once a day into R2 on the person's account and deleted after 30 days, always on. The Worker's
 // daily trigger asks the Deployment object for it, as `backUp` does here at the test's time.
 
-type Deployment = ReturnType<typeof newDeployment>;
-
 // The tests of a file share its bucket, so each starts with it empty.
 beforeEach(emptyBucket);
-
-async function makeContext(deployment: Deployment, name: string) {
-  const made = await deployment.call(hand, "create_context", {
-    name,
-    time_zone: "UTC",
-    accent: "blue",
-  });
-  return value(made).record.id;
-}
 
 /** The text of each file a stored zip holds, by its path, read from its central directory. */
 function readArchive(bytes: Uint8Array): Map<string, string> {
@@ -46,8 +43,8 @@ function readArchive(bytes: Uint8Array): Map<string, string> {
 describe("the daily Backup", () => {
   test("is the Export's file, kept in the bucket under the day it was made, holding every Context, retired ones too", async () => {
     const deployment = newDeployment("2026-11-15T03:00:00.000Z");
-    const work = await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     const words = marked("Call Ana about the roof: café, 屋根 🏠");
     atOnce(await deployment.context(home).call(hand, "record_entry", { words }));
     await deployment.call(hand, "retire_context", { id: home });
@@ -71,8 +68,7 @@ describe("the daily Backup", () => {
   });
 
   test("is deleted once it is 30 days old, by the Backup made that day", async () => {
-    const deployment = newDeployment("2026-11-15T03:00:00.000Z");
-    await makeContext(deployment, "Work");
+    const { deployment } = await contextWithItsDeployment("2026-11-15T03:00:00.000Z");
     await deployment.backUp();
     deployment.advance(29 * DAY);
     await deployment.backUp();
@@ -92,9 +88,9 @@ describe("the daily Backup", () => {
 
   test("none made for three days since the first Context was made is a standing Notice in every Context, tried or not, until one is made", async () => {
     const deployment = newDeployment("2026-11-15T03:00:00.000Z");
-    const work = deployment.context(await makeContext(deployment, "Work"));
+    const { context: work } = await contextIn(deployment, "Work");
     deployment.advance(DAY);
-    const home = deployment.context(await makeContext(deployment, "Home"));
+    const { context: home } = await contextIn(deployment, "Home");
     setBucketRefusing(true);
     expect(await deployment.backUp()).toBe("failed");
     // The daily trigger fires on no other day.
@@ -115,8 +111,9 @@ describe("the daily Backup", () => {
   });
 
   test("none succeeding for three days since the last one made is a standing Notice saying when that was", async () => {
-    const deployment = newDeployment("2026-11-15T03:00:00.000Z");
-    const work = deployment.context(await makeContext(deployment, "Work"));
+    const { deployment, context: work } = await contextWithItsDeployment(
+      "2026-11-15T03:00:00.000Z",
+    );
     await deployment.backUp();
     setBucketRefusing(true);
     deployment.advance(DAY);
@@ -133,8 +130,7 @@ describe("the daily Backup", () => {
   });
 
   test("is deleted once it is 30 days old by the Backup tried that day, even one that fails", async () => {
-    const deployment = newDeployment("2026-11-15T03:00:00.000Z");
-    await makeContext(deployment, "Work");
+    const { deployment } = await contextWithItsDeployment("2026-11-15T03:00:00.000Z");
     await deployment.backUp();
     setBucketRefusing(true);
     deployment.advance(30 * DAY);
@@ -148,8 +144,8 @@ describe("the daily Backup", () => {
 describe("the daily Backup, while a Context is stuck on its upgrade", () => {
   test("carries on for the other Contexts, and keeps the last that holds it past its 30 days until it upgrades, as its Notice says", async () => {
     const deployment = newDeployment("2026-11-15T03:00:00.000Z");
-    const work = await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     await deployment.backUp();
     await deployment.stickOnUpgrade(home);
     deployment.advance(DAY);
@@ -198,8 +194,8 @@ describe("the daily Backup, while a Context is stuck on its upgrade", () => {
 
   test("keeps the last Backup that held it, though an earlier one finished after it", async () => {
     const deployment = newDeployment("2026-11-15T03:00:00.000Z");
-    const work = await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     const { reached, release } = holdKeeping();
     const earlier = deployment.backUp();
     await reached;
@@ -219,8 +215,8 @@ describe("the daily Backup, while a Context is stuck on its upgrade", () => {
 
   test("an Export the person makes is refused, since it is always the whole Deployment", async () => {
     const deployment = newDeployment("2026-11-15T03:00:00.000Z");
-    await makeContext(deployment, "Work");
-    const home = await makeContext(deployment, "Home");
+    await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
     await deployment.stickOnUpgrade(home);
 
     expect(await deployment.call(hand, "make_export", {})).toMatchObject({
@@ -232,8 +228,7 @@ describe("the daily Backup, while a Context is stuck on its upgrade", () => {
 
 describe("get_last_backup", () => {
   test("says when the last Backup was made, and that none has been before the first", async () => {
-    const deployment = newDeployment("2026-11-15T03:00:00.000Z");
-    await makeContext(deployment, "Work");
+    const { deployment } = await contextWithItsDeployment("2026-11-15T03:00:00.000Z");
     expect(value(await deployment.call(hand, "get_last_backup", {}))).toEqual({ made_at: null });
 
     await deployment.backUp();

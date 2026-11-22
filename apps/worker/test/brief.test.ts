@@ -10,6 +10,7 @@ import { NOTHING_TO_RAISE } from "../src/agent.ts";
 import { marked } from "./markers.ts";
 import {
   answering,
+  answeringAtCost,
   calling,
   failing,
   KEY_REFUSED,
@@ -23,6 +24,7 @@ import {
 } from "./model-fake.ts";
 import {
   atOnce,
+  contextIn,
   contextWithItsDeployment,
   DAY,
   hand,
@@ -338,17 +340,10 @@ describe("a Brief during an outage", () => {
 
 describe("a Brief due at the cap", () => {
   test("waits for the cap to be raised", async () => {
-    // Each answer costs about five cents: the scripted model counts a token for every four
-    // characters, and an output token is priced at 10 US dollars a million.
-    scriptModel(answering("word ".repeat(4_000)));
+    scriptModel(answeringAtCost(0.05));
     const deployment = newDeployment("2026-11-16T06:00:00.000Z");
     await deployment.call(hand, "set_spend_cap", { cap: 0.05 });
-    const made = await deployment.call(hand, "create_context", {
-      name: "Work",
-      time_zone: "UTC",
-      accent: "blue",
-    });
-    const context = deployment.context(value(made).record.id);
+    const { context } = await contextIn(deployment);
     value(await context.callAny(hand, "send_message", { words: marked("Past the cap") }));
     await context.runsEnded();
     deployment.advance(HOUR);

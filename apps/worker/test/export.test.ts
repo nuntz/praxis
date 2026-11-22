@@ -2,26 +2,20 @@ import type { ContextFile, DeploymentFile, Export, MessagesPage } from "@praxis/
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
 import { answering, scriptModel } from "./model-fake.ts";
-import { agent, atOnce, connection, hand, newDeployment, value } from "./seam.ts";
+import {
+  agent,
+  atOnce,
+  connection,
+  contextIn,
+  contextWithItsDeployment,
+  hand,
+  newDeployment,
+  value,
+} from "./seam.ts";
 
 // The Export (section 10.1, ADR 0018): the whole Deployment as files in Praxis's own JSON format,
 // stamped with a format version, one for the Deployment and one per Context. The person's hand
 // makes one from the Deployment's settings, and nothing else may.
-
-type Deployment = ReturnType<typeof newDeployment>;
-
-async function makeContext(
-  deployment: Deployment,
-  name: string,
-  more: { time_zone?: string; accent?: string } = {},
-) {
-  const made = await deployment.call(hand, "create_context", {
-    name,
-    time_zone: more.time_zone ?? "UTC",
-    accent: more.accent ?? "blue",
-  });
-  return value(made).record.id;
-}
 
 /** The Deployment's file of an Export. */
 function deploymentFile(made: Export): DeploymentFile {
@@ -40,8 +34,8 @@ function fileOf(made: Export, id: string): ContextFile {
 describe("make_export", () => {
   test("is the whole Deployment: one file for the Deployment and one per Context, retired ones too, each stamped with the format version", async () => {
     const deployment = newDeployment("2026-11-15T09:00:00.000Z");
-    const work = await makeContext(deployment, "Work", { time_zone: "Europe/Paris" });
-    const home = await makeContext(deployment, "Home", { accent: "teal" });
+    const { id: work } = await contextIn(deployment, "Work", { time_zone: "Europe/Paris" });
+    const { id: home } = await contextIn(deployment, "Home", { accent: "teal" });
     await deployment.context(work).call(hand, "set_review_time", { day: "friday", time: null });
     await deployment.context(work).call(hand, "set_notifications", { on: false });
     await deployment.call(hand, "retire_context", { id: home });
@@ -83,8 +77,7 @@ describe("make_export", () => {
   });
 
   test("holds the spend cap and every Connection, ended ones too, and no Context's spend while it is not deleted", async () => {
-    const deployment = newDeployment("2026-11-15T09:00:00.000Z");
-    const work = await makeContext(deployment, "Work");
+    const { deployment, id: work } = await contextWithItsDeployment("2026-11-15T09:00:00.000Z");
     await deployment.call(hand, "set_spend_cap", { cap: 35 });
     const laptop = value(
       await deployment.call(hand, "create_connection", {
@@ -126,8 +119,7 @@ describe("make_export", () => {
   });
 
   test("holds a Context's Journal: each Entry as its words typed and its links as data, with its Versions and Standing mark, and each Task, Project and Person with what happened to it", async () => {
-    const deployment = newDeployment("2026-11-15T09:00:00.000Z");
-    const id = await makeContext(deployment, "Work");
+    const { deployment, id } = await contextWithItsDeployment("2026-11-15T09:00:00.000Z");
     const work = deployment.context(id);
     const at = (minutes: number) =>
       new Date(Date.parse("2026-11-15T09:00:00.000Z") + minutes * 60_000).toISOString();
@@ -281,8 +273,7 @@ describe("make_export", () => {
   });
 
   test("holds the Trash with each item's clock, what went with it and the links it took away, and keeps its records in their lists", async () => {
-    const deployment = newDeployment("2026-11-15T09:00:00.000Z");
-    const id = await makeContext(deployment, "Work");
+    const { deployment, id } = await contextWithItsDeployment("2026-11-15T09:00:00.000Z");
     const work = deployment.context(id);
     const entry = atOnce(
       await work.call(hand, "record_entry", {
@@ -328,8 +319,7 @@ describe("make_export", () => {
   });
 
   test("holds each Run record with no words, and nothing of the Conversation, the change log or a Held Change", async () => {
-    const deployment = newDeployment("2026-11-15T09:00:00.000Z");
-    const id = await makeContext(deployment, "Work");
+    const { deployment, id } = await contextWithItsDeployment("2026-11-15T09:00:00.000Z");
     const work = deployment.context(id);
     const asked = marked("What is due today?");
     const answered = marked("Nothing is due.");
@@ -386,8 +376,7 @@ describe("make_export", () => {
   });
 
   test("has no Export of one Context: naming one is invalid input", async () => {
-    const deployment = newDeployment();
-    const id = await makeContext(deployment, "Work");
+    const { deployment, id } = await contextWithItsDeployment();
 
     const result = await deployment.call(hand, "make_export", { context_id: id });
 

@@ -32,6 +32,9 @@ export const everyCaller = [hand, agent, clock, connection, readOnlyConnection];
 
 export const DAY = 24 * 60 * 60 * 1000;
 
+/** A test's way into a Deployment object, as `newDeployment` gives it. */
+export type Deployment = ReturnType<typeof newDeployment>;
+
 /**
  * A fresh Deployment object, at a time the test sets, holding no Context until one is made, or
  * the one with an id a fixture laid an earlier release's tables in (test/dump.ts).
@@ -204,22 +207,35 @@ export function newContext(
 }
 
 /**
- * A fresh Context made by the hand in a Deployment of its own, as `newContext` makes one, with that
- * Deployment and the Context's id: for a test that calls a Deployment tool about it, or that
- * reaches its object.
+ * A fresh Context made by the hand in a Deployment of its own, as `contextIn` makes one, with that
+ * Deployment: for a test that calls a Deployment tool about it, or that reaches its object.
  */
 export async function contextWithItsDeployment(
   startAt = "2026-11-15T09:00:00.000Z",
   name = "Work",
 ) {
   const deployment = newDeployment(startAt);
+  return { deployment, ...(await contextIn(deployment, name)) };
+}
+
+/**
+ * A Context made by the hand in this Deployment, in UTC and blue unless told otherwise, with its id
+ * and its record, and reached as the Worker reaches one: for a test that makes more than one in a
+ * Deployment, or that does something in the Deployment before making one.
+ */
+export async function contextIn(
+  deployment: Deployment,
+  name = "Work",
+  settings: { time_zone?: string; accent?: Accent } = {},
+) {
   const made = await deployment.call(hand, "create_context", {
     name,
     time_zone: "UTC",
     accent: "blue",
+    ...settings,
   });
-  const id = value(made).record.id;
-  return { deployment, id, context: deployment.context(id) };
+  const { record } = value(made);
+  return { id: record.id, record, context: deployment.context(record.id) };
 }
 
 /** A Context's object as a test reaches it, once the Deployment object has said which it is. */
