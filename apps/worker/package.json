@@ -7,6 +7,7 @@
     "test": "vitest run",
     "test:meaning": "vitest run -c vitest.meaning.config.ts",
     "fixture": "vitest run -c vitest.fixture.config.ts",
+    "evals": "vitest run -c vitest.evals.config.ts",
     "typecheck": "wrangler types --check >/dev/null 2>&1 || wrangler types && tsc -p . && tsc -p test && tsc -p scripts"
   },
   "dependencies": {

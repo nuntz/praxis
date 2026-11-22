@@ -14,7 +14,8 @@ import { type AgentModel, DEFAULT_MODEL, PRICES, type RunRetry } from "../src/mo
 // The model is one of the faked things (section 13). The fake is pi-ai's faux provider
 // playing a script: fixed tool calls and words, through the real runtime loop in workerd. It runs
 // in the isolate the Context objects run in, so a test scripts it before it sends a Message. What
-// the Agent says or chooses is never asserted: only what its calls did.
+// the Agent says or chooses is never asserted: only what its calls did. The Agent's evals, run by
+// hand, put the real model in its place here (`useModel`, test/agent.eval.ts).
 
 /** What the scripted model does with each request it is sent. */
 export type Script = FauxResponseFactory;
@@ -129,6 +130,15 @@ export function scriptModel(
     ...(compaction === undefined ? {} : { compaction }),
   };
   return faux;
+}
+
+/**
+ * Put the Agents of Contexts used from now on on this model, as `scriptModel` puts them on a
+ * script: the real one, for the Agent's evals run by hand (test/agent.eval.ts), never in CI.
+ */
+export function useModel(model: AgentModel): void {
+  playing = {};
+  playingModel = model;
 }
 
 /** No model: a Deployment whose configuration gives no key, which has no Agent. */
