@@ -112,9 +112,15 @@ export async function layDump(stub: DurableObjectStub, dump: Dump): Promise<void
       }
       for (const item of dump.made.filter(({ type }) => type !== "table")) sql.exec(item.sql);
     });
+    // The platform keeps an object's alarm across a deploy, and a dump holds none: one stands in
+    // for it, far enough ahead that it never fires, and the object moves it sooner as it needs.
+    await state.storage.setAlarm(ALARM_KEPT);
   });
   await wakeAgain(stub);
 }
+
+/** The alarm a laid dump stands in for the one the platform kept: never reached in a test. */
+const ALARM_KEPT = Date.parse("2100-01-01T00:00:00.000Z");
 
 /** A column, an index, a view or a trigger, as the shape of a table compares it. */
 type Shaped = Record<string, unknown>;

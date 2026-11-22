@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { marked, markersIn } from "./markers.ts";
+import { noModel } from "./model-fake.ts";
 import { agent, connection, DAY, hand, newContext, readOnlyConnection, value } from "./seam.ts";
 
 // The record of a Connection's calls (sections 7.3 and 10.5): every call from a Connection, reads
@@ -128,6 +129,15 @@ describe("list_connection_calls", () => {
 
     expect(kept.map(({ tool }) => tool)).toEqual(["list_tasks", "list_entries"]);
     expect(later.map(({ tool }) => tool)).toEqual(["list_tasks"]);
+  });
+
+  test("a Connection's read, with nothing written and no Brief or Review to wake for, sets the alarm that prunes the record", async () => {
+    // Without the Agent's key no clock arms the alarm, so only the record of calls can.
+    noModel();
+    const context = newContext();
+    value(await context.call(connection, "list_entries", {}));
+
+    expect(await context.runScheduledAlarm()).toBe(true);
   });
 
   test("pages 50 at a time, newest first, from the cursor it gave", async () => {

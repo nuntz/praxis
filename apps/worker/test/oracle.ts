@@ -62,7 +62,19 @@ const domainTables: Record<string, { kind: Effect["kind"]; id: string }> = {
  * reads to see each as a caller does: a record sent there is deleted, and one restored is made
  * again. A record in the Trash cannot change, so what it holds while there is not compared.
  */
-const trashTables = ["trash_items", "trashed", "dormant_links"];
+const trashTables: Record<string, Retention> = {
+  // Each item's clock, which the alarm removes for good at 30 days.
+  trash_items: "pruned by the alarm",
+  trashed: "kept",
+  dormant_links: "kept",
+};
+
+/**
+ * Whether the Context's alarm removes a table's rows once they are old enough (section 10.5), so
+ * the alarm stays armed while any row is there: a Context nothing else wakes, as one with no
+ * Agent's key and so no Brief or Review, would otherwise keep them for good.
+ */
+type Retention = "kept" | "pruned by the alarm";
 
 /** What a record in the Trash is in a snapshot, whatever its rows hold. */
 const IN_THE_TRASH = "in the Trash";
@@ -71,33 +83,38 @@ const IN_THE_TRASH = "in the Trash";
 const RECORD_TABLES = ["entries", "tasks", "projects", "persons"];
 
 /** The Context object's other tables, which hold no record. */
-const otherTables = [
-  "change_calls",
-  "changes",
-  "change_log_pruned",
-  "write_keys",
+const otherTables: Record<string, Retention> = {
+  change_calls: "pruned by the alarm",
+  changes: "pruned by the alarm",
+  change_log_pruned: "kept",
+  write_keys: "pruned by the alarm",
   // Run records, which hold no words and no record.
-  "runs",
-  "run_changes",
+  runs: "kept",
+  run_changes: "kept",
   // Call records, which hold no words and no record (section 6).
-  "calls",
+  calls: "kept",
   // The record of a Connection's calls, which holds no words and no record (section 7.3).
-  "connection_calls",
+  connection_calls: "pruned by the alarm",
   // When the clock last started a Brief and a Review, which holds no record.
-  "clock_schedule",
+  clock_schedule: "kept",
   // What the object keeps of the meaning index, held to the index itself below, and what
   // embedding cost.
-  "meaning_index",
-  "meaning_queue",
-  "meaning_spend",
+  meaning_index: "kept",
+  meaning_queue: "kept",
+  meaning_spend: "kept",
   // A unit on its way out of the Context, whose records are in no other table and no view, and
-  // the moves taken in. A record that leaves for another Context is deleted here, as a caller
-  // sees it, and made there.
-  "moves_out",
-  "moves_in",
+  // the moves taken in, forgotten at 30 days. A record that leaves for another Context is deleted
+  // here, as a caller sees it, and made there.
+  moves_out: "kept",
+  moves_in: "pruned by the alarm",
   // Where the object stands on its upgrade ladder (section 11), which no call changes.
-  "ladder",
-];
+  ladder: "kept",
+};
+
+/** The tables whose rows the Context's alarm removes as they age. */
+const PRUNED_BY_ALARM = Object.entries({ ...trashTables, ...otherTables })
+  .filter(([, retention]) => retention === "pruned by the alarm")
+  .map(([table]) => table);
 
 /** The tables holding the Run records, which hold no words (section 5.8). */
 const RUN_TABLES = ["runs", "run_changes"];
@@ -143,7 +160,35 @@ export async function throughOracle(stub: Stub, request: Request): Promise<ToolR
   });
   expect(problems, `The oracle, on ${request.tool} as ${request.caller.kind}`).toEqual([]);
   if (request.tool === "clear_conversation" && result.ok) await holdsNoConversation(stub);
+  await keepsItsAlarm(stub, `on ${request.tool} as ${request.caller.kind}`);
   return result;
+}
+
+/**
+ * Fail unless a Context holding a row its alarm prunes has the alarm armed, after a call and
+ * after it wakes: else nothing would ever prune it. A stuck Context is let off, since everything
+ * on its clock stops (section 11), and so is one whose storage is gone.
+ */
+async function keepsItsAlarm(stub: Stub, after: string): Promise<void> {
+  const holding = await runInDurableObject(stub, async (_, state) => {
+    const sql = state.storage.sql;
+    const tables = tablesIn(sql);
+    if (!tables.includes("ladder")) return [];
+    const [ladder] = sql
+      .exec<{ stuck_under: string | null }>(`SELECT stuck_under FROM ladder`)
+      .toArray();
+    if (ladder?.stuck_under != null) return [];
+    const held = PRUNED_BY_ALARM.filter(
+      (table) =>
+        tables.includes(table) && sql.exec(`SELECT 1 FROM ${table} LIMIT 1`).toArray().length > 0,
+    );
+    if (held.length === 0 || (await state.storage.getAlarm()) !== null) return [];
+    return held;
+  });
+  expect(
+    holding,
+    `The alarm is armed while a table it prunes holds rows (apps/worker/test/oracle.ts), ${after}`,
+  ).toEqual([]);
 }
 
 /**
@@ -681,6 +726,7 @@ export async function wakeThroughOracle(stub: Stub, at: number): Promise<void> {
   await look(false);
   await stub.wake(at);
   await look(true);
+  await keepsItsAlarm(stub, "once woken");
 }
 
 function snapshot(
@@ -704,8 +750,8 @@ function snapshot(
       (name) =>
         !(
           name in domainTables ||
-          trashTables.includes(name) ||
-          otherTables.includes(name) ||
+          name in trashTables ||
+          name in otherTables ||
           name.startsWith(RUNTIME_TABLES) ||
           // The words index and the tables SQLite keeps it in, held to SEARCHED below.
           name.startsWith(WORDS_INDEX)
@@ -713,7 +759,7 @@ function snapshot(
     );
     expect(
       unknown,
-      "Every table is known to the oracle: add it to domainTables in apps/worker/test/oracle.ts if its rows are records, else to otherTables",
+      "Every table is known to the oracle: add it to domainTables in apps/worker/test/oracle.ts if its rows are records, else to otherTables, saying whether the alarm prunes it",
     ).toEqual([]);
     // A Run record holds no words (section 5.8, ADR 0010): no marker seeded in words is in one.
     expect(
