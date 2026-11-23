@@ -7,6 +7,7 @@ import {
   wordsOnlySaying,
 } from "@praxis/domain";
 import type { LucideIcon } from "lucide-solid";
+import ArrowLeft from "lucide-solid/icons/arrow-left";
 import BookOpen from "lucide-solid/icons/book-open";
 import Check from "lucide-solid/icons/check";
 import ChevronDown from "lucide-solid/icons/chevron-down";
@@ -23,6 +24,7 @@ import { SectionTitle } from "./design/SectionTitle.tsx";
 import { recordAnchor } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
+import { onPhone } from "./media.ts";
 import { type Narrowing, NOT_NARROWED, narrowingInputs } from "./narrowing.ts";
 import { SearchChips } from "./SearchChips.tsx";
 import { createFinishing, DueMark, TaskMarks } from "./TaskItem.tsx";
@@ -88,6 +90,8 @@ export function createSearch(props: {
   const [nextCursor, setNextCursor] = createSignal<string | null>(null);
   const [wordsOnly, setWordsOnly] = createSignal<WordsOnly | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
+  // Whether the person opened the search on a phone, where it is a screen of its own until it ends.
+  const [opened, setOpened] = createSignal(false);
   // Whether Close in meaning was unfolded, for these words: new words fold it again.
   const [meaningUnfolded, setMeaningUnfolded] = createSignal(false);
   // Counts each first page shown or list cleared: a later page asked for before is from an older
@@ -133,6 +137,9 @@ export function createSearch(props: {
   // Meaning is asked with the words unless the answer says it is from words alone; with no words,
   // nothing is found by meaning.
   const meaningAsked = () => words().trim() !== "" && wordsOnly() === null;
+  // On a phone the search is a screen of its own from the moment its field is opened, in place of
+  // the Journal's Entries before it asks anything; wider, the Entries stay until it asks.
+  const open = () => asking() || (onPhone() && opened());
 
   function ask(typed: string) {
     setWords(typed);
@@ -174,31 +181,56 @@ export function createSearch(props: {
     }
   }
 
-  function show(place: JournalPlace) {
-    props.onShowInJournal(place.entry, place.anchor);
+  /** The search over, the Journal is shown again. #125 lifts the chips here too, as back does. */
+  function close() {
+    setOpened(false);
     ask("");
   }
 
+  /** Back, on a phone: the search ends, words and chips both, and the Journal is as it was left. */
+  function end() {
+    setNarrowing(NOT_NARROWED);
+    close();
+  }
+
+  function show(place: JournalPlace) {
+    props.onShowInJournal(place.entry, place.anchor);
+    close();
+  }
+
   const Field = () => (
-    <div class="journal-search">
+    <div class="journal-search" classList={{ open: open() }}>
       <search>
-        <label class="visually-hidden" for="journal-search-words">
-          Search this Context
-        </label>
-        <input
-          id="journal-search-words"
-          type="search"
-          placeholder="Search"
-          autocomplete="off"
-          value={words()}
-          onInput={(event) => ask(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape" && asking()) {
-              event.preventDefault();
-              ask("");
-            }
-          }}
-        />
+        <div class="search-row">
+          <Show when={onPhone() && open()}>
+            <button
+              type="button"
+              class="icon-button search-back"
+              aria-label="Back to the Journal"
+              onClick={end}
+            >
+              <ArrowLeft size={20} aria-hidden="true" />
+            </button>
+          </Show>
+          <label class="visually-hidden" for="journal-search-words">
+            Search this Context
+          </label>
+          <input
+            id="journal-search-words"
+            type="search"
+            placeholder="Search"
+            autocomplete="off"
+            value={words()}
+            onFocus={() => setOpened(onPhone())}
+            onInput={(event) => ask(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && open()) {
+                event.preventDefault();
+                close();
+              }
+            }}
+          />
+        </div>
         <SearchChips narrowing={narrowing()} onNarrow={narrow} timeZone={props.timeZone} />
       </search>
     </div>
@@ -447,8 +479,11 @@ export function createSearch(props: {
   );
 
   return {
-    /** Whether what is found is shown, in place of the Entries. */
-    shown: asking,
+    /**
+     * Whether the search is open, in place of the Entries: while it asks, and on a phone from the
+     * moment its field is opened until the search ends.
+     */
+    shown: open,
     Field,
     Found,
   };

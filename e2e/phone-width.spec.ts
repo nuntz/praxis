@@ -24,6 +24,8 @@ async function spills(page: Page, column: Locator) {
       const box = element.getBoundingClientRect();
       // Nothing shown, or a name kept for a screen reader alone, in a box of a pixel.
       if (box.width <= 1 && box.height <= 1) continue;
+      // Search's chips are one row that scrolls sideways on a phone, by design (section 8.4).
+      if (element.closest('[aria-label="Narrow the search"]')) continue;
       if (box.right > width + 0.5) found.push(`${named(element)} ends at ${box.right}px`);
       if (element.scrollWidth > element.clientWidth + 1 && element.clientWidth > 0) {
         found.push(`${named(element)} scrolls sideways`);

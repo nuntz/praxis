@@ -1692,8 +1692,17 @@ button.call-control {
   padding: var(--space-1) var(--space-5) var(--space-3);
 }
 
+/* The field, after the back arrow a phone gives it while the search is open. */
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .journal-search input {
+  flex: 1;
   width: 100%;
+  min-width: 0;
   min-height: 40px;
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--rule);
@@ -2595,8 +2604,71 @@ a.entry-mark.held-mark {
     padding: 0 var(--space-4) var(--space-3);
   }
 
+  /*
+   * Search opened is a screen of its own in the Journal tab: the field with a back arrow, the chips
+   * in one row that scrolls sideways, what is found and the tab bar. The top bar, the Journal's
+   * title and its composer give it their room (section 8.4).
+   */
+  .screen[data-tab="journal"]:has(.peers:not([hidden]) .journal-search.open) > .top-bar,
+  .peer.journal:has(.journal-search.open) > .peer-header,
+  .peer.journal:has(.journal-search.open) .composer-area {
+    display: none;
+  }
+
+  /* The chips' pickers open under their row, across the screen, outside its sideways scroll. */
   .journal-search {
-    padding: 0 var(--space-4) var(--space-3);
+    position: relative;
+    padding: 0 0 var(--space-3);
+  }
+
+  .journal-search.open {
+    padding-top: 14px;
+  }
+
+  .search-row {
+    padding: 0 var(--space-4);
+  }
+
+  .journal-search.open .search-row {
+    padding-left: var(--space-1);
+  }
+
+  .journal-search input {
+    min-height: 44px;
+  }
+
+  button.search-back {
+    flex: none;
+    background: none;
+    color: var(--ink);
+  }
+
+  .search-chips {
+    flex-wrap: nowrap;
+    padding: 0 var(--space-4);
+    overflow-x: auto;
+  }
+
+  .chip-holder {
+    position: static;
+  }
+
+  .chip-picker {
+    top: 100%;
+    right: var(--space-4);
+    left: var(--space-4);
+  }
+
+  /* A chip, a hit and a Task found's link are each a touch target of 44px, as its tick is. */
+  button.chip {
+    flex: none;
+    min-height: 44px;
+    padding: 0 var(--space-3);
+  }
+
+  .search-hit-body,
+  .search-task-link {
+    min-height: 44px;
   }
 
   .peer-foot {
