@@ -110,7 +110,11 @@ test("an Entry found only by meaning is set apart under Close in meaning, folded
   // Something holds the words, so what meaning alone found is folded.
   const fold = close.getByRole("button", { name: "Show 2 Entries" });
   await expect(fold).toHaveAttribute("aria-expanded", "false");
-  await expect(close.getByTestId("search-hit")).toHaveCount(0);
+  await expect(close.getByRole("listitem")).toHaveCount(0);
+  // What it controls is there, hidden, while it is folded.
+  const folded = page.locator(`#${await fold.getAttribute("aria-controls")}`);
+  await expect(folded).toHaveCount(1);
+  await expect(folded).toBeHidden();
 
   // One tap unfolds it, the hits in the tool's order, nothing in them marked.
   await fold.click();
@@ -126,6 +130,7 @@ test("an Entry found only by meaning is set apart under Close in meaning, folded
   );
   await expect(close.locator("mark")).toHaveCount(0);
   await expect(found.getByTestId("search-hit")).toHaveCount(3);
+  await expect(folded).toBeVisible();
 
   // New words fold it again.
   await search.fill("lamp");
@@ -225,6 +230,13 @@ test("what a search finds is grouped by kind in a fixed order, what matched is m
   await expect(
     found.getByRole("region", { name: /^Tasks / }).getByRole("link"),
   ).toHaveAccessibleName(new RegExp(`^Task, Ring the roofer ${tag} Today · ${TIME}$`));
+  // A Project found shows no time, as the board draws it, but is named by it all the same.
+  const project = found.getByRole("region", { name: /^Projects / }).getByRole("button");
+  await expect(project).toHaveAccessibleName(
+    new RegExp(
+      `^Project, Garden ${tag} Today · ${TIME} · Open · 0 actionable · Needs a next Task or finishing$`,
+    ),
+  );
 
   // What is found follows what changes: a Project renamed away from the words leaves, and its
   // heading with it, since a kind with nothing found has none.
@@ -241,7 +253,7 @@ test("one Show more found ends the list, and what it brings joins its kind's gro
   // Fifty-one Tasks and a Project: more than a page's fifty, so whichever place the Project takes,
   // a Task is on the next page.
   await call("create_project", { name: `Shed ${tag}` });
-  await call("record_entry", {
+  const { record: chores } = await call("record_entry", {
     words: "Chores",
     tasks: Array.from({ length: 51 }, (_, at) => ({ title: `Chore ${at + 1} ${tag}` })),
   });
@@ -260,6 +272,24 @@ test("one Show more found ends the list, and what it brings joins its kind's gro
   await expect(hits).toHaveCount(52);
   await expect(found.getByRole("heading")).toHaveText(["Projects 1", "Tasks 51"]);
   await expect(more).toHaveCount(0);
+
+  // A Task finished from the page Show more brought keeps that page shown: the list follows the
+  // change where it stands, and never goes back to its first page. The last Task in the tool's
+  // order is on the second page, wherever the Project fell.
+  const tasks = found.getByRole("region", { name: /^Tasks / });
+  const chore = await tasks.getByTestId("search-excerpt").last().textContent();
+  if (!chore) throw new Error("The last Task found has a title");
+  const task = (chores.tasks as { id: string; title: string }[]).find((t) => t.title === chore);
+  if (!task) throw new Error("The last Task found is one of the Chores");
+  await found.getByRole("button", { name: `Finish “${chore}”`, exact: true }).click();
+  await expect(found.getByRole("button", { name: `Reopen “${chore}”`, exact: true })).toBeVisible();
+  // A change from elsewhere, brought by the live channel after the finish's own: once it shows,
+  // the finish's has been followed too.
+  await call("rename_task", { id: task.id, title: `${chore} again` });
+  await expect(
+    found.getByRole("button", { name: `Reopen “${chore} again”`, exact: true }),
+  ).toBeVisible();
+  await expect(hits).toHaveCount(52);
 });
 
 test("a Task found says where it stands as Attention does, is finished and reopened from its round control, and opens from its title", async ({

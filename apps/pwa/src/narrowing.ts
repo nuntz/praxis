@@ -27,29 +27,9 @@ export type RecordNarrowing = { id: string; name: string };
 export type AuthorNarrowing = NonNullable<ToolInput<"search">["author"]>;
 
 /** An Author the chip narrows to, as the screen names them: "you", "any Connection". */
-export function authorSaid(author: AuthorNarrowing): string {
+function authorSaid(author: AuthorNarrowing): string {
   if (author.kind !== "connection") return authorName(author);
   return author.name ?? "any Connection";
-}
-
-/**
- * Whether a narrowing lists what it holds with no words: a Project, a Person or an Author chip
- * does, where a time chip alone lists nothing until there are words (section 8.4).
- */
-export function standsAlone(narrowing: Narrowing): boolean {
-  return narrowing.project !== null || narrowing.person !== null || narrowing.author !== null;
-}
-
-/**
- * What the count says of a narrowing that lists everything it holds with no words, newest first,
- * or null for one that does not: "Everything in Garden about Ana by Claude Code, newest first".
- */
-export function everythingSaid(narrowing: Narrowing): string | null {
-  if (!standsAlone(narrowing)) return null;
-  const project = narrowing.project === null ? "" : ` in ${narrowing.project.name}`;
-  const person = narrowing.person === null ? "" : ` about ${narrowing.person.name}`;
-  const author = narrowing.author === null ? "" : ` by ${authorSaid(narrowing.author)}`;
-  return `Everything${project}${person}${author}, newest first`;
 }
 
 /**
@@ -61,7 +41,7 @@ export type TimeNarrowing =
   | { kind: "range"; from: Day; to: Day };
 
 /** How many days back the time chip's presets reach, today the last of them. */
-export type LastDays = 1 | 7 | 30;
+type LastDays = 1 | 7 | 30;
 
 /** The time chip's presets, in the order offered. */
 export const LAST_DAYS: LastDays[] = [1, 7, 30];
@@ -72,7 +52,7 @@ export function lastDaysSaid(days: LastDays): string {
 }
 
 /** The `search` tool's inputs that narrow it, as a narrowing sets them. */
-export type NarrowingInputs = {
+type NarrowingInputs = {
   from?: Day;
   to?: Day;
   project_id?: string;
@@ -110,37 +90,76 @@ export function lifted(narrowing: Narrowing, chip: keyof Narrowing): Narrowing {
 }
 
 /** What the time chip says it holds once set: "Last 7 days", or its range's days. */
-export function timeSaid(time: TimeNarrowing, today: Day): string {
+function timeSaid(time: TimeNarrowing, today: Day): string {
   return time.kind === "last" ? lastDaysSaid(time.days) : daysSaid(time.from, time.to, today);
 }
 
-/**
- * What a chip set offers when nothing is found (section 8.4): a line saying what it keeps out of
- * the search, and its offer, a button that lifts it.
- */
-export type Lift = { chip: keyof Narrowing; kept: string; offer: string };
+/** What a chip set says of what it holds, wherever the screen says it (section 8.4). */
+type ChipSaid = {
+  chip: keyof Narrowing;
+  /** What the chip itself says: "By Claude Code". */
+  shown: string;
+  /** What a screen reader hears the chip named before "remove": "Author: Claude Code". */
+  named: string;
+  /** Under Nothing found, what it keeps out of the search. */
+  kept: string;
+  /** Under Nothing found, its offer: a button that lifts it. */
+  offer: string;
+  /**
+   * What the count of a list with no words says of it, "by Claude Code", or null for the time
+   * chip, which lists nothing alone.
+   */
+  everything: string | null;
+};
 
 /**
- * Each chip's line and offer once set, in one place and in the chips' order, so no chip added to
- * the narrowing goes without one.
+ * Each chip's wording once set, in one place and in the chips' order, the order the row shows
+ * them in, so no chip added to the narrowing goes without its own.
  */
-const LIFTS: {
-  [Chip in keyof Narrowing]: (held: NonNullable<Narrowing[Chip]>, today: Day) => Omit<Lift, "chip">;
+const SAID: {
+  [Chip in keyof Narrowing]: (
+    held: NonNullable<Narrowing[Chip]>,
+    today: Day,
+  ) => Omit<ChipSaid, "chip">;
 } = {
-  time: (time, today) => ({ kept: timeKept(time, today), offer: "Search any time" }),
+  time: (time, today) => {
+    const said = timeSaid(time, today);
+    return {
+      shown: said,
+      named: said,
+      kept: timeKept(time, today),
+      offer: "Search any time",
+      everything: null,
+    };
+  },
   project: (project) => ({
+    shown: project.name,
+    named: `Project: ${project.name}`,
     kept: `Only what is in ${project.name} is searched.`,
     offer: "Search every Project",
+    everything: `in ${project.name}`,
   }),
   person: (person) => ({
+    shown: person.name,
+    named: `Person: ${person.name}`,
     kept: `Only what is about ${person.name} is searched.`,
     offer: "Search every Person",
+    everything: `about ${person.name}`,
   }),
-  author: (author) => ({
-    kept: `Only what ${authorSaid(author)} made is searched.`,
-    offer: "Search every Author",
-  }),
+  author: (author) => {
+    const said = authorSaid(author);
+    return {
+      shown: `By ${said}`,
+      named: `Author: ${said}`,
+      kept: `Only what ${said} made is searched.`,
+      offer: "Search every Author",
+      everything: `by ${said}`,
+    };
+  },
 };
+
+/** The chips, in the order the row shows them and the screen says what each holds. */
+export const CHIPS = Object.keys(SAID) as (keyof Narrowing)[];
 
 /** What the time chip keeps out of the search. */
 function timeKept(time: TimeNarrowing, today: Day): string {
@@ -149,20 +168,27 @@ function timeKept(time: TimeNarrowing, today: Day): string {
   return `Nothing older than ${time.days} days is searched.`;
 }
 
-/** The offers to lift each chip set, in the chips' order. */
-export function liftsOf(narrowing: Narrowing, today: Day): Lift[] {
-  return (Object.keys(LIFTS) as (keyof Narrowing)[]).flatMap((chip) => {
-    const lift = liftOf(chip, narrowing, today);
-    return lift === null ? [] : [lift];
-  });
-}
-
-function liftOf<Chip extends keyof Narrowing>(
+/** What one chip says of what it holds, or null while it is not set. */
+export function chipSaid<Chip extends keyof Narrowing>(
   chip: Chip,
   narrowing: Narrowing,
   today: Day,
-): Lift | null {
+): ChipSaid | null {
   const held = narrowing[chip];
   if (held === null) return null;
-  return { chip, ...LIFTS[chip](held, today) };
+  return { chip, ...SAID[chip](held as NonNullable<Narrowing[Chip]>, today) };
+}
+
+/** What each chip set says of what it holds, in the chips' order. */
+export function chipsSaid(narrowing: Narrowing, today: Day): ChipSaid[] {
+  return CHIPS.flatMap((chip) => chipSaid(chip, narrowing, today) ?? []);
+}
+
+/**
+ * What the count of a list with no words says, everything its chips hold, newest first:
+ * "Everything in Garden about Ana by Claude Code, newest first".
+ */
+export function everythingSaid(narrowing: Narrowing, today: Day): string {
+  const held = chipsSaid(narrowing, today).flatMap(({ everything }) => everything ?? []);
+  return `${["Everything", ...held].join(" ")}, newest first`;
 }

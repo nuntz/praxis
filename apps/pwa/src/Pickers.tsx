@@ -14,7 +14,7 @@ import { type CallTool, Unreachable, unreachableMessage } from "./tools.ts";
 export type Choice = { name: string; detail: string | null; to: NewLink["to"] };
 
 /** How many records a picker offers at once. Typing more narrows them. */
-export const OFFERED = 8;
+const OFFERED = 8;
 
 /**
  * What a picker offers for what was typed: the records whose names hold it, and whether they are

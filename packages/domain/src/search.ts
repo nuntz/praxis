@@ -49,7 +49,7 @@ export type SearchHit =
   | { kind: "person"; id: string; summary: string; at: string; excerpt: Excerpt };
 
 /** Where a Task stands, as `get_task` gives it: its dates, its Recurrence and its state. */
-export type TaskStanding = Pick<Task, "due_date" | "defer_date" | "recurrence" | "state">;
+type TaskStanding = Pick<Task, "due_date" | "defer_date" | "recurrence" | "state">;
 
 /**
  * One ranked list of what a search found, best first, a page at a time, from words and from

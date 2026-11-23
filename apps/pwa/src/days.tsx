@@ -4,42 +4,33 @@ import { createMemo, createSignal, Show } from "solid-js";
 /** How a day's weekday is written: in full in a caption, shortened beside a time. */
 type Weekday = "long" | "short";
 
+/** Whether a day is of today's year, or of another, which is then written with it. */
+type Year = "thisYear" | "anotherYear";
+
 /**
- * A day older than yesterday as the Device's locale writes it, its weekday and its date, by how
- * its weekday is written and whether the day is of another year than today's. A Day is a date,
- * read at its midnight in UTC, so it has no zone of its own.
+ * Days as the Device's locale writes them, in each year's form: the month and day, with the
+ * weekday when one is given, and the year for another year than today's. A Day is a date, read at
+ * its midnight in UTC, so it has no zone of its own.
  */
-const dated: Record<Weekday, Record<"thisYear" | "anotherYear", Intl.DateTimeFormat>> = {
-  long: {
-    thisYear: new Intl.DateTimeFormat(undefined, {
-      weekday: "long",
+function dayFormats(weekday?: Weekday): Record<Year, Intl.DateTimeFormat> {
+  const format = (year: Year) =>
+    new Intl.DateTimeFormat(undefined, {
+      ...(weekday === undefined ? {} : { weekday }),
       month: "short",
       day: "numeric",
+      ...(year === "anotherYear" ? { year: "numeric" } : {}),
       timeZone: "UTC",
-    }),
-    anotherYear: new Intl.DateTimeFormat(undefined, {
-      weekday: "long",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      timeZone: "UTC",
-    }),
-  },
-  short: {
-    thisYear: new Intl.DateTimeFormat(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      timeZone: "UTC",
-    }),
-    anotherYear: new Intl.DateTimeFormat(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      timeZone: "UTC",
-    }),
-  },
+    });
+  return { thisYear: format("thisYear"), anotherYear: format("anotherYear") };
+}
+
+/**
+ * A day older than yesterday, its weekday and its date, by how its weekday is written and whether
+ * the day is of another year than today's.
+ */
+const dated: Record<Weekday, Record<Year, Intl.DateTimeFormat>> = {
+  long: dayFormats("long"),
+  short: dayFormats("short"),
 };
 
 /**
@@ -68,20 +59,8 @@ function dayLabel(day: Day, today: Day, weekday: Weekday = "long"): string {
   return format.format(utcMidnight(day));
 }
 
-/** A range of days as the Device's locale writes it, by whether either day is of another year. */
-const ranged: Record<"thisYear" | "anotherYear", Intl.DateTimeFormat> = {
-  thisYear: new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }),
-  anotherYear: new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }),
-};
+/** A range of days, its ends' months and days, by whether either day is of another year. */
+const ranged = dayFormats();
 
 /**
  * A range of days, both ends included, as the Device's locale writes it: "Nov 3 – 9", or one day

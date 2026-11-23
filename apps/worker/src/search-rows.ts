@@ -150,17 +150,8 @@ export function search(
   const page = fused.slice(offset, offset + PAGE_SIZE + 1);
   const shown = page.slice(0, PAGE_SIZE);
   const rows = hitRows(sql, query, shown);
-  const standing = standingOf(sql, shown, today);
-
-  return {
-    items: shown.flatMap(({ key }) => {
-      const row = rows.get(key);
-      const hit = row ? hitOf(row, standing) : null;
-      return hit ? [hit] : [];
-    }),
-    next_cursor: page.length > PAGE_SIZE ? listCursor("search", offset + PAGE_SIZE) : null,
-    words_only,
-  };
+  const read = shown.flatMap(({ key }) => rows.get(key) ?? []);
+  return pageOf(sql, read, { more: page.length > PAGE_SIZE, offset, today, words_only });
 }
 
 /**
@@ -177,10 +168,10 @@ function listing(
   offset: number,
   today: Day,
 ): SearchResults {
-  const { where, bound } = narrowing(input, zone);
+  const { where, bound } = narrowing(input, zone, LISTED_AT);
   const page = sql
     .exec<Omit<HitRow, "excerpt">>(
-      `SELECT ${WORDS_INDEX}.kind AS kind, ${WORDS_INDEX}.record_id AS id, ${AT} AS at,
+      `SELECT ${WORDS_INDEX}.kind AS kind, ${WORDS_INDEX}.record_id AS id, ${LISTED_AT} AS at,
          ${WORDS_INDEX}.text AS text,
          coalesce(e.author_kind, t.author_kind) AS author_kind,
          coalesce(e.author_name, t.author_name) AS author_name,
@@ -188,7 +179,6 @@ function listing(
        FROM ${WORDS_INDEX}
        LEFT JOIN entries e ON ${WORDS_INDEX}.kind = 'entry' AND e.id = ${WORDS_INDEX}.record_id
        LEFT JOIN tasks t ON ${WORDS_INDEX}.kind = 'task' AND t.id = ${WORDS_INDEX}.record_id
-       LEFT JOIN projects p ON 0 LEFT JOIN persons pe ON 0
        WHERE ${[`${WORDS_INDEX}.kind IN ('entry', 'task')`, ...where].join(" AND ")}
        ORDER BY at DESC, ${WORDS_INDEX}.rowid DESC
        LIMIT ? OFFSET ?`,
@@ -197,38 +187,53 @@ function listing(
       offset,
     )
     .toArray();
-  const shown = page.slice(0, PAGE_SIZE);
-  const standing = standingOf(sql, shown, today);
+  const read = page
+    .slice(0, PAGE_SIZE)
+    .map((row) => ({ ...row, excerpt: row.kind === "entry" ? firstWords(row.text) : row.text }));
+  return pageOf(sql, read, { more: page.length > PAGE_SIZE, offset, today, words_only: null });
+}
+
+/**
+ * A page of hits from the rows read for it, in their order, each Task and Project saying where it
+ * stands as read on `today`, and a cursor to the next while more follow.
+ */
+function pageOf(
+  sql: SqlStorage,
+  rows: HitRow[],
+  page: { more: boolean; offset: number; today: Day; words_only: WordsOnly | null },
+): SearchResults {
+  const standing = standingOf(sql, rows, page.today);
   return {
-    items: shown.flatMap((row) => {
-      const excerpt = row.kind === "entry" ? firstWords(row.text) : row.text;
-      const hit = hitOf({ ...row, excerpt }, standing);
-      return hit ? [hit] : [];
-    }),
-    next_cursor: page.length > PAGE_SIZE ? listCursor("search", offset + PAGE_SIZE) : null,
-    words_only: null,
+    items: rows.flatMap((row) => hitOf(row, standing) ?? []),
+    next_cursor: page.more ? listCursor("search", page.offset + PAGE_SIZE) : null,
+    words_only: page.words_only,
   };
 }
 
 /** When a record was made, from whichever record table its row of the words index joins. */
 const AT = `coalesce(e.at, t.at, p.at, pe.at)`;
 
+/** When an Entry or a Task was made, the only kinds a search with no words lists. */
+const LISTED_AT = `coalesce(e.at, t.at)`;
+
 /**
  * The narrowing a search asks for, as SQL over a record joined as `e`, `t`, `p` or `pe` by its
- * kind, the others null: by date range, Project, Person and Author, together or alone.
+ * kind, the others null: by date range, Project, Person and Author, together or alone. The range
+ * is of `made`, when the record was made, as the tables the query joins tell it.
  */
 function narrowing(
   input: ToolInput<"search">,
   zone: string,
+  made = AT,
 ): { where: string[]; bound: (string | number)[] } {
   const where: string[] = [];
   const bound: (string | number)[] = [];
   if (input.from !== undefined) {
-    where.push(`${AT} >= ?`);
+    where.push(`${made} >= ?`);
     bound.push(dayStart(input.from, zone));
   }
   if (input.to !== undefined) {
-    where.push(`${AT} < ?`);
+    where.push(`${made} < ?`);
     bound.push(dayStart(addDays(input.to, 1), zone));
   }
   if (input.project_id !== undefined) {

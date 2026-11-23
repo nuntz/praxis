@@ -8,6 +8,9 @@ import { callContextTool, contextOfOwn, expect, onPhone, openJournal, test } fro
 
 const HOUR = 60 * 60 * 1000;
 
+/** A Project whose name, on its chip, takes the row of chips past a phone's width. */
+const ROOFING = "Battens, flashing and gutters for the outbuilding";
+
 /** A Context of the journey's own, with a Journal longer than the screen and a Task in it. */
 async function longJournal(page: Page, testInfo: TestInfo) {
   const context = await contextOfOwn(page, testInfo, "Phone search");
@@ -17,9 +20,14 @@ async function longJournal(page: Page, testInfo: TestInfo) {
       made_at: new Date(Date.now() - (20 - note) * HOUR).toISOString(),
     });
   }
-  await callContextTool(page, context.id, "record_entry", {
+  const { record } = await callContextTool(page, context.id, "record_entry", {
     words: "The shed needs a new felt roof",
     tasks: [{ title: "Order felt for the shed roof" }],
+  });
+  const roofing = await callContextTool(page, context.id, "create_project", { name: ROOFING });
+  await callContextTool(page, context.id, "move_task", {
+    id: (record.tasks as { id: string }[])[0]?.id,
+    project_id: roofing.record.id,
   });
   await page.goto("/");
   const { journal, composer } = await openJournal(page, testInfo);
@@ -74,8 +82,7 @@ test("on a phone, search is a screen of its own whose back arrow returns to the 
   await expect(composer).toBeHidden();
   await expect(tabs).toBeVisible();
 
-  // The chips are one row that scrolls sideways, so they never push what is found down. #122,
-  // #123 and #124 fill it past the screen's width.
+  // The chips are one row that scrolls sideways, so they never push what is found down.
   await expect(chips).toHaveCSS("flex-wrap", "nowrap");
   await expect(chips).toHaveCSS("overflow-x", "auto");
 
@@ -108,9 +115,36 @@ test("on a phone, search is a screen of its own whose back arrow returns to the 
   await expect(earlier).toBeVisible();
   expect(await earlier.boundingBox()).toEqual(left);
 
-  // Left open on a hit found with the time chip's picker open, for the accessibility check.
+  // A chip set to a long name takes the row past the screen's width, still one line, and it
+  // scrolls sideways to the last chip and back.
   await field.fill("felt");
   await expect(found.getByTestId("search-hit")).toHaveCount(2);
+  await chips.getByRole("button", { name: "Project", exact: true }).click();
+  await journal
+    .getByRole("dialog", { name: "Project" })
+    .getByRole("option", { name: new RegExp(`^${ROOFING}`) })
+    .click();
+  await expect(chips.getByRole("button", { name: `Project: ${ROOFING}, remove` })).toBeVisible();
+  await expect(found.getByTestId("search-hit")).toHaveCount(2);
+  const row = await chips.evaluate((shown) => {
+    const boxes = [...shown.querySelectorAll(".chip")].map((chip) => chip.getBoundingClientRect());
+    return {
+      beyond: shown.scrollWidth - shown.clientWidth,
+      lowestTop: Math.max(...boxes.map((box) => box.top)),
+      highestBottom: Math.min(...boxes.map((box) => box.bottom)),
+    };
+  });
+  expect(row.beyond).toBeGreaterThan(0);
+  // One line: every chip's top above every other chip's bottom.
+  expect(row.lowestTop).toBeLessThan(row.highestBottom);
+  const author = chips.getByRole("button", { name: "Author", exact: true });
+  await expect(author).not.toBeInViewport({ ratio: 1 });
+  await chips.evaluate((shown) => shown.scrollTo({ left: shown.scrollWidth }));
+  await expect(author).toBeInViewport({ ratio: 1 });
+  await chips.evaluate((shown) => shown.scrollTo({ left: 0 }));
+  await expect(chips.getByRole("button", { name: "Any time" })).toBeInViewport({ ratio: 1 });
+
+  // Left open on a hit found with the time chip's picker open, for the accessibility check.
   await chips.getByRole("button", { name: "Any time" }).click();
   await expect(journal.getByRole("dialog", { name: "Time" })).toBeVisible();
   await expect(back).toBeVisible();

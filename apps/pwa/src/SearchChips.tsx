@@ -1,25 +1,27 @@
 import type { Connection, Day } from "@praxis/domain";
+import type { LucideIcon } from "lucide-solid";
 import Folder from "lucide-solid/icons/folder";
 import User from "lucide-solid/icons/user";
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createSignal, For, type JSX, onMount, Show } from "solid-js";
 import { todayIn } from "./days.tsx";
-import { Chip, type ChipHeld } from "./design/Chip.tsx";
+import { Chip } from "./design/Chip.tsx";
 import {
   type AuthorNarrowing,
-  authorSaid,
+  CHIPS,
+  chipSaid,
   LAST_DAYS,
   lastDaysSaid,
+  lifted,
   type Narrowing,
   type RecordNarrowing,
   type TimeNarrowing,
-  timeSaid,
 } from "./narrowing.ts";
 import { ChoicePicker, personsOffered, referencesOffered } from "./Pickers.tsx";
 import { callDeploymentTool, useCallTool, useContextId } from "./tools.ts";
 
 /**
- * The chips under the search field (section 8.4), in the order time, Project, Person, Author,
- * each setting or lifting one field of the search's narrowing. Its days are the Context's.
+ * The chips under the search field (section 8.4), in the narrowing's order, time, Project, Person,
+ * Author, each setting or lifting one field of the search's narrowing. Its days are the Context's.
  */
 export function SearchChips(props: {
   narrowing: Narrowing;
@@ -29,80 +31,88 @@ export function SearchChips(props: {
   /** Shown but not usable, as offline. */
   disabled: boolean;
 }) {
-  const today = () => todayIn(props.timeZone);
-  const narrow = (changed: Partial<Narrowing>) =>
-    props.onNarrow({ ...props.narrowing, ...changed });
   return (
     <fieldset class="search-chips" aria-label="Narrow the search" disabled={props.disabled}>
-      <Chip
-        name="Time"
-        label="Any time"
-        held={timeHeld(props.narrowing.time, today())}
-        onLift={() => narrow({ time: null })}
-        picker={(putAway) => (
-          <TimePicker
-            today={today()}
-            onPick={(time) => {
-              putAway();
-              narrow({ time });
-            }}
-          />
-        )}
-      />
-      <Chip
-        name="Project"
-        label="Project"
-        icon={props.narrowing.project === null ? undefined : Folder}
-        held={recordHeld("Project", props.narrowing.project)}
-        onLift={() => narrow({ project: null })}
-        picker={(putAway) => (
-          <ProjectPicker
-            onPick={(project) => {
-              putAway();
-              narrow({ project });
-            }}
-          />
-        )}
-      />
-      <Chip
-        name="Person"
-        label="Person"
-        icon={props.narrowing.person === null ? undefined : User}
-        held={recordHeld("Person", props.narrowing.person)}
-        onLift={() => narrow({ person: null })}
-        picker={(putAway) => (
-          <PersonPicker
+      <For each={CHIPS}>
+        {(chip) => (
+          <NarrowingChip
+            chip={chip}
+            narrowing={props.narrowing}
+            onNarrow={props.onNarrow}
             timeZone={props.timeZone}
-            onPick={(person) => {
-              putAway();
-              narrow({ person });
-            }}
           />
         )}
-      />
-      <Chip
-        name="Author"
-        label="Author"
-        held={authorHeld(props.narrowing.author)}
-        onLift={() => narrow({ author: null })}
-        picker={(putAway) => (
-          <AuthorPicker
-            onPick={(author) => {
-              putAway();
-              narrow({ author });
-            }}
-          />
-        )}
-      />
+      </For>
     </fieldset>
   );
 }
 
-/** What the Author chip says it holds, "By Claude Code", or null while it is not set. */
-function authorHeld(author: AuthorNarrowing | null): ChipHeld | null {
-  if (author === null) return null;
-  const said = authorSaid(author);
-  return { shown: `By ${said}`, named: `Author: ${said}` };
+/** What a chip's picker is given: today in the Context, its zone, and what to do with a pick. */
+type PickerProps<Chip extends keyof Narrowing> = {
+  today: Day;
+  timeZone: string;
+  onPick: (held: Narrowing[Chip]) => void;
+};
+
+/** How each chip is drawn: what it narrows by, what it says while not set, its icon and picker. */
+const DRAWN: {
+  [Chip in keyof Narrowing]: {
+    /** What the chip narrows by, which names its picker. */
+    name: string;
+    /** What it says while not set. */
+    label: string;
+    /** Before what it holds once set, for a chip that has one. */
+    icon?: LucideIcon;
+    picker: (props: PickerProps<Chip>) => JSX.Element;
+  };
+} = {
+  time: { name: "Time", label: "Any time", picker: (props) => <TimePicker {...props} /> },
+  project: {
+    name: "Project",
+    label: "Project",
+    icon: Folder,
+    picker: (props) => <RecordPicker kind="project" {...props} />,
+  },
+  person: {
+    name: "Person",
+    label: "Person",
+    icon: User,
+    picker: (props) => <RecordPicker kind="person" {...props} />,
+  },
+  author: { name: "Author", label: "Author", picker: (props) => <AuthorPicker {...props} /> },
+};
+
+/** One chip of the row: set, it says what it holds, and one tap lifts it; not set, its picker. */
+function NarrowingChip<C extends keyof Narrowing>(props: {
+  chip: C;
+  narrowing: Narrowing;
+  onNarrow: (narrowing: Narrowing) => void;
+  timeZone: string;
+}) {
+  const drawn = DRAWN[props.chip];
+  const today = () => todayIn(props.timeZone);
+  const said = () => chipSaid(props.chip, props.narrowing, today());
+  return (
+    <Chip
+      name={drawn.name}
+      label={drawn.label}
+      icon={said() === null ? undefined : drawn.icon}
+      held={said()}
+      onLift={() => props.onNarrow(lifted(props.narrowing, props.chip))}
+      picker={(putAway) =>
+        drawn.picker({
+          get today() {
+            return today();
+          },
+          timeZone: props.timeZone,
+          onPick: (held) => {
+            putAway();
+            props.onNarrow({ ...props.narrowing, [props.chip]: held });
+          },
+        })
+      }
+    />
+  );
 }
 
 /** A Connection the Author chip offers by its name, and whether every one so named has ended. */
@@ -113,7 +123,7 @@ type NamedConnection = { name: string; ended: boolean };
  * its name, in the order they were made, an ended one too, marked so, since its name stays on what
  * it made. A name two Connections share is offered once, as the search finds it by its name.
  */
-function AuthorPicker(props: { onPick: (author: AuthorNarrowing) => void }) {
+function AuthorPicker(props: PickerProps<"author">) {
   const contextId = useContextId();
   const [connections, setConnections] = createSignal<NamedConnection[]>([]);
   onMount(async () => {
@@ -166,63 +176,44 @@ function namedOnce(connections: Connection[], contextId: string): NamedConnectio
   return [...named.values()];
 }
 
-/** What a chip that narrows to a record says it holds: its name, or null while it is not set. */
-function recordHeld(chip: string, record: RecordNarrowing | null): ChipHeld | null {
-  return record === null ? null : { shown: record.name, named: `${chip}: ${record.name}` };
-}
+/** What a record chip calls its kind of record. */
+const RECORD_KIND = { project: "Project", person: "Person" } as const;
 
 /**
- * The Project chip's picker: the composer's `#` picker, offering Projects alone, the Finished and
- * Dropped ones among them, marked as such, and never making a new one.
+ * The Project and the Person chips' picker: the composer's own, `#` offering Projects alone, the
+ * Finished and Dropped ones among them, marked as such, and `@` each Person told apart from another
+ * with the same name as there. It never makes a new one.
  */
-function ProjectPicker(props: { onPick: (project: RecordNarrowing) => void }) {
+function RecordPicker(
+  props: PickerProps<"project" | "person"> & { kind: keyof typeof RECORD_KIND },
+) {
   const callTool = useCallTool();
   const contextId = useContextId();
+  const kind = RECORD_KIND[props.kind];
   return (
     <ChoicePicker
-      label="Projects"
-      fieldLabel="Find a Project"
-      none="No Project is named so."
-      offer={(typed) => referencesOffered(callTool, contextId, typed, "projects")}
+      label={`${kind}s`}
+      fieldLabel={`Find a ${kind}`}
+      none={`No ${kind} is named so.`}
+      offer={(typed) =>
+        props.kind === "project"
+          ? referencesOffered(callTool, contextId, typed, "projects")
+          : personsOffered(callTool, contextId, typed, props.timeZone)
+      }
       onPick={(choice) => {
-        if (choice.to.kind === "project") props.onPick({ id: choice.to.id, name: choice.name });
+        if (choice.to.kind === props.kind) {
+          props.onPick({ id: choice.to.id, name: choice.name } satisfies RecordNarrowing);
+        }
       }}
     />
   );
-}
-
-/**
- * The Person chip's picker: the composer's `@` picker, each Person told apart from another with
- * the same name as there, and never making a new one.
- */
-function PersonPicker(props: { timeZone: string; onPick: (person: RecordNarrowing) => void }) {
-  const callTool = useCallTool();
-  const contextId = useContextId();
-  return (
-    <ChoicePicker
-      label="Persons"
-      fieldLabel="Find a Person"
-      none="No Person is named so."
-      offer={(typed) => personsOffered(callTool, contextId, typed, props.timeZone)}
-      onPick={(choice) => {
-        if (choice.to.kind === "person") props.onPick({ id: choice.to.id, name: choice.name });
-      }}
-    />
-  );
-}
-
-/** What the time chip says it holds, or null while it is not set. */
-function timeHeld(time: TimeNarrowing | null, today: Day): ChipHeld | null {
-  if (time === null) return null;
-  const said = timeSaid(time, today);
-  return { shown: said, named: said };
 }
 
 /**
  * The time chip's picker: any time, the presets up to today, and a range of days, its two ends
  * named fields, the first on or before the last and neither after today.
  */
-function TimePicker(props: { today: Day; onPick: (time: TimeNarrowing | null) => void }) {
+function TimePicker(props: PickerProps<"time">) {
   const [from, setFrom] = createSignal("");
   const [to, setTo] = createSignal("");
   return (
@@ -248,7 +239,7 @@ function TimePicker(props: { today: Day; onPick: (time: TimeNarrowing | null) =>
         aria-label="A range of days"
         onSubmit={(event) => {
           event.preventDefault();
-          props.onPick({ kind: "range", from: from(), to: to() });
+          props.onPick({ kind: "range", from: from(), to: to() } satisfies TimeNarrowing);
         }}
       >
         <label>

@@ -2002,6 +2002,11 @@ button.search-lift {
   list-style: none;
 }
 
+/* Close in meaning folded: its list is there for the fold to control, and not shown. */
+.search-hits[hidden] {
+  display: none;
+}
+
 .search-excerpt {
   overflow-wrap: anywhere;
 }
@@ -2033,6 +2038,11 @@ button.search-lift {
   content: " · ";
   color: var(--muted);
   font-weight: 400;
+}
+
+/* A Project's time is heard and not drawn, so the mark after it starts the line. */
+.search-hit-meta > .visually-hidden + *::before {
+  content: none;
 }
 
 /* A Task found: its round control, then the link to it in the Journal, which never finishes it. */
@@ -2750,13 +2760,13 @@ a.entry-mark.held-mark {
   }
 
   /*
-   * Search opened is a screen of its own in the Journal tab: the field with a back arrow, the chips
+   * Search entered is a screen of its own in the Journal tab: the field with a back arrow, the chips
    * in one row that scrolls sideways, what is found and the tab bar. The top bar, the Journal's
    * title and its composer give it their room (section 8.4).
    */
-  .screen[data-tab="journal"]:has(.peers:not([hidden]) .journal-search.open) > .top-bar,
-  .peer.journal:has(.journal-search.open) > .peer-header,
-  .peer.journal:has(.journal-search.open) .composer-area {
+  .screen[data-tab="journal"]:has(.peers:not([hidden]) .journal-search.shown) > .top-bar,
+  .peer.journal:has(.journal-search.shown) > .peer-header,
+  .peer.journal:has(.journal-search.shown) .composer-area {
     display: none;
   }
 
@@ -2766,7 +2776,7 @@ a.entry-mark.held-mark {
     padding: 0 0 var(--space-3);
   }
 
-  .journal-search.open {
+  .journal-search.shown {
     padding-top: 14px;
   }
 
@@ -2774,7 +2784,7 @@ a.entry-mark.held-mark {
     padding: 0 var(--space-4);
   }
 
-  .journal-search.open .search-row {
+  .journal-search.shown .search-row {
     padding-left: var(--space-1);
   }
 

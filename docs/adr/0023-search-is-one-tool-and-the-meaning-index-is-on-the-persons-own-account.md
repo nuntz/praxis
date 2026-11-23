@@ -1,6 +1,6 @@
 # Search is one tool and the meaning index is on the person's own account
 
-There is one `search` tool, the same for the person's hand, the Agent and a Connection, and it returns one ranked list from words and from meaning with no mode for the caller to pick. The words index is inside the Context's object. The meaning index is outside it, kept per Context, in Vectorize with embeddings from Workers AI, both on the person's own Cloudflare account. We decided this because a caller that has to choose between two kinds of search chooses wrongly, a model most of all; and because the meaning index is the one place a Journal's words are worked on outside its object, so it stays on the account the person already trusts with the Journal, and no further provider sees them.
+There is one `search` tool, the same for the person's hand, the Agent and a Connection, and it returns one ranked list from words and from meaning with no mode for the caller to pick, or, given no words and a Project, a Person or an Author, everything that narrowing holds, newest first. The words index is inside the Context's object. The meaning index is outside it, kept per Context, in Vectorize with embeddings from Workers AI, both on the person's own Cloudflare account. We decided this because a caller that has to choose between two kinds of search chooses wrongly, a model most of all; and because the meaning index is the one place a Journal's words are worked on outside its object, so it stays on the account the person already trusts with the Journal, and no further provider sees them.
 
 ## Considered Options
 
@@ -11,6 +11,7 @@ There is one `search` tool, the same for the person's hand, the Agent and a Conn
 ## Consequences
 
 - Meaning applies to Entries only. Tasks, Projects and Persons are found by words. The Trash, Versions and the Conversation are never searched.
+- With no words, the one tool lists rather than ranks: narrowed by a Project, a Person or an Author, it gives every Entry and Task the narrowing holds, newest first, and meaning is not asked, since there is nothing to be alike to (section 9.4, since [#122](https://github.com/nuntz/praxis/issues/122)). It is still one tool with no mode: what the caller gives decides it, and with neither words nor one of those it is refused. This widens the decision as first made, where every search had words and every answer was one ranked list from words and from meaning.
 - The meaning index is derived and can be rebuilt (ADR 0006). When it is missing or stale, search answers from words and tells every caller that it did.
 - A saved Entry is findable by words at once and by meaning shortly after. A deleted Entry leaves both indexes at once as every caller sees them: its embedding stays in the meaning index while it is in the Trash, never returned, so a restore costs no embedding, and one removed for good leaves it.
 - The meaning index is one Vectorize index for the Deployment with a part per Context. Vectorize keeps no index in a jurisdiction, so a Deployment that chose one keeps its embeddings wherever Cloudflare keeps the index.

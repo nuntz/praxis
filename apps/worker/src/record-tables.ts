@@ -31,3 +31,25 @@ export function untrashed(sql: SqlStorage, record: { kind: RecordKind; id: strin
       .length > 0
   );
 }
+
+/**
+ * The records of one kind with these ids that are in this Context and not in the Trash, by id:
+ * their rows read in one query, however many, and made into records by `read`.
+ */
+export function untrashedById<
+  Row extends Record<string, SqlStorageValue>,
+  Read extends { id: string },
+>(
+  sql: SqlStorage,
+  kind: RecordKind,
+  ids: string[],
+  read: (rows: Row[]) => Read[],
+): Map<string, Read> {
+  const rows = sql
+    .exec<Row>(
+      `SELECT * FROM ${untrashedTableOf[kind]} WHERE id IN (SELECT value FROM json_each(?))`,
+      JSON.stringify(ids),
+    )
+    .toArray();
+  return new Map(read(rows).map((record) => [record.id, record]));
+}
