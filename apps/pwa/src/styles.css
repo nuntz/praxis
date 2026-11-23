@@ -1766,8 +1766,42 @@ button.call-control {
 }
 
 /* An Entry found is its words under when it was made, the Entries parted by hairlines. */
-.search-group-entry .search-hits {
+.search-group-entry .search-hits,
+.search-group-meaning .search-hits {
   gap: 0;
+}
+
+/* What meaning alone found, after a hairline, with a line saying why and the pill that folds it. */
+.search-group-meaning {
+  gap: 6px;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--rule);
+}
+
+.search-meaning-note {
+  margin: 0;
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.search-fold {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  height: 32px;
+  margin-top: var(--space-1);
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--inset);
+  color: var(--ink);
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+.search-fold-chevron {
+  color: var(--muted);
 }
 
 .search-entry .search-hit-body {

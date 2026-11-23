@@ -13,7 +13,7 @@ const countFormat = new Intl.NumberFormat();
 export function SectionTitle(props: {
   id: string;
   title: string;
-  icon?: LucideIcon;
+  icon?: LucideIcon | undefined;
   count?: number;
 }) {
   return (

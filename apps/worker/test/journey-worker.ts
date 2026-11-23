@@ -69,5 +69,6 @@ scriptModel((context) => {
 });
 
 meanAlike("dentist", "molar");
+meanAlike("lantern", "lamp", "torch", "beacon");
 
 export const ContextObject = contextObject(testModel, testMeaning, testVoice);

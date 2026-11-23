@@ -1,10 +1,13 @@
 import { type Excerpt, type SearchHit, type WordsOnly, wordsOnlySaying } from "@praxis/domain";
 import type { LucideIcon } from "lucide-solid";
 import BookOpen from "lucide-solid/icons/book-open";
+import ChevronDown from "lucide-solid/icons/chevron-down";
+import ChevronUp from "lucide-solid/icons/chevron-up";
 import Circle from "lucide-solid/icons/circle";
 import Folder from "lucide-solid/icons/folder";
 import User from "lucide-solid/icons/user";
 import { createSignal, For, Index, onCleanup, Show } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import { authorName } from "./authors.ts";
 import { SectionTitle } from "./design/SectionTitle.tsx";
 import { recordAnchor } from "./Journal.tsx";
@@ -49,6 +52,8 @@ export function createSearch(props: {
   const [nextCursor, setNextCursor] = createSignal<string | null>(null);
   const [wordsOnly, setWordsOnly] = createSignal<WordsOnly | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
+  // Whether Close in meaning was unfolded, for these words: new words fold it again.
+  const [meaningUnfolded, setMeaningUnfolded] = createSignal(false);
   // Counts each first page shown or list cleared: a later page asked for before is from an older
   // answer, whose cursor reads the same as the newer one's, so it is dropped.
   let answers = 0;
@@ -81,9 +86,13 @@ export function createSearch(props: {
   }
 
   const asking = () => words().trim() !== "";
+  // Meaning is asked with the words unless the answer says it is from words alone; with no words,
+  // nothing is found by meaning.
+  const meaningAsked = () => words().trim() !== "" && wordsOnly() === null;
 
   function ask(typed: string) {
     setWords(typed);
+    setMeaningUnfolded(false);
     if (!asking()) {
       answers += 1;
       setHits(null);
@@ -212,36 +221,58 @@ export function createSearch(props: {
           )}
         </Show>
         <Show when={hits()}>
-          {(found) => (
-            <>
-              <Index each={groupByKind(found())}>
-                {(group) => (
-                  <section
-                    class={`search-group search-group-${group().kind}`}
-                    aria-labelledby={`search-${group().kind}`}
-                  >
-                    <SectionTitle
-                      id={`search-${group().kind}`}
-                      title={group().title}
-                      icon={group().icon}
-                      count={group().hits.length}
-                    />
-                    <ol class="search-hits">
-                      <For each={group().hits}>{(hit) => <Hit hit={hit} />}</For>
-                    </ol>
-                  </section>
-                )}
-              </Index>
-              {/* One for the whole list: what it brings joins its kind's group, so none is cut short. */}
-              <Show when={nextCursor()}>
-                {(cursor) => (
-                  <button type="button" class="quiet" onClick={() => void showMore(cursor())}>
-                    Show more found
-                  </button>
-                )}
-              </Show>
-            </>
-          )}
+          {(found) => {
+            const groups = () => groupByKind(found(), meaningAsked());
+            // Close in meaning is folded while anything holds the words, and open when nothing does.
+            const foldable = () => groups().some((group) => group.kind !== "meaning");
+            const folded = (group: FoundGroup) =>
+              group.kind === "meaning" && foldable() && !meaningUnfolded();
+            return (
+              <>
+                <Index each={groups()}>
+                  {(group) => (
+                    <section
+                      class={`search-group search-group-${group().kind}`}
+                      aria-labelledby={`search-${group().kind}`}
+                    >
+                      <SectionTitle
+                        id={`search-${group().kind}`}
+                        title={group().title}
+                        icon={group().icon}
+                        count={group().hits.length}
+                      />
+                      <Show when={group().kind === "meaning"}>
+                        <p class="search-meaning-note">
+                          These hold none of the words, but are about something close.
+                        </p>
+                        <Show when={foldable()}>
+                          <MeaningFold
+                            count={group().hits.length}
+                            unfolded={meaningUnfolded()}
+                            controls={`search-${group().kind}-hits`}
+                            onToggle={() => setMeaningUnfolded((unfolded) => !unfolded)}
+                          />
+                        </Show>
+                      </Show>
+                      <Show when={!folded(group())}>
+                        <ol class="search-hits" id={`search-${group().kind}-hits`}>
+                          <For each={group().hits}>{(hit) => <Hit hit={hit} />}</For>
+                        </ol>
+                      </Show>
+                    </section>
+                  )}
+                </Index>
+                {/* One for the whole list: what it brings joins its kind's group, so none is cut short. */}
+                <Show when={nextCursor()}>
+                  {(cursor) => (
+                    <button type="button" class="quiet" onClick={() => void showMore(cursor())}>
+                      Show more found
+                    </button>
+                  )}
+                </Show>
+              </>
+            );
+          }}
         </Show>
       </section>
     </Show>
@@ -257,12 +288,17 @@ export function createSearch(props: {
 
 /** A group of what a search found, under a heading of its own. */
 export type FoundGroup = {
-  kind: SearchHit["kind"];
+  /** The kind of record it holds, or `meaning` for the Entries found only by meaning. */
+  kind: SearchHit["kind"] | "meaning";
   title: string;
-  icon: LucideIcon;
+  /** Close in meaning has none, set apart by its hairline and its line. */
+  icon?: LucideIcon;
   /** In the order the tool gave them. */
   hits: SearchHit[];
 };
+
+/** The Entries found only by meaning, set apart after the Entries that hold the words. */
+const CLOSE_IN_MEANING: Omit<FoundGroup, "hits"> = { kind: "meaning", title: "Close in meaning" };
 
 /** The groups what a search finds is shown in, in this order on every search (section 8.4). */
 const GROUPS: Omit<FoundGroup, "hits">[] = [
@@ -276,13 +312,44 @@ const GROUPS: Omit<FoundGroup, "hits">[] = [
  * The one ranked list a search gives, every page shown of it, parted by kind into its groups: each
  * holds its hits in the tool's order, and a kind with none found has no group. The tool's list is
  * reordered for no other caller.
+ *
+ * Where words were given and meaning was asked with them, an Entry in which nothing matched was
+ * found only by meaning, and goes after the Entries, under Close in meaning; one found both ways
+ * stays with the words. Searched by words alone, there is no such group.
  */
-export function groupByKind(hits: SearchHit[]): FoundGroup[] {
-  // #119 sets the Entries found only by meaning apart, after the Entries.
-  return GROUPS.map((group) => ({
-    ...group,
-    hits: hits.filter((hit) => hit.kind === group.kind),
-  })).filter((group) => group.hits.length > 0);
+export function groupByKind(hits: SearchHit[], byMeaning: boolean): FoundGroup[] {
+  const onlyByMeaning = (hit: SearchHit) =>
+    byMeaning && hit.kind === "entry" && hit.excerpt.matches.length === 0;
+  return [
+    ...GROUPS.map((group) => ({
+      ...group,
+      hits: hits.filter((hit) => hit.kind === group.kind && !onlyByMeaning(hit)),
+    })),
+    { ...CLOSE_IN_MEANING, hits: hits.filter(onlyByMeaning) },
+  ].filter((group) => group.hits.length > 0);
+}
+
+/** The button that unfolds Close in meaning, and folds it again, saying how many it holds. */
+function MeaningFold(props: {
+  count: number;
+  unfolded: boolean;
+  /** The id of the list it shows. */
+  controls: string;
+  onToggle: () => void;
+}) {
+  const Chevron = () => (props.unfolded ? ChevronUp : ChevronDown);
+  return (
+    <button
+      type="button"
+      class="search-fold"
+      aria-expanded={props.unfolded}
+      aria-controls={props.controls}
+      onClick={() => props.onToggle()}
+    >
+      {props.unfolded ? "Hide" : "Show"} {props.count} {props.count === 1 ? "Entry" : "Entries"}
+      <Dynamic component={Chevron()} class="search-fold-chevron" size={14} aria-hidden="true" />
+    </button>
+  );
 }
 
 /** Who made a record found, as the screen names them, when it is not the person. */

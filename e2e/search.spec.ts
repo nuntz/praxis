@@ -78,6 +78,70 @@ test("the person finds an Entry by what it means, though it shares no word with 
   await expect(hit.locator("mark")).toHaveCount(0);
 });
 
+test("an Entry found only by meaning is set apart under Close in meaning, folded while another holds the words and open when none does", async ({
+  page,
+}, testInfo) => {
+  const context = await contextOfOwn(page, testInfo, "Close");
+  const call = (tool: string, input: unknown) => callContextTool(page, context.id, tool, input);
+  // The journeys' meaning index says a lantern, a lamp, a torch and a beacon mean alike
+  // (journey-worker.ts).
+  await call("record_entry", { words: "Bought a lantern for the shed" });
+  await call("record_entry", { words: "The lamp flickers at night" });
+  await call("record_entry", { words: "Packed a torch and spare batteries" });
+
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const search = journal.getByRole("searchbox", { name: "Search this Context" });
+  const found = journal.getByRole("region", { name: "Found" });
+  const headings = found.getByRole("heading");
+  const entries = found.getByRole("region", { name: /^Entries / });
+  const close = found.getByRole("region", { name: /^Close in meaning / });
+  // Found by meaning shortly after they are saved, not at once: each try asks afresh.
+  await expect(async () => {
+    await search.fill("");
+    await search.fill("lantern");
+    await expect(headings).toHaveText(["Entries 1", "Close in meaning 2"], { timeout: 1000 });
+  }).toPass();
+
+  // The Entry that holds the word is found by its meaning too, and is listed once, with the words.
+  await expect(entries.getByTestId("search-excerpt")).toHaveText(["Bought a lantern for the shed"]);
+  await expect(close).toContainText("These hold none of the words, but are about something close.");
+  // Something holds the words, so what meaning alone found is folded.
+  const fold = close.getByRole("button", { name: "Show 2 Entries" });
+  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await expect(close.getByTestId("search-hit")).toHaveCount(0);
+
+  // One tap unfolds it, the hits in the tool's order, nothing in them marked.
+  await fold.click();
+  await expect(close.getByRole("button", { name: "Hide 2 Entries" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  const { items } = await call("search", { words: "lantern" });
+  await expect(close.getByTestId("search-excerpt")).toHaveText(
+    (items as SearchHit[])
+      .filter((hit) => hit.excerpt.matches.length === 0)
+      .map((hit) => hit.excerpt.text),
+  );
+  await expect(close.locator("mark")).toHaveCount(0);
+  await expect(found.getByTestId("search-hit")).toHaveCount(3);
+
+  // New words fold it again.
+  await search.fill("lamp");
+  await expect(entries.getByTestId("search-excerpt")).toHaveText(["The lamp flickers at night"]);
+  await expect(close.getByRole("button", { name: "Show 2 Entries" })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+
+  // Nothing holds these words, so what meaning found is shown open, with no fold.
+  await search.fill("beacon");
+  await expect(headings).toHaveText(["Close in meaning 3"]);
+  await expect(close).toContainText("These hold none of the words, but are about something close.");
+  await expect(close.getByRole("button")).toHaveCount(0);
+  await expect(close.getByTestId("search-hit")).toHaveCount(3);
+});
+
 /** The kinds a search finds, each with its group's heading, in the order the screen shows them. */
 const GROUPS = [
   ["project", "Projects"],
