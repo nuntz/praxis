@@ -53,14 +53,18 @@ test("the clear button clears the words and keeps the chips, and Escape or openi
   await field.fill(tag);
   await expect(excerpts).toHaveText([`Just now ${tag}`]);
 
-  // The clear button clears the words alone: the chip stays, and a time chip alone lists nothing.
+  // The clear button clears the words alone: the chip stays, and the time chip alone lists
+  // everything from its days.
   await clear.click();
   await expect(field).toHaveValue("");
   await expect(field).toBeFocused();
   await expect(clear).toHaveCount(0);
   const setChip = chips.getByRole("button", { name: "Last 7 days, remove" });
   await expect(setChip).toBeVisible();
-  await expect(found).toHaveCount(0);
+  await expect(found.getByRole("status")).toHaveText(
+    "Everything from the last 7 days, newest first",
+  );
+  await expect(excerpts).toHaveText([`Just now ${tag}`]);
   await screenOwn(1);
   // Other words, the same narrowing.
   await field.fill(`now ${tag}`);
@@ -144,9 +148,31 @@ test("Nothing found names the words and offers to lift each chip set, which read
     made_at: new Date(Date.now() - 20 * DAY).toISOString(),
   });
   const { journal, field, chips, found, excerpts, lastWeek } = await openSearch(page, testInfo);
+  const status = found.getByRole("status");
+  const today = async () => {
+    await chips.getByRole("button", { name: "Any time" }).click();
+    await journal
+      .getByRole("dialog", { name: "Time" })
+      .getByRole("button", { name: "Today" })
+      .click();
+  };
+
+  // The time chip alone, nothing made in its days: lifting it shows the Journal's Entries again, and
+  // on a phone keeps the search's screen, as the field takes the cursor.
+  await today();
+  await expect(status).toContainText("Nothing found");
+  await expect(status).toContainText("Nothing before today is searched.");
+  await expect(found.getByRole("button")).toHaveText(["Search any time"]);
+  await found.getByRole("button", { name: "Search any time" }).click();
+  await expect(chips.getByRole("button", { name: "Any time" })).toBeVisible();
+  await expect(found).toHaveCount(0);
+  await expect(journal.getByRole("list", { name: "Entries" })).toBeVisible({
+    visible: !onPhone(testInfo),
+  });
+  await expect(field).toBeFocused();
+
   await field.fill(tag);
   await expect(excerpts).toHaveText([`Long ago ${tag}`]);
-  const status = found.getByRole("status");
   await expect(status).toHaveText("Found 1");
 
   // With no chip set, there is nothing to lift: Nothing found only names the words.
@@ -164,11 +190,7 @@ test("Nothing found names the words and offers to lift each chip set, which read
   await expect(excerpts).toHaveText([`Long ago ${tag}`]);
   await expect(field).toBeFocused();
 
-  await chips.getByRole("button", { name: "Any time" }).click();
-  await journal
-    .getByRole("dialog", { name: "Time" })
-    .getByRole("button", { name: "Today" })
-    .click();
+  await today();
   await expect(found.getByRole("button", { name: "Search any time" })).toBeVisible();
   await expect(status).toContainText("Nothing before today is searched.");
 

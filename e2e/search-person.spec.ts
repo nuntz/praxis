@@ -97,6 +97,9 @@ test("the Person chip picks a Person as `@` does and lists everything about them
     .getByRole("dialog", { name: "Time" })
     .getByRole("button", { name: "Last 7 days" })
     .click();
+  await expect(found.getByRole("status")).toHaveText(
+    `Everything from the last 7 days about ${ana}, newest first`,
+  );
   await expect(excerpts).toHaveText(["Send the plans", `Called Ana ${tag}`]);
   await chips.getByRole("button", { name: "Last 7 days, remove" }).click();
   await chips.getByRole("button", { name: "Project", exact: true }).click();

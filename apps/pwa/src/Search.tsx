@@ -36,8 +36,8 @@ const SEARCH_NEEDS_NETWORK = "Search needs the network.";
 /**
  * Search in the Journal column (sections 8.4 and 9.4): one field, the chips under it that narrow
  * it, and while the field holds words, what `search` finds in place of the Entries, from words and
- * from meaning, and a line saying so when it is from words alone. A Project, a Person or an Author
- * chip with no words lists everything it holds, newest first, and a Project or a Person found
+ * from meaning, and a line saying so when it is from words alone. Any chip set with no words lists
+ * everything it holds, newest first, a time chip alone too, and a Project or a Person found
  * narrows the search to it. What is found is grouped by kind (SearchGroups.tsx), each hit saying
  * when it was made as the Journal's days do, and by whom when not by the person (SearchHit.tsx).
  *
@@ -93,7 +93,7 @@ export function createSearch(props: {
 
   /**
    * The `search` tool's input for what is asked, the time chip's days from today there. With no
-   * words, it asks for everything a Project, a Person or an Author chip holds.
+   * words, it asks for everything the chips set hold.
    */
   const inputOf = (asked: Query) => ({
     ...(hasWords(asked) ? { words: asked.words } : {}),
@@ -140,12 +140,10 @@ export function createSearch(props: {
 
   // Whether words were typed, not only spaces.
   const wordsGiven = () => hasWords({ words: words() });
-  // A time chip alone asks nothing: the Journal's days already show a time (section 8.4). A
-  // Project, a Person or an Author chip asks with no words, for everything it holds, newest first,
-  // as the tool takes it. The tool now lists a range of days alone too: #130 asks with the time
-  // chip alone, and until then its days are set aside here.
+  // Any chip set asks with no words, the time chip too, for everything it holds, newest first, as
+  // the tool takes it (section 8.4).
   const asking = () => {
-    const { from: _from, to: _to, ...input } = inputOf(query());
+    const input = inputOf(query());
     return hasWords(input) || narrows(input);
   };
   // On a phone the search is a screen of its own from the moment its field is entered, in place of

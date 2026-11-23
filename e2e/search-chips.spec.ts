@@ -118,7 +118,11 @@ test("the time chip keeps a search to recent days, says what it holds, and lifts
   await expect(anyTime).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(anyTime).toHaveCSS("border-color", "rgb(213, 217, 224)");
 
-  // Set with no words, it asks nothing and lists nothing: the Entries stay shown.
+  // Nothing is asked before a chip is set or words are typed.
+  expect(asked).toEqual([]);
+
+  // Set with no words, it lists everything made in its days, newest first, in place of the
+  // Entries, under a count that names the time.
   await anyTime.click();
   const picker = journal.getByRole("dialog", { name: "Time" });
   await expect(picker.getByRole("button")).toHaveText([
@@ -136,8 +140,19 @@ test("the time chip keeps a search to recent days, says what it holds, and lifts
   await expect(lastWeek).toBeFocused();
   await expect(lastWeek).toHaveCSS("background-color", "rgb(26, 29, 35)");
   await expect(lastWeek).toHaveCSS("color", "rgb(255, 255, 255)");
+  const status = found.getByRole("status");
+  await expect(status).toHaveText("Everything from the last 7 days, newest first");
+  await expect(excerpts).toHaveText([`Just now ${tag}`, `Four days ago ${tag}`]);
+  const entries = journal.getByRole("list", { name: "Entries" });
+  await expect(entries).toBeHidden();
+
+  // Lifted with nothing else set, nothing is asked, and the Entries are shown again.
+  await lastWeek.click();
   await expect(found).toHaveCount(0);
-  await expect(journal.getByRole("list", { name: "Entries" })).toBeVisible();
+  await expect(entries).toBeVisible();
+  await anyTime.click();
+  await picker.getByRole("button", { name: "Last 7 days" }).click();
+  await expect(excerpts).toHaveCount(2);
 
   await field.fill(tag);
   await foundWords().toEqual([`Four days ago ${tag}`, `Just now ${tag}`]);
@@ -151,14 +166,20 @@ test("the time chip keeps a search to recent days, says what it holds, and lifts
   await picker.getByRole("button", { name: "Last 30 days" }).click();
   await expect(chips.getByRole("button", { name: "Last 30 days, remove" })).toBeVisible();
   await foundWords().toEqual([`Four days ago ${tag}`, `Just now ${tag}`, `Twenty days ago ${tag}`]);
+  // Clearing the words goes back to everything from those days.
+  await field.fill("");
+  await expect(status).toHaveText("Everything from the last 30 days, newest first");
+  await expect(excerpts).toHaveText([
+    `Just now ${tag}`,
+    `Four days ago ${tag}`,
+    `Twenty days ago ${tag}`,
+  ]);
+  await field.fill(tag);
 
   await chips.getByRole("button", { name: "Last 30 days, remove" }).click();
   await anyTime.click();
   await picker.getByRole("button", { name: "Today" }).click();
   await expect(excerpts).toHaveText([`Just now ${tag}`]);
-
-  // Nothing was asked before there were words.
-  expect(asked.every((words) => words === tag)).toBe(true);
 });
 
 test("the time chip reckons its days in the Context's zone, a range of days held at both ends, and is worked from the keyboard", async ({
@@ -186,7 +207,8 @@ test("the time chip reckons its days in the Context's zone, a range of days held
     });
   }
   await callContextTool(page, context.id, "record_entry", { words: `Today ${tag}` });
-  const { journal, field, chips, excerpts, foundWords } = await openSearch(page, testInfo);
+  const { journal, field, chips, found, excerpts, foundWords } = await openSearch(page, testInfo);
+  const status = found.getByRole("status");
   await field.fill(tag);
   await expect(excerpts).toHaveCount(6);
 
@@ -202,6 +224,12 @@ test("the time chip reckons its days in the Context's zone, a range of days held
   const todayChip = chips.getByRole("button", { name: "Today, remove" });
   await expect(todayChip).toBeFocused();
   await expect(excerpts).toHaveText([`Today ${tag}`]);
+  // With no words, it lists what was made today there, and not what was made the day before.
+  await field.fill("");
+  await expect(status).toHaveText("Everything from today, newest first");
+  await expect(excerpts).toHaveText([`Today ${tag}`]);
+  await field.fill(tag);
+  await todayChip.focus();
   await page.keyboard.press("Enter");
   await expect(anyTime).toBeFocused();
   await expect(excerpts).toHaveCount(6);
@@ -219,6 +247,11 @@ test("the time chip reckons its days in the Context's zone, a range of days held
   const rangeChip = chips.getByRole("button", { name: `${range}, remove` });
   await expect(rangeChip).toHaveText(range);
   await foundWords().toEqual([`First day ${tag}`, `Last day ${tag}`]);
+  // With no words, the range lists what was made in its days, the count naming them as the chip.
+  await field.fill("");
+  await expect(status).toHaveText(`Everything from ${range}, newest first`);
+  await expect(excerpts).toHaveText([`Last day ${tag}`, `First day ${tag}`]);
+  await field.fill(tag);
 
   // Escape puts the picker away and leaves the search as it was.
   await rangeChip.click();

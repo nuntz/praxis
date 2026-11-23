@@ -235,8 +235,13 @@ function ExcerptShown(props: { excerpt: Excerpt }) {
   };
   return (
     <span class="search-excerpt" data-testid="search-excerpt">
+      {/* Each part follows its place as the excerpt changes, from first words to marked words. */}
       <Index each={parts()}>
-        {(part) => (part().matched ? <mark>{part().text}</mark> : part().text)}
+        {(part) => (
+          <Show when={part().matched} fallback={part().text}>
+            <mark>{part().text}</mark>
+          </Show>
+        )}
       </Index>
     </span>
   );

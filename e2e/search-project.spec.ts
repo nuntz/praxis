@@ -89,14 +89,17 @@ test("the Project chip picks a Project as `#` does, closed ones marked, and list
   await field.fill("");
   await expect(excerpts).toHaveCount(3);
 
-  // The Project chip and the time chip combine.
+  // The Project chip and the time chip combine, the count naming the time first.
   await chips.getByRole("button", { name: "Any time" }).click();
   await journal
     .getByRole("dialog", { name: "Time" })
-    .getByRole("button", { name: "Last 7 days" })
+    .getByRole("button", { name: "Today" })
     .click();
+  await expect(found.getByRole("status")).toHaveText(
+    `Everything from today in ${kitchen}, newest first`,
+  );
   await expect(excerpts).toHaveText(["Order the tap", `Things to order ${tag}`]);
-  await chips.getByRole("button", { name: "Last 7 days, remove" }).click();
+  await chips.getByRole("button", { name: "Today, remove" }).click();
 
   // Lifted, with no words, nothing is asked, and on a desktop the Entries are shown again; a
   // phone keeps the search's screen until its back arrow.

@@ -105,11 +105,8 @@ type ChipSaid = {
   kept: string;
   /** Under Nothing found, its offer: a button that lifts it. */
   offer: string;
-  /**
-   * What the count of a list with no words says of it, "by Claude Code", or null for the time
-   * chip, which lists nothing alone.
-   */
-  everything: string | null;
+  /** What the count of a list with no words says of it: "from today", "by Claude Code". */
+  everything: string;
 };
 
 /**
@@ -129,7 +126,7 @@ const SAID: {
       named: said,
       kept: timeKept(time, today),
       offer: "Search any time",
-      everything: null,
+      everything: `from ${timeEverything(time, today)}`,
     };
   },
   project: (project) => ({
@@ -161,6 +158,12 @@ const SAID: {
 /** The chips, in the order the row shows them and the screen says what each holds. */
 export const CHIPS = Object.keys(SAID) as (keyof Narrowing)[];
 
+/** What the count of a list with no words says the time chip holds, after "from". */
+function timeEverything(time: TimeNarrowing, today: Day): string {
+  if (time.kind === "range") return timeSaid(time, today);
+  return time.days === 1 ? "today" : `the last ${time.days} days`;
+}
+
 /** What the time chip keeps out of the search. */
 function timeKept(time: TimeNarrowing, today: Day): string {
   if (time.kind === "range") return `Nothing outside ${timeSaid(time, today)} is searched.`;
@@ -185,10 +188,10 @@ export function chipsSaid(narrowing: Narrowing, today: Day): ChipSaid[] {
 }
 
 /**
- * What the count of a list with no words says, everything its chips hold, newest first:
- * "Everything in Garden about Ana by Claude Code, newest first".
+ * What the count of a list with no words says, everything its chips hold in the chips' order,
+ * newest first: "Everything from the last 7 days in Garden about Ana by Claude Code, newest first".
  */
 export function everythingSaid(narrowing: Narrowing, today: Day): string {
-  const held = chipsSaid(narrowing, today).flatMap(({ everything }) => everything ?? []);
+  const held = chipsSaid(narrowing, today).map(({ everything }) => everything);
   return `${["Everything", ...held].join(" ")}, newest first`;
 }
