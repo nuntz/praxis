@@ -61,8 +61,9 @@ const PROJECT_STATE: Record<ProjectState["is"], string> = {
 /**
  * Search in the Journal column (sections 8.4 and 9.4): one field, the chips under it that narrow
  * it, and while the field holds words, what `search` finds in place of the Entries, from words and
- * from meaning, and a line saying so when it is from words alone. A Project chip with no words
- * lists everything in it, newest first, and a Project found narrows the search to it. What is found is grouped by kind under Attention's headings, each hit
+ * from meaning, and a line saying so when it is from words alone. A Project or a Person chip with
+ * no words lists everything it holds, newest first, and a Project or a Person found narrows the
+ * search to it. What is found is grouped by kind under Attention's headings, each hit
  * saying when it was made as the Journal's days do, and by whom when not by the person. An Entry
  * or a Task found is brought into view in the Journal. A Task and a Project found say where they
  * stand as Attention does, and a Task is finished or reopened there. An excerpt is plain text with what
@@ -119,7 +120,7 @@ export function createSearch(props: {
 
   /**
    * The `search` tool's input for what is asked, the time chip's days from today there. With no
-   * words, it asks for everything a Project chip holds.
+   * words, it asks for everything a Project or a Person chip holds.
    */
   const inputOf = (asked: Query) => ({
     ...(asked.words.trim() === "" ? {} : { words: asked.words }),
@@ -154,7 +155,7 @@ export function createSearch(props: {
   }
 
   // A time chip alone asks nothing: the Journal's days already show a time (section 8.4). A
-  // Project chip asks with no words, for everything it holds, newest first.
+  // Project or a Person chip asks with no words, for everything it holds, newest first.
   const asking = () => words().trim() !== "" || standsAlone(narrowing());
   // Meaning is asked with the words unless the answer says it is from words alone; with no words,
   // nothing is found by meaning.
@@ -220,9 +221,12 @@ export function createSearch(props: {
     end();
   }
 
-  /** Narrow the search to a Project found, a closed one too, in place of the words. */
-  function narrowTo(project: { id: string; summary: string }) {
-    setNarrowing({ ...narrowing(), project: { id: project.id, name: project.summary } });
+  /**
+   * Narrow the search to a Project found, a closed one too, or a Person found, in place of the
+   * words: the chip of its kind is set to it.
+   */
+  function narrowTo(hit: Extract<SearchHit, { kind: "project" | "person" }>) {
+    setNarrowing({ ...narrowing(), [hit.kind]: { id: hit.id, name: hit.summary } });
     ask("");
   }
 
@@ -395,40 +399,41 @@ export function createSearch(props: {
   /**
    * One record found, its excerpt and when it was made in the order shown: an Entry's time over
    * its words, a Task's, a Project's and a Person's under its title, after its kind for a screen
-   * reader. An Entry or a Task is a link that brings it into view in the Journal, named by what
-   * it holds, so its name is its kind, its time and its excerpt, and every word it shows.
+   * reader. Its name is its kind, its time and its excerpt, and every word it shows. An Entry is a
+   * link that brings it into view in the Journal; a Person narrows the search to them, so a
+   * Person, who has no place of their own on the screen, leads to everything about them.
    */
   const Hit = (shown: { hit: SearchHit }) => {
     const hit = shown.hit;
     if (hit.kind === "task") return <TaskFound hit={hit} />;
     if (hit.kind === "project") return <ProjectFound hit={hit} />;
-    const parts =
-      hit.kind === "entry"
-        ? [<Made hit={hit} />, <ExcerptShown excerpt={hit.excerpt} />]
-        : [<ExcerptShown excerpt={hit.excerpt} />, <Made hit={hit} />];
     const kind = <span class="visually-hidden">{KIND[hit.kind]}, </span>;
-    const place = placeInJournal(hit);
+    if (hit.kind === "person") {
+      return (
+        <li class="search-hit search-person" data-testid="search-hit">
+          <button type="button" class="search-hit-body" onClick={() => narrowTo(hit)}>
+            {kind}
+            <ExcerptShown excerpt={hit.excerpt} />
+            <Made hit={hit} />
+          </button>
+        </li>
+      );
+    }
+    const place = { entry: hit.id, anchor: recordAnchor("entry", hit.id) };
     return (
-      <li class={`search-hit search-${hit.kind}`} data-testid="search-hit">
-        {place === null ? (
-          // #123 makes a Person found narrow the search to them.
-          <span class="search-hit-body">
-            {kind}
-            {parts}
-          </span>
-        ) : (
-          <a
-            class="search-hit-body"
-            href={`#${place.anchor}`}
-            onClick={(event) => {
-              event.preventDefault();
-              show(place);
-            }}
-          >
-            {kind}
-            {parts}
-          </a>
-        )}
+      <li class="search-hit search-entry" data-testid="search-hit">
+        <a
+          class="search-hit-body"
+          href={`#${place.anchor}`}
+          onClick={(event) => {
+            event.preventDefault();
+            show(place);
+          }}
+        >
+          {kind}
+          <Made hit={hit} />
+          <ExcerptShown excerpt={hit.excerpt} />
+        </a>
       </li>
     );
   };
@@ -733,18 +738,6 @@ function authorShown(hit: SearchHit): string | null {
 
 /** Where a record found is shown in the Journal: the Entry to read it on, and its anchor there. */
 type JournalPlace = { entry: string; anchor: string };
-
-/** Where a record found is in the Journal, or null for a Project or Person, which it never shows. */
-function placeInJournal(hit: SearchHit): JournalPlace | null {
-  switch (hit.kind) {
-    case "entry":
-      return { entry: hit.id, anchor: recordAnchor("entry", hit.id) };
-    case "task":
-      return { entry: hit.origin_entry, anchor: recordAnchor("task", hit.id) };
-    default:
-      return null;
-  }
-}
 
 /** An excerpt as typed, with what matched marked: never rendered as Markdown (section 8.4). */
 function ExcerptShown(props: { excerpt: Excerpt }) {

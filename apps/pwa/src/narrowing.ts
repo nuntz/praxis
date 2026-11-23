@@ -11,13 +11,14 @@ export type Narrowing = {
   time: TimeNarrowing | null;
   /** The Project, sent as `project_id`, and its name as the chip says it. */
   project: RecordNarrowing | null;
-  // #123 adds the Person, sent as `person_id`.
+  /** The Person, sent as `person_id`, and their name as the chip says it. */
+  person: RecordNarrowing | null;
   /** The Author, sent as `author`: the person, the Agent, any Connection or one by its name. */
   author: AuthorNarrowing | null;
 };
 
 /** A search narrowed by nothing: every chip not set. */
-export const NOT_NARROWED: Narrowing = { time: null, project: null, author: null };
+export const NOT_NARROWED: Narrowing = { time: null, project: null, person: null, author: null };
 
 /** A record a chip narrows a search to: its id, and its name as the chip says it. */
 export type RecordNarrowing = { id: string; name: string };
@@ -32,24 +33,23 @@ export function authorSaid(author: AuthorNarrowing): string {
 }
 
 /**
- * Whether a narrowing lists what it holds with no words: a Project or an Author chip does, and a
- * Person chip will, where a time chip alone lists nothing until there are words (section 8.4).
+ * Whether a narrowing lists what it holds with no words: a Project, a Person or an Author chip
+ * does, where a time chip alone lists nothing until there are words (section 8.4).
  */
 export function standsAlone(narrowing: Narrowing): boolean {
-  // #123 adds the Person.
-  return narrowing.project !== null || narrowing.author !== null;
+  return narrowing.project !== null || narrowing.person !== null || narrowing.author !== null;
 }
 
 /**
  * What the count says of a narrowing that lists everything it holds with no words, newest first,
- * or null for one that does not: "Everything in Garden by Claude Code, newest first".
+ * or null for one that does not: "Everything in Garden about Ana by Claude Code, newest first".
  */
 export function everythingSaid(narrowing: Narrowing): string | null {
   if (!standsAlone(narrowing)) return null;
-  // #123 says a Person's.
   const project = narrowing.project === null ? "" : ` in ${narrowing.project.name}`;
+  const person = narrowing.person === null ? "" : ` about ${narrowing.person.name}`;
   const author = narrowing.author === null ? "" : ` by ${authorSaid(narrowing.author)}`;
-  return `Everything${project}${author}, newest first`;
+  return `Everything${project}${person}${author}, newest first`;
 }
 
 /**
@@ -76,6 +76,7 @@ export type NarrowingInputs = {
   from?: Day;
   to?: Day;
   project_id?: string;
+  person_id?: string;
   author?: AuthorNarrowing;
 };
 
@@ -87,6 +88,7 @@ export function narrowingInputs(narrowing: Narrowing, today: Day): NarrowingInpu
   return {
     ...timeInputs(narrowing.time, today),
     ...(narrowing.project === null ? {} : { project_id: narrowing.project.id }),
+    ...(narrowing.person === null ? {} : { person_id: narrowing.person.id }),
     ...(narrowing.author === null ? {} : { author: narrowing.author }),
   };
 }
@@ -130,7 +132,10 @@ const LIFTS: {
     kept: `Only what is in ${project.name} is searched.`,
     offer: "Search every Project",
   }),
-  // #123 adds the Person's: "Nothing about <Person> holds it.", "Search every Person".
+  person: (person) => ({
+    kept: `Only what is about ${person.name} is searched.`,
+    offer: "Search every Person",
+  }),
   author: (author) => ({
     kept: `Only what ${authorSaid(author)} made is searched.`,
     offer: "Search every Author",

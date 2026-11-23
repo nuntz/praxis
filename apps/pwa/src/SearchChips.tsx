@@ -1,5 +1,6 @@
 import type { Connection, Day } from "@praxis/domain";
 import Folder from "lucide-solid/icons/folder";
+import User from "lucide-solid/icons/user";
 import { createSignal, For, onMount, Show } from "solid-js";
 import { todayIn } from "./days.tsx";
 import { Chip, type ChipHeld } from "./design/Chip.tsx";
@@ -13,7 +14,7 @@ import {
   type TimeNarrowing,
   timeSaid,
 } from "./narrowing.ts";
-import { ChoicePicker, referencesOffered } from "./Pickers.tsx";
+import { ChoicePicker, personsOffered, referencesOffered } from "./Pickers.tsx";
 import { callDeploymentTool, useCallTool, useContextId } from "./tools.ts";
 
 /**
@@ -63,7 +64,22 @@ export function SearchChips(props: {
           />
         )}
       />
-      {/* #123 adds the Person chip here, before the Author's. */}
+      <Chip
+        name="Person"
+        label="Person"
+        icon={props.narrowing.person === null ? undefined : User}
+        held={recordHeld("Person", props.narrowing.person)}
+        onLift={() => narrow({ person: null })}
+        picker={(putAway) => (
+          <PersonPicker
+            timeZone={props.timeZone}
+            onPick={(person) => {
+              putAway();
+              narrow({ person });
+            }}
+          />
+        )}
+      />
       <Chip
         name="Author"
         label="Author"
@@ -170,6 +186,26 @@ function ProjectPicker(props: { onPick: (project: RecordNarrowing) => void }) {
       offer={(typed) => referencesOffered(callTool, contextId, typed, "projects")}
       onPick={(choice) => {
         if (choice.to.kind === "project") props.onPick({ id: choice.to.id, name: choice.name });
+      }}
+    />
+  );
+}
+
+/**
+ * The Person chip's picker: the composer's `@` picker, each Person told apart from another with
+ * the same name as there, and never making a new one.
+ */
+function PersonPicker(props: { timeZone: string; onPick: (person: RecordNarrowing) => void }) {
+  const callTool = useCallTool();
+  const contextId = useContextId();
+  return (
+    <ChoicePicker
+      label="Persons"
+      fieldLabel="Find a Person"
+      none="No Person is named so."
+      offer={(typed) => personsOffered(callTool, contextId, typed, props.timeZone)}
+      onPick={(choice) => {
+        if (choice.to.kind === "person") props.onPick({ id: choice.to.id, name: choice.name });
       }}
     />
   );
