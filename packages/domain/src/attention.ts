@@ -94,14 +94,21 @@ export function attention(
     delegated: inOrder(delegated),
     projects: openProjects
       .toSorted((a, b) => byName.compare(a.name, b.name) || compare([a.at], [b.at]))
-      .map((project) => ({
-        project,
-        actionable_tasks: project.tasks.filter(
-          (task) => task.state.is === "open" && task.state.actionable,
-        ).length,
-        no_open_task: project.tasks.every((task) => task.state.is !== "open"),
-      })),
+      .map((project) => ({ project, ...projectTasksCounted(project) })),
     loose: inOrder(loose),
+  };
+}
+
+/**
+ * How many of a Project's Tasks are actionable, and whether it has no open Task: as Attention lists
+ * an open Project, and as `search` gives any Project it finds.
+ */
+export function projectTasksCounted(project: Project): Omit<ProjectInAttention, "project"> {
+  return {
+    actionable_tasks: project.tasks.filter(
+      (task) => task.state.is === "open" && task.state.actionable,
+    ).length,
+    no_open_task: project.tasks.every((task) => task.state.is !== "open"),
   };
 }
 

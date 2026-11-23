@@ -139,7 +139,7 @@ import {
   runsNotEnded,
   spentInMonth,
 } from "./run-rows.ts";
-import { askSearch, type MeaningAnswer, search } from "./search-rows.ts";
+import { askSearch, type MeaningAnswer, type SearchAsked, search } from "./search-rows.ts";
 import {
   contextEffect,
   deploymentOfContext,
@@ -824,15 +824,19 @@ export function contextObject(
       const sql = this.ctx.storage.sql;
       const asked = askSearch(sql, input);
       if (!asked.ok) return asked;
-      if (asked.value.query === null) {
-        return success(search(sql, input, timeZoneOf(sql), asked.value, { nearest: [] }));
-      }
+      // A Task's and a Project's state is read as on the day the search arrived, in the zone the
+      // Context has when it is answered.
+      const found = (searched: SearchAsked, meaning: MeaningAnswer) => {
+        const zone = timeZoneOf(sql);
+        return search(sql, input, zone, searched, meaning, dayIn(request.arrivedAt, zone));
+      };
+      if (asked.value.query === null) return success(found(asked.value, { nearest: [] }));
       const meaning = await this.askMeaning(input.words, request.arrivedAt);
       // Read again as the store stands once the meaning index has answered: a Project or Person
       // narrowed by may have gone to the Trash meanwhile.
       const now = askSearch(sql, input);
       if (!now.ok) return now;
-      return success(search(sql, input, timeZoneOf(sql), now.value, meaning));
+      return success(found(now.value, meaning));
     }
 
     /**

@@ -1,22 +1,28 @@
 import {
   addDays,
+  type Day,
   dayStart,
   type Excerpt,
   failure,
   instantToIso,
   PAGE_SIZE,
+  type Project,
+  projectTasksCounted,
   type SearchHit,
   type SearchResults,
   type Span,
   success,
   summarizeWords,
+  type Task,
   type ToolInput,
   type ToolResult,
   type WordsOnly,
 } from "@praxis/domain";
 import { type AuthorColumns, toAuthor } from "./author.ts";
 import { listCursor, listPosition } from "./newest-first.ts";
+import { readProjects } from "./project-rows.ts";
 import { WORDS_INDEX } from "./tables.ts";
+import { readTasks } from "./task-rows.ts";
 import { NO_SUCH_PERSON } from "./tools/persons.ts";
 import { NO_SUCH_PROJECT } from "./tools/projects.ts";
 
@@ -120,7 +126,8 @@ type Ranked = { key: string; kind: SearchHit["kind"]; id: string; at: number; ro
  * By words: the records whose words, title or name hold every word given, best match first, and the
  * newest first among equals. By meaning: the Entries the meaning index found nearest, as narrowed.
  * Only the records not in the Trash are in the words index, and no earlier Version is; an Entry in
- * the Trash keeps its embedding, so the meaning index may name it, and it is left out here.
+ * the Trash keeps its embedding, so the meaning index may name it, and it is left out here. A Task
+ * and a Project found say where they stand as read on `today`, in the Context's time zone.
  */
 export function search(
   sql: SqlStorage,
@@ -128,6 +135,7 @@ export function search(
   zone: string,
   asked: SearchAsked,
   meaning: MeaningAnswer,
+  today: Day,
 ): SearchResults {
   const words_only = "words_only" in meaning ? meaning.words_only : null;
   const { offset, query } = asked;
@@ -138,12 +146,15 @@ export function search(
   const byMeaning = "nearest" in meaning ? meaningRanking(sql, meaning.nearest, narrowed) : [];
   const fused = fuse(byWords, byMeaning);
   const page = fused.slice(offset, offset + PAGE_SIZE + 1);
-  const rows = hitRows(sql, query, page.slice(0, PAGE_SIZE));
+  const shown = page.slice(0, PAGE_SIZE);
+  const rows = hitRows(sql, query, shown);
+  const standing = standingOf(sql, shown, today);
 
   return {
-    items: page.slice(0, PAGE_SIZE).flatMap(({ key }) => {
+    items: shown.flatMap(({ key }) => {
       const row = rows.get(key);
-      return row ? [hitOf(row)] : [];
+      const hit = row ? hitOf(row, standing) : null;
+      return hit ? [hit] : [];
     }),
     next_cursor: page.length > PAGE_SIZE ? listCursor("search", offset + PAGE_SIZE) : null,
     words_only,
@@ -326,7 +337,20 @@ function firstWords(words: string): string {
   return all.length > EXCERPT_WORDS ? `${kept}…` : kept;
 }
 
-function hitOf(row: HitRow): SearchHit {
+/** The Tasks and Projects on a page as reads give them, by id, so each hit says where it stands. */
+type Standing = { tasks: Map<string, Task>; projects: Map<string, Project> };
+
+function standingOf(sql: SqlStorage, page: Ranked[], today: Day): Standing {
+  const ids = (kind: SearchHit["kind"]) =>
+    page.flatMap((ranked) => (ranked.kind === kind ? [ranked.id] : []));
+  return {
+    tasks: readTasks(sql, ids("task"), today),
+    projects: readProjects(sql, ids("project"), today),
+  };
+}
+
+/** A hit from its row, or null for a Task or Project no longer there to say where it stands. */
+function hitOf(row: HitRow, standing: Standing): SearchHit | null {
   const found = { id: row.id, at: instantToIso(row.at), excerpt: excerptOf(row.excerpt) };
   switch (row.kind) {
     case "entry":
@@ -336,15 +360,33 @@ function hitOf(row: HitRow): SearchHit {
         summary: summarizeWords(row.text),
         author: toAuthor(row),
       };
-    case "task":
+    case "task": {
+      const task = standing.tasks.get(row.id);
+      if (!task) return null;
       return {
         kind: "task",
         ...found,
         summary: row.text,
         author: toAuthor(row),
         origin_entry: row.origin_entry as string,
+        due_date: task.due_date,
+        defer_date: task.defer_date,
+        recurrence: task.recurrence,
+        state: task.state,
       };
-    case "project":
+    }
+    case "project": {
+      const project = standing.projects.get(row.id);
+      if (!project) return null;
+      return {
+        kind: "project",
+        ...found,
+        summary: row.text,
+        due_date: project.due_date,
+        state: project.state,
+        ...projectTasksCounted(project),
+      };
+    }
     case "person":
       return { kind: row.kind, ...found, summary: row.text };
   }

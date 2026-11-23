@@ -77,6 +77,10 @@ describe("search", () => {
       summary: project.name,
       at: project.at,
       excerpt: { text: project.name, matches: [matched(project.name, "Hedge")] },
+      due_date: null,
+      state: { is: "open", overdue: null },
+      actionable_tasks: 0,
+      no_open_task: true,
     });
     expect(results.find((hit) => hit.kind === "task")).toEqual({
       kind: "task",
@@ -86,7 +90,152 @@ describe("search", () => {
       author: { kind: "person" },
       origin_entry: entry.id,
       excerpt: { text: task?.title, matches: [matched(task?.title ?? "", "hedge")] },
+      due_date: null,
+      defer_date: null,
+      recurrence: null,
+      state: {
+        is: "open",
+        actionable: true,
+        waiting: null,
+        delegated: null,
+        deferred: null,
+        overdue: null,
+      },
     });
+    // A Person found carries no state: a Person has none.
+    expect(results.find((hit) => hit.kind === "person")).toEqual({
+      kind: "person",
+      id: person.id,
+      summary: person.name,
+      at: person.at,
+      excerpt: { text: person.name, matches: [matched(person.name, "Hedge")] },
+    });
+  });
+
+  test("a Task found carries its dates, Recurrence and state as get_task gives them, in every state", async () => {
+    const context = newContext("2026-11-15T09:00:00.000Z");
+    const titles = {
+      open: "Parcel open",
+      finished: "Parcel finished",
+      dropped: "Parcel dropped",
+      waiting: "Parcel waiting",
+      deferred: "Parcel deferred",
+      delegated: "Parcel delegated",
+      overdue: "Parcel overdue",
+      recurring: "Parcel recurring",
+    };
+    const { record: entry } = value(
+      await context.call(hand, "record_entry", {
+        words: marked("Post office"),
+        tasks: Object.values(titles).map((title) => ({ title: marked(title) })),
+      }),
+    );
+    const [open, finished, dropped, waiting, deferred, delegated, overdue, recurring] =
+      entry.tasks.map(({ id }) => id) as string[];
+    const alice = value(
+      await context.call(hand, "create_person", { name: marked("Alice Moreau") }),
+    ).record;
+    value(await context.call(hand, "finish_task", { id: finished }));
+    value(await context.call(hand, "drop_task", { id: dropped }));
+    value(await context.call(hand, "wait_on", { id: waiting, on: { kind: "task", id: open } }));
+    value(await context.call(hand, "set_task_dates", { id: deferred, defer_date: "2026-11-20" }));
+    value(await context.call(hand, "delegate_task", { id: delegated, person_id: alice.id }));
+    value(await context.call(hand, "set_task_dates", { id: overdue, due_date: "2026-11-10" }));
+    value(await context.call(hand, "set_task_dates", { id: recurring, due_date: "2026-11-16" }));
+    value(
+      await context.call(hand, "set_recurrence", {
+        id: recurring,
+        recurrence: { kind: "weeks", every: 1, on: ["monday"] },
+      }),
+    );
+
+    const hits = new Map(
+      value(await context.call(hand, "search", { words: "parcel" })).items.map((hit) => [
+        hit.id,
+        hit,
+      ]),
+    );
+
+    for (const id of [open, finished, dropped, waiting, deferred, delegated, overdue, recurring]) {
+      const task = value(await context.call(hand, "get_task", { id }));
+      expect(hits.get(id as string)).toMatchObject({
+        kind: "task",
+        due_date: task.due_date,
+        defer_date: task.defer_date,
+        recurrence: task.recurrence,
+        state: task.state,
+      });
+    }
+    expect(hits.get(finished as string)).toMatchObject({ state: { is: "finished" } });
+    expect(hits.get(dropped as string)).toMatchObject({ state: { is: "dropped" } });
+    expect(hits.get(waiting as string)).toMatchObject({
+      state: { is: "open", actionable: false, waiting: [{ on: { kind: "task", id: open } }] },
+    });
+    expect(hits.get(deferred as string)).toMatchObject({
+      state: { deferred: { until: "2026-11-20" } },
+    });
+    expect(hits.get(delegated as string)).toMatchObject({
+      state: { delegated: { to: { id: alice.id, name: alice.name } } },
+    });
+    expect(hits.get(overdue as string)).toMatchObject({
+      due_date: "2026-11-10",
+      state: { overdue: { since: "2026-11-11" } },
+    });
+    expect(hits.get(recurring as string)).toMatchObject({
+      due_date: "2026-11-16",
+      recurrence: { kind: "weeks", every: 1, on: ["monday"] },
+    });
+  });
+
+  test("a Project found carries its Due Date and state as get_project gives them, and its count of actionable Tasks", async () => {
+    const context = newContext("2026-11-15T09:00:00.000Z");
+    const project = async (name: string, due_date?: string) =>
+      value(await context.call(hand, "create_project", { name: marked(name), due_date })).record;
+    const busy = await project("Shed busy");
+    const late = await project("Shed late", "2026-11-12");
+    const finished = await project("Shed finished");
+    const dropped = await project("Shed dropped");
+    const { record: entry } = value(
+      await context.call(hand, "record_entry", {
+        words: marked("Shed jobs"),
+        tasks: [{ title: marked("Paint") }, { title: marked("Roof") }, { title: marked("Door") }],
+      }),
+    );
+    const [paint, roof, door] = entry.tasks.map(({ id }) => id) as string[];
+    for (const id of [paint, roof, door]) {
+      value(await context.call(hand, "move_task", { id, project_id: busy.id }));
+    }
+    value(await context.call(hand, "set_task_dates", { id: door, defer_date: "2026-11-30" }));
+    value(await context.call(hand, "finish_project", { id: finished.id }));
+    value(await context.call(hand, "drop_project", { id: dropped.id }));
+
+    const hits = new Map(
+      value(await context.call(hand, "search", { words: "shed" })).items.map((hit) => [
+        hit.id,
+        hit,
+      ]),
+    );
+
+    for (const { id } of [busy, late, finished, dropped]) {
+      const read = value(await context.call(hand, "get_project", { id }));
+      expect(hits.get(id)).toMatchObject({
+        kind: "project",
+        due_date: read.due_date,
+        state: read.state,
+      });
+    }
+    const attention = value(await context.call(hand, "view_attention", {})).projects;
+    for (const { project: read, actionable_tasks, no_open_task } of attention) {
+      expect(hits.get(read.id)).toMatchObject({ actionable_tasks, no_open_task });
+    }
+    expect(hits.get(busy.id)).toMatchObject({ actionable_tasks: 2, no_open_task: false });
+    expect(hits.get(late.id)).toMatchObject({
+      state: { is: "open", overdue: { since: "2026-11-13" } },
+      actionable_tasks: 0,
+      no_open_task: true,
+    });
+    expect(hits.get(finished.id)).toMatchObject({ state: { is: "finished" } });
+    expect(hits.get(dropped.id)).toMatchObject({ state: { is: "dropped" } });
   });
 
   test("follows an Entry's words as they change, and never searches an earlier Version", async () => {

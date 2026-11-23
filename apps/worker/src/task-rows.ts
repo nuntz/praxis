@@ -120,6 +120,17 @@ export function readTask(sql: SqlStorage, id: string, today: Day): Task | null {
   return toTask(row, events.map(toEvent), today);
 }
 
+/** The Tasks with these ids that exist in this Context, by id, read as on `today`. */
+export function readTasks(sql: SqlStorage, ids: string[], today: Day): Map<string, Task> {
+  const rows = sql
+    .exec<TaskRow>(
+      `SELECT * FROM untrashed_tasks WHERE id IN (SELECT value FROM json_each(?))`,
+      JSON.stringify(ids),
+    )
+    .toArray();
+  return new Map(tasksFrom(sql, rows, today).map((task) => [task.id, task]));
+}
+
 /** The Tasks of each of these Entries, in the order they were made, by Entry id. */
 export function tasksOf(sql: SqlStorage, entries: string[], today: Day): Map<string, Task[]> {
   return tasksBy(sql, "origin_entry", entries, today, (task) => task.origin_entry);

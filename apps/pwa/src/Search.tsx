@@ -1,12 +1,21 @@
-import { type Excerpt, type SearchHit, type WordsOnly, wordsOnlySaying } from "@praxis/domain";
+import {
+  type Excerpt,
+  type ProjectState,
+  type SearchHit,
+  type Task,
+  type WordsOnly,
+  wordsOnlySaying,
+} from "@praxis/domain";
 import type { LucideIcon } from "lucide-solid";
 import BookOpen from "lucide-solid/icons/book-open";
+import Check from "lucide-solid/icons/check";
 import ChevronDown from "lucide-solid/icons/chevron-down";
 import ChevronUp from "lucide-solid/icons/chevron-up";
 import Circle from "lucide-solid/icons/circle";
 import Folder from "lucide-solid/icons/folder";
 import User from "lucide-solid/icons/user";
 import { createMemo, createSignal, For, Index, onCleanup, Show } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import { Dynamic } from "solid-js/web";
 import { authorName } from "./authors.ts";
 import { todayIn } from "./days.tsx";
@@ -16,6 +25,7 @@ import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { type Narrowing, NOT_NARROWED, narrowingInputs } from "./narrowing.ts";
 import { SearchChips } from "./SearchChips.tsx";
+import { createFinishing, DueMark, TaskMarks } from "./TaskItem.tsx";
 import { needsNetwork, useCallTool } from "./tools.ts";
 
 /** Search runs on the server, over the whole Journal, so it needs the network (section 8.8). */
@@ -27,6 +37,12 @@ const KIND: Record<SearchHit["kind"], string> = {
   project: "Project",
   person: "Person",
 };
+/** What a Project found says of where it stands. */
+const PROJECT_STATE: Record<ProjectState["is"], string> = {
+  open: "Open",
+  finished: "Finished",
+  dropped: "Dropped",
+};
 
 /**
  * Search in the Journal column (sections 8.4 and 9.4): one field, the chips under it that narrow
@@ -34,14 +50,18 @@ const KIND: Record<SearchHit["kind"], string> = {
  * `search` finds in place of the Entries, from words and from meaning, and a line saying so when
  * it is from words alone. What is found is grouped by kind under Attention's headings, each hit
  * saying when it was made as the Journal's days do, and by whom when not by the person. An Entry
- * or a Task found is brought into view in the Journal. An excerpt is shown as plain text with what
+ * or a Task found is brought into view in the Journal. A Task and a Project found say where they
+ * stand as Attention does, and a Task is finished or reopened there. An excerpt is plain text with what
  * matched marked, never as Markdown, since it is cut from the words wherever the match fell.
  *
  * The field and what is found are shown apart: the field above the column's scrolling body, so
  * nothing scrolls under it, and what is found inside it, where the Entries are.
  */
 export function createSearch(props: {
-  /** The Context's time zone, which the time chip's days are reckoned in. */
+  /**
+   * The Context's time zone: the time chip's days are reckoned in it, and a Task's and a
+   * Project's marks tell their days in it.
+   */
   timeZone: string;
   /**
    * When a record found was made: its day as the Journal reckons it, and its time, in the
@@ -57,7 +77,14 @@ export function createSearch(props: {
   const [narrowing, setNarrowing] = createSignal<Narrowing>(NOT_NARROWED);
   // What is asked: the words and the narrowing together, a new one on each change to either.
   const query = createMemo((): Query => ({ words: words(), narrowing: narrowing() }));
-  const [hits, setHits] = createSignal<SearchHit[] | null>(null);
+  // In a store, each hit kept by its id as the list is read again, so a row shown stays the same
+  // row, its round control keeping the focus, and only what changed in it is drawn again.
+  const [found, setFound] = createStore<{ hits: SearchHit[] | null }>({ hits: null });
+  const hits = () => found.hits;
+  const setHits = (next: SearchHit[] | null | ((shown: SearchHit[] | null) => SearchHit[])) => {
+    const hits = typeof next === "function" ? next(found.hits) : next;
+    setFound("hits", hits === null ? null : reconcile(hits, { key: "id" }));
+  };
   const [nextCursor, setNextCursor] = createSignal<string | null>(null);
   const [wordsOnly, setWordsOnly] = createSignal<WordsOnly | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
@@ -193,6 +220,8 @@ export function createSearch(props: {
    */
   const Hit = (shown: { hit: SearchHit }) => {
     const hit = shown.hit;
+    if (hit.kind === "task") return <TaskFound hit={hit} />;
+    if (hit.kind === "project") return <ProjectFound hit={hit} />;
     const parts =
       hit.kind === "entry"
         ? [<Made hit={hit} />, <ExcerptShown excerpt={hit.excerpt} />]
@@ -202,13 +231,12 @@ export function createSearch(props: {
     return (
       <li class={`search-hit search-${hit.kind}`} data-testid="search-hit">
         {place === null ? (
-          // #122 and #123 make a Project or a Person found narrow the search to it.
+          // #123 makes a Person found narrow the search to them.
           <span class="search-hit-body">
             {kind}
             {parts}
           </span>
         ) : (
-          // #120 puts a Task's round control before its link.
           <a
             class="search-hit-body"
             href={`#${place.anchor}`}
@@ -221,6 +249,119 @@ export function createSearch(props: {
             {parts}
           </a>
         )}
+      </li>
+    );
+  };
+
+  /** A Task found, where it stands as finishing it there or anywhere else left it. */
+  function patchTask(task: Task) {
+    const at = found.hits?.findIndex((hit) => hit.kind === "task" && hit.id === task.id) ?? -1;
+    if (at === -1) return;
+    const { due_date, defer_date, recurrence, state } = task;
+    setFound("hits", at, { due_date, defer_date, recurrence, state });
+  }
+
+  /**
+   * A Task found: its round control, which finishes it or reopens a finished one as Attention's
+   * does (section 8.3), and beside it a link that brings it into view in the Journal, named by its
+   * kind, its title, its time and its marks. Its title alone never finishes it.
+   */
+  const TaskFound = (shown: { hit: Extract<SearchHit, { kind: "task" }> }) => {
+    const hit = shown.hit;
+    const finishing = createFinishing({
+      task: () => ({ id: hit.id, title: hit.summary, state: hit.state }),
+      onTask: patchTask,
+      onProblem: setProblem,
+    });
+    const place = { entry: hit.origin_entry, anchor: recordAnchor("task", hit.id) };
+    return (
+      <li
+        class="search-hit search-task"
+        classList={{ closed: finishing.closed(), finished: finishing.shownFinished() }}
+        data-testid="search-hit"
+      >
+        <div class="search-hit-body">
+          <button
+            type="button"
+            class="search-tick"
+            aria-label={`${finishing.shownFinished() ? "Reopen" : "Finish"} “${hit.summary}”`}
+            // Only said to be disabled while its answer is awaited, so it keeps the focus.
+            aria-disabled={finishing.sending()}
+            disabled={finishing.dropped()}
+            onClick={() => {
+              if (!finishing.sending()) void finishing.setFinished(!finishing.shownFinished());
+            }}
+          >
+            <span class="search-tick-circle">
+              <Show when={finishing.shownFinished()}>
+                <Check size={14} stroke-width={3} aria-hidden="true" />
+              </Show>
+            </span>
+          </button>
+          <a
+            class="search-task-link"
+            href={`#${place.anchor}`}
+            onClick={(event) => {
+              event.preventDefault();
+              show(place);
+            }}
+          >
+            <span class="visually-hidden">{KIND.task}, </span>
+            <ExcerptShown excerpt={hit.excerpt} />
+            <span class="search-hit-meta">
+              <Made hit={hit} />
+              <TaskMarks
+                task={hit}
+                timeZone={props.timeZone}
+                mark={
+                  <Show when={hit.state.is === "finished"}>
+                    <span class="task-mark">Finished</span>
+                  </Show>
+                }
+              />
+            </span>
+          </a>
+        </div>
+      </li>
+    );
+  };
+
+  /**
+   * A Project found: whether it is open or at an end, and while open, its count of actionable Tasks,
+   * its Due Date and Attention's flag when it has no open Task.
+   */
+  const ProjectFound = (shown: { hit: Extract<SearchHit, { kind: "project" }> }) => {
+    const hit = shown.hit;
+    const open = () => (hit.state.is === "open" ? hit.state : null);
+    return (
+      // #122 makes a Project found narrow the search to it.
+      <li class="search-hit search-project" data-testid="search-hit">
+        <span class="search-hit-body">
+          <span class="visually-hidden">{KIND.project}, </span>
+          <ExcerptShown excerpt={hit.excerpt} />
+          <span class="search-hit-meta">
+            <span class="task-mark">{PROJECT_STATE[hit.state.is]}</span>
+            <Show when={open()}>
+              {(state) => (
+                <>
+                  <span class="task-mark">{hit.actionable_tasks} actionable</span>
+                  <Show when={hit.due_date}>
+                    {(due) => (
+                      <DueMark
+                        due={due()}
+                        overdue={state().overdue !== null}
+                        timeZone={props.timeZone}
+                      />
+                    )}
+                  </Show>
+                  <Show when={hit.no_open_task}>
+                    <span class="task-mark flag">Needs a next Task or finishing</span>
+                  </Show>
+                </>
+              )}
+            </Show>
+          </span>
+        </span>
       </li>
     );
   };

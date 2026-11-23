@@ -1877,6 +1877,61 @@ button.chip.set .chip-end {
   font: var(--type-row-title);
 }
 
+/* A Task's and a Project's line: when it was made, then each mark of where it stands. */
+.search-hit-meta {
+  display: block;
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.search-hit-meta > * + *::before {
+  content: " · ";
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* A Task found: its round control, then the link to it in the Journal, which never finishes it. */
+.search-task .search-hit-body {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding-left: var(--space-1);
+}
+
+.search-task-link {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* The control is the circle Attention's is, in a target wider than the circle, filled when done. */
+button.search-tick {
+  flex-shrink: 0;
+  width: 32px;
+  min-height: 22px;
+  padding: 0;
+  background: none;
+  color: var(--surface);
+}
+
+.search-tick-circle {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.search-task.finished .search-tick-circle {
+  background: var(--muted);
+}
+
 /* An Entry found is its words under when it was made, the Entries parted by hairlines. */
 .search-group-entry .search-hits,
 .search-group-meaning .search-hits {
@@ -1937,6 +1992,15 @@ button.chip.set .chip-end {
   border-color: transparent;
   border-radius: var(--radius-md);
   background: var(--inset);
+}
+
+/* A Task found at an end is muted, and a finished one struck through, as it reads as done. */
+.search-task.closed .search-excerpt {
+  color: var(--muted);
+}
+
+.search-task.finished .search-excerpt {
+  text-decoration: line-through;
 }
 
 .search-made {
@@ -2399,6 +2463,11 @@ a.entry-mark.held-mark {
 
   .icon-button {
     width: 44px;
+  }
+
+  button.search-tick {
+    width: 44px;
+    min-height: 44px;
   }
 
   .problem,

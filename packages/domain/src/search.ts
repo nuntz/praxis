@@ -1,5 +1,8 @@
+import type { ProjectInAttention } from "./attention.ts";
 import type { Author } from "./callers.ts";
 import type { Page } from "./entry.ts";
+import type { Project } from "./project.ts";
+import type { Task } from "./task.ts";
 
 /** A span of an excerpt, in UTF-16 code units as JavaScript counts a string, end not included. */
 export type Span = { start: number; end: number };
@@ -14,7 +17,11 @@ export type Excerpt = { text: string; matches: Span[] };
 /**
  * One record a search found (section 9.4): its kind and id, its one-line summary as reads give
  * it, when it was made, and the excerpt. An Entry and a Task carry their Author, and a Task the
- * Entry it hangs off. Read the record itself by its id.
+ * Entry it hangs off. A Task and a Project carry where they stand, so a caller needs no read per
+ * hit to know whether it is still open: a Task its dates, Recurrence and state as `get_task` gives
+ * them, a Project its Due Date and state as `get_project` gives them, with its count of actionable
+ * Tasks and its no-open-Task flag as `view_attention` gives them. A Person has no state. Read the
+ * record itself by its id.
  */
 export type SearchHit =
   | {
@@ -25,7 +32,7 @@ export type SearchHit =
       author: Author;
       excerpt: Excerpt;
     }
-  | {
+  | ({
       kind: "task";
       id: string;
       summary: string;
@@ -33,8 +40,16 @@ export type SearchHit =
       author: Author;
       origin_entry: string;
       excerpt: Excerpt;
-    }
-  | { kind: "project" | "person"; id: string; summary: string; at: string; excerpt: Excerpt };
+    } & TaskStanding)
+  | ({ kind: "project"; id: string; summary: string; at: string; excerpt: Excerpt } & Pick<
+      Project,
+      "due_date" | "state"
+    > &
+      Omit<ProjectInAttention, "project">)
+  | { kind: "person"; id: string; summary: string; at: string; excerpt: Excerpt };
+
+/** Where a Task stands, as `get_task` gives it: its dates, its Recurrence and its state. */
+export type TaskStanding = Pick<Task, "due_date" | "defer_date" | "recurrence" | "state">;
 
 /**
  * One ranked list of what a search found, best first, a page at a time, from words and from

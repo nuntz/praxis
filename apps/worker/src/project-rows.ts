@@ -51,6 +51,17 @@ export function readProject(sql: SqlStorage, id: string, today: Day): Project | 
   return projectsWithTasks(sql, rows, today)[0] ?? null;
 }
 
+/** The Projects with these ids that exist in this Context, by id, read as on `today`. */
+export function readProjects(sql: SqlStorage, ids: string[], today: Day): Map<string, Project> {
+  const rows = sql
+    .exec<ProjectRow>(
+      `SELECT * FROM untrashed_projects WHERE id IN (SELECT value FROM json_each(?))`,
+      JSON.stringify(ids),
+    )
+    .toArray();
+  return new Map(projectsWithTasks(sql, rows, today).map((project) => [project.id, project]));
+}
+
 /** The open Projects in this Context, in the order they were made, read as on `today`. */
 export function openProjects(sql: SqlStorage, today: Day): Project[] {
   // Open is derived: a Project is open unless the last thing declared of it was an end.

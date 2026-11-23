@@ -7,6 +7,7 @@ import {
   entryAction,
   expect,
   openJournal,
+  showTab,
   test,
 } from "./fixtures.ts";
 
@@ -259,4 +260,122 @@ test("one Show more found ends the list, and what it brings joins its kind's gro
   await expect(hits).toHaveCount(52);
   await expect(found.getByRole("heading")).toHaveText(["Projects 1", "Tasks 51"]);
   await expect(more).toHaveCount(0);
+});
+
+test("a Task found says where it stands as Attention does, is finished and reopened from its round control, and opens from its title", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}${crypto.randomUUID().replaceAll("-", "")}`;
+  const context = await contextOfOwn(page, testInfo, "Standing");
+  const call = (tool: string, input: unknown) => callContextTool(page, context.id, tool, input);
+  const titles = {
+    open: `Post the parcel ${tag}`,
+    finished: `Paid the deposit ${tag}`,
+    recurring: `Weekly review ${tag}`,
+    waiting: `Waiting for the quote ${tag}`,
+    delegated: `Mow the lawn ${tag}`,
+    deferred: `Book the dentist ${tag}`,
+    overdue: `Renew the passport ${tag}`,
+    dropped: `Old plan ${tag}`,
+  };
+  const { record: entry } = await call("record_entry", {
+    words: "Errands",
+    tasks: Object.values(titles).map((title) => ({ title })),
+  });
+  const [open, finished, recurring, waiting, delegated, deferred, overdue, dropped] = (
+    entry.tasks as { id: string }[]
+  ).map(({ id }) => id);
+  const alice = (await call("create_person", { name: "Alice Moreau" })).record;
+  await call("finish_task", { id: finished });
+  await call("set_task_dates", { id: recurring, due_date: "2099-01-05" });
+  await call("set_recurrence", {
+    id: recurring,
+    recurrence: { kind: "weeks", every: 1, on: ["monday"] },
+  });
+  await call("wait_on", { id: waiting, on: { kind: "task", id: open } });
+  await call("delegate_task", { id: delegated, person_id: alice.id });
+  await call("set_task_dates", { id: deferred, defer_date: "2099-01-10" });
+  await call("set_task_dates", { id: overdue, due_date: "2025-01-10" });
+  await call("drop_task", { id: dropped });
+  const kitchen = (await call("create_project", { name: `Kitchen ${tag}` })).record;
+  await call("move_task", { id: open, project_id: kitchen.id });
+  const shed = (await call("create_project", { name: `Shed ${tag}` })).record;
+  await call("finish_project", { id: shed.id });
+
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const search = journal.getByRole("searchbox", { name: "Search this Context" });
+  await search.fill(tag);
+  const found = journal.getByRole("region", { name: "Found" });
+  const tasks = found.getByRole("region", { name: /^Tasks / });
+  const link = (title: string) => tasks.getByRole("link", { name: new RegExp(`^Task, ${title} `) });
+  const made = `Today · ${TIME}`;
+
+  // Each state that holds is a mark after its time, as Attention marks it.
+  await expect(link(titles.open)).toHaveAccessibleName(
+    new RegExp(`^Task, ${titles.open} ${made}$`),
+  );
+  for (const [title, marks] of [
+    [titles.finished, "Finished"],
+    [titles.recurring, "Due Jan 5, 2099 · Recurring"],
+    [titles.waiting, `Waiting on ${titles.open}`],
+    [titles.delegated, "Delegated to Alice Moreau since \\w+ \\d+, \\d{4}"],
+    [titles.deferred, "Deferred until Jan 10, 2099"],
+    [titles.overdue, "Due Jan 10, 2025, Overdue"],
+    [titles.dropped, "Dropped"],
+  ] as const) {
+    await expect(link(title)).toHaveAccessibleName(
+      new RegExp(`^Task, ${title} ${made} · ${marks}$`),
+    );
+  }
+  // A finished one is muted and struck through; one open is neither.
+  const title = (of: string) => link(of).getByTestId("search-excerpt");
+  await expect(title(titles.finished)).toHaveCSS("text-decoration-line", "line-through");
+  await expect(title(titles.open)).toHaveCSS("text-decoration-line", "none");
+
+  // A Project found says where it stands, and while open its count of actionable Tasks.
+  const projects = found.getByRole("region", { name: /^Projects / }).getByTestId("search-hit");
+  const kitchenHit = projects.filter({ hasText: "Kitchen" });
+  await expect(kitchenHit).toContainText("Open");
+  await expect(kitchenHit).toContainText("1 actionable");
+  await expect(kitchenHit).not.toContainText("Needs a next Task or finishing");
+  const shedHit = projects.filter({ hasText: "Shed" });
+  await expect(shedHit).toContainText("Finished");
+  await expect(shedHit).not.toContainText("actionable");
+
+  // Its round control finishes it, and the Task waiting on it is released.
+  const finish = found.getByRole("button", { name: `Finish “${titles.open}”`, exact: true });
+  const reopen = found.getByRole("button", { name: `Reopen “${titles.open}”`, exact: true });
+  await finish.click();
+  await expect(reopen).toBeFocused();
+  await expect(link(titles.open)).toHaveAccessibleName(
+    new RegExp(`^Task, ${titles.open} ${made} · Finished$`),
+  );
+  await expect(title(titles.open)).toHaveCSS("text-decoration-line", "line-through");
+  await expect(link(titles.waiting)).toHaveAccessibleName(
+    new RegExp(`^Task, ${titles.waiting} ${made}$`),
+  );
+  await expect(kitchenHit).toContainText("0 actionable");
+  await expect(kitchenHit).toContainText("Needs a next Task or finishing");
+  // Attention shows the released Task as newly actionable.
+  await showTab(page, testInfo, "Attention");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  await expect(
+    attention.getByRole("region", { name: "Newly actionable", exact: true }),
+  ).toContainText(titles.waiting);
+  await showTab(page, testInfo, "Journal");
+
+  // On a finished one it reopens it.
+  await reopen.click();
+  await expect(finish).toBeFocused();
+  await expect(link(titles.open)).toHaveAccessibleName(
+    new RegExp(`^Task, ${titles.open} ${made}$`),
+  );
+  expect((await call("get_task", { id: open })).state.is).toBe("open");
+
+  // Its title opens it in the Journal, and finishes nothing.
+  await link(titles.open).click();
+  await expect(search).toHaveValue("");
+  await expect(journal.getByRole("checkbox", { name: titles.open, exact: true })).not.toBeChecked();
+  expect((await call("get_task", { id: open })).state.is).toBe("open");
 });

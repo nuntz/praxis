@@ -28,50 +28,18 @@ export function TaskItem(props: {
   onTask: (task: Task) => void;
   onProblem: (message: string) => void;
 }) {
-  const callTool = useCallTool();
-  const contextId = useContextId();
-  const [sending, setSending] = createSignal(false);
   const [editingDates, setEditingDates] = createSignal(false);
-  const finished = () => props.task.state.is === "finished";
-  // Finished on this Device and not yet sent; one the server refused is shown in Attention instead.
-  const unsentFinish = () => unsentFinishOf(props.task.id);
-  const shownFinished = () => finished() || unsentFinish() !== null;
-  const dropped = () => props.task.state.is === "dropped";
-  const open = () => (props.task.state.is === "open" ? props.task.state : null);
-  const sinceFormat = createMemo(
-    () => new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: props.timeZone }),
-  );
+  const finishing = createFinishing({
+    task: () => props.task,
+    onTask: props.onTask,
+    onProblem: props.onProblem,
+  });
 
   async function toggle(box: HTMLInputElement) {
-    // A finish still Unsent is undone on the Device, with no trace (section 8.8).
-    const finish = unsentFinish();
-    if (finish) {
-      discardUnsent(finish.id);
-      box.checked = finished();
-      return;
-    }
-    setSending(true);
-    try {
-      if (box.checked) {
-        // With no network the finish is kept Unsent, and the Task shows it.
-        const outcome = await finishTask(contextId, props.task);
-        if (outcome.kind === "refused") return props.onProblem(outcome.message);
-        if (outcome.kind === "made") props.onTask(outcome.value);
-        return;
-      }
-      const result = await callTool("reopen_task", { id: props.task.id });
-      if (!result.ok) return props.onProblem(result.error.message);
-      // What a rule did besides, releasing a Task waiting on it or making the next Occurrence,
-      // comes over the live channel.
-      props.onTask(result.value.record);
-    } catch (error) {
-      props.onProblem(unreachableMessage(error));
-    } finally {
-      // Whatever the answer, the box shows the Task as the server last said it is, or finished
-      // Unsent on this Device.
-      box.checked = shownFinished();
-      setSending(false);
-    }
+    await finishing.setFinished(box.checked);
+    // Whatever the answer, the box shows the Task as the server last said it is, or finished
+    // Unsent on this Device.
+    box.checked = finishing.shownFinished();
   }
 
   return (
@@ -79,22 +47,115 @@ export function TaskItem(props: {
       class="task"
       id={props.anchor}
       tabIndex={props.anchor === undefined ? undefined : -1}
-      classList={{ closed: props.task.state.is !== "open" || unsentFinish() !== null }}
+      classList={{ closed: finishing.closed() }}
     >
       <label>
         <input
           type="checkbox"
-          checked={shownFinished()}
-          disabled={sending() || dropped()}
+          checked={finishing.shownFinished()}
+          disabled={finishing.sending() || finishing.dropped()}
           onChange={(event) => void toggle(event.currentTarget)}
         />
         <span class="task-title">{props.task.title}</span>
       </label>
-      <Show when={unsentFinish()}>
+      <TaskMarks task={props.task} timeZone={props.timeZone} mark={props.mark} />
+      {/* A well-known action, so its icon stands alone, named for the Task (section 8.11). */}
+      <button
+        type="button"
+        class="task-dates-toggle"
+        aria-label={`Dates for ${props.task.title}`}
+        title={`Dates for ${props.task.title}`}
+        aria-expanded={editingDates()}
+        onClick={() => setEditingDates((shown) => !shown)}
+      >
+        <Calendar size={18} aria-hidden="true" />
+      </button>
+      <Show when={editingDates()}>
+        <TaskDatesEditor task={props.task} onTask={props.onTask} onProblem={props.onProblem} />
+      </Show>
+    </li>
+  );
+}
+
+/** What finishing a Task where it is shown needs of it: its title and where it stands. */
+type Finishable = Pick<Task, "id" | "title" | "state">;
+
+/**
+ * Finishing and reopening a Task from where it is shown, by its round control, through the tools
+ * Attention uses: with no network a finish is kept Unsent, and a finish still Unsent is undone on
+ * the Device. What the server says of the Task after is given to `onTask`.
+ */
+export function createFinishing(props: {
+  task: () => Finishable;
+  onTask: (task: Task) => void;
+  onProblem: (message: string) => void;
+}) {
+  const callTool = useCallTool();
+  const contextId = useContextId();
+  const [sending, setSending] = createSignal(false);
+  const finished = () => props.task().state.is === "finished";
+  // Finished on this Device and not yet sent; one the server refused is shown in Attention instead.
+  const unsentFinish = () => unsentFinishOf(props.task().id);
+  const shownFinished = () => finished() || unsentFinish() !== null;
+
+  async function setFinished(finish: boolean): Promise<void> {
+    // A finish still Unsent is undone on the Device, with no trace (section 8.8).
+    const unsent = unsentFinish();
+    if (unsent) return discardUnsent(unsent.id);
+    const task = props.task();
+    setSending(true);
+    try {
+      if (finish) {
+        // With no network the finish is kept Unsent, and the Task shows it.
+        const outcome = await finishTask(contextId, task);
+        if (outcome.kind === "refused") return props.onProblem(outcome.message);
+        if (outcome.kind === "made") props.onTask(outcome.value);
+        return;
+      }
+      const result = await callTool("reopen_task", { id: task.id });
+      if (!result.ok) return props.onProblem(result.error.message);
+      // What a rule did besides, releasing a Task waiting on it or making the next Occurrence,
+      // comes over the live channel.
+      props.onTask(result.value.record);
+    } catch (error) {
+      props.onProblem(unreachableMessage(error));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return {
+    sending,
+    /** Finished, on the server or Unsent on this Device. */
+    shownFinished,
+    dropped: () => props.task().state.is === "dropped",
+    /** At an end, or finished Unsent: drawn muted. */
+    closed: () => props.task().state.is !== "open" || unsentFinish() !== null,
+    setFinished,
+  };
+}
+
+/**
+ * Each state that holds for a Task as its own mark, wherever it is shown: finished Unsent, the mark
+ * the place adds, Dropped, its Due Date with Overdue, Recurring, Waiting, Delegated and Deferred.
+ */
+export function TaskMarks(props: {
+  task: Pick<Task, "id" | "state" | "due_date" | "recurrence">;
+  /** The Context's time zone, in which the day it was Delegated is told. */
+  timeZone: string;
+  mark?: JSX.Element;
+}) {
+  const open = () => (props.task.state.is === "open" ? props.task.state : null);
+  const sinceFormat = createMemo(
+    () => new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: props.timeZone }),
+  );
+  return (
+    <>
+      <Show when={unsentFinishOf(props.task.id)}>
         <span class="task-mark unsent-mark">Finished, Unsent</span>
       </Show>
       {props.mark}
-      <Show when={dropped()}>
+      <Show when={props.task.state.is === "dropped"}>
         <span class="task-mark">Dropped</span>
       </Show>
       <Show when={props.task.due_date}>
@@ -126,21 +187,7 @@ export function TaskItem(props: {
       <Show when={open()?.deferred}>
         {(deferred) => <span class="task-mark">Deferred until {formatDay(deferred().until)}</span>}
       </Show>
-      {/* A well-known action, so its icon stands alone, named for the Task (section 8.11). */}
-      <button
-        type="button"
-        class="task-dates-toggle"
-        aria-label={`Dates for ${props.task.title}`}
-        title={`Dates for ${props.task.title}`}
-        aria-expanded={editingDates()}
-        onClick={() => setEditingDates((shown) => !shown)}
-      >
-        <Calendar size={18} aria-hidden="true" />
-      </button>
-      <Show when={editingDates()}>
-        <TaskDatesEditor task={props.task} onTask={props.onTask} onProblem={props.onProblem} />
-      </Show>
-    </li>
+    </>
   );
 }
 
