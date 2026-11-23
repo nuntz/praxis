@@ -1,22 +1,46 @@
 import { addDays, type Day, dayIn, utcMidnight } from "@praxis/domain";
 import { createMemo, createSignal, Show } from "solid-js";
 
-/** A day older than yesterday as the Device's locale writes it: its weekday and its date. */
-const dated = new Intl.DateTimeFormat(undefined, {
-  weekday: "long",
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
+/** How a day's weekday is written: in full in a caption, shortened beside a time. */
+type Weekday = "long" | "short";
 
-/** The same, for a day of another year than today's. */
-const datedWithYear = new Intl.DateTimeFormat(undefined, {
-  weekday: "long",
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  timeZone: "UTC",
-});
+/**
+ * A day older than yesterday as the Device's locale writes it, its weekday and its date, by how
+ * its weekday is written and whether the day is of another year than today's. A Day is a date,
+ * read at its midnight in UTC, so it has no zone of its own.
+ */
+const dated: Record<Weekday, Record<"thisYear" | "anotherYear", Intl.DateTimeFormat>> = {
+  long: {
+    thisYear: new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    }),
+    anotherYear: new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    }),
+  },
+  short: {
+    thisYear: new Intl.DateTimeFormat(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    }),
+    anotherYear: new Intl.DateTimeFormat(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    }),
+  },
+};
 
 /**
  * The time now by this Device's clock, moved on every minute, so that today, wherever the screen
@@ -33,12 +57,30 @@ export function todayIn(zone: string): Day {
 /** The year a day falls in. */
 const yearOf = (day: Day) => new Date(utcMidnight(day)).getUTCFullYear();
 
-/** "Today", "Yesterday", or the weekday and the date, against today. A day has no zone of its own. */
-function dayLabel(day: Day, today: Day): string {
+/**
+ * "Today", "Yesterday", or the weekday and the date, with a year only for another year than
+ * today's, against today. A day has no zone of its own.
+ */
+function dayLabel(day: Day, today: Day, weekday: Weekday = "long"): string {
   if (day === today) return "Today";
   if (day === addDays(today, -1)) return "Yesterday";
-  const format = yearOf(day) === yearOf(today) ? dated : datedWithYear;
+  const format = dated[weekday][yearOf(day) === yearOf(today) ? "thisYear" : "anotherYear"];
   return format.format(utcMidnight(day));
+}
+
+/**
+ * When something was made, where no day's caption is over it, as in what a search finds: its day
+ * as the Journal's captions reckon it in a zone, the Context's, with the weekday shortened, then
+ * the time of day there, "Today · 4:41 PM" or "Wed, Nov 18 · 7:55 PM". It moves on at midnight
+ * there, as today does.
+ */
+export function dayAndTimeIn(zone: string): (at: string) => string {
+  const timeOfDay = new Intl.DateTimeFormat(undefined, { timeStyle: "short", timeZone: zone });
+  return (at) => {
+    const instant = new Date(at).getTime();
+    const day = dayLabel(dayIn(instant, zone), todayIn(zone), "short");
+    return `${day} · ${timeOfDay.format(instant)}`;
+  };
 }
 
 /**

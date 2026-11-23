@@ -16,7 +16,7 @@ import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-j
 import { createStore, reconcile, unwrap } from "solid-js/store";
 import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
-import { partIntoDays } from "./days.tsx";
+import { dayAndTimeIn, partIntoDays } from "./days.tsx";
 import { EntryActions } from "./EntryActions.tsx";
 import { EntryEditor } from "./EntryEditor.tsx";
 import { followNewest } from "./follow-newest.tsx";
@@ -60,7 +60,7 @@ export function Journal(props: {
   const contextId = useContextId();
   const live = useLive();
   // An instant as the Context's zone tells it: with its date where nothing else says the day, as
-  // in what a search finds and an Entry's Versions, and the time of day alone under a day's caption.
+  // in an Entry's Versions, and the time of day alone under a day's caption.
   const timeFormat = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -308,7 +308,7 @@ export function Journal(props: {
 
   // What a search found is shown in place of the Entries, which stay as they were under it.
   const search = createSearch({
-    formatTime: (at) => timeFormat.format(new Date(at)),
+    formatTime: dayAndTimeIn(props.timeZone),
     onShowInJournal: (entry, anchor) => void bringIntoView(entry, anchor),
   });
   const searching = search.shown;

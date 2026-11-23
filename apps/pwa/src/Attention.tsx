@@ -14,9 +14,9 @@ import Hand from "lucide-solid/icons/hand";
 import Sparkles from "lucide-solid/icons/sparkles";
 import UserRound from "lucide-solid/icons/user-round";
 import { createEffect, createSignal, For, type JSX, Show } from "solid-js";
-import { Dynamic } from "solid-js/web";
 import { WeeksAhead } from "./Ahead.tsx";
 import { followAttentionView } from "./attention-read.ts";
+import { SectionTitle } from "./design/SectionTitle.tsx";
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { MoveRecord } from "./Move.tsx";
 import { StandingNotices } from "./Notices.tsx";
@@ -226,10 +226,7 @@ function Section<T>(props: {
     <Show when={props.shownEmpty || props.items.length > 0}>
       <section class="attention-section" aria-labelledby={`attention-${props.id}`}>
         <div class="attention-section-head">
-          <h3 id={`attention-${props.id}`} class="attention-section-title">
-            <Dynamic component={props.icon} size={16} aria-hidden="true" />
-            {props.title}
-          </h3>
+          <SectionTitle id={`attention-${props.id}`} title={props.title} icon={props.icon} />
           {props.aside}
         </div>
         <Show when={props.items.length > 0}>

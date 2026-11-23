@@ -24,7 +24,7 @@ const tints = ACCENTS.map((accent) => `${accent}-tint` as const);
 
 /** Each text colour, and the grounds it is named on. */
 const pairings: [ColorToken, ColorToken[]][] = [
-  ["ink", ["ground", "surface", "inset", "notice", ...tints]],
+  ["ink", ["ground", "surface", "inset", "notice", "match", ...tints]],
   ["muted", ["ground", "surface", "inset"]],
   ["warn", ["surface", "inset"]],
   // The "Jump to latest" pill, the reverse of ink on surface.

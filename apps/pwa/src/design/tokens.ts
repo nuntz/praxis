@@ -38,6 +38,11 @@ export const colors = {
   warn: { light: "#B42318", dark: "#FF9388" },
   /** The ground of a standing Notice. Text on it is ink. */
   notice: { light: "#FFF0CC", dark: "#3B300F" },
+  /**
+   * The mark on what a search matched, in an excerpt or a title. Text on it is ink, at 600.
+   * Nothing else takes it.
+   */
+  match: { light: "#FFE58A", dark: "#5C4A0E" },
   /** Text and icons on a solid accent, and the icon on the End Call button's solid warn. */
   "on-accent": { light: "#FFFFFF", dark: "#14161B" },
   // Each accent is solid under on-accent, or text on surface and on its tint. The tint marks where

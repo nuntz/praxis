@@ -1,5 +1,12 @@
 import { type Excerpt, type SearchHit, type WordsOnly, wordsOnlySaying } from "@praxis/domain";
+import type { LucideIcon } from "lucide-solid";
+import BookOpen from "lucide-solid/icons/book-open";
+import Circle from "lucide-solid/icons/circle";
+import Folder from "lucide-solid/icons/folder";
+import User from "lucide-solid/icons/user";
 import { createSignal, For, Index, onCleanup, Show } from "solid-js";
+import { authorName } from "./authors.ts";
+import { SectionTitle } from "./design/SectionTitle.tsx";
 import { recordAnchor } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
@@ -16,17 +23,21 @@ const KIND: Record<SearchHit["kind"], string> = {
 };
 
 /**
- * Search in the Journal column (sections 8.4 and 9.4): one field, and while it holds words, the
- * one ranked list `search` gives in place of the Entries, from words and from meaning, and a line
- * saying so when it is from words alone. An Entry or a Task found is brought into
- * view in the Journal. An excerpt is shown as plain text with what matched marked, never as
- * Markdown, since it is cut from the words wherever the match fell.
+ * Search in the Journal column (sections 8.4 and 9.4): one field, and while it holds words, what
+ * `search` finds in place of the Entries, from words and from meaning, and a line saying so when
+ * it is from words alone. What is found is grouped by kind under Attention's headings, each hit
+ * saying when it was made as the Journal's days do, and by whom when not by the person. An Entry
+ * or a Task found is brought into view in the Journal. An excerpt is shown as plain text with what
+ * matched marked, never as Markdown, since it is cut from the words wherever the match fell.
  *
  * The field and what is found are shown apart: the field above the column's scrolling body, so
  * nothing scrolls under it, and what is found inside it, where the Entries are.
  */
 export function createSearch(props: {
-  /** The time of a record found, as shown in the Context's time zone. */
+  /**
+   * When a record found was made: its day as the Journal reckons it, and its time, in the
+   * Context's zone.
+   */
   formatTime: (at: string) => string;
   /** Bring a record into view in the Journal: the Entry it is, or that a Task hangs off. */
   onShowInJournal: (entry: string, anchor: string) => void;
@@ -130,9 +141,57 @@ export function createSearch(props: {
     </div>
   );
 
+  /** When a record found was made, and by whom when that is not the person. */
+  const Made = (made: { hit: SearchHit }) => (
+    <span class="search-made">
+      <time datetime={made.hit.at}>{props.formatTime(made.hit.at)}</time>
+      <Show when={authorShown(made.hit)}>{(author) => ` · ${author()}`}</Show>
+    </span>
+  );
+
+  /**
+   * One record found, its excerpt and when it was made in the order shown: an Entry's time over
+   * its words, a Task's, a Project's and a Person's under its title, after its kind for a screen
+   * reader. An Entry or a Task is a link that brings it into view in the Journal, named by what
+   * it holds, so its name is its kind, its time and its excerpt, and every word it shows.
+   */
+  const Hit = (shown: { hit: SearchHit }) => {
+    const hit = shown.hit;
+    const parts =
+      hit.kind === "entry"
+        ? [<Made hit={hit} />, <ExcerptShown excerpt={hit.excerpt} />]
+        : [<ExcerptShown excerpt={hit.excerpt} />, <Made hit={hit} />];
+    const kind = <span class="visually-hidden">{KIND[hit.kind]}, </span>;
+    const place = placeInJournal(hit);
+    return (
+      <li class={`search-hit search-${hit.kind}`} data-testid="search-hit">
+        {place === null ? (
+          // #122 and #123 make a Project or a Person found narrow the search to it.
+          <span class="search-hit-body">
+            {kind}
+            {parts}
+          </span>
+        ) : (
+          // #120 puts a Task's round control before its link.
+          <a
+            class="search-hit-body"
+            href={`#${place.anchor}`}
+            onClick={(event) => {
+              event.preventDefault();
+              show(place);
+            }}
+          >
+            {kind}
+            {parts}
+          </a>
+        )}
+      </li>
+    );
+  };
+
   const Found = () => (
-    <>
-      <Show when={asking()}>
+    <Show when={asking()}>
+      <section class="search-found" aria-label="Found">
         <Show when={hits()}>
           {(found) => (
             <p class="search-count" role="status">
@@ -152,49 +211,40 @@ export function createSearch(props: {
             </p>
           )}
         </Show>
-      </Show>
-      <Show when={asking() && hits()}>
-        {(found) => (
-          <>
-            <ol class="search-hits" aria-label="Found">
-              <For each={found()}>
-                {(hit) => (
-                  <li class="search-hit" data-testid="search-hit">
-                    <p class="search-hit-head">
-                      <span class="search-kind">{KIND[hit.kind]}</span>
-                      <time datetime={hit.at}>{props.formatTime(hit.at)}</time>
-                    </p>
-                    <Show
-                      when={placeInJournal(hit)}
-                      fallback={<ExcerptShown excerpt={hit.excerpt} />}
-                    >
-                      {(place) => (
-                        <a
-                          href={`#${place().anchor}`}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            show(place());
-                          }}
-                        >
-                          <ExcerptShown excerpt={hit.excerpt} />
-                        </a>
-                      )}
-                    </Show>
-                  </li>
+        <Show when={hits()}>
+          {(found) => (
+            <>
+              <Index each={groupByKind(found())}>
+                {(group) => (
+                  <section
+                    class={`search-group search-group-${group().kind}`}
+                    aria-labelledby={`search-${group().kind}`}
+                  >
+                    <SectionTitle
+                      id={`search-${group().kind}`}
+                      title={group().title}
+                      icon={group().icon}
+                      count={group().hits.length}
+                    />
+                    <ol class="search-hits">
+                      <For each={group().hits}>{(hit) => <Hit hit={hit} />}</For>
+                    </ol>
+                  </section>
                 )}
-              </For>
-            </ol>
-            <Show when={nextCursor()}>
-              {(cursor) => (
-                <button type="button" class="quiet" onClick={() => void showMore(cursor())}>
-                  Show more found
-                </button>
-              )}
-            </Show>
-          </>
-        )}
-      </Show>
-    </>
+              </Index>
+              {/* One for the whole list: what it brings joins its kind's group, so none is cut short. */}
+              <Show when={nextCursor()}>
+                {(cursor) => (
+                  <button type="button" class="quiet" onClick={() => void showMore(cursor())}>
+                    Show more found
+                  </button>
+                )}
+              </Show>
+            </>
+          )}
+        </Show>
+      </section>
+    </Show>
   );
 
   return {
@@ -203,6 +253,42 @@ export function createSearch(props: {
     Field,
     Found,
   };
+}
+
+/** A group of what a search found, under a heading of its own. */
+export type FoundGroup = {
+  kind: SearchHit["kind"];
+  title: string;
+  icon: LucideIcon;
+  /** In the order the tool gave them. */
+  hits: SearchHit[];
+};
+
+/** The groups what a search finds is shown in, in this order on every search (section 8.4). */
+const GROUPS: Omit<FoundGroup, "hits">[] = [
+  { kind: "project", title: "Projects", icon: Folder },
+  { kind: "person", title: "Persons", icon: User },
+  { kind: "task", title: "Tasks", icon: Circle },
+  { kind: "entry", title: "Entries", icon: BookOpen },
+];
+
+/**
+ * The one ranked list a search gives, every page shown of it, parted by kind into its groups: each
+ * holds its hits in the tool's order, and a kind with none found has no group. The tool's list is
+ * reordered for no other caller.
+ */
+export function groupByKind(hits: SearchHit[]): FoundGroup[] {
+  // #119 sets the Entries found only by meaning apart, after the Entries.
+  return GROUPS.map((group) => ({
+    ...group,
+    hits: hits.filter((hit) => hit.kind === group.kind),
+  })).filter((group) => group.hits.length > 0);
+}
+
+/** Who made a record found, as the screen names them, when it is not the person. */
+function authorShown(hit: SearchHit): string | null {
+  if (hit.kind !== "entry" && hit.kind !== "task") return null;
+  return hit.author.kind === "person" ? null : authorName(hit.author);
 }
 
 /** Where a record found is shown in the Journal: the Entry to read it on, and its anchor there. */

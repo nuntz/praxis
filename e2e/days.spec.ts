@@ -136,14 +136,15 @@ test("the Journal is parted into days in the Context's time zone, an Entry under
   expect(await under(`today ${tag}`)).toBe("Today");
 
   // Under its day, an Entry says its time of day alone, in the Context's zone, as the Device's
-  // locale writes it; what a search finds is parted into no days, so it says its date too.
+  // locale writes it; what a search finds is parted into no days, so it says its day too, as the
+  // Journal reckons it.
   await expect(entries.filter({ hasText: `older ${tag}` }).getByRole("time")).toHaveText(
     await writtenIn(page, made.older, zone, { timeStyle: "short" }),
   );
   await journal.getByRole("searchbox", { name: "Search this Context" }).fill(`yesterday ${tag}`);
-  const found = journal.getByRole("list", { name: "Found" }).getByTestId("search-hit");
+  const found = journal.getByRole("region", { name: "Found" }).getByTestId("search-hit");
   await expect(found.filter({ hasText: `yesterday ${tag}` }).getByRole("time")).toHaveText(
-    await writtenIn(page, made.yesterday, zone, { dateStyle: "medium", timeStyle: "short" }),
+    `Yesterday · ${await writtenIn(page, made.yesterday, zone, { timeStyle: "short" })}`,
   );
 });
 

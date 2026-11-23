@@ -1252,7 +1252,8 @@ button.task-dates-toggle[aria-expanded="true"] {
   width: 100%;
 }
 
-.attention-section-title {
+/* A section's heading, Attention's and the groups of what a search finds alike (SectionTitle). */
+.section-title {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -1260,6 +1261,10 @@ button.task-dates-toggle[aria-expanded="true"] {
   color: var(--muted);
   font: var(--type-meta);
   font-weight: 600;
+}
+
+.section-count {
+  font-weight: 400;
 }
 
 .attention-section-head {
@@ -1680,7 +1685,7 @@ button.call-control {
 /*
  * Search, at the top of the Journal: the field sits above the column's scrolling body, so no Entry
  * scrolls under it, and what is found takes the Entries' place. An excerpt is plain text: what
- * matched is marked in ink on the inset, never in the accent, and never restyled as Markdown.
+ * matched is marked in ink on match, never in the accent, and never restyled as Markdown.
  */
 .journal-search {
   flex-shrink: 0;
@@ -1713,44 +1718,91 @@ button.call-control {
   display: none;
 }
 
-.search-hits {
+/* What is found, grouped by kind, each group under its heading, the groups apart as sections are. */
+.search-found {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   width: 100%;
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
-.search-hit {
+.search-found > p {
+  margin: 0;
+}
+
+.search-group {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
 }
 
-.search-hit-head {
+.search-hits {
   display: flex;
-  gap: var(--space-2);
-  color: var(--muted);
-  font: var(--type-meta);
-}
-
-.search-kind {
-  font-weight: 600;
-}
-
-.search-hit a {
-  color: var(--ink);
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .search-excerpt {
   overflow-wrap: anywhere;
 }
 
-.search-excerpt mark {
+/* A Project, a Person or a Task found is a row on the inset, its title over when it was made. */
+.search-hit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px var(--space-2) 10px var(--space-3);
   border-radius: var(--radius-sm);
   background: var(--inset);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.search-hit-body .search-excerpt {
+  font: var(--type-row-title);
+}
+
+/* An Entry found is its words under when it was made, the Entries parted by hairlines. */
+.search-group-entry .search-hits {
+  gap: 0;
+}
+
+.search-entry .search-hit-body {
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  background: none;
+}
+
+.search-entry:first-child .search-hit-body {
+  border-top: none;
+}
+
+.search-entry .search-excerpt {
+  font: var(--type-body);
+}
+
+.search-entry .search-hit-body:hover,
+.search-entry .search-hit-body:focus-visible {
+  border-color: transparent;
+  border-radius: var(--radius-md);
+  background: var(--inset);
+}
+
+.search-made {
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+/* What matched, on match alone: in an Entry's words and in a title alike (section 8.11). */
+.search-excerpt mark {
+  padding: 0 2px;
+  border-radius: 4px;
+  background: var(--match);
   color: var(--ink);
   font-weight: 600;
 }
