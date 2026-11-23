@@ -1,7 +1,7 @@
 import type { Day } from "@praxis/domain";
 import Folder from "lucide-solid/icons/folder";
 import { createSignal, For } from "solid-js";
-import { daysSaid, todayIn } from "./days.tsx";
+import { todayIn } from "./days.tsx";
 import { Chip, type ChipHeld } from "./design/Chip.tsx";
 import {
   LAST_DAYS,
@@ -9,6 +9,7 @@ import {
   type Narrowing,
   type RecordNarrowing,
   type TimeNarrowing,
+  timeSaid,
 } from "./narrowing.ts";
 import { ChoicePicker, referencesOffered } from "./Pickers.tsx";
 import { useCallTool, useContextId } from "./tools.ts";
@@ -22,12 +23,14 @@ export function SearchChips(props: {
   onNarrow: (narrowing: Narrowing) => void;
   /** The Context's time zone, which today is reckoned in. */
   timeZone: string;
+  /** Shown but not usable, as offline. */
+  disabled: boolean;
 }) {
   const today = () => todayIn(props.timeZone);
   const narrow = (changed: Partial<Narrowing>) =>
     props.onNarrow({ ...props.narrowing, ...changed });
   return (
-    <fieldset class="search-chips" aria-label="Narrow the search">
+    <fieldset class="search-chips" aria-label="Narrow the search" disabled={props.disabled}>
       <Chip
         name="Time"
         label="Any time"
@@ -91,7 +94,7 @@ function ProjectPicker(props: { onPick: (project: RecordNarrowing) => void }) {
 /** What the time chip says it holds, or null while it is not set. */
 function timeHeld(time: TimeNarrowing | null, today: Day): ChipHeld | null {
   if (time === null) return null;
-  const said = time.kind === "last" ? lastDaysSaid(time.days) : daysSaid(time.from, time.to, today);
+  const said = timeSaid(time, today);
   return { shown: said, named: said };
 }
 

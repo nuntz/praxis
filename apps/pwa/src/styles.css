@@ -1699,17 +1699,86 @@ button.call-control {
   gap: var(--space-1);
 }
 
-.journal-search input {
+/*
+ * The field: an inset pill with the search icon, ringed in ink while it has the focus, its clear
+ * button there only with words, and on a desktop the `/` that reaches it while it is empty.
+ */
+.search-field {
+  display: flex;
   flex: 1;
-  width: 100%;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
-  min-height: 40px;
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--rule);
+  height: 44px;
+  padding: 0 6px 0 14px;
+  border: 1.5px solid transparent;
   border-radius: var(--radius-pill);
-  background: var(--surface);
+  background: var(--inset);
+}
+
+.search-field:focus-within {
+  border-color: var(--ink);
+}
+
+.search-field:has(input:disabled) {
+  opacity: 0.5;
+}
+
+.search-field-icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.search-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--ink);
-  font: inherit;
+  font: var(--type-body-phone);
+}
+
+.search-field input:focus-visible {
+  outline: none;
+}
+
+/* Its clear button is the screen's own, for the words alone, so the browser's is not drawn. */
+.search-field input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+button.search-clear {
+  flex: none;
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.search-key {
+  flex: none;
+  min-width: 20px;
+  margin-right: 8px;
+  padding: 0 5px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font: var(--type-caption);
+  text-align: center;
+}
+
+/* What the empty field searches, and offline why it cannot be used, under the chips. */
+.search-note {
+  margin: 10px var(--space-1) 0;
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.search-note[hidden] {
+  display: none;
 }
 
 /*
@@ -1886,6 +1955,36 @@ button.chip.set .chip-end {
 
 .search-found > p {
   margin: 0;
+}
+
+/* Nothing found: the words named, then for each chip set what it keeps out and its offer. */
+.search-nothing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-5) 0;
+}
+
+.search-nothing-title {
+  font: var(--type-words);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.search-nothing-kept {
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+button.search-lift {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--type-label);
+  font-size: 14px;
 }
 
 .search-group {
@@ -2677,10 +2776,6 @@ a.entry-mark.held-mark {
 
   .journal-search.open .search-row {
     padding-left: var(--space-1);
-  }
-
-  .journal-search input {
-    min-height: 44px;
   }
 
   button.search-back {

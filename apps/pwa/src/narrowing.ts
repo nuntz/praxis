@@ -1,4 +1,5 @@
 import { addDays, type Day } from "@praxis/domain";
+import { daysSaid } from "./days.tsx";
 
 /**
  * What the chips under the search field narrow a search to (section 8.4), each chip one field, and
@@ -75,4 +76,66 @@ function timeInputs(time: TimeNarrowing | null, today: Day): NarrowingInputs {
   if (time === null) return {};
   if (time.kind === "range") return { from: time.from, to: time.to };
   return { from: addDays(today, 1 - time.days), to: today };
+}
+
+/** Whether a narrowing has any chip set. */
+export function isNarrowed(narrowing: Narrowing): boolean {
+  return Object.values(narrowing).some((held) => held !== null);
+}
+
+/** The narrowing with one chip lifted, the others as they were. */
+export function lifted(narrowing: Narrowing, chip: keyof Narrowing): Narrowing {
+  return { ...narrowing, [chip]: null };
+}
+
+/** What the time chip says it holds once set: "Last 7 days", or its range's days. */
+export function timeSaid(time: TimeNarrowing, today: Day): string {
+  return time.kind === "last" ? lastDaysSaid(time.days) : daysSaid(time.from, time.to, today);
+}
+
+/**
+ * What a chip set offers when nothing is found (section 8.4): a line saying what it keeps out of
+ * the search, and its offer, a button that lifts it.
+ */
+export type Lift = { chip: keyof Narrowing; kept: string; offer: string };
+
+/**
+ * Each chip's line and offer once set, in one place and in the chips' order, so no chip added to
+ * the narrowing goes without one.
+ */
+const LIFTS: {
+  [Chip in keyof Narrowing]: (held: NonNullable<Narrowing[Chip]>, today: Day) => Omit<Lift, "chip">;
+} = {
+  time: (time, today) => ({ kept: timeKept(time, today), offer: "Search any time" }),
+  project: (project) => ({
+    kept: `Only what is in ${project.name} is searched.`,
+    offer: "Search every Project",
+  }),
+  // #123 adds the Person's: "Nothing about <Person> holds it.", "Search every Person".
+  // #124 adds the Author's: "Nothing by <Author> holds it.", "Search every Author".
+};
+
+/** What the time chip keeps out of the search. */
+function timeKept(time: TimeNarrowing, today: Day): string {
+  if (time.kind === "range") return `Nothing outside ${timeSaid(time, today)} is searched.`;
+  if (time.days === 1) return "Nothing before today is searched.";
+  return `Nothing older than ${time.days} days is searched.`;
+}
+
+/** The offers to lift each chip set, in the chips' order. */
+export function liftsOf(narrowing: Narrowing, today: Day): Lift[] {
+  return (Object.keys(LIFTS) as (keyof Narrowing)[]).flatMap((chip) => {
+    const lift = liftOf(chip, narrowing, today);
+    return lift === null ? [] : [lift];
+  });
+}
+
+function liftOf<Chip extends keyof Narrowing>(
+  chip: Chip,
+  narrowing: Narrowing,
+  today: Day,
+): Lift | null {
+  const held = narrowing[chip];
+  if (held === null) return null;
+  return { chip, ...LIFTS[chip](held, today) };
 }

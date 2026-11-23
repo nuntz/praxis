@@ -212,11 +212,11 @@ test("the Offline Copy is read with no network, as last fetched, in any Context,
   // Versions and search need the network, and say so.
   await entry.getByRole("button", { name: "Edited", exact: true }).click();
   await expect(journal.getByText("Versions need the network.", { exact: true })).toBeVisible();
-  await journal.getByRole("searchbox", { name: "Search this Context", exact: true }).fill(tag);
+  // Search's field is shown but cannot be used.
+  await expect(
+    journal.getByRole("searchbox", { name: "Search this Context", exact: true }),
+  ).toBeDisabled();
   await expect(journal.getByText("Search needs the network.", { exact: true })).toBeVisible();
-  await journal
-    .getByRole("searchbox", { name: "Search this Context", exact: true })
-    .press("Escape");
 
   // A Follow-up to an Entry the copy holds, Mentioning a Person it holds, kept Unsent.
   await (await entryAction(entry, "Follow up", testInfo)).click();

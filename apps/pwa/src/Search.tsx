@@ -14,7 +14,9 @@ import ChevronDown from "lucide-solid/icons/chevron-down";
 import ChevronUp from "lucide-solid/icons/chevron-up";
 import Circle from "lucide-solid/icons/circle";
 import Folder from "lucide-solid/icons/folder";
+import SearchIcon from "lucide-solid/icons/search";
 import User from "lucide-solid/icons/user";
+import X from "lucide-solid/icons/x";
 import { createMemo, createSignal, For, Index, onCleanup, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { Dynamic } from "solid-js/web";
@@ -27,11 +29,15 @@ import { useLive } from "./live-context.ts";
 import { onPhone } from "./media.ts";
 import {
   everythingSaid,
+  isNarrowed,
+  lifted,
+  liftsOf,
   type Narrowing,
   NOT_NARROWED,
   narrowingInputs,
   standsAlone,
 } from "./narrowing.ts";
+import { online } from "./online.ts";
 import { SearchChips } from "./SearchChips.tsx";
 import { createFinishing, DueMark, TaskMarks } from "./TaskItem.tsx";
 import { needsNetwork, useCallTool } from "./tools.ts";
@@ -62,6 +68,11 @@ const PROJECT_STATE: Record<ProjectState["is"], string> = {
  * stand as Attention does, and a Task is finished or reopened there. An excerpt is plain text with what
  * matched marked, never as Markdown, since it is cut from the words wherever the match fell.
  *
+ * It says what to do and gets out of the way: the field's clear button clears the words alone,
+ * Escape or opening a hit ends the search, chips and all, and on a desktop `/` reaches the field.
+ * Empty and focused, the field says what it searches; Nothing found names the words and offers to
+ * lift each chip set. Offline, the field and chips are shown but cannot be used, and say why.
+ *
  * The field and what is found are shown apart: the field above the column's scrolling body, so
  * nothing scrolls under it, and what is found inside it, where the Entries are.
  */
@@ -71,6 +82,8 @@ export function createSearch(props: {
    * Project's marks tell their days in it.
    */
   timeZone: string;
+  /** The Context's name, which the empty field says it searches. */
+  contextName: string | undefined;
   /**
    * When a record found was made: its day as the Journal reckons it, and its time, in the
    * Context's zone.
@@ -190,19 +203,16 @@ export function createSearch(props: {
     }
   }
 
-  /** The search over, the Journal is shown again. #125 lifts the chips here too, as back does. */
-  function close() {
-    setOpened(false);
-    ask("");
-  }
-
   /**
-   * The search ends, words and chips both, and the Journal is as it was left: by back on a phone,
-   * and by opening a hit, so the Journal shows it.
+   * The search ends, words and chips both, and the Journal is as it was left: by Escape, by back on
+   * a phone, and by opening a hit, so the Journal shows it.
    */
   function end() {
+    setOpened(false);
+    setWords("");
     setNarrowing(NOT_NARROWED);
-    close();
+    setMeaningUnfolded(false);
+    askAgain();
   }
 
   function show(place: JournalPlace) {
@@ -216,9 +226,61 @@ export function createSearch(props: {
     ask("");
   }
 
+  /** Escape ends the search, unless something in it, as a chip's picker, took it first. */
+  function endOnEscape(event: KeyboardEvent): boolean {
+    if (event.key !== "Escape" || event.defaultPrevented) return false;
+    if (!open() && words() === "" && !isNarrowed(narrowing())) return false;
+    event.preventDefault();
+    end();
+    return true;
+  }
+
+  let field: HTMLInputElement | undefined;
+  const [focused, setFocused] = createSignal(false);
+  const context = () => props.contextName ?? "this Context";
+
+  // The empty field's line goes as the field loses the focus. Lost to a press, it goes once the
+  // press is done, so the Entries moving up under it do not take what was pressed from the pointer.
+  let pressing = false;
+  const pressed = () => {
+    pressing = true;
+  };
+  const released = () => {
+    pressing = false;
+    setTimeout(() => setFocused(document.activeElement === field));
+  };
+  document.addEventListener("pointerdown", pressed, true);
+  document.addEventListener("pointerup", released, true);
+  document.addEventListener("pointercancel", released, true);
+  onCleanup(() => {
+    document.removeEventListener("pointerdown", pressed, true);
+    document.removeEventListener("pointerup", released, true);
+    document.removeEventListener("pointercancel", released, true);
+  });
+  const blurred = () => {
+    if (!pressing) setFocused(false);
+  };
+
+  // On a desktop, `/` puts the cursor in the field, unless it is typed where it is a `/`.
+  const onSlash = (event: KeyboardEvent) => {
+    if (event.key !== "/" || event.defaultPrevented || event.ctrlKey || event.metaKey) return;
+    if (onPhone() || !online() || typedInto(event.target)) return;
+    if (!field?.checkVisibility()) return;
+    event.preventDefault();
+    field.focus();
+  };
+  document.addEventListener("keydown", onSlash);
+  onCleanup(() => document.removeEventListener("keydown", onSlash));
+
+  // What the field is described by: why it cannot be used, or, empty, what it searches.
+  const describedBy = () => {
+    if (!online()) return "journal-search-offline";
+    return words() === "" ? "journal-search-covers" : undefined;
+  };
+
   const Field = () => (
     <div class="journal-search" classList={{ open: open() }}>
-      <search>
+      <search onKeyDown={endOnEscape}>
         <div class="search-row">
           <Show when={onPhone() && open()}>
             <button
@@ -233,26 +295,92 @@ export function createSearch(props: {
           <label class="visually-hidden" for="journal-search-words">
             Search this Context
           </label>
-          <input
-            id="journal-search-words"
-            type="search"
-            placeholder={
-              narrowing().project ? `Search within ${narrowing().project?.name}` : "Search"
-            }
-            autocomplete="off"
-            value={words()}
-            onFocus={() => setOpened(onPhone())}
-            onInput={(event) => ask(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && open()) {
-                event.preventDefault();
-                close();
-              }
-            }}
-          />
+          <div class="search-field">
+            <SearchIcon class="search-field-icon" size={18} aria-hidden="true" />
+            <input
+              ref={field}
+              id="journal-search-words"
+              type="search"
+              placeholder={`Search ${narrowing().project ? `within ${narrowing().project?.name}` : context()}`}
+              autocomplete="off"
+              aria-keyshortcuts={onPhone() ? undefined : "/"}
+              aria-describedby={describedBy()}
+              disabled={!online()}
+              value={words()}
+              onInput={(event) => ask(event.currentTarget.value)}
+              onFocus={() => {
+                setFocused(true);
+                setOpened(onPhone());
+              }}
+              onBlur={blurred}
+            />
+            <Show when={words() !== ""}>
+              <button
+                type="button"
+                class="search-clear"
+                aria-label="Clear the words"
+                disabled={!online()}
+                onClick={() => {
+                  ask("");
+                  field?.focus();
+                }}
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </Show>
+            <Show when={words() === "" && !onPhone() && online()}>
+              {/* Drawn as a key; the field's own name says it is reached by `/`. */}
+              <span class="search-key" aria-hidden="true">
+                /
+              </span>
+            </Show>
+          </div>
         </div>
-        <SearchChips narrowing={narrowing()} onNarrow={narrow} timeZone={props.timeZone} />
+        <SearchChips
+          narrowing={narrowing()}
+          onNarrow={narrow}
+          timeZone={props.timeZone}
+          disabled={!online()}
+        />
+        <p id="journal-search-covers" class="search-note" hidden={!(focused() && words() === "")}>
+          Searches the Entries, Tasks, Projects and Persons of {context()}, by their words and by
+          what they mean.
+        </p>
+        <Show when={!online()}>
+          <p id="journal-search-offline" class="search-note">
+            {SEARCH_NEEDS_NETWORK}
+          </p>
+        </Show>
       </search>
+    </div>
+  );
+
+  /**
+   * Nothing found: the words named, so a typo shows, and for each chip set what it keeps out and
+   * an offer to lift it, which reads the list again.
+   */
+  const NothingFound = () => (
+    <div class="search-nothing">
+      <p class="search-nothing-title">
+        {words().trim() === "" ? "Nothing found" : `Nothing found for “${words().trim()}”`}
+      </p>
+      <For each={liftsOf(narrowing(), todayIn(props.timeZone))}>
+        {(lift) => (
+          <>
+            <p class="search-nothing-kept">{lift.kept}</p>
+            <button
+              type="button"
+              class="search-lift"
+              onClick={() => {
+                narrow(lifted(narrowing(), lift.chip));
+                field?.focus();
+              }}
+            >
+              {lift.offer}
+            </button>
+          </>
+        )}
+      </For>
     </div>
   );
 
@@ -421,18 +549,28 @@ export function createSearch(props: {
 
   const Found = () => (
     <Show when={asking()}>
-      <section class="search-found" aria-label="Found">
-        <Show when={hits()}>
-          {(found) => (
-            <p class="search-count" role="status">
-              {found().length === 0
-                ? "Nothing found"
-                : words().trim() === ""
-                  ? everythingSaid(narrowing())
-                  : `Found ${found().length}${nextCursor() === null ? "" : " and more"}`}
-            </p>
-          )}
-        </Show>
+      <section
+        class="search-found"
+        aria-label="Found"
+        onKeyDown={(event) => {
+          // Ended from a hit, which then leaves, the cursor goes back to the field.
+          if (endOnEscape(event)) field?.focus();
+        }}
+      >
+        {/* There from the first words, so each count and Nothing found is announced as it comes. */}
+        <div class="search-status" role="status">
+          <Show when={hits()}>
+            {(found) => (
+              <Show when={found().length > 0} fallback={<NothingFound />}>
+                <p class="search-count">
+                  {words().trim() === ""
+                    ? everythingSaid(narrowing())
+                    : `Found ${found().length}${nextCursor() === null ? "" : " and more"}`}
+                </p>
+              </Show>
+            )}
+          </Show>
+        </div>
         <Show when={hits() && wordsOnly()}>
           {(why) => <p class="search-words-only">{wordsOnlySaying(why())}</p>}
         </Show>
@@ -510,6 +648,12 @@ export function createSearch(props: {
     Field,
     Found,
   };
+}
+
+/** Whether a key goes to where it is typed as text: a field, a composer or the like. */
+function typedInto(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || target.closest("input, textarea, select") !== null;
 }
 
 /** What a search asks: its words, and what its chips narrow it to. */

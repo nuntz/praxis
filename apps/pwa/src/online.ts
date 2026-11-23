@@ -2,7 +2,8 @@ import { createSignal } from "solid-js";
 
 /**
  * Whether the Device says it has a network, as the browser last said. The whole Conversation
- * needs one (section 8.8): without it the Conversation says so in place of its composer.
+ * needs one (section 8.8): without it the Conversation says so in place of its composer. Search
+ * needs one too: without it its field and chips are shown but cannot be used.
  */
 const [online, setOnline] = createSignal(typeof navigator === "undefined" || navigator.onLine);
 
