@@ -173,7 +173,8 @@ test("Nothing found names the words and offers to lift each chip set, which read
   await expect(status).toContainText("Nothing before today is searched.");
 
   // Each chip set has its own offer, in the chips' order, and lifting one keeps the others.
-  const shed = `Shed ${tag}`;
+  // Named apart from the words searched, or lifting its chip would find the Project itself.
+  const shed = "Shed";
   await callContextTool(page, context.id, "create_project", { name: shed });
   const toShed = async () => {
     await chips.getByRole("button", { name: "Project", exact: true }).click();
@@ -190,6 +191,8 @@ test("Nothing found names the words and offers to lift each chip set, which read
   await found.getByRole("button", { name: "Search every Project" }).click();
   await expect(chips.getByRole("button", { name: "Project", exact: true })).toBeVisible();
   await expect(chips.getByRole("button", { name: "Today, remove" })).toBeVisible();
+  await expect(status).toContainText("Nothing before today is searched.");
+  await expect(status).not.toContainText("Only what is in");
   await expect(offers).toHaveText(["Search any time"]);
   await expect(field).toBeFocused();
 
