@@ -588,20 +588,70 @@ describe("search", () => {
     ]);
   });
 
-  test("with no words, needs a Project, a Person or an Author: a range of days alone is refused", async () => {
+  test("with no words, a range of days lists every Entry and Task made in it, in the Context's time zone", async () => {
+    // 10:30 UTC on the 15th is 23:30 there in Auckland, 13 hours ahead.
+    const context = newContext("2026-11-15T10:30:00.000Z", {
+      name: "Personal",
+      time_zone: "Pacific/Auckland",
+    });
+    const fifteenth = await anEntry(context, marked("Late on the 15th"));
+    context.advance(60 * 60 * 1000);
+    const sixteenth = await anEntry(context, marked("Early on the 16th"));
+    context.advance(60 * 1000);
+    const task = value(
+      await context.call(hand, "add_task", { entry_id: sixteenth.id, title: marked("Call back") }),
+    ).record;
+    value(await context.call(hand, "create_project", { name: marked("Made on the 16th") }));
+    value(await context.call(hand, "create_person", { name: marked("Met on the 16th") }));
+    const trashed = await anEntry(context, marked("Deleted on the 16th"));
+    atOnce(await context.call(hand, "delete_entry", { id: trashed.id }));
+    context.advance(DAY);
+    const long = Array.from({ length: 20 }, (_, at) => `word${at}`).join("\n");
+    const seventeenth = await anEntry(context, marked(`On the 17th\n\n${long}`));
+    context.advance(DAY);
+    const eighteenth = await anEntry(context, marked("On the 18th"));
+    setMeaningFailing(true);
+
+    for (const caller of everyCaller) {
+      const results = value(
+        await context.call(caller, "search", { from: "2026-11-16", to: "2026-11-17" }),
+      );
+      expect(results.items.map(({ kind, id, excerpt }) => ({ kind, id, excerpt }))).toEqual([
+        {
+          kind: "entry",
+          id: seventeenth.id,
+          excerpt: {
+            text: `${seventeenth.words.split(/\s+/u).slice(0, 16).join(" ")}…`,
+            matches: [],
+          },
+        },
+        { kind: "task", id: task.id, excerpt: { text: task.title, matches: [] } },
+        { kind: "entry", id: sixteenth.id, excerpt: { text: sixteenth.words, matches: [] } },
+      ]);
+      expect(results.next_cursor).toBeNull();
+      expect(results.words_only).toBeNull();
+    }
+    expect(await found(context, { from: "2026-11-17" })).toEqual([
+      `entry:${eighteenth.id}`,
+      `entry:${seventeenth.id}`,
+    ]);
+    expect(await found(context, { to: "2026-11-15", words: " " })).toEqual([
+      `entry:${fifteenth.id}`,
+    ]);
+  });
+
+  test("with no words and no narrowing at all, is refused, as is a range whose start is after its end", async () => {
     const context = newContext();
     await anEntry(context, marked("Anything at all"));
 
-    for (const input of [
-      {},
-      { words: "" },
-      { words: "  " },
-      { from: "2026-11-01", to: "2026-11-30" },
-    ]) {
+    for (const input of [{}, { words: "" }, { words: "  " }]) {
       const refused = await context.call(hand, "search", input);
       expect(refused).toMatchObject({ ok: false, error: { code: "invalid_input" } });
       expect(refused.ok ? "" : refused.error.message).toContain("A search needs words.");
     }
+    const backwards = await context.call(hand, "search", { from: "2026-11-17", to: "2026-11-16" });
+    expect(backwards).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+    expect(backwards.ok ? "" : backwards.error.message).toContain("`from` is a day on or before");
   });
 
   test("with no words, gives 50 to a page, newest first, and a cursor to the next", async () => {
@@ -612,14 +662,16 @@ describe("search", () => {
       context.advance(60 * 1000);
     }
 
-    const first = value(await context.call(hand, "search", { author: { kind: "person" } }));
-    const second = value(
-      await context.call(hand, "search", { author: { kind: "person" }, cursor: first.next_cursor }),
-    );
+    for (const narrowing of [{ author: { kind: "person" } }, { from: "2026-11-15" }]) {
+      const first = value(await context.call(hand, "search", narrowing));
+      const second = value(
+        await context.call(hand, "search", { ...narrowing, cursor: first.next_cursor }),
+      );
 
-    expect(first.items.map(({ kind, id }) => `${kind}:${id}`)).toEqual(made.slice(0, 50));
-    expect(second.items.map(({ kind, id }) => `${kind}:${id}`)).toEqual(made.slice(50));
-    expect(second.next_cursor).toBeNull();
+      expect(first.items.map(({ kind, id }) => `${kind}:${id}`)).toEqual(made.slice(0, 50));
+      expect(second.items.map(({ kind, id }) => `${kind}:${id}`)).toEqual(made.slice(50));
+      expect(second.next_cursor).toBeNull();
+    }
   });
 
   test("gives 50 to a page, newest first among equal matches, and a cursor to the next", async () => {

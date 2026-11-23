@@ -97,15 +97,17 @@ export function hasWords(input: { words?: string | undefined }): boolean {
 }
 
 /**
- * Whether a search is narrowed to the records of a Project, a Person or an Author, which it then
- * lists with no words (section 9.4). A range of days alone is not: it would list the Journal.
+ * Whether a search is narrowed, by a range of days, a Project, a Person or an Author, any one or
+ * more: then it lists with no words, everything the narrowing holds (section 9.4).
  */
-export function narrowsToRecords(input: {
+export function narrows(input: {
+  from?: string | undefined;
+  to?: string | undefined;
   project_id?: string | undefined;
   person_id?: string | undefined;
   author?: object | undefined;
 }): boolean {
-  return (
-    input.project_id !== undefined || input.person_id !== undefined || input.author !== undefined
+  return [input.from, input.to, input.project_id, input.person_id, input.author].some(
+    (narrowing) => narrowing !== undefined,
   );
 }

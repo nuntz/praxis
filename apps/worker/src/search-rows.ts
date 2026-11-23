@@ -156,9 +156,9 @@ export function search(
 
 /**
  * One page of what a search with no words lists (section 9.4): every Entry and Task its narrowing
- * holds, newest first, each with its first words as the excerpt and nothing matched. Only a
- * Project, a Person or an Author lets a search go without words, and none lists a Project or a
- * Person. Read from the words index, which holds every record not in the Trash, so the newest
+ * holds, newest first, each with its first words as the excerpt and nothing matched. Only a range
+ * of days, a Project, a Person or an Author lets a search go without words, and none lists a
+ * Project or a Person. Read from the words index, which holds every record not in the Trash, so the newest
  * first among equals is the same as for words.
  */
 function listing(

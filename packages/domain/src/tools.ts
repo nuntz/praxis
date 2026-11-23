@@ -14,7 +14,7 @@ import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
 import { newRecurrence } from "./recurrence.ts";
 import { failure, type ToolResult } from "./results.ts";
-import { hasWords, narrowsToRecords, type SearchIndex, type SearchResults } from "./search.ts";
+import { hasWords, narrows, type SearchIndex, type SearchResults } from "./search.ts";
 import { clockTime, type Settings, weekday } from "./settings.ts";
 import type { Task } from "./task.ts";
 import type { Removal, TrashItem } from "./trash.ts";
@@ -581,7 +581,7 @@ export const tools = {
   search: {
     kind: "read",
     description:
-      "Search this Context: one ranked list, best match first, 50 to a page, of the Entries, Tasks, Projects and Persons whose words, title or name hold every word given, and of the Entries whose words mean what the words given mean, though they may not use them. Case and accents are set aside, and the last word, with nothing after it, also finds the words it begins, as while it is typed. Nothing in the Trash and no earlier Version of an Entry is searched. Each hit gives the record's kind, id and summary, when it was made, and an excerpt with the spans that matched by words, none for an Entry found by meaning alone; read the record by its id. A Task hit also carries where it stands, as get_task gives it: its `due_date`, `defer_date`, `recurrence` and derived `state` with the reason. A Project hit carries its `due_date` and `state` as get_project gives them, and its `actionable_tasks` and `no_open_task` as view_attention counts them. `words_only` is null when meaning was used, and otherwise says why the list is from words alone: `missing`, no meaning index in this Deployment; `stale`, it is being built from the Journal; `unreachable`, it did not answer this time; `cap_reached`, the month's spend has reached the cap. An Entry saved a moment ago is found by words at once and by meaning shortly after. Narrow it with any of: `from` and `to`, days in the Context's time zone, both included, by when a record was made; `project_id`, to the Tasks in that Project and the Entries that Reference it or hold a Task in it; `person_id`, to the Entries that Mention that Person and the Tasks ever Delegated to them; `author`, to the Entries and Tasks whose Author that is, a Connection by its name if given. Narrowed by a Project, a Person or an Author, no Project or Person is listed, and `words` may be left out: then the list is every Entry and Task the narrowing holds, newest first, 50 to a page, each with its first words as the excerpt and no spans, and meaning is not asked, so `words_only` is null. With no words and none of those three, a range of days alone included, the search is refused.",
+      "Search this Context: one ranked list, best match first, 50 to a page, of the Entries, Tasks, Projects and Persons whose words, title or name hold every word given, and of the Entries whose words mean what the words given mean, though they may not use them. Case and accents are set aside, and the last word, with nothing after it, also finds the words it begins, as while it is typed. Nothing in the Trash and no earlier Version of an Entry is searched. Each hit gives the record's kind, id and summary, when it was made, and an excerpt with the spans that matched by words, none for an Entry found by meaning alone; read the record by its id. A Task hit also carries where it stands, as get_task gives it: its `due_date`, `defer_date`, `recurrence` and derived `state` with the reason. A Project hit carries its `due_date` and `state` as get_project gives them, and its `actionable_tasks` and `no_open_task` as view_attention counts them. `words_only` is null when meaning was used, and otherwise says why the list is from words alone: `missing`, no meaning index in this Deployment; `stale`, it is being built from the Journal; `unreachable`, it did not answer this time; `cap_reached`, the month's spend has reached the cap. An Entry saved a moment ago is found by words at once and by meaning shortly after. Narrow it with any of: `from` and `to`, days in the Context's time zone, both included, by when a record was made; `project_id`, to the Tasks in that Project and the Entries that Reference it or hold a Task in it; `person_id`, to the Entries that Mention that Person and the Tasks ever Delegated to them; `author`, to the Entries and Tasks whose Author that is, a Connection by its name if given. Narrowed by a Project, a Person or an Author, no Project or Person is listed. Narrowed by any of these, a range of days or one end of it alone included, `words` may be left out: then the list is every Entry and Task the narrowing holds, newest first, 50 to a page, each with its first words as the excerpt and no spans, and meaning is not asked, so `words_only` is null. With no words and no narrowing, the search is refused.",
     input: z
       .strictObject({
         words: z.string().optional(),
@@ -598,7 +598,7 @@ export const tools = {
           .optional(),
         cursor,
       })
-      .refine((input) => hasWords(input) || narrowsToRecords(input), {
+      .refine((input) => hasWords(input) || narrows(input), {
         message: "A search needs words.",
         path: ["words"],
       })

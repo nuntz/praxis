@@ -1,6 +1,6 @@
 import {
   hasWords,
-  narrowsToRecords,
+  narrows,
   type SearchHit,
   type Task,
   type WordsOnly,
@@ -142,10 +142,11 @@ export function createSearch(props: {
   const wordsGiven = () => hasWords({ words: words() });
   // A time chip alone asks nothing: the Journal's days already show a time (section 8.4). A
   // Project, a Person or an Author chip asks with no words, for everything it holds, newest first,
-  // as the tool takes it.
+  // as the tool takes it. The tool now lists a range of days alone too: #130 asks with the time
+  // chip alone, and until then its days are set aside here.
   const asking = () => {
-    const input = inputOf(query());
-    return hasWords(input) || narrowsToRecords(input);
+    const { from: _from, to: _to, ...input } = inputOf(query());
+    return hasWords(input) || narrows(input);
   };
   // On a phone the search is a screen of its own from the moment its field is entered, in place of
   // the Journal's Entries before it asks anything; wider, the Entries stay until it asks.
