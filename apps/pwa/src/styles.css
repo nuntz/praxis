@@ -1824,6 +1824,43 @@ button.chip.set .chip-end {
   font: var(--type-body);
 }
 
+/*
+ * A picker opened from a chip: a field that narrows its choices, over the composer's list of them,
+ * which the chip's own panel already frames.
+ */
+.choice-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 260px;
+}
+
+.choice-field {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--type-body);
+}
+
+.choice-picker .link-picker {
+  padding: 0;
+  border: 0;
+}
+
+.choice-picker .link-picker:empty {
+  display: none;
+}
+
+.choice-none {
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
 .entry-list[hidden] {
   display: none;
 }
@@ -1939,6 +1976,15 @@ button.search-tick {
 
 .search-task.finished .search-tick-circle {
   background: var(--muted);
+}
+
+/* A Project found is a button, which narrows the search to it, drawn as the other hits are. */
+button.search-hit-body {
+  align-items: stretch;
+  justify-content: flex-start;
+  width: 100%;
+  font: inherit;
+  text-align: left;
 }
 
 /* An Entry found is its words under when it was made, the Entries parted by hairlines. */

@@ -1,8 +1,17 @@
 import type { Day } from "@praxis/domain";
+import Folder from "lucide-solid/icons/folder";
 import { createSignal, For } from "solid-js";
 import { daysSaid, todayIn } from "./days.tsx";
 import { Chip, type ChipHeld } from "./design/Chip.tsx";
-import { LAST_DAYS, lastDaysSaid, type Narrowing, type TimeNarrowing } from "./narrowing.ts";
+import {
+  LAST_DAYS,
+  lastDaysSaid,
+  type Narrowing,
+  type RecordNarrowing,
+  type TimeNarrowing,
+} from "./narrowing.ts";
+import { ChoicePicker, referencesOffered } from "./Pickers.tsx";
+import { useCallTool, useContextId } from "./tools.ts";
 
 /**
  * The chips under the search field (section 8.4), in the order time, Project, Person, Author,
@@ -34,8 +43,48 @@ export function SearchChips(props: {
           />
         )}
       />
-      {/* #122 adds the Project chip, #123 the Person chip and #124 the Author chip, in that order. */}
+      <Chip
+        name="Project"
+        label="Project"
+        icon={props.narrowing.project === null ? undefined : Folder}
+        held={recordHeld("Project", props.narrowing.project)}
+        onLift={() => narrow({ project: null })}
+        picker={(putAway) => (
+          <ProjectPicker
+            onPick={(project) => {
+              putAway();
+              narrow({ project });
+            }}
+          />
+        )}
+      />
+      {/* #123 adds the Person chip and #124 the Author chip, in that order. */}
     </fieldset>
+  );
+}
+
+/** What a chip that narrows to a record says it holds: its name, or null while it is not set. */
+function recordHeld(chip: string, record: RecordNarrowing | null): ChipHeld | null {
+  return record === null ? null : { shown: record.name, named: `${chip}: ${record.name}` };
+}
+
+/**
+ * The Project chip's picker: the composer's `#` picker, offering Projects alone, the Finished and
+ * Dropped ones among them, marked as such, and never making a new one.
+ */
+function ProjectPicker(props: { onPick: (project: RecordNarrowing) => void }) {
+  const callTool = useCallTool();
+  const contextId = useContextId();
+  return (
+    <ChoicePicker
+      label="Projects"
+      fieldLabel="Find a Project"
+      none="No Project is named so."
+      offer={(typed) => referencesOffered(callTool, contextId, typed, "projects")}
+      onPick={(choice) => {
+        if (choice.to.kind === "project") props.onPick({ id: choice.to.id, name: choice.name });
+      }}
+    />
   );
 }
 

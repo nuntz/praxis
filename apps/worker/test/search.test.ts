@@ -1,6 +1,7 @@
 import type { SearchHit } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
+import { setMeaningFailing } from "./meaning-fake.ts";
 import { agent, atOnce, connection, DAY, everyCaller, hand, newContext, value } from "./seam.ts";
 
 type Context = ReturnType<typeof newContext>;
@@ -493,6 +494,132 @@ describe("search", () => {
         error: { code: "not_found" },
       });
     }
+  });
+
+  test("with no words, a Project lists every Entry and Task it holds, newest first, each with its first words", async () => {
+    const context = newContext("2026-11-15T09:00:00.000Z");
+    const kitchen = value(
+      await context.call(hand, "create_project", { name: marked("Kitchen") }),
+    ).record;
+    const referencing = await anEntry(context, marked("Tiles chosen"), {
+      links: [{ to: { kind: "project", id: kitchen.id } }],
+    });
+    context.advance(60 * 1000);
+    const holding = await anEntry(context, marked("Things to order"));
+    await anEntry(context, marked("A walk in the park"));
+    context.advance(60 * 1000);
+    const task = value(
+      await context.call(hand, "add_task", { entry_id: holding.id, title: marked("Order tiles") }),
+    ).record;
+    value(await context.call(hand, "move_task", { id: task.id, project_id: kitchen.id }));
+    context.advance(60 * 1000);
+    const long = Array.from({ length: 20 }, (_, at) => `word${at}`).join("\n");
+    const latest = await anEntry(context, marked(`Cabinets\n\n${long}`), {
+      links: [{ to: { kind: "project", id: kitchen.id } }],
+    });
+    value(await context.call(hand, "create_person", { name: marked("Kitchen Kim") }));
+
+    const results = value(await context.call(hand, "search", { project_id: kitchen.id }));
+
+    expect(results.items.map(({ kind, id, excerpt }) => ({ kind, id, excerpt }))).toEqual([
+      {
+        kind: "entry",
+        id: latest.id,
+        excerpt: {
+          text: `${latest.words.split(/\s+/u).slice(0, 16).join(" ")}…`,
+          matches: [],
+        },
+      },
+      { kind: "task", id: task.id, excerpt: { text: task.title, matches: [] } },
+      { kind: "entry", id: holding.id, excerpt: { text: holding.words, matches: [] } },
+      { kind: "entry", id: referencing.id, excerpt: { text: referencing.words, matches: [] } },
+    ]);
+    expect(results.items.at(-1)).toEqual({
+      kind: "entry",
+      id: referencing.id,
+      summary: referencing.words,
+      at: "2026-11-15T09:00:00.000Z",
+      author: { kind: "person" },
+      excerpt: { text: referencing.words, matches: [] },
+    });
+    expect(results.next_cursor).toBeNull();
+    expect(results.words_only).toBeNull();
+  });
+
+  test("with no words, a Person or an Author lists what it holds, and meaning is not asked", async () => {
+    const context = newContext();
+    const ali = value(await context.call(hand, "create_person", { name: marked("Ali") })).record;
+    const mentioning = await anEntry(context, marked("Spoke with her"), {
+      links: [{ to: { kind: "person", id: ali.id } }],
+    });
+    context.advance(60 * 1000);
+    const agents = atOnce(
+      await context.call(agent, "record_entry", { words: marked("Booked it") }),
+    ).record;
+    context.advance(60 * 1000);
+    const delegated = value(
+      await context.call(agent, "add_task", {
+        entry_id: agents.id,
+        title: marked("Ask Ali about it"),
+      }),
+    ).record;
+    value(await context.call(hand, "delegate_task", { id: delegated.id, person_id: ali.id }));
+    value(await context.call(hand, "create_project", { name: marked("Ali's move") }));
+    setMeaningFailing(true);
+
+    for (const caller of everyCaller) {
+      expect(
+        value(await context.call(caller, "search", { person_id: ali.id, words: " " })),
+      ).toMatchObject({
+        items: [
+          { kind: "task", id: delegated.id },
+          { kind: "entry", id: mentioning.id },
+        ],
+        next_cursor: null,
+        words_only: null,
+      });
+    }
+    expect(await found(context, { author: { kind: "agent" } })).toEqual([
+      `task:${delegated.id}`,
+      `entry:${agents.id}`,
+    ]);
+    expect(await found(context, { author: { kind: "person" } })).toEqual([
+      `entry:${mentioning.id}`,
+    ]);
+  });
+
+  test("with no words, needs a Project, a Person or an Author: a range of days alone is refused", async () => {
+    const context = newContext();
+    await anEntry(context, marked("Anything at all"));
+
+    for (const input of [
+      {},
+      { words: "" },
+      { words: "  " },
+      { from: "2026-11-01", to: "2026-11-30" },
+    ]) {
+      const refused = await context.call(hand, "search", input);
+      expect(refused).toMatchObject({ ok: false, error: { code: "invalid_input" } });
+      expect(refused.ok ? "" : refused.error.message).toContain("A search needs words.");
+    }
+  });
+
+  test("with no words, gives 50 to a page, newest first, and a cursor to the next", async () => {
+    const context = newContext();
+    const made: string[] = [];
+    for (let receipt = 0; receipt < 53; receipt++) {
+      made.unshift(`entry:${(await anEntry(context, marked("Kept"))).id}`);
+      context.advance(60 * 1000);
+    }
+
+    const first = value(await context.call(hand, "search", { author: { kind: "person" } }));
+    const second = value(
+      await context.call(hand, "search", { author: { kind: "person" }, cursor: first.next_cursor }),
+    );
+
+    expect(first.items.map(({ kind, id }) => `${kind}:${id}`)).toEqual(made.slice(0, 50));
+    expect(second.items.map(({ kind, id }) => `${kind}:${id}`)).toEqual(made.slice(50));
+    expect(second.next_cursor).toBeNull();
   });
 
   test("gives 50 to a page, newest first among equal matches, and a cursor to the next", async () => {

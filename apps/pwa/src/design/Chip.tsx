@@ -20,7 +20,7 @@ export function Chip(props: {
   /** What it says while not set: "Any time", "Project". */
   label: string;
   /** Before its words, set or not, when it has one. */
-  icon?: LucideIcon;
+  icon?: LucideIcon | undefined;
   /** What it holds, or null while it is not set. */
   held: ChipHeld | null;
   /** Lift what it holds. */

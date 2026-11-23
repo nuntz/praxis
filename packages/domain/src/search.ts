@@ -90,3 +90,22 @@ export function wordsOnlySaying(why: WordsOnly): string {
  * is derived, and rebuilding it changes nothing true.
  */
 export type SearchIndex = { meaning: "building"; entries_to_embed: number };
+
+/** Whether a search was given words: not none, and not only spaces. */
+export function hasWords(input: { words?: string | undefined }): boolean {
+  return (input.words?.trim() ?? "") !== "";
+}
+
+/**
+ * Whether a search is narrowed to the records of a Project, a Person or an Author, which it then
+ * lists with no words (section 9.4). A range of days alone is not: it would list the Journal.
+ */
+export function narrowsToRecords(input: {
+  project_id?: string | undefined;
+  person_id?: string | undefined;
+  author?: object | undefined;
+}): boolean {
+  return (
+    input.project_id !== undefined || input.person_id !== undefined || input.author !== undefined
+  );
+}

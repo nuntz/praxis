@@ -830,7 +830,10 @@ export function contextObject(
         const zone = timeZoneOf(sql);
         return search(sql, input, zone, searched, meaning, dayIn(request.arrivedAt, zone));
       };
-      if (asked.value.query === null) return success(found(asked.value, { nearest: [] }));
+      // With no words, or none the index reads as a word, there is nothing to ask the meaning of.
+      if (asked.value.query === null || input.words === undefined) {
+        return success(found(asked.value, { nearest: [] }));
+      }
       const meaning = await this.askMeaning(input.words, request.arrivedAt);
       // Read again as the store stands once the meaning index has answered: a Project or Person
       // narrowed by may have gone to the Trash meanwhile.

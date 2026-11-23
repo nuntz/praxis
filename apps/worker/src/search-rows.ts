@@ -4,6 +4,7 @@ import {
   dayStart,
   type Excerpt,
   failure,
+  hasWords,
   instantToIso,
   PAGE_SIZE,
   type Project,
@@ -108,7 +109,7 @@ export function askSearch(sql: SqlStorage, input: ToolInput<"search">): ToolResu
   if (input.person_id !== undefined && !exists(sql, "untrashed_persons", input.person_id)) {
     return failure("not_found", NO_SUCH_PERSON);
   }
-  return success({ offset, query: wordsQuery(input.words) });
+  return success({ offset, query: wordsQuery(input.words ?? "") });
 }
 
 /**
@@ -139,6 +140,7 @@ export function search(
 ): SearchResults {
   const words_only = "words_only" in meaning ? meaning.words_only : null;
   const { offset, query } = asked;
+  if (!hasWords(input)) return listing(sql, input, zone, offset, today);
   if (query === null) return { items: [], next_cursor: null, words_only };
 
   const narrowed = narrowing(input, zone);
@@ -158,6 +160,53 @@ export function search(
     }),
     next_cursor: page.length > PAGE_SIZE ? listCursor("search", offset + PAGE_SIZE) : null,
     words_only,
+  };
+}
+
+/**
+ * One page of what a search with no words lists (section 9.4): every Entry and Task its narrowing
+ * holds, newest first, each with its first words as the excerpt and nothing matched. Only a
+ * Project, a Person or an Author lets a search go without words, and none lists a Project or a
+ * Person. Read from the words index, which holds every record not in the Trash, so the newest
+ * first among equals is the same as for words.
+ */
+function listing(
+  sql: SqlStorage,
+  input: ToolInput<"search">,
+  zone: string,
+  offset: number,
+  today: Day,
+): SearchResults {
+  const { where, bound } = narrowing(input, zone);
+  const page = sql
+    .exec<Omit<HitRow, "excerpt">>(
+      `SELECT ${WORDS_INDEX}.kind AS kind, ${WORDS_INDEX}.record_id AS id, ${AT} AS at,
+         ${WORDS_INDEX}.text AS text,
+         coalesce(e.author_kind, t.author_kind) AS author_kind,
+         coalesce(e.author_name, t.author_name) AS author_name,
+         t.origin_entry AS origin_entry
+       FROM ${WORDS_INDEX}
+       LEFT JOIN entries e ON ${WORDS_INDEX}.kind = 'entry' AND e.id = ${WORDS_INDEX}.record_id
+       LEFT JOIN tasks t ON ${WORDS_INDEX}.kind = 'task' AND t.id = ${WORDS_INDEX}.record_id
+       LEFT JOIN projects p ON 0 LEFT JOIN persons pe ON 0
+       WHERE ${[`${WORDS_INDEX}.kind IN ('entry', 'task')`, ...where].join(" AND ")}
+       ORDER BY at DESC, ${WORDS_INDEX}.rowid DESC
+       LIMIT ? OFFSET ?`,
+      ...bound,
+      PAGE_SIZE + 1,
+      offset,
+    )
+    .toArray();
+  const shown = page.slice(0, PAGE_SIZE);
+  const standing = standingOf(sql, shown, today);
+  return {
+    items: shown.flatMap((row) => {
+      const excerpt = row.kind === "entry" ? firstWords(row.text) : row.text;
+      const hit = hitOf({ ...row, excerpt }, standing);
+      return hit ? [hit] : [];
+    }),
+    next_cursor: page.length > PAGE_SIZE ? listCursor("search", offset + PAGE_SIZE) : null,
+    words_only: null,
   };
 }
 
@@ -340,7 +389,7 @@ function firstWords(words: string): string {
 /** The Tasks and Projects on a page as reads give them, by id, so each hit says where it stands. */
 type Standing = { tasks: Map<string, Task>; projects: Map<string, Project> };
 
-function standingOf(sql: SqlStorage, page: Ranked[], today: Day): Standing {
+function standingOf(sql: SqlStorage, page: Pick<Ranked, "kind" | "id">[], today: Day): Standing {
   const ids = (kind: SearchHit["kind"]) =>
     page.flatMap((ranked) => (ranked.kind === kind ? [ranked.id] : []));
   return {

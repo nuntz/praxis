@@ -1,29 +1,24 @@
 import {
-  type End,
   type Entry,
   type EntryNamed,
   followEdit,
   type LinkQuery,
   linkQueryAt,
-  type NewLink,
-  type Person,
-  type Project,
   pickLink,
-  type Task,
 } from "@praxis/domain";
 import Check from "lucide-solid/icons/check";
-import { createEffect, createSignal, For, onCleanup, Show, untrack } from "solid-js";
+import { createEffect, createSignal, onCleanup, Show, untrack } from "solid-js";
 import { keepDraft, type Pick, takeCaret, takeDraft, takeShared, withShared } from "./draft.ts";
 import { latestRead } from "./latest-read.ts";
-import { personsHeld, referencesHeld } from "./offline-copy.ts";
-import { Unreachable, unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import {
+  type Choice,
+  ChoiceList,
+  choiceKeys,
+  personsOffered,
+  referencesOffered,
+} from "./Pickers.tsx";
+import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { recordEntry } from "./unsent.ts";
-
-/** One choice in a picker: a record there is, or a new one made from what was typed. */
-type Choice = { name: string; detail: string | null; to: NewLink["to"] };
-
-/** How many records a picker offers at once. Typing more narrows them. */
-const OFFERED = 8;
 
 /**
  * The Journal's composer, which records an Entry with no model turn. `@` opens a picker of the
@@ -116,47 +111,26 @@ export function Composer(props: {
   // Each look asks afresh. Only the answer to the latest is shown.
   const { read: offer } = latestRead(async (current, found: LinkQuery) => {
     const typed = found.typed.trim();
-    const named = typed === "" ? {} : { named: typed };
-    try {
-      let records: Choice[];
-      if (found.kind === "mention") {
-        const persons = await callTool("list_persons", named);
-        if (!persons.ok) return props.onProblem(persons.error.message);
-        records = personChoices(persons.value.items, props.timeZone).slice(0, OFFERED);
-      } else {
-        const [projects, tasks] = await Promise.all([
-          callTool("list_projects", named),
-          callTool("list_tasks", named),
-        ]);
-        if (!projects.ok) return props.onProblem(projects.error.message);
-        if (!tasks.ok) return props.onProblem(tasks.error.message);
-        records = [
-          ...projects.value.items.map(projectChoice),
-          ...tasks.value.items.map(taskChoice),
-        ].slice(0, OFFERED);
-      }
-      // Shut meanwhile, by Escape or by leaving the words, the query is no longer asked: its
-      // answer would show for the next query until that one's own answer lands.
-      if (!current() || query() !== found) return;
-      const made: Choice[] =
-        typed === ""
-          ? []
-          : [
-              found.kind === "mention"
-                ? { name: typed, detail: null, to: { kind: "new_person", name: typed } }
-                : { name: typed, detail: null, to: { kind: "new_project", name: typed } },
-            ];
-      setChoices([...records, ...made]);
-      setHighlight(records.length > 0 ? 0 : -1);
-    } catch (error) {
-      if (!(error instanceof Unreachable)) return props.onProblem(unreachableMessage(error));
-      if (!current() || query() !== found) return;
-      // With no network the picker offers what the Offline Copy holds, and makes no new Person or
-      // Project, since the Device cannot tell whether one of that name exists (section 8.8).
-      const held = heldChoices(contextId, found.kind, typed, props.timeZone);
-      setChoices(held);
-      setHighlight(held.length > 0 ? 0 : -1);
-    }
+    const offered =
+      found.kind === "mention"
+        ? await personsOffered(callTool, contextId, typed, props.timeZone)
+        : await referencesOffered(callTool, contextId, typed, "tasks and projects");
+    if ("problem" in offered) return props.onProblem(offered.problem);
+    // Shut meanwhile, by Escape or by leaving the words, the query is no longer asked: its
+    // answer would show for the next query until that one's own answer lands.
+    if (!current() || query() !== found) return;
+    // With no network the picker offers what the Offline Copy holds, and makes no new Person or
+    // Project, since the Device cannot tell whether one of that name exists (section 8.8).
+    const made: Choice[] =
+      typed === "" || offered.held
+        ? []
+        : [
+            found.kind === "mention"
+              ? { name: typed, detail: null, to: { kind: "new_person", name: typed } }
+              : { name: typed, detail: null, to: { kind: "new_project", name: typed } },
+          ];
+    setChoices([...offered.choices, ...made]);
+    setHighlight(offered.choices.length > 0 ? 0 : -1);
   });
 
   function shutPicker() {
@@ -217,17 +191,13 @@ export function Composer(props: {
       return;
     }
     if (!open()) return;
-    const last = choices().length - 1;
-    if (event.key === "ArrowDown") {
+    const list = { choices: choices(), highlight: highlight(), setHighlight, choose };
+    if (choiceKeys(event, list)) return;
+    // In the words, Tab picks too, as Enter does.
+    const choice = choices()[highlight()];
+    if (event.key === "Tab" && choice) {
       event.preventDefault();
-      setHighlight((at) => Math.min(at + 1, last));
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setHighlight((at) => Math.max(at - 1, 0));
-    } else if ((event.key === "Enter" || event.key === "Tab") && highlight() >= 0) {
-      event.preventDefault();
-      const choice = choices()[highlight()];
-      if (choice) choose(choice);
+      choose(choice);
     }
   }
 
@@ -237,34 +207,14 @@ export function Composer(props: {
     <div class="composer-area">
       <Show when={open() && query()}>
         {(found) => (
-          <div
+          <ChoiceList
             id="link-picker"
-            class="link-picker"
-            role="listbox"
-            aria-label={found().kind === "mention" ? "Persons" : "Tasks and Projects"}
-          >
-            <For each={choices()}>
-              {(choice, index) => (
-                <div
-                  id={optionId(index())}
-                  role="option"
-                  // Focus stays in the words; the highlight is told by aria-activedescendant.
-                  tabIndex={-1}
-                  aria-selected={highlight() === index()}
-                  classList={{ highlighted: highlight() === index() }}
-                  // Keep the caret in the words, so the pick lands where it was.
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => choose(choice)}
-                  // The keys are the words' own (see onKeyDown), but an option given focus picks too.
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") choose(choice);
-                  }}
-                >
-                  <ChoiceLabel choice={choice} />
-                </div>
-              )}
-            </For>
-          </div>
+            label={found().kind === "mention" ? "Persons" : "Tasks and Projects"}
+            choices={choices()}
+            highlight={highlight()}
+            optionId={optionId}
+            onChoose={choose}
+          />
         )}
       </Show>
       <form
@@ -317,63 +267,4 @@ export function Composer(props: {
       </form>
     </div>
   );
-}
-
-/** The records the Offline Copy holds of a Context that a picker offers for what was typed. */
-function heldChoices(
-  context: string,
-  kind: LinkQuery["kind"],
-  typed: string,
-  timeZone: string,
-): Choice[] {
-  if (kind === "mention") {
-    return personChoices(personsHeld(context, typed), timeZone).slice(0, OFFERED);
-  }
-  const { projects, tasks } = referencesHeld(context, typed);
-  return [...projects.map(projectChoice), ...tasks.map(taskChoice)].slice(0, OFFERED);
-}
-
-function ChoiceLabel(props: { choice: Choice }) {
-  const { to, name, detail } = props.choice;
-  if (to.kind === "new_person") return <>New Person “{name}”</>;
-  if (to.kind === "new_project") return <>New Project “{name}”</>;
-  return (
-    <>
-      <span class="choice-name">{name}</span>
-      <Show when={detail}>{(said) => <span class="choice-detail"> · {said()}</span>}</Show>
-    </>
-  );
-}
-
-/**
- * The Persons offered, each told apart from another with the same name by the latest Entry that
- * Mentions them. The picker never takes two such Persons to be one.
- */
-function personChoices(persons: Person[], timeZone: string): Choice[] {
-  const named = Map.groupBy(persons, (person) => person.name);
-  return persons.map((person) => ({
-    name: person.name,
-    detail: (named.get(person.name)?.length ?? 0) > 1 ? latestMention(person, timeZone) : null,
-    to: { kind: "person", id: person.id },
-  }));
-}
-
-function latestMention(person: Person, timeZone: string): string {
-  const latest = person.latest_mention;
-  if (!latest) return "never Mentioned";
-  const day = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone });
-  return `last in “${latest.summary}”, ${day.format(new Date(latest.at))}`;
-}
-
-/** Each end as the screen names it. */
-const END: Record<End, string> = { finished: "Finished", dropped: "Dropped" };
-
-function projectChoice(project: Project): Choice {
-  const state = project.state.is === "open" ? "Project" : `Project, ${END[project.state.is]}`;
-  return { name: project.name, detail: state, to: { kind: "project", id: project.id } };
-}
-
-function taskChoice(task: Task): Choice {
-  const state = task.state.is === "open" ? "Task" : `Task, ${END[task.state.is]}`;
-  return { name: task.title, detail: state, to: { kind: "task", id: task.id } };
 }

@@ -25,7 +25,13 @@ import { recordAnchor } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { onPhone } from "./media.ts";
-import { type Narrowing, NOT_NARROWED, narrowingInputs } from "./narrowing.ts";
+import {
+  everythingSaid,
+  type Narrowing,
+  NOT_NARROWED,
+  narrowingInputs,
+  standsAlone,
+} from "./narrowing.ts";
 import { SearchChips } from "./SearchChips.tsx";
 import { createFinishing, DueMark, TaskMarks } from "./TaskItem.tsx";
 import { needsNetwork, useCallTool } from "./tools.ts";
@@ -48,9 +54,9 @@ const PROJECT_STATE: Record<ProjectState["is"], string> = {
 
 /**
  * Search in the Journal column (sections 8.4 and 9.4): one field, the chips under it that narrow
- * it, and while the field holds words, what
- * `search` finds in place of the Entries, from words and from meaning, and a line saying so when
- * it is from words alone. What is found is grouped by kind under Attention's headings, each hit
+ * it, and while the field holds words, what `search` finds in place of the Entries, from words and
+ * from meaning, and a line saying so when it is from words alone. A Project chip with no words
+ * lists everything in it, newest first, and a Project found narrows the search to it. What is found is grouped by kind under Attention's headings, each hit
  * saying when it was made as the Journal's days do, and by whom when not by the person. An Entry
  * or a Task found is brought into view in the Journal. A Task and a Project found say where they
  * stand as Attention does, and a Task is finished or reopened there. An excerpt is plain text with what
@@ -98,9 +104,12 @@ export function createSearch(props: {
   // answer, whose cursor reads the same as the newer one's, so it is dropped.
   let answers = 0;
 
-  /** The `search` tool's input for what is asked, the time chip's days from today there. */
+  /**
+   * The `search` tool's input for what is asked, the time chip's days from today there. With no
+   * words, it asks for everything a Project chip holds.
+   */
   const inputOf = (asked: Query) => ({
-    words: asked.words,
+    ...(asked.words.trim() === "" ? {} : { words: asked.words }),
     ...narrowingInputs(asked.narrowing, todayIn(props.timeZone)),
   });
 
@@ -131,9 +140,9 @@ export function createSearch(props: {
     if (asking()) await find(query());
   }
 
-  // A time chip alone asks nothing: the Journal's days already show a time (section 8.4).
-  // #122 asks with no words too, once a Project, a Person or an Author chip is set.
-  const asking = () => words().trim() !== "";
+  // A time chip alone asks nothing: the Journal's days already show a time (section 8.4). A
+  // Project chip asks with no words, for everything it holds, newest first.
+  const asking = () => words().trim() !== "" || standsAlone(narrowing());
   // Meaning is asked with the words unless the answer says it is from words alone; with no words,
   // nothing is found by meaning.
   const meaningAsked = () => words().trim() !== "" && wordsOnly() === null;
@@ -187,7 +196,10 @@ export function createSearch(props: {
     ask("");
   }
 
-  /** Back, on a phone: the search ends, words and chips both, and the Journal is as it was left. */
+  /**
+   * The search ends, words and chips both, and the Journal is as it was left: by back on a phone,
+   * and by opening a hit, so the Journal shows it.
+   */
   function end() {
     setNarrowing(NOT_NARROWED);
     close();
@@ -195,7 +207,13 @@ export function createSearch(props: {
 
   function show(place: JournalPlace) {
     props.onShowInJournal(place.entry, place.anchor);
-    close();
+    end();
+  }
+
+  /** Narrow the search to a Project found, a closed one too, in place of the words. */
+  function narrowTo(project: { id: string; summary: string }) {
+    setNarrowing({ ...narrowing(), project: { id: project.id, name: project.summary } });
+    ask("");
   }
 
   const Field = () => (
@@ -218,7 +236,9 @@ export function createSearch(props: {
           <input
             id="journal-search-words"
             type="search"
-            placeholder="Search"
+            placeholder={
+              narrowing().project ? `Search within ${narrowing().project?.name}` : "Search"
+            }
             autocomplete="off"
             value={words()}
             onFocus={() => setOpened(onPhone())}
@@ -366,9 +386,10 @@ export function createSearch(props: {
     const hit = shown.hit;
     const open = () => (hit.state.is === "open" ? hit.state : null);
     return (
-      // #122 makes a Project found narrow the search to it.
+      // A Project found narrows the search to it, so a closed one, which Attention never opens,
+      // leads to everything in it too.
       <li class="search-hit search-project" data-testid="search-hit">
-        <span class="search-hit-body">
+        <button type="button" class="search-hit-body" onClick={() => narrowTo(hit)}>
           <span class="visually-hidden">{KIND.project}, </span>
           <ExcerptShown excerpt={hit.excerpt} />
           <span class="search-hit-meta">
@@ -393,7 +414,7 @@ export function createSearch(props: {
               )}
             </Show>
           </span>
-        </span>
+        </button>
       </li>
     );
   };
@@ -406,7 +427,9 @@ export function createSearch(props: {
             <p class="search-count" role="status">
               {found().length === 0
                 ? "Nothing found"
-                : `Found ${found().length}${nextCursor() === null ? "" : " and more"}`}
+                : words().trim() === ""
+                  ? everythingSaid(narrowing())
+                  : `Found ${found().length}${nextCursor() === null ? "" : " and more"}`}
             </p>
           )}
         </Show>
