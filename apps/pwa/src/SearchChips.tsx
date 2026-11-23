@@ -1,9 +1,11 @@
-import type { Day } from "@praxis/domain";
+import type { Connection, Day } from "@praxis/domain";
 import Folder from "lucide-solid/icons/folder";
-import { createSignal, For } from "solid-js";
+import { createSignal, For, onMount, Show } from "solid-js";
 import { todayIn } from "./days.tsx";
 import { Chip, type ChipHeld } from "./design/Chip.tsx";
 import {
+  type AuthorNarrowing,
+  authorSaid,
   LAST_DAYS,
   lastDaysSaid,
   type Narrowing,
@@ -12,7 +14,7 @@ import {
   timeSaid,
 } from "./narrowing.ts";
 import { ChoicePicker, referencesOffered } from "./Pickers.tsx";
-import { useCallTool, useContextId } from "./tools.ts";
+import { callDeploymentTool, useCallTool, useContextId } from "./tools.ts";
 
 /**
  * The chips under the search field (section 8.4), in the order time, Project, Person, Author,
@@ -61,9 +63,91 @@ export function SearchChips(props: {
           />
         )}
       />
-      {/* #123 adds the Person chip and #124 the Author chip, in that order. */}
+      {/* #123 adds the Person chip here, before the Author's. */}
+      <Chip
+        name="Author"
+        label="Author"
+        held={authorHeld(props.narrowing.author)}
+        onLift={() => narrow({ author: null })}
+        picker={(putAway) => (
+          <AuthorPicker
+            onPick={(author) => {
+              putAway();
+              narrow({ author });
+            }}
+          />
+        )}
+      />
     </fieldset>
   );
+}
+
+/** What the Author chip says it holds, "By Claude Code", or null while it is not set. */
+function authorHeld(author: AuthorNarrowing | null): ChipHeld | null {
+  if (author === null) return null;
+  const said = authorSaid(author);
+  return { shown: `By ${said}`, named: `Author: ${said}` };
+}
+
+/** A Connection the Author chip offers by its name, and whether every one so named has ended. */
+type NamedConnection = { name: string; ended: boolean };
+
+/**
+ * The Author chip's picker: you, the Agent, any Connection, and each Connection of this Context by
+ * its name, in the order they were made, an ended one too, marked so, since its name stays on what
+ * it made. A name two Connections share is offered once, as the search finds it by its name.
+ */
+function AuthorPicker(props: { onPick: (author: AuthorNarrowing) => void }) {
+  const contextId = useContextId();
+  const [connections, setConnections] = createSignal<NamedConnection[]>([]);
+  onMount(async () => {
+    try {
+      const listed = await callDeploymentTool("list_connections", { ended: true });
+      if (listed.ok) setConnections(namedOnce(listed.value.items, contextId));
+    } catch {
+      // Unreached, the picker offers the Authors that need no list.
+    }
+  });
+  const choice = (label: string, author: AuthorNarrowing) => (
+    <li>
+      <button type="button" onClick={() => props.onPick(author)}>
+        {label}
+      </button>
+    </li>
+  );
+  return (
+    <ul class="chip-choices">
+      {choice("You", { kind: "person" })}
+      {choice("The Agent", { kind: "agent" })}
+      {choice("Any Connection", { kind: "connection" })}
+      <For each={connections()}>
+        {(connection) => (
+          <li>
+            <button
+              type="button"
+              onClick={() => props.onPick({ kind: "connection", name: connection.name })}
+            >
+              {connection.name}
+              <Show when={connection.ended}>
+                <span class="choice-detail"> · Ended</span>
+              </Show>
+            </button>
+          </li>
+        )}
+      </For>
+    </ul>
+  );
+}
+
+/** A Context's Connections by name, each name once, where it first came, ended if all so named are. */
+function namedOnce(connections: Connection[], contextId: string): NamedConnection[] {
+  const named = new Map<string, NamedConnection>();
+  for (const { name, context_id, ended } of connections) {
+    if (context_id !== contextId) continue;
+    const earlier = named.get(name);
+    named.set(name, { name, ended: ended && (earlier?.ended ?? true) });
+  }
+  return [...named.values()];
 }
 
 /** What a chip that narrows to a record says it holds: its name, or null while it is not set. */

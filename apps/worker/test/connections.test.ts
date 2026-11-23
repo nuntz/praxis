@@ -115,6 +115,21 @@ describe("list_connections", () => {
 
     expect(await listed(deployment)).toEqual([first, third]);
   });
+
+  test("asked for the ended ones too, lists them in their place, each marked ended", async () => {
+    const deployment = newDeployment();
+    const { id: work } = await contextIn(deployment, "Work");
+    const { id: home } = await contextIn(deployment, "Home");
+    const first = await connect(deployment, work, "Claude Code");
+    const second = await connect(deployment, home, "ChatGPT");
+    const third = await connect(deployment, work, "Claude");
+    value(await deployment.call(hand, "end_connection", { id: first.id }));
+
+    const all = value(await deployment.call(hand, "list_connections", { ended: true })).items;
+
+    expect(all).toEqual([{ ...first, ended: true }, second, third]);
+    expect(await listed(deployment)).toEqual([second, third]);
+  });
 });
 
 describe("rename_connection", () => {

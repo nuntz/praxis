@@ -149,8 +149,8 @@ export const deploymentTools = {
   list_connections: {
     kind: "read",
     description:
-      "List the Connections not ended, in the order they were made, each with its name, its Context, whether it reads only and its address.",
-    input: z.strictObject({}),
+      "List the Connections not ended, in the order they were made, each with its name, its Context, whether it reads only and its address. Give `ended: true` to list the ended ones too, in their place, each marked ended, since an ended Connection's name stays on what it made.",
+    input: z.strictObject({ ended: z.boolean().optional() }),
   },
   create_connection: {
     kind: "write",

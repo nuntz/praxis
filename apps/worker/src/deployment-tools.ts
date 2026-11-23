@@ -216,11 +216,12 @@ export const deploymentHandlers: Omit<
     );
   },
 
-  async list_connections({ sql }) {
+  async list_connections({ input, sql }) {
     const rows = sql
       .exec<ConnectionRow>(
         `SELECT id, name, context_id, reading_only, ended FROM connections
-         WHERE ended = 0 ORDER BY seq`,
+         WHERE ended = 0 OR ? ORDER BY seq`,
+        input.ended ? 1 : 0,
       )
       .toArray();
     return success({ items: rows.map(toConnection) });
