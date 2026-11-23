@@ -14,7 +14,7 @@ import type { Person } from "./person.ts";
 import type { Project } from "./project.ts";
 import { newRecurrence } from "./recurrence.ts";
 import { failure, type ToolResult } from "./results.ts";
-import { hasWords, narrows, type SearchIndex, type SearchResults } from "./search.ts";
+import { hasWords, narrowsSearch, type SearchIndex, type SearchResults } from "./search.ts";
 import { clockTime, type Settings, weekday } from "./settings.ts";
 import type { Task } from "./task.ts";
 import type { Removal, TrashItem } from "./trash.ts";
@@ -598,7 +598,7 @@ export const tools = {
           .optional(),
         cursor,
       })
-      .refine((input) => hasWords(input) || narrows(input), {
+      .refine((input) => hasWords(input) || narrowsSearch(input), {
         message: "A search needs words.",
         path: ["words"],
       })

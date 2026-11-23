@@ -1,5 +1,5 @@
 import type { Page, TestInfo } from "@playwright/test";
-import { callContextTool, contextOfOwn, expect, openJournal, test } from "./fixtures.ts";
+import { callContextTool, contextOfOwn, expect, openJournal, pickTime, test } from "./fixtures.ts";
 
 // The Person chip narrows search to a Person, with words or without, and a Person found leads to
 // everything about them (section 8.4). Its picker is the composer's `@` picker. With no words, a
@@ -92,11 +92,7 @@ test("the Person chip picks a Person as `@` does and lists everything about them
   await expect(excerpts).toHaveCount(3);
 
   // The Person chip combines with the time chip and with the Project chip.
-  await chips.getByRole("button", { name: "Any time" }).click();
-  await journal
-    .getByRole("dialog", { name: "Time" })
-    .getByRole("button", { name: "Last 7 days" })
-    .click();
+  await pickTime(page, "Last 7 days");
   await expect(found.getByRole("status")).toHaveText(
     `Everything from the last 7 days about ${ana}, newest first`,
   );

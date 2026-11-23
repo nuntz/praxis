@@ -1,5 +1,5 @@
 import type { Locator, Page, TestInfo } from "@playwright/test";
-import { callContextTool, contextOfOwn, expect, openJournal, test } from "./fixtures.ts";
+import { callContextTool, contextOfOwn, expect, openJournal, pickTime, test } from "./fixtures.ts";
 
 // Chips under the search field narrow what is found (section 8.4). The time chip keeps a search to
 // days reckoned in the Context's time zone from today there, both ends included, and sends them as
@@ -180,6 +180,11 @@ test("the time chip keeps a search to recent days, says what it holds, and lifts
   await anyTime.click();
   await picker.getByRole("button", { name: "Today" }).click();
   await expect(excerpts).toHaveText([`Just now ${tag}`]);
+
+  // Left on the time chip's list alone with its count, so the accessibility check sees them.
+  await field.fill("");
+  await expect(status).toHaveText("Everything from today, newest first");
+  await expect(excerpts).toHaveText([`Just now ${tag}`]);
 });
 
 test("the time chip reckons its days in the Context's zone, a range of days held at both ends, and is worked from the keyboard", async ({
@@ -224,12 +229,6 @@ test("the time chip reckons its days in the Context's zone, a range of days held
   const todayChip = chips.getByRole("button", { name: "Today, remove" });
   await expect(todayChip).toBeFocused();
   await expect(excerpts).toHaveText([`Today ${tag}`]);
-  // With no words, it lists what was made today there, and not what was made the day before.
-  await field.fill("");
-  await expect(status).toHaveText("Everything from today, newest first");
-  await expect(excerpts).toHaveText([`Today ${tag}`]);
-  await field.fill(tag);
-  await todayChip.focus();
   await page.keyboard.press("Enter");
   await expect(anyTime).toBeFocused();
   await expect(excerpts).toHaveCount(6);
@@ -252,9 +251,17 @@ test("the time chip reckons its days in the Context's zone, a range of days held
   await expect(status).toHaveText(`Everything from ${range}, newest first`);
   await expect(excerpts).toHaveText([`Last day ${tag}`, `First day ${tag}`]);
   await field.fill(tag);
+  await rangeChip.click();
+
+  // With no words, Today lists what was made today there, and not what was made the day before.
+  await pickTime(page, "Today");
+  await field.fill("");
+  await expect(status).toHaveText("Everything from today, newest first");
+  await expect(excerpts).toHaveText([`Today ${tag}`]);
+  await field.fill(tag);
+  await todayChip.click();
 
   // Escape puts the picker away and leaves the search as it was.
-  await rangeChip.click();
   await expect(excerpts).toHaveCount(6);
   await anyTime.click();
   await expect(picker).toBeVisible();

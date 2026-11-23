@@ -1,5 +1,13 @@
 import type { Page, TestInfo } from "@playwright/test";
-import { callContextTool, contextOfOwn, expect, onPhone, openJournal, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  contextOfOwn,
+  expect,
+  onPhone,
+  openJournal,
+  pickTime,
+  test,
+} from "./fixtures.ts";
 
 // The Project chip narrows search to a Project, with words or without, and a Project found leads
 // into it (section 8.4). Its picker is the composer's `#` picker, offering Projects alone, the
@@ -90,11 +98,7 @@ test("the Project chip picks a Project as `#` does, closed ones marked, and list
   await expect(excerpts).toHaveCount(3);
 
   // The Project chip and the time chip combine, the count naming the time first.
-  await chips.getByRole("button", { name: "Any time" }).click();
-  await journal
-    .getByRole("dialog", { name: "Time" })
-    .getByRole("button", { name: "Today" })
-    .click();
+  await pickTime(page, "Today");
   await expect(found.getByRole("status")).toHaveText(
     `Everything from today in ${kitchen}, newest first`,
   );

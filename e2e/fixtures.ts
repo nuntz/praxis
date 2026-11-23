@@ -70,6 +70,16 @@ export async function openJournal(page: Page, testInfo: TestInfo) {
   return { journal, composer: journal.getByRole("textbox", { name: /^Record an Entry in / }) };
 }
 
+/** A preset of the search's time chip picked from its picker, the chip not set before. */
+export async function pickTime(page: Page, name: "Today" | "Last 7 days" | "Last 30 days") {
+  const journal = page.getByRole("region", { name: "Journal" });
+  await journal
+    .getByRole("group", { name: "Narrow the search" })
+    .getByRole("button", { name: "Any time" })
+    .click();
+  await journal.getByRole("dialog", { name: "Time" }).getByRole("button", { name }).click();
+}
+
 /** An Entry's actions its toolbar shows, where the Device has a pointer that hovers. */
 const FREQUENT = ["Edit", "Follow up", "Mark Standing", "Unmark Standing"];
 

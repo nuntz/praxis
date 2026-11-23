@@ -100,7 +100,7 @@ export function hasWords(input: { words?: string | undefined }): boolean {
  * Whether a search is narrowed, by a range of days, a Project, a Person or an Author, any one or
  * more: then it lists with no words, everything the narrowing holds (section 9.4).
  */
-export function narrows(input: {
+export function narrowsSearch(input: {
   from?: string | undefined;
   to?: string | undefined;
   project_id?: string | undefined;

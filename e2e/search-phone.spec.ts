@@ -1,5 +1,13 @@
 import type { Locator, Page, TestInfo } from "@playwright/test";
-import { callContextTool, contextOfOwn, expect, onPhone, openJournal, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  contextOfOwn,
+  expect,
+  onPhone,
+  openJournal,
+  pickTime,
+  test,
+} from "./fixtures.ts";
 
 // On a phone, search is a screen of its own in the Journal tab: a back arrow beside the field, the
 // chips in one row that scrolls sideways, what is found and the tab bar, with no composer; back
@@ -88,11 +96,7 @@ test("on a phone, search is a screen of its own whose back arrow returns to the 
 
   // Every chip, tick and hit is a touch target, set or not.
   await expectTappable(chips.getByRole("button"));
-  await chips.getByRole("button", { name: "Any time" }).click();
-  await journal
-    .getByRole("dialog", { name: "Time" })
-    .getByRole("button", { name: "Last 7 days" })
-    .click();
+  await pickTime(page, "Last 7 days");
   const set = chips.getByRole("button", { name: "Last 7 days, remove" });
   await expect(set).toBeVisible();
   await expectTappable(chips.getByRole("button"));

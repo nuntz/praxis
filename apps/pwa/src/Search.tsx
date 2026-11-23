@@ -1,6 +1,6 @@
 import {
   hasWords,
-  narrows,
+  narrowsSearch,
   type SearchHit,
   type Task,
   type WordsOnly,
@@ -144,7 +144,7 @@ export function createSearch(props: {
   // the tool takes it (section 8.4).
   const asking = () => {
     const input = inputOf(query());
-    return hasWords(input) || narrows(input);
+    return hasWords(input) || narrowsSearch(input);
   };
   // On a phone the search is a screen of its own from the moment its field is entered, in place of
   // the Journal's Entries before it asks anything; wider, the Entries stay until it asks.

@@ -1,5 +1,13 @@
 import type { TestInfo } from "@playwright/test";
-import { callContextTool, contextOfOwn, expect, onPhone, openJournal, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  contextOfOwn,
+  expect,
+  onPhone,
+  openJournal,
+  pickTime,
+  test,
+} from "./fixtures.ts";
 
 // Search says what to do, and gets out of the way when asked (section 8.4): the clear button clears
 // the words alone, Escape or opening a hit ends the search, `/` reaches the field, the empty field
@@ -21,14 +29,7 @@ async function openSearch(page: import("@playwright/test").Page, testInfo: TestI
   const chips = journal.getByRole("group", { name: "Narrow the search" });
   const found = journal.getByRole("region", { name: "Found" });
   const excerpts = found.getByTestId("search-excerpt");
-  const lastWeek = async () => {
-    await chips.getByRole("button", { name: "Any time" }).click();
-    await journal
-      .getByRole("dialog", { name: "Time" })
-      .getByRole("button", { name: "Last 7 days" })
-      .click();
-  };
-  return { journal, composer, field, chips, found, excerpts, lastWeek };
+  return { journal, composer, field, chips, found, excerpts };
 }
 
 test("the clear button clears the words and keeps the chips, and Escape or opening a hit ends the search, chips and all", async ({
@@ -41,7 +42,7 @@ test("the clear button clears the words and keeps the chips, and Escape or openi
     words: `Long ago ${tag}`,
     made_at: new Date(Date.now() - 20 * DAY).toISOString(),
   });
-  const { journal, field, chips, found, excerpts, lastWeek } = await openSearch(page, testInfo);
+  const { journal, field, chips, found, excerpts } = await openSearch(page, testInfo);
   const clear = journal.getByRole("button", { name: "Clear the words" });
   // On a phone the search is a screen of its own, with a back arrow, until it ends.
   const back = journal.getByRole("button", { name: "Back to the Journal" });
@@ -49,7 +50,7 @@ test("the clear button clears the words and keeps the chips, and Escape or openi
   // With no words, there is nothing to clear.
   await expect(clear).toHaveCount(0);
 
-  await lastWeek();
+  await pickTime(page, "Last 7 days");
   await field.fill(tag);
   await expect(excerpts).toHaveText([`Just now ${tag}`]);
 
@@ -80,13 +81,13 @@ test("the clear button clears the words and keeps the chips, and Escape or openi
   await screenOwn(0);
 
   // Pressed on a chip set, with no words, it ends the search too.
-  await lastWeek();
+  await pickTime(page, "Last 7 days");
   await expect(setChip).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(chips.getByRole("button", { name: "Any time" })).toBeFocused();
 
   // Opening a hit ends the search, the chips with it.
-  await lastWeek();
+  await pickTime(page, "Last 7 days");
   await field.fill(tag);
   await screenOwn(1);
   await found.getByRole("link", { name: new RegExp(`Just now ${tag}`) }).click();
@@ -147,19 +148,12 @@ test("Nothing found names the words and offers to lift each chip set, which read
     words: `Long ago ${tag}`,
     made_at: new Date(Date.now() - 20 * DAY).toISOString(),
   });
-  const { journal, field, chips, found, excerpts, lastWeek } = await openSearch(page, testInfo);
+  const { journal, field, chips, found, excerpts } = await openSearch(page, testInfo);
   const status = found.getByRole("status");
-  const today = async () => {
-    await chips.getByRole("button", { name: "Any time" }).click();
-    await journal
-      .getByRole("dialog", { name: "Time" })
-      .getByRole("button", { name: "Today" })
-      .click();
-  };
 
   // The time chip alone, nothing made in its days: lifting it shows the Journal's Entries again, and
   // on a phone keeps the search's screen, as the field takes the cursor.
-  await today();
+  await pickTime(page, "Today");
   await expect(status).toContainText("Nothing found");
   await expect(status).toContainText("Nothing before today is searched.");
   await expect(found.getByRole("button")).toHaveText(["Search any time"]);
@@ -181,7 +175,7 @@ test("Nothing found names the words and offers to lift each chip set, which read
   await expect(found.getByRole("button")).toHaveCount(0);
 
   await field.fill(tag);
-  await lastWeek();
+  await pickTime(page, "Last 7 days");
   await expect(status).toContainText(`Nothing found for “${tag}”`);
   await expect(status).toContainText("Nothing older than 7 days is searched.");
   const offer = found.getByRole("button", { name: "Search any time" });
@@ -190,7 +184,7 @@ test("Nothing found names the words and offers to lift each chip set, which read
   await expect(excerpts).toHaveText([`Long ago ${tag}`]);
   await expect(field).toBeFocused();
 
-  await today();
+  await pickTime(page, "Today");
   await expect(found.getByRole("button", { name: "Search any time" })).toBeVisible();
   await expect(status).toContainText("Nothing before today is searched.");
 

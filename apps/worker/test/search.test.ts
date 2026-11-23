@@ -655,7 +655,11 @@ describe("search", () => {
   });
 
   test("with no words, gives 50 to a page, newest first, and a cursor to the next", async () => {
-    const context = newContext();
+    // Made from 09:00 on the 15th in UTC, so the 15th onward holds every one.
+    const context = newContext("2026-11-15T09:00:00.000Z", {
+      name: "Personal",
+      time_zone: "UTC",
+    });
     const made: string[] = [];
     for (let receipt = 0; receipt < 53; receipt++) {
       made.unshift(`entry:${(await anEntry(context, marked("Kept"))).id}`);

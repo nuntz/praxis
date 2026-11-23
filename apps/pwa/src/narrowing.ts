@@ -46,9 +46,33 @@ type LastDays = 1 | 7 | 30;
 /** The time chip's presets, in the order offered. */
 export const LAST_DAYS: LastDays[] = [1, 7, 30];
 
+/** What the time chip says of what it holds, wherever the screen says it, besides its name. */
+type TimeSaid = Pick<ChipSaid, "shown" | "kept" | "everything">;
+
+/** Each preset's wording: what it is called, offered and once set, and what it says it holds. */
+const LAST_DAYS_SAID: Record<LastDays, TimeSaid> = {
+  1: { shown: "Today", kept: "Nothing before today is searched.", everything: "from today" },
+  7: {
+    shown: "Last 7 days",
+    kept: "Nothing older than 7 days is searched.",
+    everything: "from the last 7 days",
+  },
+  30: {
+    shown: "Last 30 days",
+    kept: "Nothing older than 30 days is searched.",
+    everything: "from the last 30 days",
+  },
+};
+
+/** A range of days' wording, from its days as the chip says them: "Jun 1 – 30". */
+function rangeSaid(from: Day, to: Day, today: Day): TimeSaid {
+  const shown = daysSaid(from, to, today);
+  return { shown, kept: `Nothing outside ${shown} is searched.`, everything: `from ${shown}` };
+}
+
 /** What a preset of the time chip is called, offered and once set. */
 export function lastDaysSaid(days: LastDays): string {
-  return days === 1 ? "Today" : `Last ${days} days`;
+  return LAST_DAYS_SAID[days].shown;
 }
 
 /** The `search` tool's inputs that narrow it, as a narrowing sets them. */
@@ -89,11 +113,6 @@ export function lifted(narrowing: Narrowing, chip: keyof Narrowing): Narrowing {
   return { ...narrowing, [chip]: null };
 }
 
-/** What the time chip says it holds once set: "Last 7 days", or its range's days. */
-function timeSaid(time: TimeNarrowing, today: Day): string {
-  return time.kind === "last" ? lastDaysSaid(time.days) : daysSaid(time.from, time.to, today);
-}
-
 /** What a chip set says of what it holds, wherever the screen says it (section 8.4). */
 type ChipSaid = {
   chip: keyof Narrowing;
@@ -105,7 +124,10 @@ type ChipSaid = {
   kept: string;
   /** Under Nothing found, its offer: a button that lifts it. */
   offer: string;
-  /** What the count of a list with no words says of it: "from today", "by Claude Code". */
+  /**
+   * What the count of a list with no words says of it, with its own "from", "in", "about" or
+   * "by": "from today", "by Claude Code".
+   */
   everything: string;
 };
 
@@ -120,14 +142,9 @@ const SAID: {
   ) => Omit<ChipSaid, "chip">;
 } = {
   time: (time, today) => {
-    const said = timeSaid(time, today);
-    return {
-      shown: said,
-      named: said,
-      kept: timeKept(time, today),
-      offer: "Search any time",
-      everything: `from ${timeEverything(time, today)}`,
-    };
+    const said =
+      time.kind === "last" ? LAST_DAYS_SAID[time.days] : rangeSaid(time.from, time.to, today);
+    return { ...said, named: said.shown, offer: "Search any time" };
   },
   project: (project) => ({
     shown: project.name,
@@ -157,19 +174,6 @@ const SAID: {
 
 /** The chips, in the order the row shows them and the screen says what each holds. */
 export const CHIPS = Object.keys(SAID) as (keyof Narrowing)[];
-
-/** What the count of a list with no words says the time chip holds, after "from". */
-function timeEverything(time: TimeNarrowing, today: Day): string {
-  if (time.kind === "range") return timeSaid(time, today);
-  return time.days === 1 ? "today" : `the last ${time.days} days`;
-}
-
-/** What the time chip keeps out of the search. */
-function timeKept(time: TimeNarrowing, today: Day): string {
-  if (time.kind === "range") return `Nothing outside ${timeSaid(time, today)} is searched.`;
-  if (time.days === 1) return "Nothing before today is searched.";
-  return `Nothing older than ${time.days} days is searched.`;
-}
 
 /** What one chip says of what it holds, or null while it is not set. */
 export function chipSaid<Chip extends keyof Narrowing>(
