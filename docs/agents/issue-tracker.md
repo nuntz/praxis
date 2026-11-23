@@ -30,6 +30,8 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 Create a GitHub issue. A spec's tickets hold every one of its user stories between them: each ticket names the numbers of the stories its criteria hold, and a story no ticket names gets a ticket of its own before any is built. #107's stories 35 and 49 sat in no ticket, and its review found them missing only once all nine were built.
 
+A spec's claim about the code as it is ("as Attention says it", "the Deployment's list of Connections", "the composer's picker, reused") is read in the code before publishing, and a false one is rewritten as a change to build. #117 named Attention's wording, ended Connections and a reusable picker that the code did not have. Name each ADR whose decision the spec changes beside the SPEC sections, as #117 changed ADR 0023's "one ranked list from words and from meaning" and named only 9.4.
+
 A ticket with an acceptance criterion that needs what another open ticket builds (a refusal for a state that ticket makes, a reason that ticket gives) is blocked by it: add the edge as in **Blocking** below, or write the stand-in into the criterion.
 
 ## When a skill says "fetch the relevant ticket"
