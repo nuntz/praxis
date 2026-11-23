@@ -68,6 +68,31 @@ function dayLabel(day: Day, today: Day, weekday: Weekday = "long"): string {
   return format.format(utcMidnight(day));
 }
 
+/** A range of days as the Device's locale writes it, by whether either day is of another year. */
+const ranged: Record<"thisYear" | "anotherYear", Intl.DateTimeFormat> = {
+  thisYear: new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }),
+  anotherYear: new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }),
+};
+
+/**
+ * A range of days, both ends included, as the Device's locale writes it: "Nov 3 – 9", or one day
+ * alone when both ends are the same, with a year only when either is of another year than today's.
+ */
+export function daysSaid(from: Day, to: Day, today: Day): string {
+  const year = yearOf(today);
+  const format = ranged[yearOf(from) === year && yearOf(to) === year ? "thisYear" : "anotherYear"];
+  return format.formatRange(utcMidnight(from), utcMidnight(to));
+}
+
 /**
  * When something was made, where no day's caption is over it, as in what a search finds: its day
  * as the Journal's captions reckon it in a zone, the Context's, with the weekday shortened, then

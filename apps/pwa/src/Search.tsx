@@ -6,13 +6,16 @@ import ChevronUp from "lucide-solid/icons/chevron-up";
 import Circle from "lucide-solid/icons/circle";
 import Folder from "lucide-solid/icons/folder";
 import User from "lucide-solid/icons/user";
-import { createSignal, For, Index, onCleanup, Show } from "solid-js";
+import { createMemo, createSignal, For, Index, onCleanup, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { authorName } from "./authors.ts";
+import { todayIn } from "./days.tsx";
 import { SectionTitle } from "./design/SectionTitle.tsx";
 import { recordAnchor } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
+import { type Narrowing, NOT_NARROWED, narrowingInputs } from "./narrowing.ts";
+import { SearchChips } from "./SearchChips.tsx";
 import { needsNetwork, useCallTool } from "./tools.ts";
 
 /** Search runs on the server, over the whole Journal, so it needs the network (section 8.8). */
@@ -26,7 +29,8 @@ const KIND: Record<SearchHit["kind"], string> = {
 };
 
 /**
- * Search in the Journal column (sections 8.4 and 9.4): one field, and while it holds words, what
+ * Search in the Journal column (sections 8.4 and 9.4): one field, the chips under it that narrow
+ * it, and while the field holds words, what
  * `search` finds in place of the Entries, from words and from meaning, and a line saying so when
  * it is from words alone. What is found is grouped by kind under Attention's headings, each hit
  * saying when it was made as the Journal's days do, and by whom when not by the person. An Entry
@@ -37,6 +41,8 @@ const KIND: Record<SearchHit["kind"], string> = {
  * nothing scrolls under it, and what is found inside it, where the Entries are.
  */
 export function createSearch(props: {
+  /** The Context's time zone, which the time chip's days are reckoned in. */
+  timeZone: string;
   /**
    * When a record found was made: its day as the Journal reckons it, and its time, in the
    * Context's zone.
@@ -48,6 +54,9 @@ export function createSearch(props: {
   const callTool = useCallTool();
   const live = useLive();
   const [words, setWords] = createSignal("");
+  const [narrowing, setNarrowing] = createSignal<Narrowing>(NOT_NARROWED);
+  // What is asked: the words and the narrowing together, a new one on each change to either.
+  const query = createMemo((): Query => ({ words: words(), narrowing: narrowing() }));
   const [hits, setHits] = createSignal<SearchHit[] | null>(null);
   const [nextCursor, setNextCursor] = createSignal<string | null>(null);
   const [wordsOnly, setWordsOnly] = createSignal<WordsOnly | null>(null);
@@ -58,14 +67,20 @@ export function createSearch(props: {
   // answer, whose cursor reads the same as the newer one's, so it is dropped.
   let answers = 0;
 
-  // Each change to the words asks afresh, and only the answer to the latest is shown.
-  const { read: find, changed } = latestRead(async (current, asked: string) => {
+  /** The `search` tool's input for what is asked, the time chip's days from today there. */
+  const inputOf = (asked: Query) => ({
+    words: asked.words,
+    ...narrowingInputs(asked.narrowing, todayIn(props.timeZone)),
+  });
+
+  // Each change to the words or the chips asks afresh, and only the answer to the latest is shown.
+  const { read: find, changed } = latestRead(async (current, asked: Query) => {
     try {
       // Read once the live channel is open, so a change made meanwhile is either read or brought.
       await live.ready;
-      const result = await callTool("search", { words: asked });
+      const result = await callTool("search", inputOf(asked));
       // Emptied meanwhile, the field asks nothing: its answer would show under no words.
-      if (!current() || words() !== asked) return;
+      if (!current() || query() !== asked) return;
       if (!result.ok) return setProblem(result.error.message);
       answers += 1;
       setProblem(null);
@@ -73,7 +88,7 @@ export function createSearch(props: {
       setNextCursor(result.value.next_cursor);
       setWordsOnly(result.value.words_only);
     } catch (error) {
-      if (current() && words() === asked) setProblem(needsNetwork(error, SEARCH_NEEDS_NETWORK));
+      if (current() && query() === asked) setProblem(needsNetwork(error, SEARCH_NEEDS_NETWORK));
     }
   });
 
@@ -82,9 +97,11 @@ export function createSearch(props: {
   onCleanup(live.listen({ changed: refind, readAfresh: refind }));
 
   async function refind(): Promise<void> {
-    if (asking()) await find(words());
+    if (asking()) await find(query());
   }
 
+  // A time chip alone asks nothing: the Journal's days already show a time (section 8.4).
+  // #122 asks with no words too, once a Project, a Person or an Author chip is set.
   const asking = () => words().trim() !== "";
   // Meaning is asked with the words unless the answer says it is from words alone; with no words,
   // nothing is found by meaning.
@@ -93,6 +110,15 @@ export function createSearch(props: {
   function ask(typed: string) {
     setWords(typed);
     setMeaningUnfolded(false);
+    askAgain();
+  }
+
+  function narrow(narrowed: Narrowing) {
+    setNarrowing(narrowed);
+    askAgain();
+  }
+
+  function askAgain() {
     if (!asking()) {
       answers += 1;
       setHits(null);
@@ -103,15 +129,15 @@ export function createSearch(props: {
       changed();
       return;
     }
-    void find(typed);
+    void find(query());
   }
 
   async function showMore(cursor: string) {
-    const asked = words();
+    const asked = query();
     const after = answers;
-    const stillAsked = () => words() === asked && answers === after;
+    const stillAsked = () => query() === asked && answers === after;
     try {
-      const result = await callTool("search", { words: asked, cursor });
+      const result = await callTool("search", { ...inputOf(asked), cursor });
       if (!stillAsked()) return;
       if (!result.ok) return setProblem(result.error.message);
       setHits((shown) => [...(shown ?? []), ...result.value.items]);
@@ -146,6 +172,7 @@ export function createSearch(props: {
             }
           }}
         />
+        <SearchChips narrowing={narrowing()} onNarrow={narrow} timeZone={props.timeZone} />
       </search>
     </div>
   );
@@ -285,6 +312,9 @@ export function createSearch(props: {
     Found,
   };
 }
+
+/** What a search asks: its words, and what its chips narrow it to. */
+type Query = { words: string; narrowing: Narrowing };
 
 /** A group of what a search found, under a heading of its own. */
 export type FoundGroup = {

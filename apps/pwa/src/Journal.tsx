@@ -308,6 +308,7 @@ export function Journal(props: {
 
   // What a search found is shown in place of the Entries, which stay as they were under it.
   const search = createSearch({
+    timeZone: props.timeZone,
     formatTime: dayAndTimeIn(props.timeZone),
     onShowInJournal: (entry, anchor) => void bringIntoView(entry, anchor),
   });
