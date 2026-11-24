@@ -18,6 +18,7 @@ import {
   SOMEONE_ELSES_EMAIL,
   TEST_APPLICATION,
   THE_PERSONS_EMAIL,
+  THROUGH_OAUTH,
   TOKEN_LIFE,
 } from "./access-fake.ts";
 import { logs } from "./markers.ts";
@@ -117,7 +118,8 @@ describe("the Access sign-in every request needs", () => {
   });
 
   test("signed in, the request reaches what it is for", async () => {
-    expect((await send("/mcp", { method: "POST", body: "{}" })).status).toBe(404);
+    const client = await access.sign(Date.now(), THROUGH_OAUTH);
+    expect((await send("/mcp", { method: "POST", body: "{}" }, client)).status).toBe(404);
     expect(await callTool("/api/deployment/tools/list_contexts", {})).toMatchObject({ ok: true });
   });
 
@@ -237,6 +239,113 @@ describe("the person's Google address, the only one let in", () => {
 
     expect(noted()).toEqual(["other", "none", "unset"]);
     expect(logs().filter((line) => line.includes("@"))).toEqual([]);
+  });
+});
+
+describe("Access's OAuth claim, on a client's token alone, which only MCP takes", () => {
+  /** The results the Worker logged of where it refused a token by Access's OAuth claim, in order. */
+  const noted = () =>
+    logs().flatMap((line) => {
+      const parsed = JSON.parse(line.startsWith("{") ? line : "null") as {
+        access?: string;
+        result?: string;
+      } | null;
+      return parsed?.access === "oauth" ? [parsed.result] : [];
+    });
+
+  /** Every address outside MCP: the screen and its files, the tool endpoint and the live channel. */
+  const OUTSIDE_MCP = EVERYWHERE.filter(([path]) => !path.startsWith("/mcp"));
+
+  test("on a token outside MCP, is refused wherever it is for, and it is logged", async () => {
+    const client = await access.sign(Date.now(), THROUGH_OAUTH);
+
+    for (const [path, init] of OUTSIDE_MCP) {
+      const refused = await send(path, init, client);
+      expect(refused.status, path).toBe(403);
+      expect(await refused.text(), path).toBe(
+        "This address is for the screen, not for a Connection, which calls Praxis at its own address under /mcp.",
+      );
+    }
+    expect(noted()).toEqual(OUTSIDE_MCP.map(() => "outside_mcp"));
+  });
+
+  test("counts by being there, whatever its value", async () => {
+    for (const oauth of [false, null, "", 0, {}]) {
+      const client = await access.sign(Date.now(), { oauth });
+      expect((await post("/api/deployment/tools/list_contexts", "{}", client)).status).toBe(403);
+      // Let through to MCP, where an address naming no Connection is not found.
+      expect((await post("/mcp/an-address", "{}", client)).status).toBe(404);
+    }
+  });
+
+  test("on a token refused outside MCP, reaches no tool", async () => {
+    const id = await makeContext("Home");
+    const client = await access.sign(Date.now(), THROUGH_OAUTH);
+
+    await post(
+      `/api/contexts/${id}/tools/record_entry`,
+      JSON.stringify({ words: "Never recorded" }),
+      client,
+    );
+    await post(
+      "/api/deployment/tools/create_context",
+      JSON.stringify({ name: "Never made", time_zone: "Europe/Paris", accent: "moss" }),
+      client,
+    );
+
+    expect(await callTool(`/api/contexts/${id}/tools/list_entries`, {})).toMatchObject({
+      value: { items: [] },
+    });
+    const listed = await callTool("/api/deployment/tools/list_contexts", {});
+    const names = (listed.value as { items: { name: string }[] }).items.map(({ name }) => name);
+    expect(names).toContain("Home");
+    expect(names).not.toContain("Never made");
+  });
+
+  test("missing from a token on MCP, as from a browser or once Access renames it, is refused and logged", async () => {
+    for (const path of ["/mcp", "/mcp/an-address"]) {
+      const refused = await send(path, { method: "POST", body: "{}" });
+      expect(refused.status, path).toBe(403);
+      expect(await refused.text(), path).toBe(
+        "This address is for a Connection, whose client signs in through OAuth. Open the screen at the address of Praxis itself, not under /mcp.",
+      );
+    }
+    expect(noted()).toEqual(["missing_on_mcp", "missing_on_mcp"]);
+  });
+
+  test("on a token signed out, unavailable or not the person's, changes nothing of its answer", async () => {
+    const lapsed = await access.sign(Date.now() - 2 * TOKEN_LIFE, THROUGH_OAUTH);
+    const another = await access.sign(Date.now(), {
+      ...THROUGH_OAUTH,
+      email: SOMEONE_ELSES_EMAIL,
+    });
+    const client = await access.sign(Date.now(), THROUGH_OAUTH);
+
+    for (const [path, init] of EVERYWHERE) {
+      expect((await send(path, init, lapsed)).status, path).toBe(401);
+      const refused = await send(path, init, another);
+      expect(refused.status, path).toBe(403);
+      expect(refused.headers.get(SIGN_IN_HEADER), path).toBe("not-the-persons");
+    }
+    // A Worker that has not read the keys yet, and cannot.
+    worker = praxis(() => access.setup());
+    access.setReachable(false);
+    for (const [path, init] of EVERYWHERE) {
+      expect((await send(path, init, client)).status, path).toBe(503);
+    }
+    expect(noted()).toEqual([]);
+  });
+
+  test("in a refusal, is logged as where, never the address, the token or a claim's value", async () => {
+    const client = await access.sign(Date.now(), THROUGH_OAUTH);
+    await post("/api/deployment/tools/list_contexts", "{}", client);
+    await send("/mcp/an-address", { method: "POST", body: "{}" });
+
+    const lines = logs().filter((line) => line.includes('"oauth"'));
+    expect(lines).toEqual([
+      JSON.stringify({ access: "oauth", result: "outside_mcp" }),
+      JSON.stringify({ access: "oauth", result: "missing_on_mcp" }),
+    ]);
   });
 });
 

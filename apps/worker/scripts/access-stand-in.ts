@@ -1,6 +1,11 @@
 import type { Server, ServerWebSocket } from "bun";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
-import { fakeAccess, SOMEONE_ELSES_EMAIL, THE_PERSONS_EMAIL } from "../test/access-fake.ts";
+import {
+  fakeAccess,
+  SOMEONE_ELSES_EMAIL,
+  THE_PERSONS_EMAIL,
+  THROUGH_OAUTH,
+} from "../test/access-fake.ts";
 
 // Praxis on this machine, behind a stand-in for Cloudflare Access: `wrangler dev` on the next
 // port up, and in front of it what Access does for a Deployment. It signs every request in as the
@@ -32,11 +37,16 @@ function carries(request: Request, cookie: string): boolean {
   return request.headers.get("cookie")?.includes(`${cookie}=yes`) ?? false;
 }
 
-/** The token Access puts on a request it lets through: the person's, or another address's. */
+/**
+ * The token Access puts on a request it lets through: the person's, or another address's. A
+ * request to MCP carries Access's OAuth claim, as from a client signed in through managed OAuth,
+ * which every MCP caller is; nothing else does, as from a browser.
+ */
 function tokenFor(request: Request): Promise<string> {
+  const throughOAuth = new URL(request.url).pathname.startsWith("/mcp") ? THROUGH_OAUTH : {};
   return carries(request, ANOTHER_EMAIL)
-    ? access.sign(Date.now(), { email: SOMEONE_ELSES_EMAIL })
-    : access.sign(Date.now());
+    ? access.sign(Date.now(), { ...throughOAuth, email: SOMEONE_ELSES_EMAIL })
+    : access.sign(Date.now(), throughOAuth);
 }
 
 const options = process.argv.slice(2);

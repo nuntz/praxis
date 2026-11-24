@@ -64,11 +64,17 @@ export function publishedKeySet(teamDomain: string): AccessKeySet {
 export type NotThePersons = "other" | "none" | "unset";
 
 /**
+ * Signed in as the person: by a browser, or by a client through Access's managed OAuth, which
+ * the token Access signed tells by its `oauth` claim.
+ */
+export type SignedIn = "signed_in" | "signed_in_through_oauth";
+
+/**
  * Whether a request is the person's: signed in as the person; signed out, which the person mends
  * by signing in again; unavailable, when the keys to check it with cannot be read, which signing in
  * again does not mend; or signed in, but not as the person.
  */
-export type SignIn = "signed_in" | "signed_out" | "unavailable" | NotThePersons;
+export type SignIn = SignedIn | "signed_out" | "unavailable" | NotThePersons;
 
 /** The one way Access signs its tokens: RS256. */
 export const ACCESS_SIGNING = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" } as const;
@@ -82,11 +88,16 @@ export type Access = { keySet: AccessKeySet; application: AccessApplication; sig
 /** An email as compared: neither its case nor the spaces around it tell two apart. */
 const comparable = (email: string) => email.trim().toLowerCase();
 
-/** Whether claims Access signed carry the person's address, or why they are not the person's. */
-function whose(claims: Claims, signInEmail: string): "signed_in" | NotThePersons {
+/**
+ * Whether claims Access signed carry the person's address, and how they signed in, or why they
+ * are not the person's.
+ */
+function whose(claims: Claims, signInEmail: string): SignedIn | NotThePersons {
   if (!signInEmail) return "unset";
   if (typeof claims.email !== "string" || !comparable(claims.email)) return "none";
-  return comparable(claims.email) === signInEmail ? "signed_in" : "other";
+  if (comparable(claims.email) !== signInEmail) return "other";
+  // Present whatever its value, which Cloudflare does not document.
+  return "oauth" in claims ? "signed_in_through_oauth" : "signed_in";
 }
 
 /** The shortest time between two reads of the keys, so a stranger's tokens cannot make it fetch on every request. */
@@ -104,6 +115,10 @@ type Claims = {
   // client's as well as a browser's: seen in Workers Logs on 2026-11-22 for Claude on the web,
   // ChatGPT on the web and Claude Code, though Cloudflare's docs do not say so.
   email?: unknown;
+  // Access puts this on the token of a client it signed in through managed OAuth, and not on a
+  // browser's: seen in Workers Logs on 2026-11-24 for Claude Code, on MCP and on the tool endpoint
+  // (#137), though Cloudflare's docs do not say so. Only whether it is there counts.
+  oauth?: unknown;
 };
 
 function base64urlBytes(part: string): Uint8Array<ArrayBuffer> {

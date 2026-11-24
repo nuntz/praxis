@@ -17,6 +17,7 @@ Every caller of Praxis signs in through Cloudflare Access: the person's browser,
 - The address holds an opaque id, never the Context's name. It is not a secret: the Access login stands in front of it.
 - Whatever signs in as the person through an address is that Connection. Praxis records the client registrations it has seen on each one. One address pasted into two clients puts both under one name.
 - One client may hold two Connections to two Contexts. Praxis guards its own side only.
+- Access lets a client's OAuth token through on every path of the hostname, not only `/mcp`, and signs the token it forwards for that client with an `oauth` claim, which a browser's lacks (Workers Logs, #137). The Worker lets a token with the claim reach only `/mcp`, so a Connection limited to reading, or to one Context, cannot reach the screen's tools as the person, and it refuses a token without the claim on `/mcp`. Cloudflare does not document the claim. If it is renamed, MCP is refused rather than the screen's tools opened to a client, and the Worker's `missing_on_mcp` log line shows it.
 - On every call the Worker checks the Connection in the Deployment object, so ending one, or switching it to reading only, takes effect on the next call and does not depend on Access revoking a token.
 - A Connection limited to reading is offered only the reading tools.
 - A call to an ended Connection and a call to an address that never existed get the same refusal, which says to make a new Connection in Praxis.
