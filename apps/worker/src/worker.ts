@@ -56,6 +56,7 @@ export function praxis(accessOf: (env: Env) => Access) {
       if (signIn === "signed_out") return signedOut();
       if (signIn === "unavailable") return unavailable();
       if (signIn !== "signed_in") return notThePersons(signIn);
+      probeCaller(request, token);
       try {
         return await route(request, env, arrivedAt);
       } catch (error) {
@@ -75,6 +76,35 @@ export function praxis(accessOf: (env: Env) => Access) {
       context.waitUntil(deploymentOf(env).backUp(controller.scheduledTime));
     },
   } satisfies ExportedHandler<Env>;
+}
+
+/**
+ * Temporary, for #137: whether a request Access signed in tells an OAuth client from a browser.
+ * Logs, for the tool endpoint and MCP only, the names of the request's headers and of the claims
+ * in Access's token, its `type` claim, and how many audiences it names: no header's or claim's
+ * value otherwise. Removed once #137 has its answer.
+ */
+function probeCaller(request: Request, token: string | null) {
+  const { pathname } = new URL(request.url);
+  const kind = MCP_PATH.test(pathname) ? "mcp" : pathname.startsWith("/api/") ? "api" : null;
+  if (!kind) return;
+  let claims: Record<string, unknown> = {};
+  try {
+    const payload = (token ?? "").split(".")[1] ?? "";
+    const base64 = payload.replaceAll("-", "+").replaceAll("_", "/");
+    claims = JSON.parse(atob(base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=")));
+  } catch {
+    // A token the gate let through always decodes; nothing to log if it does not.
+  }
+  console.log({
+    probe: "137",
+    kind,
+    method: request.method,
+    headers: [...request.headers.keys()].sort(),
+    claims: Object.keys(claims).sort(),
+    type: typeof claims.type === "string" ? claims.type : null,
+    audiences: Array.isArray(claims.aud) ? claims.aud.length : claims.aud === undefined ? 0 : 1,
+  });
 }
 
 /** Route a request Access signed in: to MCP, the screen's files, a live channel or a tool. */
