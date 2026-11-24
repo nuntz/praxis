@@ -1,8 +1,9 @@
 name: Ticket closed
 
 # Closing a ticket can leave a comment in master naming it, which fails CI's ticket check from
-# then on, though nothing was pushed. This runs that check as the ticket closes and says on the
-# ticket which comments name it, so master is not left to the next push to find red.
+# then on, though nothing was pushed. This runs that check as the ticket closes and, while a
+# comment names it, reopens it and says which: its work is not done, and a comment alone went
+# unseen after the close twice. However it was closed, on GitHub's page or by an agent.
 
 on:
   issues:
@@ -29,16 +30,21 @@ jobs:
         shell: bash -o pipefail {0}
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Say so on the ticket
+      - name: Reopen the ticket while a comment names it
         if: failure() && steps.check.outcome == 'failure'
         run: |
+          # Only this ticket's comments: master may be red over another, which that one reopened.
+          grep -F "names #$NUMBER," "$RUNNER_TEMP/tickets.txt" > "$RUNNER_TEMP/named.txt" || exit 0
           {
-            echo "Closing this leaves a comment on master naming a closed ticket, which fails CI until it is cleared:"
+            echo "Reopened: comments on master still name this ticket, which fails CI until they are cleared:"
             echo
             echo '```'
-            cat "$RUNNER_TEMP/tickets.txt"
+            cat "$RUNNER_TEMP/named.txt"
             echo '```'
+            echo
+            echo "Clear each one, as this ticket's work replaces it, then close it again."
           } > "$RUNNER_TEMP/comment.md"
+          gh issue reopen "$NUMBER" --repo "$GITHUB_REPOSITORY"
           gh issue comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
         env:
           GH_TOKEN: ${{ github.token }}
