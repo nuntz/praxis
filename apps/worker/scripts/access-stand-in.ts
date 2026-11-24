@@ -140,7 +140,11 @@ async function pipeLive(request: Request, url: URL, server: Server<Piped>) {
   return new Response("Not a WebSocket.", { status: 400 });
 }
 
+// It signs whoever reaches it in as the person, so it answers on this machine only: Bun's
+// default is every interface, and its "localhost" is [::1] alone, which the login page's origin is
+// not. `wrangler dev` behind it is on loopback already, as wrangler's default.
 Bun.serve<Piped>({
+  hostname: "127.0.0.1",
   port,
   websocket: {
     open(browser) {
