@@ -16,7 +16,9 @@ export function marker(): string {
 /**
  * Words carrying a marker. Each call adds a new one, so words used twice, as written and as read
  * back, are made once and kept in a variable. The marker comes first, so a summary of the words,
- * cut at 80 characters, carries it too, and finding the marker finds either.
+ * cut at 80 characters, carries it too, and finding the marker finds either. The marker is six
+ * words as the search index splits them, so an Entry's excerpt, cut at 16, keeps at most ten of
+ * the words after it.
  */
 export function marked(words: string): string {
   return `${marker()} ${words}`;

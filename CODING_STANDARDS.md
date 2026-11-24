@@ -13,6 +13,10 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 
 - A second set of tools reuses the first's machinery (parsing input, write keys, the log line, Effects) through one shared function, so a rule changed once holds for both.
 
+## Tools
+
+- A change to what a tool does or gives updates its description in `packages/domain/src/tools.ts` wherever the description says otherwise or leaves out what a caller now needs, and the evals are run (section 13), since the Agent and every Connection read the description and never the spec. In #127 SPEC 9.4 came to say which spans an excerpt keeps while the description still said "the spans that matched".
+
 ## Outside services
 
 - A cache in front of an outside service has a maximum age, and its limit on how often it asks holds after a failed ask as after a good one. Anything trusted from outside, such as a key, stops being trusted when that age passes.

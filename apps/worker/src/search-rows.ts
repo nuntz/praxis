@@ -66,7 +66,11 @@ function wordsGiven(words: string): WordGiven[] {
   }));
 }
 
-/** A word as the index splits them: a run of letters and digits, with their accents. */
+/**
+ * A word as the index splits them: a run of letters and digits, with their accents. This, `fold`
+ * and `isShort` follow the index's tokenizer, `unicode61 remove_diacritics 2`, set where the index
+ * is made (`createWordsIndex` in `steps/context-0001.ts`): a change to it changes these too.
+ */
 const WORD = /[\p{L}\p{N}\p{M}]+/gu;
 
 /** A letter or a digit, as counted for a short word and looked for between two spans. */
@@ -75,7 +79,11 @@ const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 /** The most letters and digits a short word given holds. */
 const SHORT = 2;
 
-/** A word as the index compares it: its accents taken off, and in lower case. */
+/**
+ * A word as the index compares it: its accents taken off, and in lower case. Close to the
+ * tokenizer's own, which takes accents off Latin letters alone and lowercases a final Σ as σ, so
+ * two words the index holds equal in another script may fold apart here.
+ */
 function fold(word: string): string {
   return word.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
