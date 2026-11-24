@@ -44,22 +44,47 @@ const EXCERPT_WORDS = 16;
  * syntax. Null when nothing typed is a word.
  */
 export function wordsQuery(words: string): string | null {
-  const terms = words.match(WORD);
-  if (!terms) return null;
+  const given = wordsGiven(words);
+  if (given.length === 0) return null;
+  return given.map(({ term, begun }) => `"${term}"${begun ? "*" : ""}`).join(" ");
+}
+
+/**
+ * A word given, as typed and as the index compares it (`fold`), and whether it also matches the
+ * words it begins: the last, while nothing follows it.
+ */
+type WordGiven = { term: string; folded: string; begun: boolean };
+
+/** The words given, in the order typed, as the index splits words. */
+function wordsGiven(words: string): WordGiven[] {
+  const terms = words.match(WORD) ?? [];
   const begun = new RegExp(`${WORD.source}$`, "u").test(words);
-  return terms
-    .map((term, at) => `"${term}"${begun && at === terms.length - 1 ? "*" : ""}`)
-    .join(" ");
+  return terms.map((term, at) => ({
+    term,
+    folded: fold(term),
+    begun: begun && at === terms.length - 1,
+  }));
 }
 
 /** A word as the index splits them: a run of letters and digits, with their accents. */
 const WORD = /[\p{L}\p{N}\p{M}]+/gu;
 
+/** A letter or a digit, as counted for a short word and looked for between two spans. */
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+/** The most letters and digits a short word given holds. */
+const SHORT = 2;
+
+/** A word as the index compares it: its accents taken off, and in lower case. */
+function fold(word: string): string {
+  return word.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
 /**
  * An excerpt as SQLite marked it, on one line: each run of spaces and line breaks as one space,
- * and each match as a span of what is left.
+ * and each match as a span of what is left, as the words given keep it (`keptSpans`).
  */
-export function excerptOf(marked: string): Excerpt {
+export function excerptOf(marked: string, given: WordGiven[]): Excerpt {
   let text = "";
   const matches: Span[] = [];
   let start: number | null = null;
@@ -71,7 +96,42 @@ export function excerptOf(marked: string): Excerpt {
     } else if (!/\s/u.test(character)) text += character;
     else if (!text.endsWith(" ")) text += " ";
   }
-  return { text, matches };
+  return { text, matches: keptSpans(text, matches, given) };
+}
+
+/**
+ * The spans an excerpt keeps (section 9.4). A span is a short word's when every word given that
+ * matches it has two letters or digits or fewer. A run of spans is kept whole when it holds a span
+ * that is not a short word's, so "log in" marks the phrase and not every "in". When every word
+ * given is short, every span is kept.
+ */
+function keptSpans(text: string, spans: Span[], given: WordGiven[]): Span[] {
+  if (given.every(isShort)) return spans;
+  const shortWords = (span: Span) => {
+    const words = (text.slice(span.start, span.end).match(WORD) ?? []).map(fold);
+    const matching = given.filter(({ folded, begun }) =>
+      words.some((word) => (begun ? word.startsWith(folded) : word === folded)),
+    );
+    return matching.length > 0 && matching.every(isShort);
+  };
+  return runsOf(text, spans).flatMap((run) => (run.every(shortWords) ? [] : run));
+}
+
+/** Whether a word given is short: two letters or digits or fewer. */
+function isShort({ term }: WordGiven): boolean {
+  return [...term].filter((character) => LETTER_OR_DIGIT.test(character)).length <= SHORT;
+}
+
+/** The spans in runs, in order: spans with no letter or digit between them are one run. */
+function runsOf(text: string, spans: Span[]): Span[][] {
+  const runs: Span[][] = [];
+  for (const span of spans) {
+    const run = runs.at(-1);
+    const last = run?.at(-1);
+    if (run && last && !LETTER_OR_DIGIT.test(text.slice(last.end, span.start))) run.push(span);
+    else runs.push([span]);
+  }
+  return runs;
 }
 
 type HitRow = AuthorColumns & {
@@ -151,7 +211,13 @@ export function search(
   const shown = page.slice(0, PAGE_SIZE);
   const rows = hitRows(sql, query, shown);
   const read = shown.flatMap(({ key }) => rows.get(key) ?? []);
-  return pageOf(sql, read, { more: page.length > PAGE_SIZE, offset, today, words_only });
+  return pageOf(sql, read, {
+    more: page.length > PAGE_SIZE,
+    offset,
+    today,
+    words_only,
+    given: wordsGiven(input.words ?? ""),
+  });
 }
 
 /**
@@ -190,21 +256,34 @@ function listing(
   const read = page
     .slice(0, PAGE_SIZE)
     .map((row) => ({ ...row, excerpt: row.kind === "entry" ? firstWords(row.text) : row.text }));
-  return pageOf(sql, read, { more: page.length > PAGE_SIZE, offset, today, words_only: null });
+  return pageOf(sql, read, {
+    more: page.length > PAGE_SIZE,
+    offset,
+    today,
+    words_only: null,
+    given: [],
+  });
 }
 
 /**
  * A page of hits from the rows read for it, in their order, each Task and Project saying where it
- * stands as read on `today`, and a cursor to the next while more follow.
+ * stands as read on `today`, each excerpt marked as the words given keep it, and a cursor to the
+ * next while more follow.
  */
 function pageOf(
   sql: SqlStorage,
   rows: HitRow[],
-  page: { more: boolean; offset: number; today: Day; words_only: WordsOnly | null },
+  page: {
+    more: boolean;
+    offset: number;
+    today: Day;
+    words_only: WordsOnly | null;
+    given: WordGiven[];
+  },
 ): SearchResults {
   const standing = standingOf(sql, rows, page.today);
   return {
-    items: rows.flatMap((row) => hitOf(row, standing) ?? []),
+    items: rows.flatMap((row) => hitOf(row, standing, page.given) ?? []),
     next_cursor: page.more ? listCursor("search", page.offset + PAGE_SIZE) : null,
     words_only: page.words_only,
   };
@@ -403,9 +482,12 @@ function standingOf(sql: SqlStorage, page: Pick<Ranked, "kind" | "id">[], today:
   };
 }
 
-/** A hit from its row, or null for a Task or Project no longer there to say where it stands. */
-function hitOf(row: HitRow, standing: Standing): SearchHit | null {
-  const found = { id: row.id, at: instantToIso(row.at), excerpt: excerptOf(row.excerpt) };
+/**
+ * A hit from its row, its excerpt marked as the words given keep it, or null for a Task or Project
+ * no longer there to say where it stands.
+ */
+function hitOf(row: HitRow, standing: Standing, given: WordGiven[]): SearchHit | null {
+  const found = { id: row.id, at: instantToIso(row.at), excerpt: excerptOf(row.excerpt, given) };
   switch (row.kind) {
     case "entry":
       return {

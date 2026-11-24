@@ -716,4 +716,102 @@ describe("search", () => {
       "Anchovy",
     ]);
   });
+
+  describe("marks a short word given only beside a longer word's mark", () => {
+    test("marks the phrase, not every place the short word stands", async () => {
+      const context = newContext();
+      const words = marked("Fix the bug allowing any user in the domain to log in");
+      await anEntry(context, words);
+
+      const [hit] = value(await context.call(hand, "search", { words: "log in" })).items;
+
+      const text = hit?.excerpt.text ?? "";
+      expect(text).toMatch(/any user in the domain to log in$/);
+      expect(spansOf(hit)).toEqual([
+        { text: "log", start: text.indexOf("log in") },
+        { text: "in", start: text.indexOf("log in") + 4 },
+      ]);
+    });
+
+    test("drops a short last word's mark on a word it begins, outside a run", async () => {
+      const context = newContext();
+      await anEntry(context, marked("Look inside the shed, then log in"));
+
+      const [hit] = value(await context.call(hand, "search", { words: "log in" })).items;
+
+      expect(spansOf(hit).map(({ text }) => text)).toEqual(["log", "in"]);
+    });
+
+    test("sets case and accents aside in telling a short word's mark", async () => {
+      const context = newContext();
+      await anEntry(context, marked("In town, the CAFÉ in the square"));
+
+      const [hit] = value(await context.call(hand, "search", { words: "Cafe in" })).items;
+
+      expect(spansOf(hit).map(({ text }) => text)).toEqual(["CAFÉ", "in"]);
+    });
+
+    test("keeps every mark of a long word given, wherever it falls", async () => {
+      const context = newContext();
+      await anEntry(context, marked("Read the log in the morning, then log in"));
+
+      const [hit] = value(await context.call(hand, "search", { words: "log in" })).items;
+
+      expect(spansOf(hit).map(({ text }) => text)).toEqual(["log", "in", "log", "in"]);
+      const text = hit?.excerpt.text ?? "";
+      expect(spansOf(hit).map(({ start }) => start)).toEqual([
+        text.indexOf("log in the"),
+        text.indexOf("in the"),
+        text.lastIndexOf("log in"),
+        text.lastIndexOf("in"),
+      ]);
+    });
+
+    test("keeps every mark when every word given is short", async () => {
+      const context = newContext();
+      await anEntry(context, marked("Al and Alma"));
+      await anEntry(context, marked("A list to do, and the rest to do later"));
+
+      const al = value(await context.call(hand, "search", { words: "Al" })).items;
+      const toDo = value(await context.call(hand, "search", { words: "to do" })).items;
+
+      expect(spansOf(al[0]).map(({ text }) => text)).toEqual(["Al", "Alma"]);
+      expect(spansOf(toDo[0]).map(({ text }) => text)).toEqual(["to", "do", "to", "do"]);
+    });
+
+    test("holds for a Task's title and a Project's and a Person's name as for an Entry", async () => {
+      const context = newContext();
+      const entry = await anEntry(context, marked("Support call"), {
+        tasks: [{ title: marked("Fix log in for users in Paris") }],
+      });
+      const project = value(
+        await context.call(hand, "create_project", { name: marked("Log in page in staging") }),
+      ).record;
+      const person = value(
+        await context.call(hand, "create_person", { name: marked("Ana in Paris, Log In support") }),
+      ).record;
+
+      const results = value(await context.call(hand, "search", { words: "log in" })).items;
+
+      const expected = {
+        [`task:${entry.tasks[0]?.id}`]: { text: entry.tasks[0]?.title, spans: ["log", "in"] },
+        [`project:${project.id}`]: { text: project.name, spans: ["Log", "in"] },
+        [`person:${person.id}`]: { text: person.name, spans: ["Log", "In"] },
+      };
+      expect(
+        Object.fromEntries(
+          results.map((hit) => [
+            `${hit.kind}:${hit.id}`,
+            { text: hit.excerpt.text, spans: spansOf(hit).map(({ text }) => text) },
+          ]),
+        ),
+      ).toEqual(expected);
+    });
+  });
 });
+
+/** Each span of a hit's excerpt as the text it marks and where it starts. */
+function spansOf(hit: SearchHit | undefined) {
+  const excerpt = hit?.excerpt ?? { text: "", matches: [] };
+  return excerpt.matches.map(({ start, end }) => ({ text: excerpt.text.slice(start, end), start }));
+}

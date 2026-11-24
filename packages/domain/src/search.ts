@@ -9,8 +9,9 @@ export type Span = { start: number; end: number };
 
 /**
  * The part of a record's words, title or name that a search found, as plain text on one line,
- * with the spans of the words that matched. It is never rendered as Markdown (section 8.4): an
- * Entry's excerpt is cut from its words and may end inside a link or an emphasis.
+ * with the spans of the words that matched, a short word's only beside a longer word's (section
+ * 9.4). It is never rendered as Markdown (section 8.4): an Entry's excerpt is cut from its words
+ * and may end inside a link or an emphasis.
  */
 export type Excerpt = { text: string; matches: Span[] };
 
