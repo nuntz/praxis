@@ -116,8 +116,8 @@ type Claims = {
   // ChatGPT on the web and Claude Code, though Cloudflare's docs do not say so.
   email?: unknown;
   // Access puts this on the token of a client it signed in through managed OAuth, and not on a
-  // browser's: seen in Workers Logs on 2026-11-24 for Claude Code, on MCP and on the tool endpoint
-  // (#137), though Cloudflare's docs do not say so. Only whether it is there counts.
+  // browser's: seen in Workers Logs on 2026-11-24 for Claude Code, on MCP and on the tool endpoint,
+  // though Cloudflare's docs do not say so. Only whether it is there counts.
   oauth?: unknown;
 };
 

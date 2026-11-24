@@ -17,7 +17,7 @@ export const THE_PERSONS_EMAIL = "the.person@praxis.test";
 
 /**
  * The claim Access adds to the token of a client it signed in through managed OAuth, and never to
- * a browser's (Workers Logs, 2026-11-24, #137). Its value is not known, and does not count.
+ * a browser's (Workers Logs, 2026-11-24). Its value is not known, and does not count.
  */
 export const THROUGH_OAUTH = { oauth: { client: "a-client" } };
 

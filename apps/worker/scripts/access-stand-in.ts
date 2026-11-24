@@ -140,77 +140,93 @@ async function pipeLive(request: Request, url: URL, server: Server<Piped>) {
   return new Response("Not a WebSocket.", { status: 400 });
 }
 
-Bun.serve<Piped>({
-  port,
-  websocket: {
-    open(browser) {
-      browser.data.browser = browser;
-      for (const message of browser.data.waiting.splice(0)) browser.send(message);
-    },
-    // Passed on as sent, so the Worker answers it as it would anything sent up the channel.
-    message(browser, message) {
-      browser.data.upstream.send(message);
-    },
-    close(browser, code, reason) {
-      browser.data.upstream.close(sendable(code, 1000), reason);
-    },
-  },
-  async fetch(request, server) {
-    const url = new URL(request.url);
-    if (url.pathname === "/cdn-cgi/access/certs") {
-      return Response.json({ keys: await access.keySet.keys() });
-    }
-    if (url.pathname === "/cdn-cgi/access/login") {
-      return new Response(loginPage(backTo(url)), { headers: { "content-type": "text/html" } });
-    }
-    if (url.pathname === "/cdn-cgi/access/sign-in") {
-      return new Response(null, {
-        status: 302,
-        headers: { location: backTo(url), "set-cookie": `${SIGNED_OUT}=; Path=/; Max-Age=0` },
-      });
-    }
-    if (carries(request, SIGNED_OUT)) {
-      const back = encodeURIComponent(url.pathname + url.search);
-      return Response.redirect(`${loginOrigin}/cdn-cgi/access/login?redirect_url=${back}`, 302);
-    }
+// It signs whoever reaches it in as the person, so it answers on this machine only: on both
+// loopback addresses, since Bun's default is every interface and its "localhost" is [::1] alone,
+// which the login page's origin is not. `wrangler dev` behind it is on loopback already, as
+// wrangler's default.
+const loopback = ["127.0.0.1", "::1"];
+// A page of another site can reach loopback too, once its name is made to point there, as DNS
+// rebinding does; its requests then name its own host. Only this machine's names are answered.
+const ownHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`]);
 
-    // A browser names what it fetches for; Node's fetch, as an MCP client uses, sends a mode only.
-    const fetchedFor = request.headers.get("sec-fetch-dest");
-    const subresource = fetchedFor !== null && fetchedFor !== "document";
-    if (subresource && !carries(request, SIGNED_IN)) {
-      // As Access answers a request that carries no sign-in.
-      return Response.json(
-        { error: "invalid_token" },
-        {
-          status: 401,
-          headers: { "www-authenticate": 'Bearer realm="OAuth", error="invalid_token"' },
-        },
-      );
-    }
+for (const hostname of loopback)
+  Bun.serve<Piped>({
+    hostname,
+    port,
+    websocket: {
+      open(browser) {
+        browser.data.browser = browser;
+        for (const message of browser.data.waiting.splice(0)) browser.send(message);
+      },
+      // Passed on as sent, so the Worker answers it as it would anything sent up the channel.
+      message(browser, message) {
+        browser.data.upstream.send(message);
+      },
+      close(browser, code, reason) {
+        browser.data.upstream.close(sendable(code, 1000), reason);
+      },
+    },
+    async fetch(request, server) {
+      if (!ownHosts.has(request.headers.get("host") ?? "")) {
+        return new Response("The stand-in answers only to this machine's names for it.", {
+          status: 403,
+        });
+      }
+      const url = new URL(request.url);
+      if (url.pathname === "/cdn-cgi/access/certs") {
+        return Response.json({ keys: await access.keySet.keys() });
+      }
+      if (url.pathname === "/cdn-cgi/access/login") {
+        return new Response(loginPage(backTo(url)), { headers: { "content-type": "text/html" } });
+      }
+      if (url.pathname === "/cdn-cgi/access/sign-in") {
+        return new Response(null, {
+          status: 302,
+          headers: { location: backTo(url), "set-cookie": `${SIGNED_OUT}=; Path=/; Max-Age=0` },
+        });
+      }
+      if (carries(request, SIGNED_OUT)) {
+        const back = encodeURIComponent(url.pathname + url.search);
+        return Response.redirect(`${loginOrigin}/cdn-cgi/access/login?redirect_url=${back}`, 302);
+      }
 
-    if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
-      return pipeLive(request, url, server);
-    }
+      // A browser names what it fetches for; Node's fetch, as an MCP client uses, sends a mode only.
+      const fetchedFor = request.headers.get("sec-fetch-dest");
+      const subresource = fetchedFor !== null && fetchedFor !== "document";
+      if (subresource && !carries(request, SIGNED_IN)) {
+        // As Access answers a request that carries no sign-in.
+        return Response.json(
+          { error: "invalid_token" },
+          {
+            status: 401,
+            headers: { "www-authenticate": 'Bearer realm="OAuth", error="invalid_token"' },
+          },
+        );
+      }
 
-    const headers = new Headers(request.headers);
-    headers.set(ACCESS_TOKEN_HEADER, await tokenFor(request));
-    headers.delete("host");
-    // Bun's fetch decompresses a body but keeps its encoding header, which the browser would
-    // then decode again, so the Worker is asked for none.
-    headers.set("accept-encoding", "identity");
-    try {
-      const answer = await fetch(`http://localhost:${workerPort}${url.pathname}${url.search}`, {
-        method: request.method,
-        headers,
-        body: request.body,
-        redirect: "manual",
-      });
-      const signedIn = new Response(answer.body, answer);
-      signedIn.headers.append("set-cookie", `${SIGNED_IN}=yes; Path=/; HttpOnly; SameSite=Lax`);
-      return signedIn;
-    } catch {
-      return new Response("The Worker is not up yet.", { status: 502 });
-    }
-  },
-});
+      if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
+        return pipeLive(request, url, server);
+      }
+
+      const headers = new Headers(request.headers);
+      headers.set(ACCESS_TOKEN_HEADER, await tokenFor(request));
+      headers.delete("host");
+      // Bun's fetch decompresses a body but keeps its encoding header, which the browser would
+      // then decode again, so the Worker is asked for none.
+      headers.set("accept-encoding", "identity");
+      try {
+        const answer = await fetch(`http://localhost:${workerPort}${url.pathname}${url.search}`, {
+          method: request.method,
+          headers,
+          body: request.body,
+          redirect: "manual",
+        });
+        const signedIn = new Response(answer.body, answer);
+        signedIn.headers.append("set-cookie", `${SIGNED_IN}=yes; Path=/; HttpOnly; SameSite=Lax`);
+        return signedIn;
+      } catch {
+        return new Response("The Worker is not up yet.", { status: 502 });
+      }
+    },
+  });
 console.log(`Praxis, signed in through a stand-in for Access, at ${origin}`);
