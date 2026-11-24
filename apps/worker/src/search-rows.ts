@@ -34,8 +34,14 @@ import { NO_SUCH_PROJECT } from "./tools/projects.ts";
 const MATCH_START = "\u0002";
 const MATCH_END = "\u0003";
 
-/** The words an Entry's excerpt keeps around what matched, at most. */
+/** A match as SQLite marks it, between `MATCH_START` and `MATCH_END`, the words it marks captured. */
+const MARKED_MATCH = new RegExp(`${MATCH_START}([^${MATCH_END}]*)${MATCH_END}`, "gu");
+
+/** The words an Entry's excerpt keeps around what matched, at most, whoever cuts it. */
 const EXCERPT_WORDS = 16;
+
+/** The words an Entry's excerpt keeps before the first place a longer word given matches. */
+const WORDS_BEFORE = 4;
 
 /**
  * The words given as SQLite's full-text query: each a term of letters and digits, as the index
@@ -116,13 +122,56 @@ export function excerptOf(marked: string, given: WordGiven[]): Excerpt {
 function keptSpans(text: string, spans: Span[], given: WordGiven[]): Span[] {
   if (given.every(isShort)) return spans;
   const shortWords = (span: Span) => {
-    const words = (text.slice(span.start, span.end).match(WORD) ?? []).map(fold);
-    const matching = given.filter(({ folded, begun }) =>
-      words.some((word) => (begun ? word.startsWith(folded) : word === folded)),
+    const words = foldedWords(text.slice(span.start, span.end));
+    const matching = given.filter((wordGiven) =>
+      words.some((word) => matchesWord(wordGiven, word)),
     );
     return matching.length > 0 && matching.every(isShort);
   };
   return runsOf(text, spans).flatMap((run) => (run.every(shortWords) ? [] : run));
+}
+
+/**
+ * An Entry's excerpt cut around the first place a longer word given matches (section 9.4), from
+ * its words with every match marked: as many words as an excerpt keeps, split at spaces and line
+ * breaks, the few before that place first, and "…" at an end where the words go on. Null when no
+ * word given is longer, or no match is a longer word's, and SQLite's own window stands.
+ */
+function cutAround(marked: string, given: WordGiven[]): string | null {
+  const longer = given.filter((wordGiven) => !isShort(wordGiven));
+  const words = spaced(marked);
+  const at = words.findIndex((word) =>
+    matchesIn(word).some((match) => longer.some((wordGiven) => matchesWord(wordGiven, match))),
+  );
+  if (at < 0) return null;
+  return cutFrom(words, Math.max(0, Math.min(at - WORDS_BEFORE, words.length - EXCERPT_WORDS)));
+}
+
+/** Some text's words split at spaces and line breaks, as an excerpt cut in code counts them. */
+function spaced(text: string): string[] {
+  return text.trim().split(/\s+/u);
+}
+
+/** As many words as an excerpt keeps from `start`, marked "…" at an end where the words go on. */
+function cutFrom(words: string[], start: number): string {
+  const end = start + EXCERPT_WORDS;
+  const kept = words.slice(start, end).join(" ");
+  return `${start > 0 ? "…" : ""}${kept}${end < words.length ? "…" : ""}`;
+}
+
+/** The words SQLite marked as matches in some marked text, each as the index compares it. */
+function matchesIn(marked: string): string[] {
+  return [...marked.matchAll(MARKED_MATCH)].flatMap(([, match]) => foldedWords(match ?? ""));
+}
+
+/** Some text's words as the index splits and compares them. */
+function foldedWords(text: string): string[] {
+  return (text.match(WORD) ?? []).map(fold);
+}
+
+/** Whether a word given matches a word, as the index compares it: exactly, or the last begun. */
+function matchesWord({ folded, begun }: WordGiven, word: string): boolean {
+  return begun ? word.startsWith(folded) : word === folded;
 }
 
 /** Whether a word given is short: two letters or digits or fewer. */
@@ -146,6 +195,8 @@ type HitRow = AuthorColumns & {
   kind: SearchHit["kind"];
   id: string;
   excerpt: string;
+  /** An Entry's words, every match marked, when the words found it: its excerpt is cut from them. */
+  marked?: string | null;
   at: number;
   text: string;
   origin_entry: string | null;
@@ -441,6 +492,9 @@ function hitRows(sql: SqlStorage, query: string, page: Ranked[]): Map<string, Hi
            WHEN 'entry' THEN snippet(${WORDS_INDEX}, 2, char(2), char(3), '…', ${EXCERPT_WORDS})
            ELSE highlight(${WORDS_INDEX}, 2, char(2), char(3))
          END AS excerpt,
+         CASE ${WORDS_INDEX}.kind
+           WHEN 'entry' THEN highlight(${WORDS_INDEX}, 2, char(2), char(3))
+         END AS marked,
          ${AT} AS at, ${WORDS_INDEX}.text AS text,
          coalesce(e.author_kind, t.author_kind) AS author_kind,
          coalesce(e.author_name, t.author_name) AS author_name,
@@ -473,9 +527,7 @@ function hitRows(sql: SqlStorage, query: string, page: Ranked[]): Map<string, Hi
 
 /** An Entry's first words, as many as an excerpt keeps, marked as cut when it goes on. */
 function firstWords(words: string): string {
-  const all = words.trim().split(/\s+/u);
-  const kept = all.slice(0, EXCERPT_WORDS).join(" ");
-  return all.length > EXCERPT_WORDS ? `${kept}…` : kept;
+  return cutFrom(spaced(words), 0);
 }
 
 /** The Tasks and Projects on a page as reads give them, by id, so each hit says where it stands. */
@@ -495,7 +547,8 @@ function standingOf(sql: SqlStorage, page: Pick<Ranked, "kind" | "id">[], today:
  * no longer there to say where it stands.
  */
 function hitOf(row: HitRow, standing: Standing, given: WordGiven[]): SearchHit | null {
-  const found = { id: row.id, at: instantToIso(row.at), excerpt: excerptOf(row.excerpt, given) };
+  const cut = (row.marked ? cutAround(row.marked, given) : null) ?? row.excerpt;
+  const found = { id: row.id, at: instantToIso(row.at), excerpt: excerptOf(cut, given) };
   switch (row.kind) {
     case "entry":
       return {

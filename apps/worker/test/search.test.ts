@@ -717,6 +717,95 @@ describe("search", () => {
     ]);
   });
 
+  describe("cuts an Entry's excerpt around the first place a longer word given matches", () => {
+    test("shows the longer word where short words fill the start", async () => {
+      const context = newContext();
+      const early =
+        "Surface one item in Attention only when a decision is needed, and keep the run";
+      const late = "details in a log for later, with nothing else in it until the end";
+      await anEntry(context, marked(`${early} ${late}`));
+
+      const [hit] = value(await context.call(hand, "search", { words: "log in" })).items;
+
+      const text = hit?.excerpt.text ?? "";
+      expect(text).toMatch(/ a log for later, /);
+      expect(spansOf(hit)).toEqual([{ text: "log", start: text.indexOf("log") }]);
+    });
+
+    test("keeps as many words as an excerpt does, on one line, marked as cut only where the words go on", async () => {
+      const context = newContext();
+      const filler = (name: string) =>
+        Array.from({ length: 20 }, (_, at) => `${name}${at} in`).join("\n");
+      const atStart = await anEntry(context, marked(`Ledger in hand\n\n${filler("first")}`));
+      const atEnd = await anEntry(
+        context,
+        marked(`${filler("second")}\n\nthe ledger   in the end`),
+      );
+      const inMiddle = await anEntry(
+        context,
+        marked(`${filler("third")} ledger ${filler("fourth")}`),
+      );
+
+      const results = value(await context.call(hand, "search", { words: "ledger in" })).items;
+      const excerpt = (id: string) => results.find((hit) => hit.id === id)?.excerpt.text ?? "";
+
+      const [itsMarker] = atStart.words.split(" ");
+      expect(excerpt(atStart.id)).toBe(
+        `${itsMarker} Ledger in hand first0 in first1 in first2 in first3 in first4 in first5 in…`,
+      );
+      expect(excerpt(atEnd.id)).toBe(
+        "…in second15 in second16 in second17 in second18 in second19 in the ledger in the end",
+      );
+      expect(excerpt(inMiddle.id)).toBe(
+        "…third18 in third19 in ledger fourth0 in fourth1 in fourth2 in fourth3 in fourth4 in fourth5…",
+      );
+    });
+
+    test("cuts the same around a match in another case or accents, or one the last word begins", async () => {
+      const context = newContext();
+      const before = Array.from({ length: 20 }, (_, at) => `w${at} in`).join(" ");
+      const around = (word: string) => `${before} ${word} after in it`;
+      // Words no marker holds: its hex digits could begin a word given last, as "caf" would.
+      const exact = await anEntry(context, marked(around("rose")));
+      const accented = await anEntry(context, marked(around("ROSÉ")));
+      const begun = await anEntry(context, marked(around("roseraie")));
+      const cut = async (words: string, id: string) => {
+        const { items } = value(await context.call(hand, "search", { words }));
+        const hit = items.find((each) => each.id === id);
+        return { text: hit?.excerpt.text, spans: spansOf(hit).map(({ text }) => text) };
+      };
+
+      const around16 = (word: string) =>
+        `…w14 in w15 in w16 in w17 in w18 in w19 in ${word} after in it`;
+      expect(await cut("rose in", exact.id)).toEqual({
+        text: around16("rose"),
+        spans: ["in", "rose"],
+      });
+      expect(await cut("Rosé in", accented.id)).toEqual({
+        text: around16("ROSÉ"),
+        spans: ["in", "ROSÉ"],
+      });
+      expect(await cut("in ros", begun.id)).toEqual({
+        text: around16("roseraie"),
+        spans: ["in", "roseraie"],
+      });
+    });
+
+    test("leaves the cut to SQLite when every word given is short", async () => {
+      const context = newContext();
+      const filler = (name: string) => Array.from({ length: 20 }, (_, at) => `${name}${at}`);
+      const entry = await anEntry(
+        context,
+        marked([...filler("a"), "to", "go", ...filler("b"), "to", "do", ...filler("c")].join(" ")),
+      );
+
+      const [hit] = value(await context.call(hand, "search", { words: "to do" })).items;
+
+      expect(hit?.id).toBe(entry.id);
+      expect(hit?.excerpt.text).toBe("…b13 b14 b15 b16 b17 b18 b19 to do c0 c1 c2 c3 c4 c5 c6…");
+    });
+  });
+
   describe("marks a short word given only beside a longer word's mark", () => {
     test("marks the phrase, not every place the short word stands", async () => {
       const context = newContext();
