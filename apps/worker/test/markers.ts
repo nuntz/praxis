@@ -6,9 +6,13 @@
 const markers = new Set<string>();
 const logged: string[] = [];
 
-/** A string that must never appear in anything logged, to put in words. */
+/**
+ * A string that must never appear in anything logged, to put in words. One word to the search
+ * index, so a word given last can begin it only by beginning "MARKER", and then in every run: a
+ * UUID's groups of hex were each a word, which a begun "caf" or "bed" matched now and then.
+ */
 export function marker(): string {
-  const made = `MARKER-${crypto.randomUUID()}`;
+  const made = `MARKER${crypto.randomUUID().replaceAll("-", "")}`;
   markers.add(made);
   return made;
 }
@@ -17,9 +21,8 @@ export function marker(): string {
  * Words carrying a marker. Each call adds a new one, so words used twice, as written and as read
  * back, are made once and kept in a variable. The marker comes first, so a summary of the words,
  * cut at 80 characters, carries it too, and finding the marker finds either. The marker is one
- * word split at spaces and six as the search index splits them: an Entry's excerpt, 16 words,
- * keeps fifteen after it when cut around a longer word given, and at most ten when every word
- * given is short and SQLite cuts it (section 9.4).
+ * word, at spaces and as the search index splits words, so an Entry's excerpt of 16 keeps at most
+ * fifteen after it (section 9.4).
  */
 export function marked(words: string): string {
   return `${marker()} ${words}`;
@@ -35,8 +38,11 @@ export function adoptMarkers(text: string): void {
 
 /** The markers in some text, such as a record's words. */
 export function markersIn(text: string): string[] {
-  return text.match(/MARKER-[0-9a-f-]{36}/g) ?? [];
+  return text.match(MARKERS) ?? [];
 }
+
+/** A marker as made now, or as an earlier test made one and a fixture keeps it, with dashes. */
+const MARKERS = /MARKER(?:[0-9a-f]{32}|-[0-9a-f-]{36})/g;
 
 /** Everything logged or carried since the last test began, one string per console call. */
 export function logs(): readonly string[] {

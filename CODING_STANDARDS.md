@@ -15,7 +15,7 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 
 ## Tools
 
-- A change to what a tool does or gives updates its description in `packages/domain/src/tools.ts` wherever the description says otherwise or leaves out what a caller now needs, and the evals are run (section 13), since the Agent and every Connection read the description and never the spec. In #127 SPEC 9.4 came to say which spans an excerpt keeps while the description still said "the spans that matched".
+- A change to what a tool does or gives updates its description in `packages/domain/src/tools.ts` wherever the description says otherwise or leaves out what a caller now needs, since the Agent and every Connection read the description and never the spec. In #127 SPEC 9.4 came to say which spans an excerpt keeps while the description still said "the spans that matched". A description changed has the evals run (section 13); one that still holds, as the search tool's did when #131 changed how an excerpt is cut, needs none.
 
 ## Outside services
 

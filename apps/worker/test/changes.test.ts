@@ -38,7 +38,8 @@ describe("record_entry's Effects", () => {
   test("a summary is cut to 80 characters as seen, never splitting one", async () => {
     const context = newContext();
     const family = "👩‍👩‍👧";
-    const fits = `${marker()} ${"x".repeat(80 - 44)}`;
+    const seeded = marker();
+    const fits = `${seeded} ${"x".repeat(80 - seeded.length - 1)}`;
 
     const long = value(
       await context.call(hand, "record_entry", { words: `${marker()} ${family.repeat(80)}` }),
