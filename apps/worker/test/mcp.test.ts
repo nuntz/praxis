@@ -22,25 +22,33 @@ import {
 import { beforeEach, describe, expect, test } from "vitest";
 import { ACCESS_TOKEN_HEADER } from "../src/access.ts";
 import { praxis } from "../src/worker.ts";
-import { fakeAccess, TEST_APPLICATION } from "./access-fake.ts";
+import { fakeAccess, TEST_APPLICATION, THROUGH_OAUTH } from "./access-fake.ts";
 import { offering } from "./offering.ts";
 
 const ORIGIN = "https://praxis.test";
 
 let worker: ReturnType<typeof praxis>;
-let token: string;
+/** The tokens Access puts on the person's requests: from the screen, and from a client. */
+let tokens: { screen: string; client: string };
 
 beforeEach(async () => {
   const access = await fakeAccess(TEST_APPLICATION);
   worker = praxis(() => access.setup());
-  // The Worker reads the real clock when a request arrives, so the token is signed at it.
-  token = await access.sign(Date.now());
+  // The Worker reads the real clock when a request arrives, so the tokens are signed at it.
+  tokens = {
+    screen: await access.sign(Date.now()),
+    client: await access.sign(Date.now(), THROUGH_OAUTH),
+  };
 });
 
-/** A request to the Worker as Access lets it through, signed in as the person. */
+/**
+ * A request to the Worker as Access lets it through, signed in as the person: through managed
+ * OAuth to MCP, as a client signs in, and elsewhere as the screen does.
+ */
 function send(url: string | URL, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
-  headers.set(ACCESS_TOKEN_HEADER, token);
+  const toMcp = new URL(url, ORIGIN).pathname.startsWith("/mcp");
+  headers.set(ACCESS_TOKEN_HEADER, toMcp ? tokens.client : tokens.screen);
   return worker.fetch(new Request(url, { ...init, headers }), env);
 }
 

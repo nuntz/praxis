@@ -13,7 +13,7 @@ import { RUNTIME_TABLES } from "../src/agent.ts";
 import { CONTEXT_LADDER, DEPLOYMENT_LADDER, type Step } from "../src/steps/index.ts";
 import { WORDS_INDEX } from "../src/tables.ts";
 import { praxis } from "../src/worker.ts";
-import { fakeAccess, TEST_APPLICATION } from "./access-fake.ts";
+import { fakeAccess, TEST_APPLICATION, THROUGH_OAUTH } from "./access-fake.ts";
 import { type Dump, dumpObject, layDump, shapeOf } from "./dump.ts";
 import { type FixtureIds, fixtureName } from "./fixture-scenario.ts";
 import pending from "./fixtures/pi-1.5.2-pending/pending.json";
@@ -560,10 +560,11 @@ describe("a Deployment object stuck on its upgrade", () => {
   test("is shown as one plain page saying under which release, for every request", async () => {
     const access = await fakeAccess(TEST_APPLICATION);
     const worker = praxis(() => access.setup());
-    const token = await access.sign(Date.now());
+    const screen = await access.sign(Date.now());
+    const client = await access.sign(Date.now(), THROUGH_OAUTH);
     const send = (path: string, init: RequestInit = {}) => {
       const headers = new Headers(init.headers);
-      headers.set(ACCESS_TOKEN_HEADER, token);
+      headers.set(ACCESS_TOKEN_HEADER, path.startsWith("/mcp") ? client : screen);
       return worker.fetch(new Request(`https://praxis.test${path}`, { ...init, headers }), env);
     };
     // The one the Worker routes by, taken afresh each time it is woken again.

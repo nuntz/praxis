@@ -6,7 +6,13 @@ import {
   type ToolResult,
   UPGRADE_HEADER,
 } from "@praxis/domain";
-import { ACCESS_TOKEN_HEADER, type Access, AccessGate, type NotThePersons } from "./access.ts";
+import {
+  ACCESS_TOKEN_HEADER,
+  type Access,
+  AccessGate,
+  type NotThePersons,
+  type SignedIn,
+} from "./access.ts";
 import { arrivalTime } from "./arrival.ts";
 import { type StuckUpgrade, stuckIn, stuckWords } from "./ladder.ts";
 import { connectionCaller, connectionIdIn, noConnection, serveConnection } from "./mcp.ts";
@@ -55,7 +61,11 @@ export function praxis(accessOf: (env: Env) => Access) {
       const signIn = await gateFor(accessOf(env)).check(token, arrivedAt);
       if (signIn === "signed_out") return signedOut();
       if (signIn === "unavailable") return unavailable();
-      if (signIn !== "signed_in") return notThePersons(signIn);
+      if (signIn !== "signed_in" && signIn !== "signed_in_through_oauth") {
+        return notThePersons(signIn);
+      }
+      const misplaced = misplacedSignIn(signIn, new URL(request.url).pathname);
+      if (misplaced) return misplaced;
       try {
         return await route(request, env, arrivedAt);
       } catch (error) {
@@ -245,6 +255,33 @@ function notThePersons(why: NotThePersons): Response {
 <p><a href="/cdn-cgi/access/logout">Sign out of Cloudflare Access</a>, then sign in with the Google address this Praxis belongs to.</p>`,
     refused,
   );
+}
+
+/**
+ * A request signed in as the person, but not where its way of signing in belongs: a client Access
+ * signed in through managed OAuth reaches only MCP, so a Connection limited to reading, or to one
+ * Context, is held to it; and every MCP caller signs in that way (ADR 0009), so a token there
+ * without Access's OAuth claim is a browser pointed at an MCP address, or a claim Access renamed.
+ * Each refusal says which address is for what, which mends the first; only a release mends the
+ * second, which the log line tells the person of. Nothing is routed. Logged as where, never a
+ * value from the token. Null when it belongs.
+ */
+function misplacedSignIn(signIn: SignedIn, pathname: string): Response | null {
+  const throughOAuth = signIn === "signed_in_through_oauth";
+  if (MCP_PATH.test(pathname) === throughOAuth) return null;
+  const refused = (result: string, words: string) => {
+    console.warn(JSON.stringify({ access: "oauth", result }));
+    return new Response(words, { status: 403, headers: { "cache-control": "no-store" } });
+  };
+  return throughOAuth
+    ? refused(
+        "outside_mcp",
+        "This address is for the screen, not for a Connection, which calls Praxis at its own address under /mcp.",
+      )
+    : refused(
+        "missing_on_mcp",
+        "This address is for a Connection, whose client signs in through OAuth. Open the screen at the address of Praxis itself, not under /mcp.",
+      );
 }
 
 /** The keys to check the sign-in with could not be read. Signing in again would not mend it. */
