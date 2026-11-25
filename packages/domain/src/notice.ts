@@ -1,5 +1,8 @@
 import type { ClockKind } from "./clock.ts";
 
+/** Every way a Run can fail, as `RunFailure` names them. */
+export const RUN_FAILURES = ["model_unavailable", "key_refused", "request_refused"] as const;
+
 /**
  * Why a Run failed, as the Notice under the person's Message says (section 5.6). Three failures
  * are told apart by the provider's answer: a refused key first, by its status, its error's type
@@ -13,11 +16,12 @@ import type { ClockKind } from "./clock.ts";
  * - `request_refused`: the provider answered and refused the request itself, which no wait and
  *   no key mends, only a release or a changed Conversation. It shows only on the Run that failed.
  */
-export type RunFailure = "model_unavailable" | "key_refused" | "request_refused";
+export type RunFailure = (typeof RUN_FAILURES)[number];
 
 /**
  * Whether waiting mends a failure, so that a Brief or Review that failed so is tried again
- * (section 5.4): only the model not being reached.
+ * (section 5.4): only the model not being reached. The clock reads it to decide, and Attention's
+ * line to say what the clock does, so the two cannot disagree.
  */
 export function mendedByWaiting(failure: RunFailure): boolean {
   return failure === "model_unavailable";
