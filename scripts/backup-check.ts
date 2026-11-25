@@ -27,6 +27,12 @@ export const BACKUP_BUCKET = "praxis-backups";
  */
 const NOT_IN_BUCKET = 3;
 
+/** R2's error code for a bucket that does not exist. */
+const NO_SUCH_BUCKET = 10006;
+
+/** How long the listing may take before the check says it cannot tell. */
+const LISTING_TIMEOUT_MS = 30_000;
+
 /** When the daily trigger fires, in UTC hours (apps/worker/wrangler.jsonc, section 10.3). */
 const DUE_AT_HOUR = 3;
 
@@ -50,14 +56,16 @@ export function deploysWithoutBackup(message: string): boolean {
 /**
  * Whether the Cloudflare API's listing of the bucket under a Backup's name, answered with `status`
  * and `body`, holds that Backup: an object whose key is the name exactly, not one that only starts
- * with it. An answer that is not a listing throws, naming the status, so a token or API problem is
- * never taken for a missing Backup, nor waved through by the line that deploys without one.
+ * with it. No bucket at all holds no Backup either: a Deployment set up before the daily Backup has
+ * none until `pulumi up`, which runs after the check. Any other answer that is not a listing throws,
+ * naming the status, so a token or API problem is never taken for a missing Backup, nor waved
+ * through by the line that deploys without one.
  */
 export function holdsBackup(name: string, status: number, body: string): boolean {
   let listing: {
     success?: boolean;
     result?: { key?: unknown }[];
-    errors?: { message?: unknown }[];
+    errors?: { code?: unknown; message?: unknown }[];
   };
   try {
     listing = JSON.parse(body) ?? {};
@@ -66,6 +74,9 @@ export function holdsBackup(name: string, status: number, body: string): boolean
   }
   const listed =
     status >= 200 && status < 300 && listing.success === true && Array.isArray(listing.result);
+  if (status === 404 && listing.errors?.some((error) => error.code === NO_SUCH_BUCKET)) {
+    return false;
+  }
   if (!listed) {
     const said = (listing.errors ?? [])
       .map((error) => error.message)
@@ -102,7 +113,7 @@ async function inBucket(name: string): Promise<number> {
     token: process.env.CLOUDFLARE_API_TOKEN ?? "",
   });
   try {
-    const answer = await fetch(url, { headers });
+    const answer = await fetch(url, { headers, signal: AbortSignal.timeout(LISTING_TIMEOUT_MS) });
     return holdsBackup(name, answer.status, await answer.text()) ? 0 : NOT_IN_BUCKET;
   } catch (error) {
     const why = error instanceof Error ? error.message : String(error);

@@ -54,6 +54,16 @@ describe("the deploy's check for a Backup from the last day", () => {
     expect(holdsBackup(DUE, 200, JSON.stringify(listing))).toBe(false);
   });
 
+  test("finds no Backup when there is no bucket yet, as before the first `pulumi up` made it", () => {
+    const noBucket = {
+      success: false,
+      errors: [{ code: 10006, message: "The specified bucket does not exist." }],
+    };
+    expect(holdsBackup(DUE, 404, JSON.stringify(noBucket))).toBe(false);
+    const elsewhere = { success: false, errors: [{ code: 7003, message: "Could not route" }] };
+    expect(() => holdsBackup(DUE, 404, JSON.stringify(elsewhere))).toThrow("HTTP 404");
+  });
+
   test("fails, naming the status, when the API does not answer with a listing", () => {
     const refused = { success: false, errors: [{ code: 10000, message: "Authentication error" }] };
     expect(() => holdsBackup(DUE, 200, JSON.stringify(refused))).toThrow(
