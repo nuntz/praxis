@@ -1,8 +1,10 @@
 name: Ticket closed
 
 # Closing a ticket can leave a comment in master naming it, which fails CI's ticket check from
-# then on, though nothing was pushed. This runs that check as the ticket closes and says on the
-# ticket which comments name it, so master is not left to the next push to find red.
+# then on, though nothing was pushed. This runs that check as the ticket closes and, while a
+# comment names it, says which and reopens it: its work is not done, and a comment alone went
+# unseen after the close twice. However it was closed, on GitHub's page or by an agent. A ticket
+# closed as not planned or a duplicate is only told, and so is one closed while the check breaks.
 
 on:
   issues:
@@ -25,21 +27,50 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: No placeholder names a closed ticket
         id: check
-        run: bun run check:tickets 2>&1 | tee "$RUNNER_TEMP/tickets.txt"
+        # Counted closed whatever GitHub's API says a moment after the close.
+        run: bun lint/tickets.ts --closing "$NUMBER" 2>&1 | tee "$RUNNER_TEMP/tickets.txt"
         shell: bash -o pipefail {0}
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Say so on the ticket
+          NUMBER: ${{ github.event.issue.number }}
+      - name: Reopen the ticket while a comment names it
         if: failure() && steps.check.outcome == 'failure'
         run: |
+          reopen=no
+          # Only this ticket's comments: master may be red over another ticket, which its own close
+          # handles. The check prints its count only once it has read everything.
+          if grep -F "names #$NUMBER," "$RUNNER_TEMP/tickets.txt" > "$RUNNER_TEMP/named.txt"; then
+            if [ "$REASON" = "not_planned" ] || [ "$REASON" = "duplicate" ]; then
+              # Its work is not coming under this number: the comments go, the ticket stays closed.
+              heading="Comments on master still name this ticket, which fails CI until they are cleared:"
+              advice="It was closed without its work, so remove each one, or point it at the ticket that has the work."
+            else
+              reopen=yes
+              heading="Reopened: comments on master still name this ticket, which fails CI until they are cleared:"
+              advice="Clear each one, as this ticket's work replaces it, then close it again."
+            fi
+          elif grep -qF " placeholders, naming " "$RUNNER_TEMP/tickets.txt"; then
+            exit 0
+          else
+            heading="The ticket check broke as this closed, so whether a comment on master names it is not known:"
+            advice="Run \`bun lint/tickets.ts --closing $NUMBER\` once it can, and clear what it names."
+            cp "$RUNNER_TEMP/tickets.txt" "$RUNNER_TEMP/named.txt"
+          fi
           {
-            echo "Closing this leaves a comment on master naming a closed ticket, which fails CI until it is cleared:"
+            echo "$heading"
             echo
             echo '```'
-            cat "$RUNNER_TEMP/tickets.txt"
+            cat "$RUNNER_TEMP/named.txt"
             echo '```'
+            echo
+            echo "$advice"
           } > "$RUNNER_TEMP/comment.md"
+          # The comment first, so a ticket is never reopened with nothing saying why.
           gh issue comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+          if [ "$reopen" = yes ]; then
+            gh issue reopen "$NUMBER" --repo "$GITHUB_REPOSITORY"
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ github.event.issue.number }}
+          REASON: ${{ github.event.issue.state_reason }}
