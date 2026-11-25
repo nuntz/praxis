@@ -74,6 +74,7 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 ## The deploy job
 
 - A check in the deploy job stops on any failure it cannot tell from a "no": a command that fails, an output it cannot read. The Backup check reads `pulumi stack output --json` and stops when that fails, rather than taking the failure as a first deploy with nothing to check.
+- Its "no" is every answer that means nothing is there, the place that would hold it included: the bucket a Deployment set up before the daily Backup lacks until `pulumi up`, which R2 answers with a 404. A check rewritten to read another source keeps each outcome the old one gave, or its ticket names the change.
 
 ## Decisions
 
