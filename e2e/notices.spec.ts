@@ -53,3 +53,24 @@ test("a Notice with no section of settings to deal with it, such as a refused ke
   await expect(notices).toHaveCount(4);
   await expect(notices.getByRole("link")).toHaveCount(0);
 });
+
+test("a Brief whose request the provider refused says so in Attention, and not that it is tried again", async ({
+  page,
+}, testInfo) => {
+  await noticesAre(page, [
+    {
+      kind: "clock_failed",
+      clock: "brief",
+      failure: "request_refused",
+      since: new Date().toISOString(),
+    },
+  ]);
+  await page.goto("/");
+  const notice = (await attention(page, testInfo)).getByTestId("standing-notice");
+
+  await expect(notice).toHaveText(
+    /^The Brief could not run since .+: the model's provider refused Praxis's request\. It is not tried again: the next one runs at its time\.\s*$/,
+  );
+  await expect(notice).not.toContainText("could not be reached");
+  await expect(notice).not.toContainText("a little later");
+});

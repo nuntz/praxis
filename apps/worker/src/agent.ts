@@ -47,7 +47,7 @@ import { type Digest, encodeCursor } from "./change-log.ts";
 import { finishedSince, settleClockRun } from "./clock-rows.ts";
 import { summaryRequest } from "./compaction.ts";
 import { type HeldWaiting, heldWaiting } from "./held-change-rows.ts";
-import { type AgentModel, costOf, runFailure } from "./model.ts";
+import { type AgentModel, costOf, providerAnswer, runFailure } from "./model.ts";
 import type { KeyReport } from "./notice-rows.ts";
 import {
   addRunChange,
@@ -757,9 +757,13 @@ export class ContextAgent {
     const cutShort = settled.status !== "done" && settled.reason === ROUNDS_REACHED;
     const failure =
       settled.status === "done" || cutShort ? null : runFailure(settled.reason, settled.detail);
-    // Why, by the runtime's code and never its detail, which may quote what was said (ADR 0010).
+    // Why, by the runtime's code and the provider's status and error type, and never the detail's
+    // words, which may quote what was said (ADR 0010).
     if (failure !== null) {
-      console.error(JSON.stringify({ agent: "run_failed", reason: settled.reason, failure }));
+      const { status, type } = providerAnswer(settled.detail);
+      console.error(
+        JSON.stringify({ agent: "run_failed", reason: settled.reason, failure, status, type }),
+      );
     }
     // A Run trying a failed one again places no Message: its records start where it started.
     const first = settled.entry ?? run.from_record;

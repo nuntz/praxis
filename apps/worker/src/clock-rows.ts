@@ -4,6 +4,7 @@ import {
   clockTimes,
   instantToIso,
   latestDue,
+  mendedByWaiting,
   nextDue,
   type RunEnd,
   type RunFailure,
@@ -136,21 +137,23 @@ export function clockCapped(sql: SqlStorage, kind: ClockKind, due: number, at: n
 /**
  * A Brief's or Review's Run started at `at` has ended. One that answered, or was cut short, is the
  * one that came; one that failed is tried again after a gap that grows with each try, and its
- * Notice stands until one of its kind runs. A key the provider refused is not tried again
- * (section 5.6): that one is dropped, and the next is tried when it comes.
+ * Notice stands until one of its kind runs. One no wait mends, a key or a request the provider
+ * refused, is not tried again (section 5.4): that one is dropped, and the next is tried when it
+ * comes.
  */
 export function clockEnded(
   sql: SqlStorage,
   kind: ClockKind,
   ended: { how: RunEnd; failure: RunFailure | null; at: number },
 ): void {
-  if (ended.how === "failed" && ended.failure === "key_refused") {
+  if (ended.how === "failed" && ended.failure !== null && !mendedByWaiting(ended.failure)) {
     sql.exec(
       `UPDATE clock_schedule
        SET through = max(through, coalesce(trying, through)), trying = NULL, tries = 0,
-         retry_at = NULL, capped = NULL, failure = 'key_refused',
+         retry_at = NULL, capped = NULL, failure = ?,
          failing_since = coalesce(failing_since, ?)
        WHERE kind = ?`,
+      ended.failure,
       ended.at,
       kind,
     );

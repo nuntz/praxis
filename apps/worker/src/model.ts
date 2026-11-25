@@ -107,13 +107,55 @@ const KEY_REFUSED =
   /(?<![a-z0-9])(?:401|403)(?![a-z0-9])|authentication_error|permission_error|x-api-key|credit balance|billing|usage limits?/i;
 
 /**
- * Why a Run failed, from how the runtime says it ended: the provider refusing the key, told by
- * its own words for it, or the model not being reached, which is everything else, since only
- * waiting mends it (section 5.6).
+ * Why a Run failed, from how the runtime says it ended (section 5.6). The provider refusing the
+ * key is told by its own words for it, first, since it answers low credit as a 400. Then the
+ * provider refusing the request itself: it answered with a 4xx, other than a rate limit (429) or
+ * a timeout (408), which waiting mends. Everything else, an answer of 5xx or none at all, is the
+ * model not being reached.
  */
 export function runFailure(reason: string, detail: unknown): RunFailure {
-  if (reason === "model_error" && typeof detail === "string" && KEY_REFUSED.test(detail)) {
-    return "key_refused";
+  if (reason !== "model_error" || typeof detail !== "string") return "model_unavailable";
+  if (KEY_REFUSED.test(detail)) return "key_refused";
+  const { status } = providerAnswer(detail);
+  if (status !== undefined && status >= 400 && status < 500 && !WAITED_OUT.has(status)) {
+    return "request_refused";
   }
   return "model_unavailable";
 }
+
+/** The provider's 4xx answers that waiting mends: a timeout (408) and a rate limit (429). */
+const WAITED_OUT = new Set([408, 429]);
+
+/**
+ * The provider's HTTP status and its error's type, from the runtime's detail of how a call
+ * failed, where they are there: the status it leads with, and the type in the answer's body that
+ * follows. Neither holds words, so both may be logged (ADR 0010); the answer's message, which can
+ * quote the request, is never read out of it.
+ */
+export function providerAnswer(detail: unknown): { status?: number; type?: string } {
+  if (typeof detail !== "string") return {};
+  const status = /^(\d{3})(?![0-9])/.exec(detail)?.[1];
+  const type = errorType(detail);
+  return {
+    ...(status === undefined ? {} : { status: Number(status) }),
+    ...(type === undefined ? {} : { type }),
+  };
+}
+
+/** The type of the provider's error, as its body names it, when that is a name and no words. */
+function errorType(detail: string): string | undefined {
+  const start = detail.indexOf("{");
+  const end = detail.lastIndexOf("}");
+  if (start === -1 || end < start) return undefined;
+  let body: unknown;
+  try {
+    body = JSON.parse(detail.slice(start, end + 1));
+  } catch {
+    return undefined;
+  }
+  const type = (body as { error?: { type?: unknown } } | null)?.error?.type;
+  return typeof type === "string" && ERROR_TYPE.test(type) ? type : undefined;
+}
+
+/** An error's type as the provider names one, such as `invalid_request_error`: a name, no words. */
+const ERROR_TYPE = /^[a-z][a-z0-9_]{0,63}$/;

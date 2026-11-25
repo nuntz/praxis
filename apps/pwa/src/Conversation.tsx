@@ -682,6 +682,8 @@ const FAILED: Record<RunFailure, string> = {
     "The model could not be reached, so the Agent did not answer. Your Message is kept.",
   key_refused:
     "The model's provider refused this Deployment's key, so the Agent did not answer. Your Message is kept.",
+  request_refused:
+    "The model's provider refused Praxis's request, so the Agent did not answer. Your Message is kept.",
 };
 
 /**

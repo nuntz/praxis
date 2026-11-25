@@ -1,12 +1,14 @@
 import type { MessagesPage, PersonMessage } from "@praxis/domain";
 import { describe, expect, test } from "vitest";
-import { marked } from "./markers.ts";
+import { logs, marked, marker } from "./markers.ts";
 import {
   answering,
   answeringAtCost,
   failing,
   KEY_REFUSED,
   lastWords,
+  REQUEST_REFUSED,
+  refusedRequest,
   SCRIPTED_RETRY,
   type Script,
   scriptModel,
@@ -128,6 +130,62 @@ describe("send_message when the provider refuses the key", () => {
 
     expect(standing).toEqual([{ kind: "key_refused", since: "2026-11-15T09:00:00.000Z" }]);
     expect(value(await work.call(hand, "list_notices", {})).items).toEqual([]);
+  });
+});
+
+describe("send_message when the provider refuses the request", () => {
+  test("the Run fails at once, its Notice saying the request was refused, which is no standing Notice", async () => {
+    const faux = scriptModel(failing(REQUEST_REFUSED));
+    const context = newContext();
+
+    const sent = await sendAndSettle(context, marked("Hello"));
+
+    expect(faux.state.callCount).toBe(1);
+    expect(await messages(context)).toEqual([
+      { ...sent, notice: { run: expect.any(String), failure: "request_refused" } },
+    ]);
+    expect(value(await context.call(hand, "list_notices", {})).items).toEqual([]);
+  });
+
+  test("retry_run starts a new Run for it, which a release or a changed Conversation can mend", async () => {
+    let refusing = true;
+    scriptModel(failingWhile(() => refusing, REQUEST_REFUSED));
+    const context = newContext();
+    const sent = await sendAndSettle(context, marked("Hello"));
+    const [failed] = await messages(context);
+    if (failed?.from !== "person" || !failed.notice) throw new Error("No Run failed");
+
+    refusing = false;
+    const retried = await context.callAny(hand, "retry_run", { run: failed.notice.run });
+    await context.runsEnded();
+
+    expect(value(retried)).toEqual({ message: { ...sent, notice: null } });
+    const shown = await messages(context);
+    expect(shown).toMatchObject([
+      { from: "agent", words: "Back again.", run: { ended: "answered" } },
+      { ...sent, notice: null },
+    ]);
+    expect(shown[0]?.from === "agent" && shown[0].run.id).not.toBe(failed.notice.run);
+  });
+
+  test("is logged with the provider's status and error type, never its message or the request's words", async () => {
+    // The provider's message quotes the request, the person's words in it.
+    const words = marked("Hello");
+    scriptModel(failing(refusedRequest(`${marker()} could not be read in: ${words}`)));
+    const context = newContext();
+
+    await sendAndSettle(context, words);
+
+    expect(logs().filter((line) => line.includes('"run_failed"'))).toEqual([
+      JSON.stringify({
+        agent: "run_failed",
+        reason: "model_error",
+        failure: "request_refused",
+        status: 400,
+        type: "invalid_request_error",
+      }),
+    ]);
+    // The markers in the provider's message and the person's words are held to by the harness.
   });
 });
 
