@@ -131,7 +131,7 @@ const REQUEST_REFUSED_TYPES = new Set([
  * answers that as a 400. Then the provider refusing the request itself: it answered with a 4xx,
  * other than a rate limit (429) or a timeout (408), which waiting mends, or, with no status, with
  * the type of such a refusal. Everything else, an answer of 5xx or none at all, is the model not
- * being reached.
+ * being reached. The shapes `detail` comes in are in `docs/pi-durable.md`.
  */
 export function runFailure(reason: string, detail: unknown): RunFailure {
   if (reason !== "model_error" || typeof detail !== "string") return "model_unavailable";
