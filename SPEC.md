@@ -568,7 +568,7 @@ ADR 0003, 0005, 0007, 0009, 0010. Glossary: Connection.
 - The person makes a Connection in Praxis: a name, one Context, and whether it is limited to reading. Praxis gives an address under `/mcp` holding an opaque id, which the person pastes into the client. The address is not a secret.
 - The request path alone tells the Worker which Connection is calling. Nothing in the token does.
 - Whatever signs in as the person through an address is that Connection. One address pasted into two clients puts both under one name. One client may hold two Connections to two Contexts.
-- Praxis records the client registrations it has seen on each Connection. A registration id is a history, never a key: nothing may be keyed on one.
+- Praxis does not record which client calls through a Connection. Each client is given its own Connection, so the address tells them apart, and every caller signs in through Access as the person.
 - The Context is fixed for the Connection's life. Reading-only is the one thing the person can switch afterwards.
 - On every call the Worker checks the Connection in the Deployment object, so ending one or switching it to reading only takes effect on the next call.
 - A call to an ended Connection and a call to an address that never existed get the same refusal, which says to make a new Connection in Praxis.
@@ -696,7 +696,7 @@ Its sections are in two groups, the current Context's and the Deployment's:
 | | **Trash** | Each item, what went with it and when it will be removed. Restore, remove one for good, empty. |
 | | **Conversation and search** | Clear the Conversation, rebuild the search index. |
 | Everything in Praxis | **Contexts** | Each with its accent colour. |
-| | **Connections** | Each with the registrations seen. |
+| | **Connections** | Each with its Context, its address and whether it is limited to reading. |
 | | **Devices** | Section 8.10. |
 | | **Spend** | The spend cap and the month's spend against it. |
 | | **Backups and Export** | When the last Backup was made, and making an Export. |
