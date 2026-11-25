@@ -101,19 +101,96 @@ export function anthropicModel(env: ModelConfiguration): AgentModel | NoAgent {
 /**
  * What the provider says when it refuses the key rather than being unavailable: the key is wrong
  * or not allowed (401, 403), the account is out of credit, or it has reached the spend limit set
- * with the provider. Asking again does not mend these, and the person can (section 5.6).
+ * with the provider. Asking again does not mend these, and the person can (section 5.6). Read only
+ * where the provider's answer has neither a status nor a type to tell it by.
  */
 const KEY_REFUSED =
   /(?<![a-z0-9])(?:401|403)(?![a-z0-9])|authentication_error|permission_error|x-api-key|credit balance|billing|usage limits?/i;
 
+/** The statuses and error types the provider refuses the key with (section 5.6). */
+const KEY_REFUSED_STATUSES = new Set([401, 402, 403]);
+const KEY_REFUSED_TYPES = new Set(["authentication_error", "permission_error", "billing_error"]);
+
 /**
- * Why a Run failed, from how the runtime says it ended: the provider refusing the key, told by
- * its own words for it, or the model not being reached, which is everything else, since only
- * waiting mends it (section 5.6).
+ * The provider's own sentences for an account out of credit or at its spend limit, which it
+ * answers as a 400 invalid request. Whole sentences, since the message of a refused request can
+ * quote the request, and so any word of the key's.
+ */
+const OUT_OF_CREDIT = /credit balance is too low|reached your specified (?:api )?usage limits?/i;
+
+/** The provider's error types for a request it refuses, for an answer that has no status. */
+const REQUEST_REFUSED_TYPES = new Set([
+  "invalid_request_error",
+  "not_found_error",
+  "request_too_large",
+]);
+
+/**
+ * Why a Run failed, from how the runtime says it ended (section 5.6). The provider refusing the
+ * key comes first, by its status, its error's type, or its sentences for low credit, since it
+ * answers that as a 400. Then the provider refusing the request itself: it answered with a 4xx,
+ * other than a rate limit (429) or a timeout (408), which waiting mends, or, with no status, with
+ * the type of such a refusal. Everything else, an answer of 5xx or none at all, is the model not
+ * being reached.
  */
 export function runFailure(reason: string, detail: unknown): RunFailure {
-  if (reason === "model_error" && typeof detail === "string" && KEY_REFUSED.test(detail)) {
+  if (reason !== "model_error" || typeof detail !== "string") return "model_unavailable";
+  const { status, type } = providerAnswer(detail);
+  if (status === undefined && type === undefined) {
+    return KEY_REFUSED.test(detail) ? "key_refused" : "model_unavailable";
+  }
+  if (
+    (status !== undefined && KEY_REFUSED_STATUSES.has(status)) ||
+    (type !== undefined && KEY_REFUSED_TYPES.has(type)) ||
+    OUT_OF_CREDIT.test(detail)
+  ) {
     return "key_refused";
   }
-  return "model_unavailable";
+  const refused =
+    status === undefined
+      ? type !== undefined && REQUEST_REFUSED_TYPES.has(type)
+      : status >= 400 && status < 500 && !WAITED_OUT.has(status);
+  return refused ? "request_refused" : "model_unavailable";
 }
+
+/** The provider's 4xx answers that waiting mends: a timeout (408) and a rate limit (429). */
+const WAITED_OUT = new Set([408, 429]);
+
+/**
+ * The provider's HTTP status and its error's type, from the runtime's detail of how a call
+ * failed, where they are there: the status just before the answer's body, which the runtime may
+ * put words of its own in front of, or that it leads with when there is no body, and the type in
+ * that body. Neither holds words, so both may be logged (ADR 0010); the answer's message, which
+ * can quote the request, is never read out of it.
+ */
+export function providerAnswer(detail: unknown): { status?: number; type?: string } {
+  if (typeof detail !== "string") return {};
+  const body = detail.indexOf("{");
+  const status =
+    body === -1
+      ? /^(\d{3})(?![0-9])/.exec(detail)?.[1]
+      : /(?:^|[^0-9])(\d{3})\s*$/.exec(detail.slice(0, body))?.[1];
+  const type = errorType(detail);
+  return {
+    ...(status === undefined ? {} : { status: Number(status) }),
+    ...(type === undefined ? {} : { type }),
+  };
+}
+
+/** The type of the provider's error, as its body names it, when that is a name and no words. */
+function errorType(detail: string): string | undefined {
+  const start = detail.indexOf("{");
+  const end = detail.lastIndexOf("}");
+  if (start === -1 || end < start) return undefined;
+  let body: unknown;
+  try {
+    body = JSON.parse(detail.slice(start, end + 1));
+  } catch {
+    return undefined;
+  }
+  const type = (body as { error?: { type?: unknown } } | null)?.error?.type;
+  return typeof type === "string" && ERROR_TYPE.test(type) ? type : undefined;
+}
+
+/** An error's type as the provider names one, such as `invalid_request_error`: a name, no words. */
+const ERROR_TYPE = /^[a-z][a-z0-9_]{0,63}$/;

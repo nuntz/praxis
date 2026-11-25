@@ -287,6 +287,32 @@ export const UNAVAILABLE =
 export const KEY_REFUSED =
   '401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}';
 
+/**
+ * An error as Anthropic answers it, as the runtime passes it on: the HTTP status, then the body
+ * it sent, or the body alone for one sent with no status, as during a stream.
+ */
+export function providerError(status: number | null, type: string, message: string): string {
+  const body = JSON.stringify({
+    type: "error",
+    error: { type, message },
+    request_id: "req_011CTqY7jRkxmTW2Qhx3o1vN",
+  });
+  return status === null ? body : `${status} ${body}`;
+}
+
+/**
+ * What Anthropic answers a request it refuses as invalid, such as one naming a tool it was not
+ * offered, with its message in `words`. Asking again would not mend it, nor would the key.
+ */
+export function refusedRequest(
+  words = "Tool reference 'record_entry' not found in available tools.",
+): string {
+  return providerError(400, "invalid_request_error", words);
+}
+
+/** A refused request, in the provider's shape. */
+export const REQUEST_REFUSED = refusedRequest();
+
 /** A script whose every answer is the provider's error, in these words. */
 export function failing(error: string): Script {
   return () => fauxAssistantMessage([], { stopReason: "error", errorMessage: error });

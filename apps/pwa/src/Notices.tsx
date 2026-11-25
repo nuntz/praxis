@@ -1,4 +1,4 @@
-import type { SpendNotice, StandingNotice } from "@praxis/domain";
+import type { RunFailure, SpendNotice, StandingNotice } from "@praxis/domain";
 import { createSignal, For, type JSX } from "solid-js";
 import { deviceTimeZone } from "./ContextSettings.tsx";
 import { latestRead } from "./latest-read.ts";
@@ -97,6 +97,16 @@ const sinceFormat = new Intl.DateTimeFormat(undefined, {
   timeZone: deviceTimeZone(),
 });
 
+/** Why a Brief or Review could not run, and what comes of it, as its standing Notice says. */
+const CLOCK_FAILED: Record<RunFailure, string> = {
+  model_unavailable:
+    "the model could not be reached. It is tried again a little later each time, until it runs or the next one is due.",
+  key_refused:
+    "the model's provider refused this Deployment's key. It is tried again a little later each time, until it runs or the next one is due.",
+  request_refused:
+    "the model's provider refused Praxis's request. It is not tried again: the next one runs at its time.",
+};
+
 /** What a standing Notice says. */
 function noticeWords(notice: StandingNotice): string {
   switch (notice.kind) {
@@ -108,7 +118,7 @@ function noticeWords(notice: StandingNotice): string {
     case "nearing_cap":
       return capWords({ notice: notice.kind, spent: notice.spent, cap: notice.cap });
     case "clock_failed":
-      return `The ${notice.clock === "brief" ? "Brief" : "Review"} could not run since ${sinceFormat.format(new Date(notice.since))}: ${notice.failure === "key_refused" ? "the model's provider refused this Deployment's key" : "the model could not be reached"}. It is tried again a little later each time, until it runs or the next one is due.`;
+      return `The ${notice.clock === "brief" ? "Brief" : "Review"} could not run since ${sinceFormat.format(new Date(notice.since))}: ${CLOCK_FAILED[notice.failure]}`;
     case "no_backup":
       return notice.last_made === null
         ? "No Backup has been made yet, though Praxis has tried for three days. It tries again each day."

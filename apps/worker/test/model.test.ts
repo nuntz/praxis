@@ -7,7 +7,15 @@ import {
   runFailure,
   unpricedModel,
 } from "../src/model.ts";
-import { KEY_REFUSED, lastWords, scriptModel, testModel, UNAVAILABLE } from "./model-fake.ts";
+import {
+  providerError as answer,
+  KEY_REFUSED,
+  lastWords,
+  REQUEST_REFUSED,
+  scriptModel,
+  testModel,
+  UNAVAILABLE,
+} from "./model-fake.ts";
 
 // The model's one contract suite (section 13). In CI it runs against the scripted model only, so
 // CI never calls a model. By hand it runs against the real one too, with the person's own key:
@@ -28,10 +36,11 @@ const RECORD = {
   },
 };
 
-function ask(model: AgentModel, text: string, tools: (typeof RECORD)[] = []) {
+/** Ask the model, or, with `id`, a model of the same provider by that id, known to it or not. */
+function ask(model: AgentModel, text: string, tools: (typeof RECORD)[] = [], id?: string) {
   const found = model.models.getModel(model.provider, model.id);
   if (!found) throw new Error(`The model ${model.provider}/${model.id} is not there`);
-  return model.models.completeSimple(found, {
+  return model.models.completeSimple(id === undefined ? found : { ...found, id }, {
     systemPrompt: "You are a terse assistant. Use a tool when asked to.",
     messages: [{ role: "user", content: text, timestamp: 0 }],
     tools,
@@ -40,9 +49,15 @@ function ask(model: AgentModel, text: string, tools: (typeof RECORD)[] = []) {
 
 /**
  * The contract, run against one model. `refusedKey` gives what its provider says when it refuses
- * the key: for the real one, what it answers a key that is not one.
+ * the key: for the real one, what it answers a key that is not one. `refusedRequest` gives what it
+ * says when it refuses the request itself: for the real one, what it answers asked for a model it
+ * does not know.
  */
-function contract(name: string, model: () => AgentModel, refusedKey: () => Promise<string>) {
+function contract(
+  name: string,
+  model: () => AgentModel,
+  refused: { key: () => Promise<string>; request: () => Promise<string> },
+) {
   describe(`the model: ${name}`, () => {
     test("it is one the code ships a price for", () => {
       expect(PRICES[model().id]).toBeDefined();
@@ -57,8 +72,9 @@ function contract(name: string, model: () => AgentModel, refusedKey: () => Promi
       expect(answer.usage.output).toBeGreaterThan(0);
     });
 
-    test("the provider refusing the key is told apart from it being unavailable", async () => {
-      expect(runFailure("model_error", await refusedKey())).toBe("key_refused");
+    test("the provider refusing the key, refusing the request, and being unavailable are told apart", async () => {
+      expect(runFailure("model_error", await refused.key())).toBe("key_refused");
+      expect(runFailure("model_error", await refused.request())).toBe("request_refused");
       expect(runFailure("model_error", UNAVAILABLE)).toBe("model_unavailable");
     });
 
@@ -87,7 +103,7 @@ contract(
     if (typeof scripted === "string") throw new Error("No scripted model");
     return scripted;
   },
-  async () => KEY_REFUSED,
+  { key: async () => KEY_REFUSED, request: async () => REQUEST_REFUSED },
 );
 
 const real = inject("realModel");
@@ -97,12 +113,56 @@ if (real) {
     if (typeof found === "string") throw new Error(`No model to run against: ${found}`);
     return found;
   };
-  contract(
-    "real",
-    () => configured(real.key),
-    async () => (await ask(configured("sk-ant-not-a-key"), "Hello.")).errorMessage ?? "",
-  );
+  contract("real", () => configured(real.key), {
+    key: async () => (await ask(configured("sk-ant-not-a-key"), "Hello.")).errorMessage ?? "",
+    request: async () =>
+      (await ask(configured(real.key), "Hello.", [], "claude-not-a-model")).errorMessage ?? "",
+  });
 }
+
+describe("why a Run failed, from the provider's answer", () => {
+  test.each([
+    [answer(400, "invalid_request_error", "Tool reference 'x' not found in available tools.")],
+    [answer(404, "not_found_error", "model: claude-not-a-model")],
+    [answer(413, "request_too_large", "Request exceeds the maximum allowed number of bytes.")],
+    // Its message quotes the request, which may hold any words, those of a refused key too.
+    [answer(400, "invalid_request_error", "Tool reference 'billing_lookup' not found.")],
+    [answer(400, "invalid_request_error", "messages.0: 'room 403, usage limit' is not valid.")],
+    // The runtime may say first what it was doing when the provider refused it.
+    [`Compaction failed: Summarization failed: ${answer(400, "invalid_request_error", "No.")}`],
+    // An error sent during a stream has a body and no status.
+    [answer(null, "invalid_request_error", "Tool reference 'x' not found in available tools.")],
+  ])("a request the provider refuses is refused, which no wait mends: %s", (said) => {
+    expect(runFailure("model_error", said)).toBe("request_refused");
+  });
+
+  test.each([
+    [answer(401, "authentication_error", "invalid x-api-key")],
+    [answer(403, "permission_error", "Your API key does not have permission to use this model.")],
+    [
+      answer(
+        400,
+        "invalid_request_error",
+        "Your credit balance is too low to access the Anthropic API.",
+      ),
+    ],
+    [answer(400, "invalid_request_error", "You have reached your specified API usage limits.")],
+    [answer(402, "billing_error", "There is an issue with your payment method.")],
+  ])("the key the provider refuses is refused, even as a 400: %s", (said) => {
+    expect(runFailure("model_error", said)).toBe("key_refused");
+  });
+
+  test.each([
+    [answer(408, "timeout_error", "Request timed out.")],
+    [answer(429, "rate_limit_error", "Number of request tokens has exceeded your rate limit.")],
+    [answer(500, "api_error", "Internal server error")],
+    [answer(529, "overloaded_error", "Overloaded")],
+    [answer(null, "overloaded_error", "Overloaded")],
+    ["fetch failed"],
+  ])("the model not reached, which waiting mends, is unavailable: %s", (said) => {
+    expect(runFailure("model_error", said)).toBe("model_unavailable");
+  });
+});
 
 describe("the deploy's check of the configured model", () => {
   test("a model the code ships no price for fails it, naming the model and the ones priced", () => {

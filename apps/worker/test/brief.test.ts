@@ -17,6 +17,7 @@ import {
   lastWords,
   noModel,
   offeredIn,
+  REQUEST_REFUSED,
   type Script,
   scriptModel,
   UNAVAILABLE,
@@ -505,6 +506,44 @@ describe("a Brief whose key the provider refuses", () => {
       failure: "key_refused",
       since: "2026-11-16T07:00:00.000Z",
     });
+  });
+});
+
+describe("a Brief whose request the provider refuses", () => {
+  test("is not tried again: the next runs at its own time, and Attention says why until one runs", async () => {
+    let refusing = true;
+    const refused = failing(REQUEST_REFUSED);
+    const answered = answering("Brief 2.");
+    const faux = scriptModel((...args) => (refusing ? refused(...args) : answered(...args)));
+    const context = newContext("2026-11-16T06:59:00.000Z");
+    context.advance(MINUTE);
+    await wake(context);
+    const asked = faux.state.callCount;
+    const notices = value(await context.call(hand, "list_notices", {})).items;
+
+    // Waiting through every gap a Brief the model could not be reached for is tried again after.
+    context.advance(2 * HOUR);
+    await wake(context);
+    const later = faux.state.callCount;
+    const stillNoticed = value(await context.call(hand, "list_notices", {})).items;
+    refusing = false;
+    context.advance(DAY - 2 * HOUR);
+    await wake(context);
+
+    expect(asked).toBe(1);
+    expect(later).toBe(asked);
+    const failed = {
+      kind: "clock_failed",
+      clock: "brief",
+      failure: "request_refused",
+      since: "2026-11-16T07:00:00.000Z",
+    };
+    expect(notices).toEqual([failed]);
+    expect(stillNoticed).toEqual([failed]);
+    expect(await messages(context)).toMatchObject([
+      { words: "Brief 2.", clock: { kind: "brief", taken: "2026-11-17T07:00:00.000Z" } },
+    ]);
+    expect(value(await context.call(hand, "list_notices", {})).items).toEqual([]);
   });
 });
 

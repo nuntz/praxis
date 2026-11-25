@@ -130,6 +130,41 @@ test("a Run that failed keeps the Message with a Notice under it, and Try again 
   await expect(sent.getByText(/The model could not be reached/)).toHaveCount(0);
 });
 
+test("a Run whose request the provider refused says so under the Message, not that the model was unreachable, and Try again answers it", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const context = await makeContext(page, {
+    name: `Refused ${tag}`,
+    time_zone: "UTC",
+    accent: "teal",
+  });
+  await lastShown(page, context.id);
+  await page.goto("/");
+  await showTab(page, testInfo, "Agent");
+  const conversation = page.getByRole("region", { name: "Conversation" });
+
+  const words = `Refused once: are you there ${tag}`;
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in Refused ${tag}`, exact: true })
+    .fill(words);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+
+  const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
+  const sent = messages.filter({ hasText: words });
+  await expect(sent.getByRole("status")).toHaveText(
+    "The model's provider refused Praxis's request, so the Agent did not answer. Your Message is kept.",
+  );
+  await expect(sent.getByText(/could not be reached|tried again/)).toHaveCount(0);
+
+  const retried = page.waitForResponse(/\/retry_run$/);
+  await sent.getByRole("button", { name: "Try again", exact: true }).click();
+  expect(await (await retried).json()).toMatchObject({ ok: true });
+
+  await expect(messages.last().getByText("Back again.", { exact: true })).toBeVisible();
+  await expect(sent.getByText(/refused Praxis's request/)).toHaveCount(0);
+});
+
 test("the person saves a Run's transcript, then clears the Conversation from the settings", async ({
   page,
 }, testInfo) => {

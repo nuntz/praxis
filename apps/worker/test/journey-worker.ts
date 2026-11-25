@@ -4,6 +4,7 @@ import { contextObject } from "../src/context-object.ts";
 import { meanAlike, testMeaning } from "./meaning-fake.ts";
 import {
   lastWords,
+  REQUEST_REFUSED,
   SCRIPTED_RETRY,
   scriptModel,
   testModel,
@@ -18,7 +19,8 @@ import { testVoice } from "./voice-fake.ts";
 // "Edit <id> at <version>: <words>" changes that Entry's words, and then it answers. "Say:
 // <words>" answers with those words, as a model writing Markdown would. "Unreachable
 // once: <words>" fails as an overloaded provider does for the whole of the first Run that asks,
-// then answers when the Run is tried again. A Brief or a Review has nothing to raise, so one the
+// then answers when the Run is tried again. "Refused once: <words>" is refused as an invalid request
+// by the first Run that asks, which no retry repeats, then answered when it is tried again. A Brief or a Review has nothing to raise, so one the
 // clock starts while a journey runs leaves no Message, except in a Context whose name begins
 // "Briefed", where it raises something, for a journey to see it unread. Anything else it only answers. Its meaning index is the
 // fake, which takes a molar and a dentist to mean alike. Its voice provider is the fake's end at the
@@ -31,6 +33,7 @@ const RECORD = /^Record: ([\s\S]+)$/;
 const SAY = /^Say: ([\s\S]+)$/;
 const EDIT = /^Edit (\S+) at (\d+): ([\s\S]+)$/;
 const UNREACHABLE_ONCE = /^Unreachable once: /;
+const REFUSED_ONCE = /^Refused once: /;
 const CLOCK_STARTED = /^The clock started this Run/;
 const BRIEFED = /This Context is "Briefed /;
 
@@ -51,6 +54,14 @@ scriptModel((context) => {
     // The first Run asks once and again as often as its retries allow; each one fails.
     if (times <= 1 + SCRIPTED_RETRY.maxRetries) {
       return fauxAssistantMessage([], { stopReason: "error", errorMessage: UNAVAILABLE });
+    }
+    return fauxAssistantMessage("Back again.");
+  }
+  if (REFUSED_ONCE.test(words)) {
+    const times = (asks.get(words) ?? 0) + 1;
+    asks.set(words, times);
+    if (times === 1) {
+      return fauxAssistantMessage([], { stopReason: "error", errorMessage: REQUEST_REFUSED });
     }
     return fauxAssistantMessage("Back again.");
   }

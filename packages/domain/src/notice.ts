@@ -1,12 +1,27 @@
 import type { ClockKind } from "./clock.ts";
 
 /**
- * Why a Run failed, as the Notice under the person's Message says (section 5.6). Two failures are
- * told apart: the model could not be reached, which shows only on the Run that failed, and the
- * provider refused the key (wrong, out of credit, or at the provider's own limit), which is a
- * standing Notice too until a call succeeds.
+ * Why a Run failed, as the Notice under the person's Message says (section 5.6). Three failures
+ * are told apart by the provider's answer: a refused key first, by its status, its error's type
+ * or its sentences for low credit, since it answers that as a 400; then any other 4xx but a rate
+ * limit or a timeout, a refused request; then anything else, the model not reached.
+ *
+ * - `model_unavailable`: the model could not be reached, which only waiting mends. It shows only
+ *   on the Run that failed, and a Brief or Review is tried again.
+ * - `key_refused`: the provider refused the key (wrong, out of credit, or at the provider's own
+ *   limit), which is a standing Notice too until a call succeeds. No wait mends it.
+ * - `request_refused`: the provider answered and refused the request itself, which no wait and
+ *   no key mends, only a release or a changed Conversation. It shows only on the Run that failed.
  */
-export type RunFailure = "model_unavailable" | "key_refused";
+export type RunFailure = "model_unavailable" | "key_refused" | "request_refused";
+
+/**
+ * Whether waiting mends a failure, so that a Brief or Review that failed so is tried again
+ * (section 5.4): only the model not being reached.
+ */
+export function mendedByWaiting(failure: RunFailure): boolean {
+  return failure === "model_unavailable";
+}
 
 /**
  * The Notice under a person's Message whose Run failed (section 8.5). It is not a Message: it
@@ -24,9 +39,12 @@ export type RunNotice = { run: string; failure: RunFailure };
  *   starts, until one is set up (section 6).
  * - `nearing_cap`: the month's spend has passed 80% of the cap.
  * - `cap_reached`: the month's spend has reached the cap, and no new Run starts.
- * - `clock_failed`: a Brief or a Review that was due could not run since this instant, and why. It
- *   is tried again with a growing gap until it runs or the next one is due (section 5.6), and the
- *   Notice stays until one of its kind runs.
+ * - `clock_failed`: a Brief or a Review that was due could not run since this instant, and why.
+ *   One the model could not be reached for is tried again with a growing gap until it runs or the
+ *   next one is due; one whose key or request the provider refused is not (section 5.4). The
+ *   Notice stays until one of its kind runs. Its `failure` is told apart as a Run's is (see
+ *   `RunFailure`). A refused request is no standing Notice of its own: it is not the
+ *   Deployment's, as a refused key is.
  * - `no_backup`: no daily Backup has been made for three days (section 10.3), and when the last
  *   one was, or null when none has been. It stays until one is made. It is not a Notification.
  * - `context_stuck`: a Context's object is stuck on its upgrade under this release (section 11),

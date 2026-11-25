@@ -174,7 +174,7 @@ const contextFile = z.strictObject({
       }),
       cost: z.number().min(0),
       ended: z.enum(["answered", "cut_short", "failed", "cap_reached"]).nullable(),
-      failure: z.enum(["model_unavailable", "key_refused"]).nullable(),
+      failure: z.enum(["model_unavailable", "key_refused", "request_refused"]).nullable(),
     }),
   ),
   moving: z.array(

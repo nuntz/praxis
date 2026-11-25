@@ -8,7 +8,7 @@ import {
 import { describe, expect, test } from "vitest";
 import { marked } from "./markers.ts";
 import { meanAlike } from "./meaning-fake.ts";
-import { answering, scriptModel } from "./model-fake.ts";
+import { answering, failing, REQUEST_REFUSED, scriptModel } from "./model-fake.ts";
 import { asRestored, base64, restore, restoredIds } from "./restoring.ts";
 import { atOnce, contextIn, DAY, hand, newDeployment, value } from "./seam.ts";
 
@@ -474,6 +474,25 @@ describe("restore_export", () => {
     const runs = value(await after.context(id).call(hand, "list_runs", {})).items;
     expect(runs).toEqual([
       expect.objectContaining({ id: contextFile(made, work).runs[0]?.id, ended: "failed" }),
+    ]);
+  });
+
+  test("brings back a Run whose request the provider refused, as it failed", async () => {
+    scriptModel(failing(REQUEST_REFUSED));
+    const before = newDeployment();
+    const { id: work } = await contextIn(before, "Work", PARIS);
+    value(await before.context(work).callAny(hand, "send_message", { words: marked("Hi") }));
+    await before.context(work).runsEnded();
+    const made = value(await before.call(hand, "make_export", {}));
+
+    const after = newDeployment();
+    const [id = ""] = value(await restore(after, made)).record.contexts.map(
+      (context) => context.id,
+    );
+
+    const again = value(await after.call(hand, "make_export", {}));
+    expect(contextFile(again, id).runs).toEqual([
+      expect.objectContaining({ ended: "failed", failure: "request_refused" }),
     ]);
   });
 
