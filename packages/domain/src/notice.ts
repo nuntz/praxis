@@ -2,9 +2,9 @@ import type { ClockKind } from "./clock.ts";
 
 /**
  * Why a Run failed, as the Notice under the person's Message says (section 5.6). Three failures
- * are told apart by the provider's answer: its words for a refused key first, since it answers low
- * credit as a 400; then any other 4xx but a rate limit or a timeout, a refused request; then
- * anything else, the model not reached.
+ * are told apart by the provider's answer: a refused key first, by its status, its error's type
+ * or its sentences for low credit, since it answers that as a 400; then any other 4xx but a rate
+ * limit or a timeout, a refused request; then anything else, the model not reached.
  *
  * - `model_unavailable`: the model could not be reached, which only waiting mends. It shows only
  *   on the Run that failed, and a Brief or Review is tried again.

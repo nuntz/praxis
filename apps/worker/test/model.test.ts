@@ -125,6 +125,13 @@ describe("why a Run failed, from the provider's answer", () => {
     [answer(400, "invalid_request_error", "Tool reference 'x' not found in available tools.")],
     [answer(404, "not_found_error", "model: claude-not-a-model")],
     [answer(413, "request_too_large", "Request exceeds the maximum allowed number of bytes.")],
+    // Its message quotes the request, which may hold any words, those of a refused key too.
+    [answer(400, "invalid_request_error", "Tool reference 'billing_lookup' not found.")],
+    [answer(400, "invalid_request_error", "messages.0: 'room 403, usage limit' is not valid.")],
+    // The runtime may say first what it was doing when the provider refused it.
+    [`Compaction failed: Summarization failed: ${answer(400, "invalid_request_error", "No.")}`],
+    // An error sent during a stream has a body and no status.
+    [answer(null, "invalid_request_error", "Tool reference 'x' not found in available tools.")],
   ])("a request the provider refuses is refused, which no wait mends: %s", (said) => {
     expect(runFailure("model_error", said)).toBe("request_refused");
   });
@@ -139,6 +146,8 @@ describe("why a Run failed, from the provider's answer", () => {
         "Your credit balance is too low to access the Anthropic API.",
       ),
     ],
+    [answer(400, "invalid_request_error", "You have reached your specified API usage limits.")],
+    [answer(402, "billing_error", "There is an issue with your payment method.")],
   ])("the key the provider refuses is refused, even as a 400: %s", (said) => {
     expect(runFailure("model_error", said)).toBe("key_refused");
   });
