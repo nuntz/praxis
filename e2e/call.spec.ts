@@ -433,6 +433,7 @@ test("a Call ended while the Device is still asked to keep its screen awake lets
   await ended;
   await voice.answerScreen();
 
+  await expect.poll(() => voice.grantedScreen()).toBe(1);
   await expect.poll(() => voice.awake()).toBe(false);
 });
 

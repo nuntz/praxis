@@ -40,6 +40,8 @@ export type FakeVoice = {
   delayScreen(): void;
   /** Answer the request `delayScreen` kept waiting. */
   answerScreen(): void;
+  /** How many wake locks the Device has granted. */
+  grantedScreen(): number;
 };
 
 declare global {
@@ -210,12 +212,14 @@ export function installFakeVoice({ keepsScreenAwake }: { keepsScreenAwake: boole
       });
     },
     answerScreen: () => {},
+    grantedScreen: () => grants,
   };
 
   // The Screen Wake Lock: one is granted only while the page is shown, and released when it is
   // hidden, as the browser does.
   const wakeLocks = new Set<FakeWakeLock>();
   let delayed: Promise<void> | null = null;
+  let grants = 0;
   class FakeWakeLock extends EventTarget {
     readonly type = "screen";
     released = false;
@@ -239,6 +243,7 @@ export function installFakeVoice({ keepsScreenAwake }: { keepsScreenAwake: boole
       if (type !== "screen" || hidden) throw new DOMException("Not shown", "NotAllowedError");
       const granted = new FakeWakeLock();
       wakeLocks.add(granted);
+      grants += 1;
       return granted;
     },
   };
@@ -293,5 +298,6 @@ export async function fakeVoice(page: Page, { keepsScreenAwake = true } = {}) {
     releaseScreen: () => page.evaluate(() => window.__voiceFake.releaseScreen()),
     delayScreen: () => page.evaluate(() => window.__voiceFake.delayScreen()),
     answerScreen: () => page.evaluate(() => window.__voiceFake.answerScreen()),
+    grantedScreen: () => page.evaluate(() => window.__voiceFake.grantedScreen()),
   };
 }
