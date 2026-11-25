@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 
 // The voice provider is one of the faked things (section 13). This is its end on the Device: it
-// stands in for the browser's WebRTC and microphone, and for whether the page is shown, which a
-// journey cannot hide, so a Call carries scripted text and
+// stands in for the browser's WebRTC and microphone, for whether the page is shown, which a
+// journey cannot hide, and for the Screen Wake Lock, which a headless browser does not grant, so a Call carries scripted text and
 // handovers and no sound, as the provider's channel would. Its end at the Context's object is
 // apps/worker/test/voice-fake.ts, which the journeys' Worker sets every Call up at. It holds the
 // Device to the contract (e2e/voice-contract.spec.ts): an event the Device may not send, or the
@@ -32,6 +32,14 @@ export type FakeVoice = {
   microphoneOn(): boolean;
   /** The person leaves Praxis: the tab hidden, as when the screen is locked, or shown again. */
   hide(hidden: boolean): void;
+  /** Whether the Device is kept from locking its screen by itself. */
+  awake(): boolean;
+  /** The Device releases every wake lock on its screen, as iOS may while the page is shown. */
+  releaseScreen(): void;
+  /** The next request for a wake lock goes unanswered until `answerScreen`. */
+  delayScreen(): void;
+  /** Answer the request `delayScreen` kept waiting. */
+  answerScreen(): void;
 };
 
 declare global {
@@ -41,10 +49,10 @@ declare global {
 }
 
 /**
- * Put the fake in the page's place of WebRTC and the microphone, before the page loads. Runs in
- * the page, so it holds everything it uses.
+ * Put the fake in the page's place of WebRTC and the microphone, before the page loads, and of the
+ * Screen Wake Lock unless the Device has none. Runs in the page, so it holds everything it uses.
  */
-export function installFakeVoice(): void {
+export function installFakeVoice({ keepsScreenAwake }: { keepsScreenAwake: boolean }): void {
   const allowed = ["session.commentary.append", "session.close"];
   let clock = 0;
   let channel: FakeChannel | null = null;
@@ -192,7 +200,49 @@ export function installFakeVoice(): void {
     },
     microphoneOn: () => track.enabled && !track.stopped,
     hide: () => {},
+    awake: () => wakeLocks.size > 0,
+    releaseScreen: () => {
+      for (const wakeLock of [...wakeLocks]) wakeLock.letGo();
+    },
+    delayScreen: () => {
+      delayed = new Promise((answer) => {
+        fake.answerScreen = answer;
+      });
+    },
+    answerScreen: () => {},
   };
+
+  // The Screen Wake Lock: one is granted only while the page is shown, and released when it is
+  // hidden, as the browser does.
+  const wakeLocks = new Set<FakeWakeLock>();
+  let delayed: Promise<void> | null = null;
+  class FakeWakeLock extends EventTarget {
+    readonly type = "screen";
+    released = false;
+    async release(): Promise<void> {
+      this.letGo();
+    }
+    letGo(): void {
+      if (this.released) return;
+      this.released = true;
+      wakeLocks.delete(this);
+      this.dispatchEvent(new Event("release"));
+    }
+  }
+  const wakeLock = {
+    request: async (type: string) => {
+      if (delayed) {
+        const answered = delayed;
+        delayed = null;
+        await answered;
+      }
+      if (type !== "screen" || hidden) throw new DOMException("Not shown", "NotAllowedError");
+      const granted = new FakeWakeLock();
+      wakeLocks.add(granted);
+      return granted;
+    },
+  };
+  Object.defineProperty(navigator, "wakeLock", { value: keepsScreenAwake ? wakeLock : undefined });
 
   let hidden = false;
   Object.defineProperty(document, "visibilityState", {
@@ -201,6 +251,7 @@ export function installFakeVoice(): void {
   Object.defineProperty(document, "hidden", { get: () => hidden });
   fake.hide = (to) => {
     hidden = to;
+    if (hidden) fake.releaseScreen();
     document.dispatchEvent(new Event("visibilitychange"));
   };
 
@@ -218,9 +269,12 @@ export function installFakeVoice(): void {
   Object.defineProperty(window, "MediaStream", { value: class {} });
 }
 
-/** The fake in this page, put in place before it loads, and a journey's way to it. */
-export async function fakeVoice(page: Page) {
-  await page.addInitScript(installFakeVoice);
+/**
+ * The fake in this page, put in place before it loads, and a journey's way to it: on a Device that
+ * can keep its screen awake, unless told otherwise.
+ */
+export async function fakeVoice(page: Page, { keepsScreenAwake = true } = {}) {
+  await page.addInitScript(installFakeVoice, { keepsScreenAwake });
   return {
     /** The person speaks, and the voice model hands it over: the handover's id. */
     say: (words: string) =>
@@ -235,5 +289,9 @@ export async function fakeVoice(page: Page) {
     faults: () => page.evaluate(() => window.__voiceFake.faults),
     microphoneOn: () => page.evaluate(() => window.__voiceFake.microphoneOn()),
     hide: (hidden: boolean) => page.evaluate((to) => window.__voiceFake.hide(to), hidden),
+    awake: () => page.evaluate(() => window.__voiceFake.awake()),
+    releaseScreen: () => page.evaluate(() => window.__voiceFake.releaseScreen()),
+    delayScreen: () => page.evaluate(() => window.__voiceFake.delayScreen()),
+    answerScreen: () => page.evaluate(() => window.__voiceFake.answerScreen()),
   };
 }

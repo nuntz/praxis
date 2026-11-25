@@ -391,6 +391,64 @@ test("about two minutes in which nothing is said end the Call, with a Notice", a
   ]);
 });
 
+test("a Call keeps the Device's screen from locking by itself until the Call ends", async ({
+  page,
+}, testInfo) => {
+  const voice = await fakeVoice(page);
+  const { name, conversation } = await inContext(page, testInfo, "Awake");
+  expect(await voice.awake()).toBe(false);
+  const controls = await startCall(page, conversation, name);
+  await expect.poll(() => voice.awake()).toBe(true);
+
+  const ended = page.waitForResponse(/\/tools\/end_call$/);
+  await controls.getByRole("button", { name: "End Call", exact: true }).click();
+  await ended;
+  await expect.poll(() => voice.awake()).toBe(false);
+});
+
+test("when the Device releases its screen during a Call while Praxis is shown, the Call keeps it awake again", async ({
+  page,
+}, testInfo) => {
+  const voice = await fakeVoice(page);
+  const { name, conversation } = await inContext(page, testInfo, "Awake again");
+  const controls = await startCall(page, conversation, name);
+  await expect.poll(() => voice.awake()).toBe(true);
+
+  await voice.releaseScreen();
+
+  await expect.poll(() => voice.awake()).toBe(true);
+  await expect(controls).toBeVisible();
+});
+
+test("a Call ended while the Device is still asked to keep its screen awake lets it sleep once answered", async ({
+  page,
+}, testInfo) => {
+  const voice = await fakeVoice(page);
+  const { name, conversation } = await inContext(page, testInfo, "Answered late");
+  await voice.delayScreen();
+  const controls = await startCall(page, conversation, name);
+
+  const ended = page.waitForResponse(/\/tools\/end_call$/);
+  await controls.getByRole("button", { name: "End Call", exact: true }).click();
+  await ended;
+  await voice.answerScreen();
+
+  await expect.poll(() => voice.awake()).toBe(false);
+});
+
+test("a Device that cannot keep its screen awake has its Call all the same", async ({
+  page,
+}, testInfo) => {
+  const voice = await fakeVoice(page, { keepsScreenAwake: false });
+  const { tag, name, conversation } = await inContext(page, testInfo, "Not held");
+  await startCall(page, conversation, name);
+
+  await voice.say(`What is due ${tag}?`);
+
+  await expect.poll(async () => (await voice.spoken()).length).toBe(1);
+  expect(await voice.faults()).toEqual([]);
+});
+
 test("leaving Praxis ends the Call at the provider", async ({ page }, testInfo) => {
   const voice = await fakeVoice(page);
   const { name, conversation } = await inContext(page, testInfo, "Left");

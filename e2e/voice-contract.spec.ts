@@ -100,7 +100,7 @@ for (const provider of providers) {
     test.skip(real && provider.key === "", "Run by hand, given VOICE_API_KEY");
 
     test.beforeEach(async ({ page }) => {
-      if (!real) await page.addInitScript(installFakeVoice);
+      if (!real) await page.addInitScript(installFakeVoice, { keepsScreenAwake: true });
       await openChannel(page, provider.key || null);
     });
 
