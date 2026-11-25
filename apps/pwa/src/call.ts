@@ -19,8 +19,9 @@ import type { CallTool } from "./tools.ts";
 // back under that handover, to be spoken, or what Praxis has to say when there is none: the Message
 // refused, or its Run failed. It sends the provider nothing else but the end of the Call. The voice
 // key never reaches it: the Context's object sets the Call up. While the Call goes on it sends the
-// object a sign of life, and ends the Call itself on leaving Praxis and after two minutes of
-// silence; the object ends it when the Device falls silent, at the cap, and when another starts.
+// object a sign of life and keeps the screen awake, so the Device does not lock it by itself, and it
+// ends the Call itself on leaving Praxis and after two minutes of silence; the object ends it when
+// the Device falls silent, at the cap, and when another starts.
 
 /** How a Call ends, as the Device reports it. */
 export type DeviceCallEnd = (typeof CALL_ENDS_REPORTED)[number];
@@ -106,6 +107,8 @@ export class DeviceCall {
     if (event.type === "visibilitychange" && document.visibilityState !== "hidden") return;
     void this.#close("left");
   };
+  /** The wake lock on the screen while the Call goes on, once the Device has granted it. */
+  #wakeLock: WakeLockSentinel | null = null;
   /** Set while the person hangs up: the Device waits to hear the provider end the session. */
   #ending: ((end: ProviderEnd) => void) | null = null;
   #ended = false;
@@ -206,6 +209,31 @@ export class DeviceCall {
     window.addEventListener("pagehide", this.#leaving);
     window.addEventListener("offline", this.#leaving);
     this.#signOfLife = setInterval(() => void this.#alive(), SIGN_OF_LIFE_EVERY);
+    void this.#keepAwake();
+  }
+
+  /**
+   * Keep the screen awake, so the Device does not lock it by itself and end the Call. A Device that
+   * will not has the Call all the same. One that releases it while Praxis is still shown is asked
+   * again; hidden, the Call is ending anyway.
+   */
+  async #keepAwake(): Promise<void> {
+    let wakeLock: WakeLockSentinel;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+    } catch {
+      return;
+    }
+    // Answered after the Call ended.
+    if (this.#ended) {
+      void wakeLock.release();
+      return;
+    }
+    this.#wakeLock = wakeLock;
+    wakeLock.addEventListener("release", () => {
+      if (this.#ended || document.visibilityState === "hidden") return;
+      void this.#keepAwake();
+    });
   }
 
   /**
@@ -397,6 +425,8 @@ export class DeviceCall {
     document.removeEventListener("visibilitychange", this.#leaving);
     window.removeEventListener("pagehide", this.#leaving);
     window.removeEventListener("offline", this.#leaving);
+    void this.#wakeLock?.release();
+    this.#wakeLock = null;
     for (const track of this.#microphone.getTracks()) track.stop();
     this.#audio.srcObject = null;
     this.#connection.close();
