@@ -1,5 +1,5 @@
 import type { Page, TestInfo } from "@playwright/test";
-import type { StandingNotice } from "@praxis/domain";
+import { mendedByWaiting, RUN_FAILURES, type StandingNotice } from "@praxis/domain";
 import { expect, showTab, test } from "./fixtures.ts";
 
 // A standing Notice shows in Attention only, and leads to the section of Settings that deals with
@@ -73,4 +73,52 @@ test("a Brief whose request the provider refused says so in Attention, and not t
   );
   await expect(notice).not.toContainText("could not be reached");
   await expect(notice).not.toContainText("a little later");
+});
+
+test("a Review whose key the provider refused says so in Attention, and not that it is tried again", async ({
+  page,
+}, testInfo) => {
+  await noticesAre(page, [
+    {
+      kind: "clock_failed",
+      clock: "review",
+      failure: "key_refused",
+      since: new Date().toISOString(),
+    },
+  ]);
+  await page.goto("/");
+  const notice = (await attention(page, testInfo)).getByTestId("standing-notice");
+
+  // Where the key is set is the refused key's own Notice to say, not this one's.
+  await expect(notice).toHaveText(
+    /^The Review could not run since .+: the model's provider refused this Deployment's key\. It is not tried again: the next one runs at its time\.\s*$/,
+  );
+});
+
+test("a Brief that failed says it is tried again in Attention exactly when waiting mends its failure", async ({
+  page,
+}, testInfo) => {
+  const since = new Date().toISOString();
+  await noticesAre(
+    page,
+    RUN_FAILURES.map((failure) => ({ kind: "clock_failed", clock: "brief", failure, since })),
+  );
+  await page.goto("/");
+  const notices = (await attention(page, testInfo)).getByTestId("standing-notice");
+  await expect(notices).toHaveCount(RUN_FAILURES.length);
+
+  for (const [at, failure] of RUN_FAILURES.entries()) {
+    const notice = notices.nth(at);
+    if (mendedByWaiting(failure)) {
+      await expect(notice, failure).toContainText(
+        "It is tried again a little later each time, until it runs or the next one is due.",
+      );
+      await expect(notice, failure).not.toContainText("not tried again");
+    } else {
+      await expect(notice, failure).toContainText(
+        "It is not tried again: the next one runs at its time.",
+      );
+      await expect(notice, failure).not.toContainText("a little later");
+    }
+  }
 });
