@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import wrangler from "../apps/worker/wrangler.jsonc";
-import { deploysWithoutBackup, lastDueBackup, WITHOUT_BACKUP } from "./backup-check.ts";
+import {
+  BACKUP_BUCKET,
+  backupListing,
+  deploysWithoutBackup,
+  holdsBackup,
+  lastDueBackup,
+  WITHOUT_BACKUP,
+} from "./backup-check.ts";
+
+/** The Backup due on 2026-11-22. */
+const DUE = "praxis-export-2026-11-22.zip";
 
 describe("the deploy's check for a Backup from the last day", () => {
   test("looks for today's once the daily trigger has fired, yesterday's before", () => {
@@ -24,5 +34,46 @@ describe("the deploy's check for a Backup from the last day", () => {
     expect(deploysWithoutBackup("Fix the boiler\n\ndeploy-without-backup: YES")).toBe(true);
     expect(deploysWithoutBackup("Fix the boiler")).toBe(false);
     expect(deploysWithoutBackup(`Do not write ${WITHOUT_BACKUP} on a line of its own`)).toBe(false);
+  });
+
+  test("finds the Backup when the bucket lists an object of exactly its name", () => {
+    const listing = { success: true, result: [{ key: DUE, size: 1 }] };
+    expect(holdsBackup(DUE, 200, JSON.stringify(listing))).toBe(true);
+  });
+
+  test("does not take an object whose name only starts with the Backup's for it", () => {
+    const listing = {
+      success: true,
+      result: [{ key: `${DUE}.old`, size: 1 }],
+    };
+    expect(holdsBackup(DUE, 200, JSON.stringify(listing))).toBe(false);
+  });
+
+  test("finds no Backup when the bucket lists nothing under its name", () => {
+    const listing = { success: true, result: [] };
+    expect(holdsBackup(DUE, 200, JSON.stringify(listing))).toBe(false);
+  });
+
+  test("fails, naming the status, when the API does not answer with a listing", () => {
+    const refused = { success: false, errors: [{ code: 10000, message: "Authentication error" }] };
+    expect(() => holdsBackup(DUE, 200, JSON.stringify(refused))).toThrow(
+      "HTTP 200: Authentication error",
+    );
+    expect(() => holdsBackup(DUE, 403, JSON.stringify(refused))).toThrow(
+      "HTTP 403: Authentication error",
+    );
+    expect(() => holdsBackup(DUE, 502, "<html>Bad gateway</html>")).toThrow("HTTP 502");
+  });
+
+  test("lists the bucket under the Backup's name, in the Deployment's jurisdiction if it has one", () => {
+    const inEu = backupListing(DUE, { account: "acc123", jurisdiction: "eu", token: "tok" });
+    expect(inEu.url).toBe(
+      `https://api.cloudflare.com/client/v4/accounts/acc123/r2/buckets/praxis-backups/objects?prefix=${DUE}`,
+    );
+    expect(BACKUP_BUCKET).toBe("praxis-backups");
+    expect(inEu.headers).toEqual({ Authorization: "Bearer tok", "cf-r2-jurisdiction": "eu" });
+    const anywhere = backupListing(DUE, { account: "acc123", jurisdiction: "", token: "tok" });
+    expect(anywhere.url).toBe(inEu.url);
+    expect(anywhere.headers).toEqual({ Authorization: "Bearer tok" });
   });
 });

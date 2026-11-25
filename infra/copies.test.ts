@@ -15,6 +15,7 @@ const routing = await Bun.file(new URL("../apps/worker/src/routing.ts", import.m
 const meaning = await Bun.file(new URL("../apps/worker/src/meaning.ts", import.meta.url)).text();
 const deploy = await Bun.file(new URL("../scripts/deploy-config.ts", import.meta.url)).text();
 const workflow = await Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text();
+const backupCheck = await Bun.file(new URL("../scripts/backup-check.ts", import.meta.url)).text();
 
 /** The jurisdictions the Worker keeps objects in, as routing.ts lists them. */
 const WORKER_JURISDICTIONS = [
@@ -32,6 +33,12 @@ test("the bucket infra makes for the Backups is the one wrangler.jsonc binds", (
   expect(wrangler.r2_buckets.map((bucket: { bucket_name: string }) => bucket.bucket_name)).toEqual([
     made,
   ]);
+});
+
+test("the deploy looks for a Backup in the bucket infra makes for them", () => {
+  const made = /^const BACKUP_BUCKET = "([^"]*)";$/m.exec(program)?.[1];
+  expect(made).toBeDefined();
+  expect(/^export const BACKUP_BUCKET = "([^"]*)";$/m.exec(backupCheck)?.[1]).toBe(made);
 });
 
 test("every var infra gives the Worker is one wrangler.jsonc declares, so its type is Env's", () => {

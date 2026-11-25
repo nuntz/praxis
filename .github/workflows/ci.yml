@@ -160,12 +160,15 @@ jobs:
           due="$(bun scripts/backup-check.ts due)"
           account="$(pulumi stack output --cwd infra cloudflareAccountId --show-secrets)"
           jurisdiction="$(pulumi stack output --cwd infra workerVars --show-secrets --json | jq -r '.JURISDICTION')"
-          found="$RUNNER_TEMP/backup.zip"
-          trap 'rm -f "$found"' EXIT
-          if (cd apps/worker && CLOUDFLARE_ACCOUNT_ID="$account" bunx wrangler r2 object get \
-            "praxis-backups/$due" --remote ${jurisdiction:+--jurisdiction "$jurisdiction"} \
-            --file "$found" > /dev/null 2>&1); then
+          # Lists the bucket's metadata only, never the Backup: 3 is no Backup, and any other failure
+          # is a check that cannot say, which stops here whatever the commit's message says.
+          found=0
+          CLOUDFLARE_ACCOUNT_ID="$account" JURISDICTION="$jurisdiction" \
+            bun scripts/backup-check.ts in-bucket "$due" || found=$?
+          if [ "$found" -eq 0 ]; then
             echo "The Backup $due is in the bucket."
+          elif [ "$found" -ne 3 ]; then
+            exit 1
           elif bun scripts/backup-check.ts overridden <<< "$HEAD_COMMIT_MESSAGE"; then
             echo "::warning::No Backup $due in the bucket: deploying without it, as the commit says."
           else
