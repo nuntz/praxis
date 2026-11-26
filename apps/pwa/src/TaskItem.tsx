@@ -216,23 +216,34 @@ function TaskDatesEditor(props: {
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();
-  async function setDate(field: keyof TaskDates, day: string) {
+  // Each send is numbered, and an answer is placed only if no later send's answer is placed
+  // already: one from before it would show the Task without the later day (#162).
+  let sends = 0;
+  let placed = 0;
+  async function setDate(id: string, field: keyof TaskDates, day: string) {
+    // biome-ignore lint/plugin: a write, not a read: latestRead() would drop an earlier answer once a later day is sent, though the later one may be refused, and send it again after a change.
+    const mine = ++sends;
     try {
-      const result = await callTool("set_task_dates", {
-        id: props.task.id,
-        [field]: day === "" ? null : day,
-      });
+      const result = await callTool("set_task_dates", { id, [field]: day === "" ? null : day });
       if (!result.ok) return props.onProblem(result.error.message);
+      if (mine < placed) return;
+      placed = mine;
       props.onTask(result.value.record);
     } catch (error) {
       props.onProblem(unreachableMessage(error));
     }
   }
 
+  // The Task the fields are for, as they are drawn: a day sent once they are gone is still its.
+  const id = props.task.id;
   const field = (name: keyof TaskDates, label: string) => (
     <label class="task-date">
       {label}
-      <SettlingField type="date" value={props.task[name]} onSettle={(day) => setDate(name, day)} />
+      <SettlingField
+        type="date"
+        value={props.task[name]}
+        onSettle={(day) => setDate(id, name, day)}
+      />
     </label>
   );
 
