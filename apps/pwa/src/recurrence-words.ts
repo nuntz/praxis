@@ -1,5 +1,7 @@
 import {
+  addDays,
   type Day,
+  daysBetween,
   type NewRecurrence,
   type Recurrence,
   utcMidnight,
@@ -98,12 +100,48 @@ export function recurrencesOffered(due: Day): NewRecurrence[] {
   ];
 }
 
-/** Whether a Task's rule is one offered, whatever day it counts from. */
-export function sameRule(held: Recurrence, offered: NewRecurrence): boolean {
+/** The Monday of the week a day falls in: weeks run Monday to Sunday (section 3.5). */
+function mondayOf(day: Day): Day {
+  return addDays(day, -((new Date(utcMidnight(day)).getUTCDay() + 6) % 7));
+}
+
+/** How many calendar months lie from one day's month to another's. */
+function monthsBetween(from: Day, to: Day): number {
+  const [a, b] = [new Date(utcMidnight(from)), new Date(utcMidnight(to))];
+  return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + b.getUTCMonth() - a.getUTCMonth();
+}
+
+/**
+ * Whether a Task's rule makes the same Occurrences as one offered from its Due Date, `due`. A
+ * schedule counts from the day it was set (section 3.5), so the same words can name another
+ * schedule once the Due Date has moved: every year on another day, every 2 weeks in the other
+ * week. An interval counts from the day it is closed, whatever day it was set.
+ */
+export function sameRule(held: Recurrence, offered: NewRecurrence, due: Day): boolean {
   if (held.kind !== offered.kind || held.every !== offered.every) return false;
-  if (held.kind === "weeks" && offered.kind === "weeks")
-    return held.on.join() === offered.on.join();
-  if (held.kind === "months" && offered.kind === "months") return held.on === offered.on;
-  if (held.kind === "interval" && offered.kind === "interval") return held.unit === offered.unit;
-  return true;
+  if (held.kind === "interval" || offered.kind === "interval") {
+    return held.kind === "interval" && offered.kind === "interval" && held.unit === offered.unit;
+  }
+  const every = held.every;
+  switch (held.kind) {
+    case "days":
+      return daysBetween(held.from, due) % every === 0;
+    case "weeks":
+      return (
+        offered.kind === "weeks" &&
+        held.on.join() === offered.on.join() &&
+        daysBetween(mondayOf(held.from), mondayOf(due)) % (7 * every) === 0
+      );
+    case "months":
+      return (
+        offered.kind === "months" &&
+        held.on === offered.on &&
+        monthsBetween(held.from, due) % every === 0
+      );
+    case "years":
+      return (
+        held.from.slice(5) === due.slice(5) &&
+        (Number(due.slice(0, 4)) - Number(held.from.slice(0, 4))) % every === 0
+      );
+  }
 }

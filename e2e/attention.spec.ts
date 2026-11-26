@@ -275,6 +275,34 @@ test("from a Task's page the person renames it, gives it a Recurrence from its D
   );
 });
 
+test("a yearly Recurrence whose Task's Due Date has moved is shown as its own, not as the one offered from the new day", async ({
+  page,
+}, testInfo) => {
+  const { id, tasks } = await contextWith(page, testInfo, ["Renew the insurance"]);
+  const [renewal] = tasks;
+  await callContextTool(page, id, "set_task_dates", { id: renewal?.id, due_date: "2099-01-01" });
+  await callContextTool(page, id, "set_recurrence", {
+    id: renewal?.id,
+    recurrence: { kind: "years", every: 1 },
+  });
+  // The schedule still counts from the day it was set (section 3.5).
+  await callContextTool(page, id, "set_task_dates", { id: renewal?.id, due_date: "2099-02-01" });
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  await attention.getByRole("button", { name: "Renew the insurance", exact: true }).click();
+  const opened = attention.getByRole("dialog", { name: "Renew the insurance" });
+  await opened.getByRole("button", { name: /^Recurrence Every year on / }).click();
+  const choices = opened.getByRole("group", { name: "Recurrence" });
+  const pressed = choices.getByRole("button", { pressed: true });
+  await expect(pressed).toHaveCount(1);
+  await expect(pressed).toHaveText(/^Every year on (1 January|January 1)$/);
+  await expect(choices.getByRole("button", { name: /February/ })).not.toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
 test("a Delegated Task's row names the Person and the day, and its Delegated to page offers to take it back", async ({
   page,
 }, testInfo) => {

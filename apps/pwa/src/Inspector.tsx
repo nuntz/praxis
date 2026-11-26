@@ -227,7 +227,9 @@ export function Inspector(props: {
     input: ToolInput<N>,
     { holds = true } = {},
   ): Promise<ToolOutput[N] | null> {
-    if (sending()) return null;
+    // Only a write that holds the page waits on another: a title or a date changed meanwhile is
+    // sent all the same, never dropped.
+    if (holds && sending()) return null;
     if (holds) setSending(true);
     setProblem(null);
     changed();
@@ -1194,7 +1196,8 @@ function RecurrencePage(props: {
           <Show
             when={(() => {
               const rule = held();
-              return rule && !recurrencesOffered(due()).some((offered) => sameRule(rule, offered))
+              return rule &&
+                !recurrencesOffered(due()).some((offered) => sameRule(rule, offered, due()))
                 ? rule
                 : null;
             })()}
@@ -1211,7 +1214,7 @@ function RecurrencePage(props: {
                 icon={Repeat}
                 pressed={(() => {
                   const own = held();
-                  return own !== null && sameRule(own, rule);
+                  return own !== null && sameRule(own, rule, due());
                 })()}
                 disabled={props.sending}
                 onClick={() => props.onChoose(rule)}
