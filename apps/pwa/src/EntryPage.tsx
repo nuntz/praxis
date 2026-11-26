@@ -29,15 +29,19 @@ export function EntryPage(props: {
   onClose: () => void;
 }) {
   const callTool = useCallTool();
-  // As the page opened on it: what the change is made against, whatever comes in meanwhile.
-  const opened = { words: props.entry.words, version: props.entry.version };
-  const [words, setWords] = createSignal(opened.words);
+  // As the page opened on it, or as it last saved it: what the next change is made against.
+  const [opened, setOpened] = createSignal({
+    words: props.entry.words,
+    version: props.entry.version,
+  });
+  const [words, setWords] = createSignal(props.entry.words);
+  const [said, setSaid] = createSignal<string | null>(null);
   const [title, setTitle] = createSignal("");
   const [saving, setSaving] = createSignal(false);
   const [adding, setAdding] = createSignal(false);
   const [asking, setAsking] = createSignal(false);
   const [problem, setProblem] = createSignal<string | null>(null);
-  const changed = () => words() !== opened.words;
+  const changed = () => words() !== opened().words;
   const canSave = () => !saving() && changed() && words().trim() !== "";
   let field!: HTMLTextAreaElement;
   let taskField!: HTMLInputElement;
@@ -69,12 +73,16 @@ export function EntryPage(props: {
     if (!canSave()) return;
     setSaving(true);
     setProblem(null);
+    setSaid(null);
+    // What was sent, and what it was sent against: the words can change while it is out.
+    const sent = words();
+    const from = opened();
     try {
       const result = await callTool("edit_entry", {
         id: props.entry.id,
-        words: words(),
-        version: opened.version,
-        tasks: inlineTasksAdded(opened.words, words()),
+        words: sent,
+        version: from.version,
+        tasks: inlineTasksAdded(from.words, sent),
       });
       if (!result.ok) {
         return setProblem(
@@ -86,7 +94,10 @@ export function EntryPage(props: {
       // A change by the person's own hand is never held.
       if (isHeld(result.value)) throw new Error("A change by hand was held");
       props.onSaved(result.value.record);
-      props.onClose();
+      // Words typed while it was out are not dropped: the page stays, with them still to save.
+      if (words() === sent) return props.onClose();
+      setOpened({ words: sent, version: result.value.record.version });
+      setSaid("Saved. What you typed since is not saved yet.");
     } catch (error) {
       setProblem(unreachableMessage(error));
     } finally {
@@ -103,8 +114,8 @@ export function EntryPage(props: {
       const result = await callTool("add_task", { entry_id: props.entry.id, title: named });
       if (!result.ok) return setProblem(result.error.message);
       props.onTask(result.value.record);
-      setTitle("");
-      taskField.focus();
+      // A title typed while it was out stays, to be added next.
+      if (title().trim() === named) setTitle("");
     } catch (error) {
       setProblem(unreachableMessage(error));
     } finally {
@@ -179,6 +190,13 @@ export function EntryPage(props: {
           <Show when={problem()}>
             {(message) => (
               <p class="problem" role="alert">
+                {message()}
+              </p>
+            )}
+          </Show>
+          <Show when={said()}>
+            {(message) => (
+              <p class="entry-page-said" role="status">
                 {message()}
               </p>
             )}

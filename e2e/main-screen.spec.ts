@@ -198,6 +198,11 @@ test("at rest each composer is one line, its label where the words will go, and 
     await field.fill("Half a thought");
     await leave();
     await expect(field).not.toBeFocused();
+    // Read once a fold would have run: it waits for the press to be done, then a turn of the page.
+    await page.evaluate(
+      () => new Promise((settled) => setTimeout(() => requestAnimationFrame(settled))),
+    );
+    await expect(frame).not.toHaveAttribute("data-folded");
     expect((await boxOf(frame)).height).toBe(opened.height);
     await field.fill("");
     await leave();

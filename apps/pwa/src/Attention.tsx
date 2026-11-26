@@ -77,18 +77,30 @@ export function Attention(props: {
     return `${why} ${shortDay(on, today)}`;
   }
 
+  // What the status line says stays until another change replaces it, so its Reopen or Restore
+  // can still be reached after a row is opened.
   function open(page: Page, key: string) {
     if (pages().length === 0) openedFrom = key;
-    setSaid(null);
     setPages([page]);
   }
 
+  /**
+   * The page shut: the focus goes back to the row it was opened from, or to what the status line
+   * offers when that row has left. A change made on the page is read first, since reading it
+   * draws the rows afresh and would take the focus from one given it before.
+   */
   function closed() {
     const key = openedFrom;
     openedFrom = null;
-    queueMicrotask(() => {
+    const focusRow = () => {
       const row = key && list?.querySelector<HTMLElement>(`[data-open-key="${key}"]`);
       (row || list?.querySelector<HTMLElement>(".moved button") || list)?.focus();
+    };
+    queueMicrotask(focusRow);
+    void read().then(() => {
+      // Only where the focus was lost with the row drawn afresh: the person may have moved on.
+      const at = document.activeElement;
+      if (at === document.body || at === list) focusRow();
     });
   }
 
@@ -96,7 +108,8 @@ export function Attention(props: {
     if (!shown.undo) return;
     try {
       await shown.undo.run(callTool);
-      setSaid(null);
+      // Only what it undid goes from the status line: a change said meanwhile stays said.
+      if (said() === shown) setSaid(null);
       await read();
     } catch (error) {
       setProblem(unreachableMessage(error));
@@ -109,7 +122,7 @@ export function Attention(props: {
       timeZone={props.timeZone}
       place={place}
       openKey={`task-${task.id}`}
-      onOpen={() => open({ kind: "task", id: task.id }, `task-${task.id}`)}
+      onOpen={() => open({ kind: "task", id: task.id, held: task }, `task-${task.id}`)}
       onTask={() => void read()}
       onProblem={setProblem}
     />
@@ -191,7 +204,7 @@ export function Attention(props: {
                       openKey={`due-project-${item.project.id}`}
                       onOpen={() =>
                         open(
-                          { kind: "project", id: item.project.id },
+                          { kind: "project", id: item.project.id, held: item.project },
                           `due-project-${item.project.id}`,
                         )
                       }
@@ -219,7 +232,10 @@ export function Attention(props: {
                     noOpenTask={item.no_open_task}
                     openKey={`project-${item.project.id}`}
                     onOpen={() =>
-                      open({ kind: "project", id: item.project.id }, `project-${item.project.id}`)
+                      open(
+                        { kind: "project", id: item.project.id, held: item.project },
+                        `project-${item.project.id}`,
+                      )
                     }
                   />
                 )}
@@ -248,7 +264,7 @@ export function Attention(props: {
           projectName={(id) =>
             view()?.projects.find((item) => item.project.id === id)?.project.name
           }
-          version={view}
+          viewRead={view}
           onChanged={() => void read()}
           onSaid={setSaid}
           onClosed={closed}

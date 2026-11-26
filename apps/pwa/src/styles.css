@@ -2938,8 +2938,14 @@ button.entry-page-discard {
   overflow-y: auto;
 }
 
-.entry-page-body > .problem {
+.entry-page-body > .problem,
+.entry-page-said {
   margin: 0;
+}
+
+.entry-page-said {
+  color: var(--muted);
+  font: var(--type-meta);
 }
 
 .entry-page-words {

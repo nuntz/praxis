@@ -1,4 +1,4 @@
-import { type Day, type Project, type Task, utcMidnight } from "@praxis/domain";
+import { type Day, dayIn, type Project, type Task, utcMidnight } from "@praxis/domain";
 import ChevronRight from "lucide-solid/icons/chevron-right";
 import Folder from "lucide-solid/icons/folder";
 import Hourglass from "lucide-solid/icons/hourglass";
@@ -25,14 +25,20 @@ export function shortDay(day: Day, today: Day): string {
   }).format(utcMidnight(day));
 }
 
-type Lead = { text: string; tone?: "overdue" | "today" | "flag" };
+/** The mark a row leads with, and which state it says, so the signs leave that one out. */
+type Lead = {
+  text: string;
+  tone?: "overdue" | "today" | "flag";
+  says?: "waiting" | "delegated";
+};
 
 /**
  * The mark a Task's row leads with: Overdue, then due today, then why the place shows it, who it
  * is Delegated to, the day it is Deferred until, and its Due Date. Overdue and due today are never
  * left out, since they are what Attention is for.
  */
-function taskLead(task: Task, today: Day, place: string | undefined): Lead | null {
+function taskLead(task: Task, timeZone: string, place: string | undefined): Lead | null {
+  const today = todayIn(timeZone);
   const state = task.state;
   if (state.is !== "open") return { text: state.is === "finished" ? "Finished" : "Dropped" };
   const due = task.due_date;
@@ -41,9 +47,13 @@ function taskLead(task: Task, today: Day, place: string | undefined): Lead | nul
   }
   if (due === today) return { text: "Due today", tone: "today" };
   if (place !== undefined) return { text: place };
-  if (state.delegated) return { text: state.delegated.to.name };
+  // The Person and the day it was Delegated, as the Delegated section lists it (section 8.3).
+  if (state.delegated) {
+    const since = shortDay(dayIn(Date.parse(state.delegated.since), timeZone), today);
+    return { text: `${state.delegated.to.name}, ${since}`, says: "delegated" };
+  }
   if (state.deferred) return { text: `Deferred until ${shortDay(state.deferred.until, today)}` };
-  if (state.waiting) return { text: "Waiting" };
+  if (state.waiting) return { text: "Waiting", says: "waiting" };
   if (due !== null) return { text: `Due ${shortDay(due, today)}` };
   return null;
 }
@@ -66,7 +76,7 @@ export function TaskRow(props: {
     onTask: props.onTask,
     onProblem: props.onProblem,
   });
-  const lead = () => taskLead(props.task, todayIn(props.timeZone), props.place);
+  const lead = () => taskLead(props.task, props.timeZone, props.place);
   const open = () => (props.task.state.is === "open" ? props.task.state : null);
 
   async function toggle(box: HTMLInputElement) {
@@ -98,10 +108,10 @@ export function TaskRow(props: {
           <Show when={props.task.recurrence}>
             <Repeat size={14} />
           </Show>
-          <Show when={open()?.waiting && lead()?.text !== "Waiting"}>
+          <Show when={open()?.waiting && lead()?.says !== "waiting"}>
             <Hourglass size={14} />
           </Show>
-          <Show when={open()?.delegated && lead()?.text !== open()?.delegated?.to.name}>
+          <Show when={open()?.delegated && lead()?.says !== "delegated"}>
             <UserRound size={14} />
           </Show>
         </span>

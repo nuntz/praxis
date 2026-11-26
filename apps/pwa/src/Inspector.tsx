@@ -1,5 +1,6 @@
 import type {
   Day,
+  Entry,
   NewRecurrence,
   Project,
   Task,
@@ -11,6 +12,7 @@ import type {
   WaitTarget,
 } from "@praxis/domain";
 import { waitedOnName } from "@praxis/domain";
+import { imageLoadingIn } from "@praxis/domain/markdown";
 import type { LucideIcon } from "lucide-solid";
 import ArrowRightLeft from "lucide-solid/icons/arrow-right-left";
 import Ban from "lucide-solid/icons/ban";
@@ -24,6 +26,7 @@ import FolderMinus from "lucide-solid/icons/folder-minus";
 import FolderPlus from "lucide-solid/icons/folder-plus";
 import Hourglass from "lucide-solid/icons/hourglass";
 import Repeat from "lucide-solid/icons/repeat";
+import RotateCcw from "lucide-solid/icons/rotate-ccw";
 import Trash from "lucide-solid/icons/trash";
 import Undo from "lucide-solid/icons/undo-2";
 import UserRound from "lucide-solid/icons/user-round";
@@ -47,7 +50,14 @@ import { MoveRecord } from "./Move.tsx";
 import { ChoicePicker, personsOffered, referencesOffered, waitTargetsOffered } from "./Pickers.tsx";
 import { recurrencesOffered, recurrenceWords, sameRule } from "./recurrence-words.ts";
 import { createFinishing, DueMark, TaskMarks } from "./TaskItem.tsx";
-import { type CallTool, unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import {
+  type CallTool,
+  Unreachable,
+  unreachableMessage,
+  useCallTool,
+  useContextId,
+} from "./tools.ts";
+import { Words } from "./Words.tsx";
 
 /**
  * A Task's or a Project's page, opened from its row in Attention over the whole column (section
@@ -57,8 +67,8 @@ import { type CallTool, unreachableMessage, useCallTool, useContextId } from "./
 
 /** One page of the panel: a Task's or a Project's own, or a choice made for the one under it. */
 export type Page =
-  | { kind: "task"; id: string }
-  | { kind: "project"; id: string }
+  | { kind: "task"; id: string; held?: Task }
+  | { kind: "project"; id: string; held?: Project }
   | { kind: "recurrence" | "delegate" | "wait" | "place"; task: string }
   | { kind: "move"; project: string };
 
@@ -82,8 +92,8 @@ export function Inspector(props: {
   timeZone: string;
   /** An open Project's name, as Attention's view holds it. */
   projectName: (id: string) => string | undefined;
-  /** Read again each time Attention's view is, so the page shows what it shows. */
-  version: () => unknown;
+  /** Attention's view as last read: the page is read again each time it is, to show the same. */
+  viewRead: () => unknown;
   /** A change was made: Attention reads its view again. */
   onChanged: () => void;
   onSaid: (said: Said) => void;
@@ -92,8 +102,14 @@ export function Inspector(props: {
 }) {
   const callTool = useCallTool();
   const contextId = useContextId();
-  const [task, setTask] = createSignal<Task | null>(null);
-  const [project, setProject] = createSignal<Project | null>(null);
+  // The record the first page was opened with, as its row held it, until it is read afresh.
+  const opening = props.pages[0];
+  const [task, setTask] = createSignal<Task | null>(
+    opening?.kind === "task" ? (opening.held ?? null) : null,
+  );
+  const [project, setProject] = createSignal<Project | null>(
+    opening?.kind === "project" ? (opening.held ?? null) : null,
+  );
   const [problem, setProblem] = createSignal<string | null>(null);
   const [sending, setSending] = createSignal(false);
   // A page pushed comes in from the side; one returned to by back is simply there.
@@ -121,6 +137,9 @@ export function Inspector(props: {
   const { read, changed } = latestRead(async (current) => {
     const of = untrack(subject);
     if (!of) return;
+    // With no network the page shows the record as Attention holds it, from the Offline Copy
+    // where there is one, and says nothing until a write needs the network (section 8.8).
+    const held = () => (of.kind === "task" ? shownTask() : shownProject()) !== null;
     try {
       if (of.kind === "task") {
         const result = await callTool("get_task", { id: of.id });
@@ -134,18 +153,25 @@ export function Inspector(props: {
         setProject(result.value);
       }
     } catch (error) {
-      if (current()) setProblem(unreachableMessage(error));
+      if (current() && !(error instanceof Unreachable && untrack(held))) {
+        setProblem(unreachableMessage(error));
+      }
     }
   });
   // Read on opening a page, and again whenever Attention's view is: a change made here or
   // elsewhere moves both.
   createEffect(
-    on([() => JSON.stringify(subject()), props.version], () => {
+    on([() => JSON.stringify(subject()), props.viewRead], () => {
       void read();
     }),
   );
 
+  // While a write is out, the page stays as it was when the write was sent: nothing goes back or
+  // opens, and no other write starts, so its answer lands on the page it was made from.
   function push(page: Page) {
+    if (sending()) return;
+    if (page.kind === "task" && page.held) setTask(page.held);
+    if (page.kind === "project" && page.held) setProject(page.held);
     setProblem(null);
     setPushed(true);
     props.setPages([...props.pages, page]);
@@ -153,6 +179,7 @@ export function Inspector(props: {
   }
 
   function back() {
+    if (sending() || props.pages.length === 0) return;
     setProblem(null);
     const left = top();
     const rest = props.pages.slice(0, -1);
@@ -190,6 +217,7 @@ export function Inspector(props: {
     tool: N,
     input: ToolInput<N>,
   ): Promise<ToolOutput[N] | null> {
+    if (sending()) return null;
     setSending(true);
     setProblem(null);
     changed();
@@ -231,21 +259,14 @@ export function Inspector(props: {
 
   // Each Task's actions.
 
-  async function rename(field: HTMLTextAreaElement, kind: "task" | "project") {
-    const was = field.defaultValue;
-    const now = field.value.replace(/\s+/g, " ").trim();
-    if (now === was) return;
-    if (now === "") {
-      field.value = was;
-      return;
-    }
+  /** A title or name as typed, sent unless it is empty or what the record has already. */
+  async function rename(typed: string, kind: "task" | "project") {
+    const now = typed.replace(/\s+/g, " ").trim();
     const id = subject()?.id;
-    if (!id) return;
-    const done =
-      kind === "task"
-        ? await writeTask("rename_task", { id, title: now })
-        : await writeProject("rename_project", { id, name: now });
-    if (!done) field.value = was;
+    const was = kind === "task" ? shownTask()?.title : shownProject()?.name;
+    if (!id || now === "" || now === was) return;
+    if (kind === "task") await writeTask("rename_task", { id, title: now });
+    else await writeProject("rename_project", { id, name: now });
   }
 
   async function setDate(field: keyof TaskDates, input: HTMLInputElement) {
@@ -261,33 +282,33 @@ export function Inspector(props: {
   async function setRecurrence(rule: NewRecurrence | null) {
     const shown = shownTask();
     if (!shown) return;
-    const done =
+    const written =
       rule === null
         ? await writeTask("remove_recurrence", { id: shown.id })
         : await writeTask("set_recurrence", { id: shown.id, recurrence: rule });
-    if (done) back();
+    if (written) back();
   }
 
   async function delegate(personId: string | null) {
     const shown = shownTask();
     if (!shown) return;
-    const done =
+    const written =
       personId === null
         ? await writeTask("take_back_task", { id: shown.id })
         : await writeTask("delegate_task", { id: shown.id, person_id: personId });
-    if (done) back();
+    if (written) back();
   }
 
   async function waitOn(on: WaitTarget, name: string) {
     const shown = shownTask();
     if (!shown) return;
-    const done = await writeTask("wait_on", { id: shown.id, on });
-    if (!done) return;
+    const written = await writeTask("wait_on", { id: shown.id, on });
+    if (!written) return;
     // A Task left Waiting and not due leaves Attention until the wait ends (section 8.3).
-    const due = done.due_date !== null && done.due_date <= todayIn(props.timeZone);
-    if (done.state.is === "open" && done.state.waiting && !due) {
+    const due = written.due_date !== null && written.due_date <= todayIn(props.timeZone);
+    if (written.state.is === "open" && written.state.waiting && !due) {
       props.onSaid({
-        text: `“${done.title}” waits on “${name}”, and leaves Attention until that ends.`,
+        text: `“${written.title}” waits on “${name}”, and leaves Attention until that ends.`,
       });
     }
     back();
@@ -302,8 +323,8 @@ export function Inspector(props: {
   async function place(projectId: string | null) {
     const shown = shownTask();
     if (!shown) return;
-    const done = await writeTask("move_task", { id: shown.id, project_id: projectId });
-    if (done) back();
+    const written = await writeTask("move_task", { id: shown.id, project_id: projectId });
+    if (written) back();
   }
 
   async function makeProject() {
@@ -314,17 +335,16 @@ export function Inspector(props: {
     setPushed(true);
     props.setPages([...props.pages.slice(0, -1), { kind: "project", id: made.id }]);
     queueMicrotask(focusPage);
-    props.onSaid({ text: `“${shown.title}” is now a Project, with the Task as its first.` });
   }
 
   async function dropTask() {
     const shown = shownTask();
     if (!shown) return;
-    const done = await writeTask("drop_task", { id: shown.id });
-    if (!done) return;
+    const written = await writeTask("drop_task", { id: shown.id });
+    if (!written) return;
     props.onSaid({
-      text: `Dropped “${done.title}”.`,
-      undo: { label: "Reopen", run: (call) => sent(call("reopen_task", { id: done.id })) },
+      text: `Dropped “${written.title}”.`,
+      undo: { label: "Reopen", run: (call) => sent(call("reopen_task", { id: written.id })) },
     });
     leave();
   }
@@ -332,13 +352,20 @@ export function Inspector(props: {
   async function deleteTask() {
     const shown = shownTask();
     if (!shown) return;
-    const done = await write("delete_task", { id: shown.id });
-    if (!done) return;
+    const written = await write("delete_task", { id: shown.id });
+    if (!written) return;
     props.onSaid({
       text: `“${shown.title}” is in the Trash.`,
       undo: { label: "Restore", run: (call) => sent(call("restore", { id: shown.id })) },
     });
     leave();
+  }
+
+  /** A finished or dropped Task opened again: it is open, and its page stays. */
+  async function reopenTask() {
+    const shown = shownTask();
+    if (!shown) return;
+    await writeTask("reopen_task", { id: shown.id });
   }
 
   // Each Project's.
@@ -357,22 +384,29 @@ export function Inspector(props: {
     const shown = shownProject();
     if (!shown) return;
     const open = openTasks(shown);
-    const done = await writeProject(end, { id: shown.id });
-    if (!done) return;
+    const written = await writeProject(end, { id: shown.id });
+    if (!written) return;
     const dropped =
       open === 0 ? "" : ` Its ${open} open ${open === 1 ? "Task was" : "Tasks were"} dropped.`;
     props.onSaid({
-      text: `${end === "finish_project" ? "Finished" : "Dropped"} ${done.name}.${dropped}`,
-      undo: { label: "Reopen", run: (call) => sent(call("reopen_project", { id: done.id })) },
+      text: `${end === "finish_project" ? "Finished" : "Dropped"} ${written.name}.${dropped}`,
+      undo: { label: "Reopen", run: (call) => sent(call("reopen_project", { id: written.id })) },
     });
     leave();
+  }
+
+  /** A finished or dropped Project declared open again; its Tasks dropped with it stay so. */
+  async function reopenProject() {
+    const shown = shownProject();
+    if (!shown) return;
+    await writeProject("reopen_project", { id: shown.id });
   }
 
   async function deleteProject() {
     const shown = shownProject();
     if (!shown) return;
-    const done = await write("delete_project", { id: shown.id });
-    if (!done) return;
+    const written = await write("delete_project", { id: shown.id });
+    if (!written) return;
     props.onSaid({
       text: `${shown.name} is in the Trash. Its Tasks stay, in no Project.`,
       undo: { label: "Restore", run: (call) => sent(call("restore", { id: shown.id })) },
@@ -381,9 +415,7 @@ export function Inspector(props: {
   }
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== "Escape") return;
-    const field = event.target;
-    if (field instanceof HTMLTextAreaElement) field.value = field.defaultValue;
+    if (event.key !== "Escape" || sending()) return;
     event.preventDefault();
     event.stopPropagation();
     back();
@@ -393,7 +425,8 @@ export function Inspector(props: {
   // A control that answered a change can leave the page with it, and the focus with it: Escape
   // from nowhere still goes back.
   const strayEscape = (event: KeyboardEvent) => {
-    if (event.key === "Escape" && document.activeElement === document.body) onKeyDown(event);
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    if (document.activeElement === document.body) onKeyDown(event);
   };
   document.addEventListener("keydown", strayEscape);
   onCleanup(() => document.removeEventListener("keydown", strayEscape));
@@ -420,6 +453,7 @@ export function Inspector(props: {
           type="button"
           class="inspector-back"
           aria-label={`Back to ${backName()}`}
+          disabled={sending()}
           onClick={back}
         >
           <ChevronLeft size={20} aria-hidden="true" />
@@ -448,11 +482,12 @@ export function Inspector(props: {
                   timeZone={props.timeZone}
                   projectName={props.projectName}
                   sending={sending()}
-                  onRename={(field) => void rename(field, "task")}
+                  onRename={(typed) => rename(typed, "task")}
                   onDate={(field, input) => void setDate(field, input)}
                   onPush={(kind) => push({ kind, task: shown().id })}
                   onMakeProject={() => void makeProject()}
                   onDrop={() => void dropTask()}
+                  onReopen={() => void reopenTask()}
                   onDelete={() => void deleteTask()}
                   onTask={(changedTask) => {
                     setTask(changedTask);
@@ -468,11 +503,12 @@ export function Inspector(props: {
                   project={shown()}
                   timeZone={props.timeZone}
                   sending={sending()}
-                  onRename={(field) => void rename(field, "project")}
+                  onRename={(typed) => rename(typed, "project")}
                   onDue={(input) => void setProjectDue(input)}
                   onMove={() => push({ kind: "move", project: shown().id })}
-                  onOpenTask={(id) => push({ kind: "task", id })}
+                  onOpenTask={(opened) => push({ kind: "task", id: opened.id, held: opened })}
                   onEnd={(end) => void endProject(end)}
+                  onReopen={() => void reopenProject()}
                   onDelete={() => void deleteProject()}
                   onChanged={props.onChanged}
                   onProblem={setProblem}
@@ -597,14 +633,19 @@ function openTasks(project: Project): number {
 }
 
 /** The title, or a Project's name, changed where it is shown: on leaving it or on Enter. */
+/**
+ * The title, or a Project's name, changed where it is shown: on leaving it or on Enter; Escape
+ * puts it back. What is typed is the person's until then: a fresh read of the record shows its
+ * title only in a field nothing has been typed in, so a read landing mid-word never takes it back.
+ */
 function TitleField(props: {
   value: string;
   label: string;
-  onCommit: (field: HTMLTextAreaElement) => void;
+  onCommit: (title: string) => Promise<void>;
 }) {
-  let field: HTMLTextAreaElement | undefined;
+  let field!: HTMLTextAreaElement;
+  let typed = false;
   const size = () => {
-    if (!field) return;
     field.style.height = "auto";
     field.style.height = `${field.scrollHeight}px`;
   };
@@ -612,29 +653,39 @@ function TitleField(props: {
     on(
       () => props.value,
       (value) => {
-        if (!field) return;
-        field.defaultValue = value;
-        if (document.activeElement !== field) field.value = value;
+        if (!typed) field.value = value;
         size();
       },
     ),
   );
-  onMount(size);
+  async function commit() {
+    if (!typed) return;
+    typed = false;
+    await props.onCommit(field.value);
+    // Kept or refused, the field shows the title as it now is, unless typed in again meanwhile.
+    if (!typed) field.value = props.value;
+    size();
+  }
   return (
     <textarea
       ref={field}
       class="inspector-title"
       rows={1}
       aria-label={props.label}
-      value={props.value}
-      onInput={size}
+      onInput={() => {
+        typed = true;
+        size();
+      }}
       onKeyDown={(event) => {
         if (event.key === "Enter") {
           event.preventDefault();
           event.currentTarget.blur();
+        } else if (event.key === "Escape") {
+          typed = false;
+          field.value = props.value;
         }
       }}
-      onBlur={(event) => props.onCommit(event.currentTarget)}
+      onBlur={() => void commit()}
     />
   );
 }
@@ -733,11 +784,12 @@ function TaskPage(props: {
   timeZone: string;
   projectName: (id: string) => string | undefined;
   sending: boolean;
-  onRename: (field: HTMLTextAreaElement) => void;
+  onRename: (typed: string) => Promise<void>;
   onDate: (field: keyof TaskDates, input: HTMLInputElement) => void;
   onPush: (kind: "recurrence" | "delegate" | "wait" | "place") => void;
   onMakeProject: () => void;
   onDrop: () => void;
+  onReopen: () => void;
   onDelete: () => void;
   onTask: (task: Task) => void;
   onProblem: (message: string) => void;
@@ -749,16 +801,32 @@ function TaskPage(props: {
     onProblem: props.onProblem,
   });
   const open = () => openState(props.task);
-  const [origin, setOrigin] = createSignal<string | null>(null);
+  const [origin, setOrigin] = createSignal<Entry | null>(null);
   // The Entry it came from, which says what there is to say about it (section 3.3).
   const { read: readOrigin } = latestRead(async (current) => {
     try {
       const result = await callTool("get_entry", { id: props.task.origin_entry });
-      if (current() && result.ok) setOrigin(result.value.words);
+      if (current() && result.ok) setOrigin(result.value);
     } catch {
       // With no network the page shows the Task without its Entry.
     }
   });
+  // A Project Attention does not list, being at an end, is named by reading it.
+  const [closedProject, setClosedProject] = createSignal<{ id: string; name: string } | null>(null);
+  const { read: readProject } = latestRead(async (current, id: string) => {
+    try {
+      const result = await callTool("get_project", { id });
+      if (current() && result.ok) setClosedProject({ id, name: result.value.name });
+    } catch {
+      // With no network it is named as a Project, not by its name.
+    }
+  });
+  createEffect(() => {
+    const id = props.task.project;
+    if (id !== null && props.projectName(id) === undefined) void readProject(id);
+  });
+  const projectNamed = (id: string) =>
+    props.projectName(id) ?? (closedProject()?.id === id ? closedProject()?.name : undefined);
   createEffect(
     on(
       () => props.task.origin_entry,
@@ -839,7 +907,7 @@ function TaskPage(props: {
             value={
               props.task.project === null
                 ? "None"
-                : (props.projectName(props.task.project) ?? "A closed Project")
+                : (projectNamed(props.task.project) ?? "A Project")
             }
             page="place"
             onClick={() => props.onPush("place")}
@@ -872,11 +940,32 @@ function TaskPage(props: {
           />
         </div>
       </Show>
+      {/* At an end, it is reopened or deleted from here: the round control does not reopen a
+          Dropped one (section 3.4). */}
+      <Show when={props.task.state.is !== "open"}>
+        <div class="inspector-group">
+          <ActionLine
+            icon={RotateCcw}
+            label="Reopen"
+            sub="Open again, to be done"
+            disabled={props.sending}
+            onClick={props.onReopen}
+          />
+          <ActionLine
+            icon={Trash}
+            label="Delete"
+            sub="To the Trash for 30 days"
+            danger
+            disabled={props.sending}
+            onClick={props.onDelete}
+          />
+        </div>
+      </Show>
       <Show when={origin()}>
-        {(words) => (
+        {(entry) => (
           <figure class="inspector-origin">
             <figcaption>From its Entry</figcaption>
-            <blockquote>{words()}</blockquote>
+            <Words words={entry().words} images={imageLoadingIn(entry())} />
           </figure>
         )}
       </Show>
@@ -888,11 +977,12 @@ function ProjectPage(props: {
   project: Project;
   timeZone: string;
   sending: boolean;
-  onRename: (field: HTMLTextAreaElement) => void;
+  onRename: (typed: string) => Promise<void>;
   onDue: (input: HTMLInputElement) => void;
   onMove: () => void;
-  onOpenTask: (id: string) => void;
+  onOpenTask: (task: Task) => void;
   onEnd: (end: "finish_project" | "drop_project") => void;
+  onReopen: () => void;
   onDelete: () => void;
   onChanged: () => void;
   onProblem: (message: string) => void;
@@ -911,6 +1001,11 @@ function ProjectPage(props: {
       </div>
       <p class="inspector-marks">
         <span class="task-mark">Project</span>
+        <Show when={props.project.state.is !== "open"}>
+          <span class="task-mark">
+            {props.project.state.is === "finished" ? "Finished" : "Dropped"}
+          </span>
+        </Show>
         <Show when={props.project.due_date}>
           {(due) => <DueMark due={due()} overdue={overdue()} timeZone={props.timeZone} />}
         </Show>
@@ -943,7 +1038,7 @@ function ProjectPage(props: {
                 task={task}
                 timeZone={props.timeZone}
                 openKey={`task-${task.id}`}
-                onOpen={() => props.onOpenTask(task.id)}
+                onOpen={() => props.onOpenTask(task)}
                 onTask={() => props.onChanged()}
                 onProblem={props.onProblem}
               />
@@ -952,20 +1047,33 @@ function ProjectPage(props: {
         </ul>
       </Show>
       <div class="inspector-group">
-        <ActionLine
-          icon={Check}
-          label="Finish"
-          sub={drops()}
-          disabled={props.sending}
-          onClick={() => props.onEnd("finish_project")}
-        />
-        <ActionLine
-          icon={Ban}
-          label="Drop"
-          sub={drops()}
-          disabled={props.sending}
-          onClick={() => props.onEnd("drop_project")}
-        />
+        <Show
+          when={props.project.state.is === "open"}
+          fallback={
+            <ActionLine
+              icon={RotateCcw}
+              label="Reopen"
+              sub="Its Tasks dropped with it stay dropped"
+              disabled={props.sending}
+              onClick={props.onReopen}
+            />
+          }
+        >
+          <ActionLine
+            icon={Check}
+            label="Finish"
+            sub={drops()}
+            disabled={props.sending}
+            onClick={() => props.onEnd("finish_project")}
+          />
+          <ActionLine
+            icon={Ban}
+            label="Drop"
+            sub={drops()}
+            disabled={props.sending}
+            onClick={() => props.onEnd("drop_project")}
+          />
+        </Show>
         <ActionLine
           icon={Trash}
           label="Delete"
