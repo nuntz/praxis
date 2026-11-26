@@ -36,11 +36,13 @@ test("the person records Entries in the Journal's composer and sees them in time
   await expect(ours).toHaveCount(2);
   await expect(ours.nth(0).getByTestId("words")).toHaveText(first);
   await expect(ours.nth(1).getByTestId("words").locator("p")).toHaveCount(1);
-  // Found by its id from here on, since editing it hides its words.
+  // Found by its id from here on, as the page that edits it is.
   const renewal = journal.locator(`[id="${await ours.nth(1).getAttribute("id")}"]`);
   await (await entryAction(renewal, "Edit", testInfo)).click();
   await expect(
-    renewal.getByRole("textbox", { name: "The Entry's words", exact: true }),
+    page
+      .getByRole("dialog", { name: /^The Entry of / })
+      .getByRole("textbox", { name: "The Entry's words", exact: true }),
   ).toHaveValue(second);
 });
 
@@ -103,7 +105,7 @@ test("the person sees an Entry's words rendered as Markdown, and edits them as t
   await journal.getByRole("button", { name: "Record" }).click();
   const recorded = journal.getByTestId("entry").filter({ hasText: `Offsite ${tag}` });
   await expect(recorded).toHaveCount(1);
-  // Found by its id from here on, since editing it hides its words.
+  // Found by its id from here on, as the page that edits it is.
   const entry = journal.locator(`[id="${await recorded.getAttribute("id")}"]`);
   const shown = entry.getByTestId("words");
 
@@ -137,11 +139,13 @@ test("the person sees an Entry's words rendered as Markdown, and edits them as t
   expect(widths.table[0]).toBeGreaterThan(widths.table[1] as number);
   expect(widths.words[0]).toBe(widths.words[1]);
 
-  // The editor shows the words as typed, with no preview.
+  // The Entry's page shows the words as typed, with no preview.
   await (await entryAction(entry, "Edit", testInfo)).click();
-  await expect(entry.getByRole("textbox", { name: "The Entry's words", exact: true })).toHaveValue(
-    words,
-  );
+  await expect(
+    page
+      .getByRole("dialog", { name: /^The Entry of / })
+      .getByRole("textbox", { name: "The Entry's words", exact: true }),
+  ).toHaveValue(words);
 });
 
 /** A one-pixel PNG, served for an image's address so no journey reaches beyond the Worker. */
@@ -206,7 +210,7 @@ test("an image loads by itself only in an Entry the person wrote by hand, and wa
   });
   const recorded = journal.getByTestId("entry").filter({ hasText: `Floor ${tag}` });
   await expect(recorded).toHaveCount(1);
-  // Found by its id from here on, since editing it hides its words.
+  // Found by its id from here on, as the page that edits it is.
   const agents = journal.locator(`[id="${await recorded.getAttribute("id")}"]`);
   const show = agents.getByRole("button", { name: `Show image Floor plan ${tag}`, exact: true });
   await expect(show).toBeVisible();
@@ -224,9 +228,84 @@ test("an image loads by itself only in an Entry the person wrote by hand, and wa
 
   // The person's edit makes the Entry theirs, and its image then loads by itself.
   await (await entryAction(agents, "Edit", testInfo)).click();
-  const editor = agents.getByRole("textbox", { name: "The Entry's words", exact: true });
+  const opened = page.getByRole("dialog", { name: /^The Entry of / });
+  const editor = opened.getByRole("textbox", { name: "The Entry's words", exact: true });
   await editor.fill(`Floor ${tag}, checked\n\n![Floor plan ${tag}](${floorPlan})`);
-  await agents.getByRole("button", { name: "Save", exact: true }).click();
+  await opened.getByRole("button", { name: "Save", exact: true }).click();
   await expect(agents.getByRole("img", { name: `Floor plan ${tag}`, exact: true })).toBeVisible();
   await expect(show).toHaveCount(0);
+});
+
+test("the person adds Tasks to an Entry from its page, its words left as they are, and leaving with words changed and not saved asks first", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const words = `Paint the fence ${tag}`;
+  const [primer, topcoat] = [`Buy the primer ${tag}`, `Buy the topcoat ${tag}`];
+
+  await page.goto("/");
+  const { journal, composer } = await openJournal(page, testInfo);
+  await composer.fill(words);
+  await composer.press("ControlOrMeta+Enter");
+  const recorded = journal
+    .getByTestId("entry")
+    .filter({ has: page.getByTestId("words").getByText(words, { exact: true }) });
+  await expect(recorded).toHaveCount(1);
+  const entry = journal.locator(`[id="${await recorded.getAttribute("id")}"]`);
+
+  // Add a Task opens the Entry's page with the caret in the field that adds one.
+  await (await entryAction(entry, "Add a Task", testInfo)).click();
+  const opened = page.getByRole("dialog", { name: /^The Entry of / });
+  const field = opened.getByRole("textbox", { name: "New Task for this Entry" });
+  await expect(field).toBeFocused();
+
+  // Enter adds it at once, and the field is ready for the next; the button adds one too.
+  const added = (act: () => Promise<void>) => async () => {
+    const answer = page.waitForResponse(/\/tools\/add_task$/);
+    await act();
+    expect((await (await answer).json()).ok).toBe(true);
+  };
+  await added(async () => {
+    await field.fill(primer);
+    await field.press("Enter");
+  })();
+  await expect(field).toHaveValue("");
+  await expect(field).toBeFocused();
+  await added(async () => {
+    await field.fill(topcoat);
+    await opened.getByRole("button", { name: "Add", exact: true }).click();
+  })();
+  await expect(opened.getByRole("list", { name: "Tasks" }).getByRole("checkbox")).toHaveCount(2);
+
+  // Back, the Entry has both Tasks, its words as they were and no edited mark.
+  await opened.getByRole("button", { name: "Back to the Journal" }).click();
+  await expect(opened).toHaveCount(0);
+  await expect(entry.getByRole("checkbox", { name: primer })).toBeVisible();
+  await expect(entry.getByRole("checkbox", { name: topcoat })).toBeVisible();
+  await expect(entry.getByTestId("words")).toHaveText(words);
+  await expect(entry.getByRole("button", { name: /^Edited/ })).toHaveCount(0);
+
+  // Words changed and not saved are not dropped silently: leaving asks first.
+  await (await entryAction(entry, "Edit", testInfo)).click();
+  const editor = opened.getByRole("textbox", { name: "The Entry's words", exact: true });
+  await expect(editor).toBeFocused();
+  await editor.press("End");
+  await editor.pressSequentially(" this weekend");
+  await page.keyboard.press("Escape");
+  const asked = opened.getByRole("alertdialog", { name: "Your changes are not saved" });
+  await expect(asked).toBeVisible();
+  await asked.getByRole("button", { name: "Keep editing" }).click();
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveValue(`${words} this weekend`);
+
+  await opened.getByRole("button", { name: "Back to the Journal" }).click();
+  await asked.getByRole("button", { name: "Discard them" }).click();
+  await expect(opened).toHaveCount(0);
+  await expect(entry.getByTestId("words")).toHaveText(words);
+
+  // Left asking, so the accessibility check sees the page and its question.
+  await (await entryAction(entry, "Edit", testInfo)).click();
+  await editor.pressSequentially(" soon");
+  await page.keyboard.press("Escape");
+  await expect(asked).toBeVisible();
 });

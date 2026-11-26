@@ -99,7 +99,7 @@ export async function pickTime(page: Page, name: "Today" | "Last 7 days" | "Last
 }
 
 /** An Entry's actions its toolbar shows, where the Device has a pointer that hovers. */
-const FREQUENT = ["Edit", "Follow up", "Mark Standing", "Unmark Standing"];
+const FREQUENT = ["Edit", "Add a Task", "Follow up", "Mark Standing", "Unmark Standing"];
 
 /**
  * One of an Entry's actions, reached as the person reaches it (section 8.4): on the desktop, in
@@ -108,7 +108,15 @@ const FREQUENT = ["Edit", "Follow up", "Mark Standing", "Unmark Standing"];
  */
 export async function entryAction(
   entry: Locator,
-  name: "Edit" | "Follow up" | "Mark Standing" | "Unmark Standing" | "Move" | "Delete" | "Discard",
+  name:
+    | "Edit"
+    | "Add a Task"
+    | "Follow up"
+    | "Mark Standing"
+    | "Unmark Standing"
+    | "Move"
+    | "Delete"
+    | "Discard",
   testInfo: TestInfo,
 ): Promise<Locator> {
   if (onPhone(testInfo)) {

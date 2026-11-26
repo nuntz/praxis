@@ -2837,6 +2837,186 @@ button.quiet.entry-mark {
   gap: var(--space-4);
 }
 
+/*
+ * An Entry's page, over the whole Journal column (section 8.4): its words filling the page, Save
+ * in its header, its Tasks under the words with a field that adds one.
+ */
+
+.entry-page {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  border-radius: inherit;
+  background: var(--surface);
+  animation: entry-page-in 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes entry-page-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entry-page {
+    animation: entry-page-fade 160ms ease-out;
+  }
+}
+
+@keyframes entry-page-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.entry-page-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 60px;
+  padding: var(--space-3) var(--space-4) var(--space-2) var(--space-3);
+}
+
+button.entry-page-back {
+  gap: 2px;
+  min-height: 36px;
+  padding: 0 var(--space-2) 0 2px;
+  background: none;
+  color: var(--ink);
+}
+
+.entry-page-when {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font: var(--type-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.entry-page-save {
+  flex-shrink: 0;
+  min-height: 36px;
+  margin-left: auto;
+  padding: 0 var(--space-4);
+}
+
+.entry-page-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0 var(--space-4) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+  font: var(--type-meta);
+}
+
+.entry-page-ask > .entry-page-ask-said {
+  flex: 1 1 12em;
+}
+
+button.entry-page-discard {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  background: var(--warn);
+}
+
+.entry-page-body {
+  /* A grid, so the page scrolls and nothing on it is squeezed to fit. */
+  display: grid;
+  flex: 1;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-2) var(--space-5) var(--space-5);
+  overflow-y: auto;
+}
+
+.entry-page-body > .problem {
+  margin: 0;
+}
+
+.entry-page-words {
+  width: 100%;
+  min-height: 8lh;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--ground);
+  color: var(--ink);
+  font: var(--type-words);
+  resize: none;
+}
+
+.entry-page-hint {
+  margin: calc(-1 * var(--space-1)) 0 0;
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.entry-page-title {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+/* The field that adds a Task, a row like the Tasks above it with a dashed control. */
+.task.entry-page-add {
+  flex-wrap: nowrap;
+  gap: var(--space-3);
+  padding: 6px 6px 6px var(--space-3);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+
+.entry-page-add-mark {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 2px dashed var(--muted);
+  border-radius: 50%;
+}
+
+.task.entry-page-add input {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  margin: 0;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--type-row-title);
+  appearance: auto;
+  cursor: text;
+}
+
+/* The row shows the focus, not the field inside it. */
+.task.entry-page-add:focus-within {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.task.entry-page-add input:focus-visible {
+  outline: none;
+}
+
+button.entry-page-add-button {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+}
+
 /* Moving an Entry or a Project to another Context: the unit shown before the person confirms. */
 
 .move-record {
@@ -3367,6 +3547,21 @@ a.entry-mark.held-mark {
   /* A Task's dates, a touch target of 44px. */
   button.task-dates-toggle {
     width: 44px;
+    min-height: 44px;
+  }
+
+  /* An Entry's page: its padding at a phone's gutter, and fields that do not zoom. */
+  .entry-page-body {
+    padding: var(--space-2) var(--space-4) var(--space-5);
+  }
+
+  .entry-page-words,
+  .task.entry-page-add input {
+    font-size: 17px;
+  }
+
+  button.entry-page-save,
+  button.entry-page-add-button {
     min-height: 44px;
   }
 

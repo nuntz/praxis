@@ -16,18 +16,20 @@ test("the person edits an Entry, restores an earlier Version and records a Follo
     .getByTestId("entry")
     .filter({ has: page.getByTestId("words").getByText(first, { exact: true }) });
   await expect(recorded).toHaveCount(1);
-  // Found by its id from here on, since editing it hides its words and a Follow-up names them.
+  // Found by its id from here on, since its words change and a Follow-up names them.
   const entry = journal.locator(`[id="${await recorded.getAttribute("id")}"]`);
   await expect(entry.getByRole("button", { name: /^Edited/ })).toHaveCount(0);
 
-  // The editor shows the words as typed, and a marked line it adds makes a Task.
+  // The Entry's page shows the words as typed, and a marked line they gain makes a Task.
   await (await entryAction(entry, "Edit", testInfo)).click();
-  const editor = entry.getByRole("textbox", { name: "The Entry's words", exact: true });
+  const opened = page.getByRole("dialog", { name: /^The Entry of / });
+  const editor = opened.getByRole("textbox", { name: "The Entry's words", exact: true });
   await expect(editor).toHaveValue(first);
   await editor.fill(edited);
   const saved = page.waitForResponse((response) => response.url().endsWith("/tools/edit_entry"));
-  await entry.getByRole("button", { name: "Save", exact: true }).click();
+  await opened.getByRole("button", { name: "Save", exact: true }).click();
   await saved;
+  await expect(opened).toHaveCount(0);
   const shown = entry.getByTestId("words");
   await expect(shown.getByText(`${first}, far too high`, { exact: true })).toBeVisible();
   await expect(shown.getByText(`[] Ask for another quote ${tag}`, { exact: true })).toBeVisible();
