@@ -28,11 +28,17 @@ export function SettlingField(props: {
   let settling: ReturnType<typeof setTimeout> | undefined;
   let picked: string | null = null;
   let answering = 0;
+  /** Whether the record's value changed while the field was not left alone, and is not shown. */
+  let behind = false;
 
   /** The record's value, in the field if it is left alone. */
   function show() {
-    if (picked !== null || answering > 0 || document.activeElement === input) return;
+    if (picked !== null || answering > 0 || document.activeElement === input) {
+      behind = true;
+      return;
+    }
     input.value = props.value ?? "";
+    behind = false;
   }
   createEffect(on(() => props.value, show));
 
@@ -41,7 +47,9 @@ export function SettlingField(props: {
     if (picked === null) return;
     const value = picked;
     picked = null;
-    if (value === (props.value ?? "")) return;
+    // What the record holds already is not sent, unless a pick before it is still out: the record
+    // then holds what this one takes back.
+    if (answering === 0 && value === (props.value ?? "")) return;
     answering += 1;
     try {
       await props.onSettle(value);
@@ -66,7 +74,9 @@ export function SettlingField(props: {
       }}
       onBlur={() => {
         void send();
-        show();
+        // A task later, past a change a browser fires after leaving, as a phone's picker may: the
+        // field catches up only on what it was not shown.
+        if (behind) setTimeout(show);
       }}
     />
   );
