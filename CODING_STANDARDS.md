@@ -57,6 +57,7 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 ## Guards
 
 - A guard against state another write leaves behind has a test that goes red with the guard switched off. `forgetConversation` in `apps/worker/src/run-rows.ts` lets go of the Run records' handles on a cleared Conversation, since the runtime opened afresh numbers its records anew. Every test passed with it switched off until the clearing test's new Run made a change, which then landed on an old Run (#69).
+- A test that ends on something gone or absent (no wake lock held, nothing sent, nothing stored) first asserts that the path which would leave it there ran, since its final state is also the state before anything happened. The late-answer journey in `e2e/call.spec.ts` checks one wake lock was granted before it checks the Call let it go: it passed with no request made until review caught it (#157).
 
 ## Seam tests
 
