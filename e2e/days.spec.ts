@@ -1,6 +1,7 @@
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import {
   callContextTool,
+  enterSearch,
   expect,
   lastShown,
   makeContext,
@@ -141,7 +142,7 @@ test("the Journal is parted into days in the Context's time zone, an Entry under
   await expect(entries.filter({ hasText: `older ${tag}` }).getByRole("time")).toHaveText(
     await writtenIn(page, made.older, zone, { timeStyle: "short" }),
   );
-  await journal.getByRole("searchbox", { name: "Search this Context" }).fill(`yesterday ${tag}`);
+  await (await enterSearch(page)).fill(`yesterday ${tag}`);
   const found = journal.getByRole("region", { name: "Found" }).getByTestId("search-hit");
   await expect(found.filter({ hasText: `yesterday ${tag}` }).getByRole("time")).toHaveText(
     `Yesterday · ${await writtenIn(page, made.yesterday, zone, { timeStyle: "short" })}`,

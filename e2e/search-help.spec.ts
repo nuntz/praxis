@@ -2,6 +2,7 @@ import type { TestInfo } from "@playwright/test";
 import {
   callContextTool,
   contextOfOwn,
+  enterSearch,
   expect,
   onPhone,
   openJournal,
@@ -21,11 +22,24 @@ function tagOf(testInfo: TestInfo): string {
   return `${testInfo.project.name}${crypto.randomUUID().replaceAll("-", "")}`;
 }
 
-/** The Journal opened on a Context of the journey's own, and its search's controls. */
-async function openSearch(page: import("@playwright/test").Page, testInfo: TestInfo) {
+/**
+ * The Journal opened on a Context of the journey's own, and its search's controls, the search
+ * entered unless the journey enters it itself.
+ */
+async function openSearch(
+  page: import("@playwright/test").Page,
+  testInfo: TestInfo,
+  { entered = true } = {},
+) {
   await page.goto("/");
   const { journal, composer } = await openJournal(page, testInfo);
-  const field = journal.getByRole("searchbox", { name: "Search this Context" });
+  const field = entered
+    ? await enterSearch(page)
+    : journal.getByRole("searchbox", {
+        name: "Search this Context",
+        exact: true,
+        includeHidden: true,
+      });
   const chips = journal.getByRole("group", { name: "Narrow the search" });
   const found = journal.getByRole("region", { name: "Found" });
   const excerpts = found.getByTestId("search-excerpt");
@@ -71,20 +85,26 @@ test("the clear button clears the words and keeps the chips, and Escape or openi
   await field.fill(`now ${tag}`);
   await expect(excerpts).toHaveText([`Just now ${tag}`]);
 
-  // Escape ends the search, the words and the chips both.
+  // Escape ends the search, the words and the chips both, and the chips fold away with it.
   await field.press("Escape");
   await expect(field).toHaveValue("");
   await expect(setChip).toHaveCount(0);
-  await expect(chips.getByRole("button", { name: "Any time" })).toBeVisible();
+  await expect(chips).toBeHidden();
   await expect(found).toHaveCount(0);
   await expect(journal.getByRole("list", { name: "Entries" })).toBeVisible();
   await screenOwn(0);
 
-  // Pressed on a chip set, with no words, it ends the search too.
+  // Pressed on a chip set, with no words, it ends the search too, and the focus the chip held goes
+  // to the field, or on a phone to the button that opens the search.
   await pickTime(page, "Last 7 days");
   await expect(setChip).toBeFocused();
   await page.keyboard.press("Escape");
-  await expect(chips.getByRole("button", { name: "Any time" })).toBeFocused();
+  await expect(chips).toBeHidden();
+  await expect(
+    onPhone(testInfo)
+      ? journal.getByRole("button", { name: "Open the search", exact: true })
+      : field,
+  ).toBeFocused();
 
   // Opening a hit ends the search, the chips with it.
   await pickTime(page, "Last 7 days");
@@ -94,7 +114,7 @@ test("the clear button clears the words and keeps the chips, and Escape or openi
   await expect(field).toHaveValue("");
   await expect(setChip).toHaveCount(0);
   await screenOwn(0);
-  await expect(chips.getByRole("button", { name: "Any time" })).toBeVisible();
+  await expect(chips).toBeHidden();
   await expect(journal.getByTestId("entry").filter({ hasText: `Just now ${tag}` })).toBeFocused();
 });
 
@@ -102,12 +122,12 @@ test("the focused empty field says what search covers, and on a desktop / puts t
   page,
 }, testInfo) => {
   const context = await contextOfOwn(page, testInfo, "Slash");
-  const { journal, composer, field } = await openSearch(page, testInfo);
+  const { journal, composer, field } = await openSearch(page, testInfo, { entered: false });
   const covers = `Searches the Entries, Tasks, Projects and Persons of ${context.name}, by their words and by what they mean.`;
   const line = journal.getByText(covers);
   await expect(line).toBeHidden();
 
-  await field.focus();
+  await enterSearch(page);
   await expect(line).toBeVisible();
   await expect(field).toHaveAccessibleDescription(covers);
   // Once it holds words, it says it no more.

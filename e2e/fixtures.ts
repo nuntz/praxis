@@ -70,9 +70,27 @@ export async function openJournal(page: Page, testInfo: TestInfo) {
   return { journal, composer: journal.getByRole("textbox", { name: /^Record an Entry in / }) };
 }
 
+/**
+ * The Journal's search field, the search entered as the person enters it, so its chips show
+ * (section 8.4): on a phone by the button beside the Journal's title, which gives the field the
+ * caret; wider, by the field in the Journal's header. Entered already, it stays as it is.
+ */
+export async function enterSearch(page: Page): Promise<Locator> {
+  const journal = page.getByRole("region", { name: "Journal" });
+  const name = "Search this Context";
+  const shownField = journal.getByRole("searchbox", { name, exact: true });
+  const button = journal.getByRole("button", { name: "Open the search", exact: true });
+  await expect(button.or(shownField)).toBeVisible();
+  await ((await button.isVisible()) ? button : shownField).click();
+  await expect(shownField).toBeFocused();
+  // Found hidden too, so what it holds can be read once the search ends and a phone hides it.
+  return journal.getByRole("searchbox", { name, exact: true, includeHidden: true });
+}
+
 /** A preset of the search's time chip picked from its picker, the chip not set before. */
 export async function pickTime(page: Page, name: "Today" | "Last 7 days" | "Last 30 days") {
   const journal = page.getByRole("region", { name: "Journal" });
+  await enterSearch(page);
   await journal
     .getByRole("group", { name: "Narrow the search" })
     .getByRole("button", { name: "Any time" })

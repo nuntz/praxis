@@ -1,5 +1,14 @@
 import type { Locator, Page, TestInfo } from "@playwright/test";
-import { callContextTool, contextOfOwn, expect, openJournal, pickTime, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  contextOfOwn,
+  enterSearch,
+  expect,
+  onPhone,
+  openJournal,
+  pickTime,
+  test,
+} from "./fixtures.ts";
 
 // Chips under the search field narrow what is found (section 8.4). The time chip keeps a search to
 // days reckoned in the Context's time zone from today there, both ends included, and sends them as
@@ -82,7 +91,7 @@ async function tabTo(page: Page, control: Locator) {
 async function openSearch(page: Page, testInfo: TestInfo) {
   await page.goto("/");
   const { journal } = await openJournal(page, testInfo);
-  const field = journal.getByRole("searchbox", { name: "Search this Context" });
+  const field = await enterSearch(page);
   const chips = journal.getByRole("group", { name: "Narrow the search" });
   const found = journal.getByRole("region", { name: "Found" });
   const excerpts = found.getByTestId("search-excerpt");
@@ -146,10 +155,12 @@ test("the time chip keeps a search to recent days, says what it holds, and lifts
   const entries = journal.getByRole("list", { name: "Entries" });
   await expect(entries).toBeHidden();
 
-  // Lifted with nothing else set, nothing is asked, and the Entries are shown again.
+  // Lifted with nothing else set, nothing is asked. Wider than a phone the Entries are shown
+  // again; on a phone the search keeps its screen until its back arrow.
   await lastWeek.click();
   await expect(found).toHaveCount(0);
-  await expect(entries).toBeVisible();
+  if (onPhone(testInfo)) await expect(entries).toBeHidden();
+  else await expect(entries).toBeVisible();
   await anyTime.click();
   await picker.getByRole("button", { name: "Last 7 days" }).click();
   await expect(excerpts).toHaveCount(2);

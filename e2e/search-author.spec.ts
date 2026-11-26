@@ -4,6 +4,7 @@ import {
   callContextTool,
   callDeploymentTool,
   contextOfOwn,
+  enterSearch,
   expect,
   openJournal,
   test,
@@ -68,7 +69,7 @@ async function contextWithAuthors(page: Page, testInfo: TestInfo) {
 async function openSearch(page: Page, testInfo: TestInfo) {
   await page.goto("/");
   const { journal } = await openJournal(page, testInfo);
-  const field = journal.getByRole("searchbox", { name: "Search this Context" });
+  const field = await enterSearch(page);
   const chips = journal.getByRole("group", { name: "Narrow the search" });
   const found = journal.getByRole("region", { name: "Found" });
   return { journal, field, chips, found, excerpts: found.getByTestId("search-excerpt") };

@@ -18,13 +18,13 @@ import { onPhone } from "./media.ts";
 import {
   chipsSaid,
   everythingSaid,
-  isNarrowed,
   lifted,
   type Narrowing,
   NOT_NARROWED,
   narrowingInputs,
 } from "./narrowing.ts";
 import { online } from "./online.ts";
+import { afterPress } from "./press.ts";
 import { SearchChips } from "./SearchChips.tsx";
 import { SearchGroups } from "./SearchGroups.tsx";
 import type { HitActions, JournalPlace, NarrowsTo } from "./SearchHit.tsx";
@@ -82,7 +82,9 @@ export function createSearch(props: {
   const [nextCursor, setNextCursor] = createSignal<string | null>(null);
   const [wordsOnly, setWordsOnly] = createSignal<WordsOnly | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
-  // Whether the person entered the search on a phone, where it is a screen of its own until it ends.
+  // Whether the person entered the search: its field focused, or on a phone its button tapped. On a
+  // phone it is then a screen of its own until it ends; wider, its chips show until the person
+  // leaves it having asked nothing (section 8.4).
   const [entered, setEntered] = createSignal(false);
   // Whether Close in meaning was unfolded, for these words: new words fold it again.
   const [meaningUnfolded, setMeaningUnfolded] = createSignal(false);
@@ -149,6 +151,8 @@ export function createSearch(props: {
   // On a phone the search is a screen of its own from the moment its field is entered, in place of
   // the Journal's Entries before it asks anything; wider, the Entries stay until it asks.
   const shown = () => asking() || (onPhone() && entered());
+  // Whether the search is in use, so its chips show: entered, or asking.
+  const inUse = () => entered() || asking();
 
   function ask(typed: string) {
     setWords(typed);
@@ -240,12 +244,18 @@ export function createSearch(props: {
     onProblem: setProblem,
   };
 
-  /** Escape ends the search, unless something in it, as a chip's picker, took it first. */
+  /**
+   * Escape ends the search, unless something in it, as a chip's picker, took it first. The chips
+   * fold away with it, so the focus they held goes to the field, or on a phone to its button.
+   */
   function endOnEscape(event: KeyboardEvent): boolean {
     if (event.key !== "Escape" || event.defaultPrevented) return false;
-    if (!shown() && words() === "" && !isNarrowed(narrowing())) return false;
+    if (!inUse() && words() === "") return false;
     event.preventDefault();
+    const held = document.activeElement !== field;
+    if (held && !onPhone()) field?.focus();
     end();
+    if (held && onPhone()) openButton?.focus();
     return true;
   }
 
@@ -275,6 +285,33 @@ export function createSearch(props: {
     if (!pressing) setFocused(false);
   };
 
+  // Wider than a phone, the search is left by a press or the focus going anywhere outside it, and
+  // folds back to its field once it asks nothing. On a phone only its back arrow leaves it.
+  let searchElement: HTMLElement | undefined;
+  let openButton: HTMLButtonElement | undefined;
+  const leftFrom = (event: Event) => {
+    if (onPhone() || !entered() || asking()) return;
+    if (event.target instanceof Node && searchElement?.contains(event.target)) return;
+    afterPress(() => {
+      if (!asking() && !searchElement?.contains(document.activeElement)) setEntered(false);
+    });
+  };
+  document.addEventListener("pointerdown", leftFrom, true);
+  document.addEventListener("focusin", leftFrom, true);
+  onCleanup(() => {
+    document.removeEventListener("pointerdown", leftFrom, true);
+    document.removeEventListener("focusin", leftFrom, true);
+  });
+
+  /**
+   * Enter the search from its button on a phone: its screen shows, with the caret in the field.
+   * Offline it opens all the same, to the field that cannot be used and says why.
+   */
+  function enter() {
+    setEntered(true);
+    field?.focus();
+  }
+
   // On a desktop, `/` puts the cursor in the field, unless it is typed where it is a `/`.
   const onSlash = (event: KeyboardEvent) => {
     if (event.key !== "/" || event.defaultPrevented || event.ctrlKey || event.metaKey) return;
@@ -293,80 +330,100 @@ export function createSearch(props: {
   };
 
   const Field = () => (
-    <div class="journal-search" classList={{ shown: shown() }}>
-      <search onKeyDown={endOnEscape}>
-        <div class="search-row">
-          <Show when={onPhone() && shown()}>
-            <button
-              type="button"
-              class="icon-button search-back"
-              aria-label="Back to the Journal"
-              onClick={end}
-            >
-              <ArrowLeft size={20} aria-hidden="true" />
-            </button>
-          </Show>
-          <label class="visually-hidden" for="journal-search-words">
-            Search this Context
-          </label>
-          <div class="search-field">
-            <SearchIcon class="search-field-icon" size={18} aria-hidden="true" />
-            <input
-              ref={field}
-              id="journal-search-words"
-              type="search"
-              placeholder={`Search ${narrowing().project ? `within ${narrowing().project?.name}` : context()}`}
-              autocomplete="off"
-              aria-keyshortcuts={onPhone() ? undefined : "/"}
-              aria-describedby={describedBy()}
-              disabled={!online()}
-              value={words()}
-              onInput={(event) => ask(event.currentTarget.value)}
-              onFocus={() => {
-                setFocused(true);
-                setEntered(onPhone());
-              }}
-              onBlur={blurred}
-            />
-            <Show when={words() !== ""}>
+    <>
+      {/* On a phone the field waits behind this button beside the Journal's title (section 8.4). */}
+      <Show when={onPhone() && !shown()}>
+        <button
+          ref={openButton}
+          type="button"
+          class="icon-button search-open"
+          aria-label="Open the search"
+          onClick={enter}
+        >
+          <SearchIcon size={20} aria-hidden="true" />
+        </button>
+      </Show>
+      <div class="journal-search" classList={{ shown: shown(), "in-use": inUse() }}>
+        <search ref={searchElement} onKeyDown={endOnEscape}>
+          <div class="search-row">
+            <Show when={onPhone() && shown()}>
               <button
                 type="button"
-                class="search-clear"
-                aria-label="Clear the words"
-                disabled={!online()}
+                class="icon-button search-back"
+                aria-label="Back to the Journal"
                 onClick={() => {
-                  ask("");
-                  field?.focus();
+                  end();
+                  // Back on the Journal, the person is where they opened the search from.
+                  openButton?.focus();
                 }}
               >
-                <X size={16} aria-hidden="true" />
+                <ArrowLeft size={20} aria-hidden="true" />
               </button>
             </Show>
-            <Show when={words() === "" && !onPhone() && online()}>
-              {/* Drawn as a key; the field's own name says it is reached by `/`. */}
-              <span class="search-key" aria-hidden="true">
-                /
-              </span>
-            </Show>
+            <label class="visually-hidden" for="journal-search-words">
+              Search this Context
+            </label>
+            <div class="search-field">
+              <SearchIcon class="search-field-icon" size={18} aria-hidden="true" />
+              <input
+                ref={field}
+                id="journal-search-words"
+                type="search"
+                placeholder={`Search ${narrowing().project ? `within ${narrowing().project?.name}` : context()}`}
+                autocomplete="off"
+                aria-keyshortcuts={onPhone() ? undefined : "/"}
+                aria-describedby={describedBy()}
+                disabled={!online()}
+                value={words()}
+                onInput={(event) => ask(event.currentTarget.value)}
+                onFocus={() => {
+                  setFocused(true);
+                  setEntered(true);
+                }}
+                // Folded by Escape with the caret kept in it, a press enters it again.
+                onClick={() => setEntered(true)}
+                onBlur={blurred}
+              />
+              <Show when={words() !== ""}>
+                <button
+                  type="button"
+                  class="search-clear"
+                  aria-label="Clear the words"
+                  disabled={!online()}
+                  onClick={() => {
+                    ask("");
+                    field?.focus();
+                  }}
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </Show>
+              <Show when={words() === "" && !onPhone() && online()}>
+                {/* Drawn as a key; the field's own name says it is reached by `/`. */}
+                <span class="search-key" aria-hidden="true">
+                  /
+                </span>
+              </Show>
+            </div>
           </div>
-        </div>
-        <SearchChips
-          narrowing={narrowing()}
-          onNarrow={narrow}
-          timeZone={props.timeZone}
-          disabled={!online()}
-        />
-        <p id="journal-search-covers" class="search-note" hidden={!(focused() && words() === "")}>
-          Searches the Entries, Tasks, Projects and Persons of {context()}, by their words and by
-          what they mean.
-        </p>
-        <Show when={!online()}>
-          <p id="journal-search-offline" class="search-note">
-            {SEARCH_NEEDS_NETWORK}
+          <SearchChips
+            narrowing={narrowing()}
+            onNarrow={narrow}
+            timeZone={props.timeZone}
+            disabled={!online()}
+          />
+          <p id="journal-search-covers" class="search-note" hidden={!(focused() && words() === "")}>
+            Searches the Entries, Tasks, Projects and Persons of {context()}, by their words and by
+            what they mean.
           </p>
-        </Show>
-      </search>
-    </div>
+          <Show when={!online()}>
+            <p id="journal-search-offline" class="search-note">
+              {SEARCH_NEEDS_NETWORK}
+            </p>
+          </Show>
+        </search>
+      </div>
+    </>
   );
 
   /**

@@ -27,6 +27,7 @@ import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { readNotices } from "./Notices.tsx";
 import { online } from "./online.ts";
+import { afterPress } from "./press.ts";
 import { CapLink } from "./SettingsLink.tsx";
 import { CapNotice, readSpend, spend } from "./Spend.tsx";
 import { callDeploymentTool, unreachableMessage, useCallTool } from "./tools.ts";
@@ -364,19 +365,16 @@ export function Conversation(props: {
       id="conversation"
       title="Conversation"
       aside={
-        <>
-          <span class="peer-note">with the Agent, in {props.contextName}</span>
-          <Show when={callOffer()}>
-            {(offer) => (
-              <CallButton
-                contextName={props.contextName}
-                offer={offer()}
-                starting={calling()}
-                onStart={() => void startCall()}
-              />
-            )}
-          </Show>
-        </>
+        <Show when={callOffer()}>
+          {(offer) => (
+            <CallButton
+              contextName={props.contextName}
+              offer={offer()}
+              starting={calling()}
+              onStart={() => void startCall()}
+            />
+          )}
+        </Show>
       }
     >
       <Show when={noCall()}>
@@ -981,6 +979,9 @@ function MessageComposer(props: {
   const [words, setWords] = createSignal("");
   const [sending, setSending] = createSignal(false);
   const canSend = () => !sending() && words().trim() !== "";
+  // At rest, with nothing written and the focus elsewhere, it folds to one line (section 8.2).
+  const [focused, setFocused] = createSignal(false);
+  const folded = () => !focused() && words() === "";
 
   async function send() {
     if (!canSend()) return;
@@ -1004,6 +1005,12 @@ function MessageComposer(props: {
     <div class="composer-area">
       <form
         class="composer"
+        data-folded={folded() ? "" : undefined}
+        onFocusIn={() => setFocused(true)}
+        onFocusOut={(event) => {
+          const form = event.currentTarget;
+          afterPress(() => setFocused(form.contains(document.activeElement)));
+        }}
         onSubmit={(event) => {
           event.preventDefault();
           void send();
