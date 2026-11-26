@@ -246,7 +246,8 @@ export function createSearch(props: {
 
   /**
    * Escape ends the search, unless something in it, as a chip's picker, took it first. The chips
-   * fold away with it, so the focus they held goes to the field, or on a phone to its button.
+   * fold away with it, so the focus they held goes to the field. On a phone the field goes with
+   * its screen, so the focus goes to the button that opens it, wherever it was.
    */
   function endOnEscape(event: KeyboardEvent): boolean {
     if (event.key !== "Escape" || event.defaultPrevented) return false;
@@ -255,7 +256,7 @@ export function createSearch(props: {
     const held = document.activeElement !== field;
     if (held && !onPhone()) field?.focus();
     end();
-    if (held && onPhone()) openButton?.focus();
+    if (onPhone()) openButton?.focus();
     return true;
   }
 

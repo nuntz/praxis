@@ -75,7 +75,8 @@ export type Page =
 /** What a change said in Attention's status line, and how to undo it, where it can be. */
 export type Said = {
   text: string;
-  undo?: { label: string; run: (callTool: CallTool) => Promise<void> };
+  /** Undoes the change: null once it is undone, or why it was refused. */
+  undo?: { label: string; run: (callTool: CallTool) => Promise<string | null> };
 };
 
 const CHOICE_TITLES = {
@@ -206,19 +207,28 @@ export function Inspector(props: {
   }
 
   function focusPage() {
-    const first = panel?.querySelector<HTMLElement>(
-      ".inspector-page .choice-field, .inspector-page button.inspector-choice, .inspector-back",
-    );
+    // The page's own field first, then the header's Back: one query for all three would find the
+    // first in the page's order, which is the header's.
+    const first =
+      panel?.querySelector<HTMLElement>(
+        ".inspector-page .choice-field, .inspector-page button.inspector-choice",
+      ) ?? panel?.querySelector<HTMLElement>(".inspector-back");
     first?.focus();
   }
 
-  /** A write from the panel: its answer, or null once its problem is shown. */
+  /**
+   * A write from the panel: its answer, or null once its problem is shown. One whose answer moves
+   * the page (`holds`) holds it while it is out, so nothing else goes back, opens or is sent. One
+   * that only changes what the page shows, a title or a date, holds nothing: it is sent as its
+   * field is left, and the press that left it must land as it was meant.
+   */
   async function write<N extends ToolName>(
     tool: N,
     input: ToolInput<N>,
+    { holds = true } = {},
   ): Promise<ToolOutput[N] | null> {
     if (sending()) return null;
-    setSending(true);
+    if (holds) setSending(true);
     setProblem(null);
     changed();
     try {
@@ -238,22 +248,38 @@ export function Inspector(props: {
       setProblem(unreachableMessage(error));
       return null;
     } finally {
-      setSending(false);
+      if (holds) setSending(false);
     }
   }
 
-  async function writeTask<N extends ToolName>(tool: N, input: ToolInput<N>): Promise<Task | null> {
-    const answer = (await write(tool, input)) as { record: Task } | null;
-    if (answer) setTask(answer.record);
+  /** A Task as an answer gave it, shown only while its own page is the one shown. */
+  function placeTask(answered: Task) {
+    const of = subject();
+    if (of?.kind === "task" && of.id === answered.id) setTask(answered);
+  }
+
+  function placeProject(answered: Project) {
+    const of = subject();
+    if (of?.kind === "project" && of.id === answered.id) setProject(answered);
+  }
+
+  async function writeTask<N extends ToolName>(
+    tool: N,
+    input: ToolInput<N>,
+    options?: { holds: boolean },
+  ): Promise<Task | null> {
+    const answer = (await write(tool, input, options)) as { record: Task } | null;
+    if (answer) placeTask(answer.record);
     return answer?.record ?? null;
   }
 
   async function writeProject<N extends ToolName>(
     tool: N,
     input: ToolInput<N>,
+    options?: { holds: boolean },
   ): Promise<Project | null> {
-    const answer = (await write(tool, input)) as { record: Project } | null;
-    if (answer) setProject(answer.record);
+    const answer = (await write(tool, input, options)) as { record: Project } | null;
+    if (answer) placeProject(answer.record);
     return answer?.record ?? null;
   }
 
@@ -265,18 +291,18 @@ export function Inspector(props: {
     const id = subject()?.id;
     const was = kind === "task" ? shownTask()?.title : shownProject()?.name;
     if (!id || now === "" || now === was) return;
-    if (kind === "task") await writeTask("rename_task", { id, title: now });
-    else await writeProject("rename_project", { id, name: now });
+    if (kind === "task") await writeTask("rename_task", { id, title: now }, { holds: false });
+    else await writeProject("rename_project", { id, name: now }, { holds: false });
   }
 
-  async function setDate(field: keyof TaskDates, input: HTMLInputElement) {
+  async function setDate(field: keyof TaskDates, day: string) {
     const shown = shownTask();
     if (!shown) return;
-    await writeTask("set_task_dates", {
-      id: shown.id,
-      [field]: input.value === "" ? null : input.value,
-    });
-    input.value = (shownTask() ?? shown)[field] ?? "";
+    await writeTask(
+      "set_task_dates",
+      { id: shown.id, [field]: day === "" ? null : day },
+      { holds: false },
+    );
   }
 
   async function setRecurrence(rule: NewRecurrence | null) {
@@ -317,7 +343,7 @@ export function Inspector(props: {
   async function stopWaiting(on: WaitTarget) {
     const shown = shownTask();
     if (!shown) return;
-    await writeTask("stop_waiting", { id: shown.id, on });
+    await writeTask("stop_waiting", { id: shown.id, on }, { holds: false });
   }
 
   async function place(projectId: string | null) {
@@ -334,6 +360,7 @@ export function Inspector(props: {
     if (!made) return;
     setPushed(true);
     props.setPages([...props.pages.slice(0, -1), { kind: "project", id: made.id }]);
+    setProject(made);
     queueMicrotask(focusPage);
   }
 
@@ -344,7 +371,7 @@ export function Inspector(props: {
     if (!written) return;
     props.onSaid({
       text: `Dropped “${written.title}”.`,
-      undo: { label: "Reopen", run: (call) => sent(call("reopen_task", { id: written.id })) },
+      undo: { label: "Reopen", run: (call) => refusal(call("reopen_task", { id: written.id })) },
     });
     leave();
   }
@@ -356,7 +383,7 @@ export function Inspector(props: {
     if (!written) return;
     props.onSaid({
       text: `“${shown.title}” is in the Trash.`,
-      undo: { label: "Restore", run: (call) => sent(call("restore", { id: shown.id })) },
+      undo: { label: "Restore", run: (call) => refusal(call("restore", { id: shown.id })) },
     });
     leave();
   }
@@ -365,19 +392,19 @@ export function Inspector(props: {
   async function reopenTask() {
     const shown = shownTask();
     if (!shown) return;
-    await writeTask("reopen_task", { id: shown.id });
+    await writeTask("reopen_task", { id: shown.id }, { holds: false });
   }
 
   // Each Project's.
 
-  async function setProjectDue(input: HTMLInputElement) {
+  async function setProjectDue(day: string) {
     const shown = shownProject();
     if (!shown) return;
-    await writeProject("set_project_due_date", {
-      id: shown.id,
-      due_date: input.value === "" ? null : input.value,
-    });
-    input.value = (shownProject() ?? shown).due_date ?? "";
+    await writeProject(
+      "set_project_due_date",
+      { id: shown.id, due_date: day === "" ? null : day },
+      { holds: false },
+    );
   }
 
   async function endProject(end: "finish_project" | "drop_project") {
@@ -390,7 +417,7 @@ export function Inspector(props: {
       open === 0 ? "" : ` Its ${open} open ${open === 1 ? "Task was" : "Tasks were"} dropped.`;
     props.onSaid({
       text: `${end === "finish_project" ? "Finished" : "Dropped"} ${written.name}.${dropped}`,
-      undo: { label: "Reopen", run: (call) => sent(call("reopen_project", { id: written.id })) },
+      undo: { label: "Reopen", run: (call) => refusal(call("reopen_project", { id: written.id })) },
     });
     leave();
   }
@@ -399,7 +426,7 @@ export function Inspector(props: {
   async function reopenProject() {
     const shown = shownProject();
     if (!shown) return;
-    await writeProject("reopen_project", { id: shown.id });
+    await writeProject("reopen_project", { id: shown.id }, { holds: false });
   }
 
   async function deleteProject() {
@@ -409,7 +436,7 @@ export function Inspector(props: {
     if (!written) return;
     props.onSaid({
       text: `${shown.name} is in the Trash. Its Tasks stay, in no Project.`,
-      undo: { label: "Restore", run: (call) => sent(call("restore", { id: shown.id })) },
+      undo: { label: "Restore", run: (call) => refusal(call("restore", { id: shown.id })) },
     });
     leave();
   }
@@ -424,12 +451,24 @@ export function Inspector(props: {
   onMount(focusPage);
   // A control that answered a change can leave the page with it, and the focus with it: Escape
   // from nowhere still goes back.
+  // Escape from nowhere goes back only when the panel is where the person was last, not after a
+  // press elsewhere on the screen.
+  let lastHere = true;
+  const where = (event: Event) => {
+    lastHere = event.target instanceof Node && !!panel?.contains(event.target);
+  };
   const strayEscape = (event: KeyboardEvent) => {
-    if (event.key !== "Escape" || event.defaultPrevented) return;
+    if (event.key !== "Escape" || event.defaultPrevented || !lastHere) return;
     if (document.activeElement === document.body) onKeyDown(event);
   };
   document.addEventListener("keydown", strayEscape);
-  onCleanup(() => document.removeEventListener("keydown", strayEscape));
+  document.addEventListener("pointerdown", where, true);
+  document.addEventListener("focusin", where, true);
+  onCleanup(() => {
+    document.removeEventListener("keydown", strayEscape);
+    document.removeEventListener("pointerdown", where, true);
+    document.removeEventListener("focusin", where, true);
+  });
 
   const backName = () => {
     const under = props.pages[props.pages.length - 2];
@@ -483,14 +522,14 @@ export function Inspector(props: {
                   projectName={props.projectName}
                   sending={sending()}
                   onRename={(typed) => rename(typed, "task")}
-                  onDate={(field, input) => void setDate(field, input)}
+                  onDate={(field, day) => void setDate(field, day)}
                   onPush={(kind) => push({ kind, task: shown().id })}
                   onMakeProject={() => void makeProject()}
                   onDrop={() => void dropTask()}
                   onReopen={() => void reopenTask()}
                   onDelete={() => void deleteTask()}
                   onTask={(changedTask) => {
-                    setTask(changedTask);
+                    placeTask(changedTask);
                     props.onChanged();
                   }}
                   onProblem={setProblem}
@@ -504,7 +543,7 @@ export function Inspector(props: {
                   timeZone={props.timeZone}
                   sending={sending()}
                   onRename={(typed) => rename(typed, "project")}
-                  onDue={(input) => void setProjectDue(input)}
+                  onDue={(day) => void setProjectDue(day)}
                   onMove={() => push({ kind: "move", project: shown().id })}
                   onOpenTask={(opened) => push({ kind: "task", id: opened.id, held: opened })}
                   onEnd={(end) => void endProject(end)}
@@ -520,7 +559,7 @@ export function Inspector(props: {
                 <RecurrencePage
                   task={shown()}
                   sending={sending()}
-                  onDate={(input) => void setDate("due_date", input)}
+                  onDate={(day) => void setDate("due_date", day)}
                   onChoose={(rule) => void setRecurrence(rule)}
                 />
               )}
@@ -619,9 +658,12 @@ export function Inspector(props: {
 }
 
 /** A write sent from the status line, whose refusal is thrown to be said there. */
-async function sent(answer: Promise<{ ok: boolean; error?: { message: string } }>) {
+/** A write sent from the status line: null once it is made, or why it was refused. */
+async function refusal(
+  answer: Promise<{ ok: boolean; error?: { message: string } }>,
+): Promise<string | null> {
   const result = await answer;
-  if (!result.ok) throw new Error(result.error?.message ?? "Praxis refused it.");
+  return result.ok ? null : (result.error?.message ?? "Praxis refused it.");
 }
 
 function openState(task: Task) {
@@ -632,7 +674,6 @@ function openTasks(project: Project): number {
   return project.tasks.filter((task) => task.state.is === "open").length;
 }
 
-/** The title, or a Project's name, changed where it is shown: on leaving it or on Enter. */
 /**
  * The title, or a Project's name, changed where it is shown: on leaving it or on Enter; Escape
  * puts it back. What is typed is the person's until then: a fresh read of the record shows its
@@ -734,22 +775,54 @@ function ActionLine(props: {
   );
 }
 
+/** How long a picked day stays as it is before it is sent, unless its field is left sooner. */
+const DATE_SETTLES_MS = 700;
+
+/**
+ * A day, sent once its field is left or the day has stayed as it is a moment: typed by keyboard,
+ * a date changes at each keystroke of its year, through days nobody meant. What is picked is the
+ * person's until then, and a fresh read shows the record's day only in a field left alone.
+ */
 function DateLine(props: {
   icon: LucideIcon;
   label: string;
   value: Day | null;
   overdue?: boolean;
-  onChange: (input: HTMLInputElement) => void;
+  onChange: (day: string) => void;
 }) {
+  let input!: HTMLInputElement;
+  let settling: ReturnType<typeof setTimeout> | undefined;
+  let picked: string | null = null;
+  createEffect(
+    on(
+      () => props.value,
+      (value) => {
+        if (picked === null) input.value = value ?? "";
+      },
+    ),
+  );
+  function send() {
+    clearTimeout(settling);
+    if (picked === null) return;
+    const day = picked;
+    picked = null;
+    if (day !== (props.value ?? "")) props.onChange(day);
+  }
+  onCleanup(send);
   return (
     <label class="inspector-line inspector-date">
       <Dynamic component={props.icon} size={18} aria-hidden="true" />
       <span class="inspector-line-label">{props.label}</span>
       <input
+        ref={input}
         type="date"
         classList={{ overdue: props.overdue }}
-        value={props.value ?? ""}
-        onChange={(event) => props.onChange(event.currentTarget)}
+        onChange={(event) => {
+          picked = event.currentTarget.value;
+          clearTimeout(settling);
+          settling = setTimeout(send, DATE_SETTLES_MS);
+        }}
+        onBlur={send}
       />
     </label>
   );
@@ -785,7 +858,7 @@ function TaskPage(props: {
   projectName: (id: string) => string | undefined;
   sending: boolean;
   onRename: (typed: string) => Promise<void>;
-  onDate: (field: keyof TaskDates, input: HTMLInputElement) => void;
+  onDate: (field: keyof TaskDates, day: string) => void;
   onPush: (kind: "recurrence" | "delegate" | "wait" | "place") => void;
   onMakeProject: () => void;
   onDrop: () => void;
@@ -870,13 +943,13 @@ function TaskPage(props: {
             label="Due Date"
             value={props.task.due_date}
             overdue={open()?.overdue != null}
-            onChange={(input) => props.onDate("due_date", input)}
+            onChange={(day) => props.onDate("due_date", day)}
           />
           <DateLine
             icon={Clock}
             label="Defer Date"
             value={props.task.defer_date}
-            onChange={(input) => props.onDate("defer_date", input)}
+            onChange={(day) => props.onDate("defer_date", day)}
           />
           <ChoiceLine
             icon={Repeat}
@@ -978,7 +1051,7 @@ function ProjectPage(props: {
   timeZone: string;
   sending: boolean;
   onRename: (typed: string) => Promise<void>;
-  onDue: (input: HTMLInputElement) => void;
+  onDue: (day: string) => void;
   onMove: () => void;
   onOpenTask: (task: Task) => void;
   onEnd: (end: "finish_project" | "drop_project") => void;
@@ -1091,7 +1164,7 @@ function ProjectPage(props: {
 function RecurrencePage(props: {
   task: Task;
   sending: boolean;
-  onDate: (input: HTMLInputElement) => void;
+  onDate: (day: string) => void;
   onChoose: (rule: NewRecurrence | null) => void;
 }) {
   const held = () => props.task.recurrence;

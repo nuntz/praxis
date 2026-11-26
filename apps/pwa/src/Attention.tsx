@@ -107,7 +107,8 @@ export function Attention(props: {
   async function undo(shown: Said) {
     if (!shown.undo) return;
     try {
-      await shown.undo.run(callTool);
+      const refused = await shown.undo.run(callTool);
+      if (refused !== null) return setProblem(refused);
       // Only what it undid goes from the status line: a change said meanwhile stays said.
       if (said() === shown) setSaid(null);
       await read();
