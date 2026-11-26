@@ -95,6 +95,8 @@ export function SettlingField(props: {
         settling = setTimeout(() => void send(), SETTLES_MS);
       }}
       onBlur={() => {
+        // A field taken away with its page may be left as it goes: the cleanup sends for it.
+        if (gone) return;
         void send();
         // A task later, past a change a browser fires after leaving, as a phone's picker may: the
         // field catches up on what it was not shown, or from a day left half there.

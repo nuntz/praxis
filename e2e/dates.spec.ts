@@ -109,6 +109,11 @@ test("a Task's two dates set in the Journal one after the other both show, which
   await task.getByLabel("Due Date", { exact: true }).fill("2099-01-02");
   await page.keyboard.press("Tab");
   await first.asked();
+  // The dates closed and opened again meanwhile: a new editor, which the first answer outlives.
+  const toggle = task.getByRole("button", { name: `Dates for ${title}`, exact: true });
+  await toggle.click();
+  await expect(task.getByLabel("Defer Date", { exact: true })).toHaveCount(0);
+  await toggle.click();
   const second = page.waitForResponse(/\/tools\/set_task_dates$/);
   await task.getByLabel("Defer Date", { exact: true }).fill("2099-01-01");
   await page.keyboard.press("Tab");
