@@ -1,6 +1,10 @@
-# The voice instructions' evals
+# The voice instructions' evals, and the Device on a phone
 
-Run by hand in real Calls, never in CI, whenever the voice model or its instructions change (`apps/worker/src/voice/gpt-live-1.1.ts`, SPEC section 13, ADR 0021). They judge the voice model, not the Agent, whose own evals are separate (`apps/worker/test/agent-evals.ts`). Each case gets a pass or a fail, from what is heard and from what the Conversation holds afterwards. A Deployment with both keys is needed, and the Device's own microphone.
+Two hand checks of real Calls, never run in CI, each with its own trigger and setup: the voice instructions' evals, and the Device on a phone.
+
+## The voice instructions' evals
+
+Run by hand whenever the voice model or its instructions change (`apps/worker/src/voice/gpt-live-1.1.ts`, SPEC section 13, ADR 0021). They judge the voice model, not the Agent, whose own evals are separate (`apps/worker/test/agent-evals.ts`). Each case gets a pass or a fail, from what is heard and from what the Conversation holds afterwards. A Deployment with both keys is needed, and the Device's own microphone.
 
 Before each case, start a new Call in a Context whose Journal holds a few Entries and Tasks, so there is something the voice model could wrongly claim to know.
 
@@ -15,3 +19,16 @@ Before each case, start a new Call in a Context whose Journal holds a few Entrie
 | A sigh | Sigh, or cough, before a request. | Note whether the person's Message holds the sound written out. Either is a pass: this case records what the provider does, which its documentation leaves unknown (`docs/gpt-live.md`). |
 
 Record the date, the voice model, the commit of the instructions and each result, and file a failure as a ticket.
+
+## The Device on a phone
+
+Run by hand whenever the Device's end of a Call changes (`apps/pwa/src/call.ts`), on an iPhone with Praxis added to the Home Screen and opened from there. The Device keeps its screen awake during a Call (ADR 0021), and the fake browser in CI neither locks a screen nor keeps one awake (SPEC section 13). Each case gets a pass or a fail.
+
+Before the cases, set Auto-Lock to 30 seconds (Settings, Display & Brightness), well under the two minutes of silence that end a Call, so a screen not kept awake locks first.
+
+| Case | Do | Passes when |
+|---|---|---|
+| The screen stays awake | Start a Call, ask for something, then say nothing and touch nothing for a minute. | The screen is still on after a minute, and the Call goes on until the person ends it, or until the two minutes of silence end it, with the foot saying so. |
+| The person's lock ends it | In a Call, press the side button. | The Call ends, and once Praxis is opened again the foot says it ended when Praxis was left. |
+
+Record the date, the commit deployed, the iOS version, the Auto-Lock setting, whether Low Power Mode was on and each result, and file a failure as a ticket.
