@@ -539,3 +539,35 @@ test("from its page a Project is renamed, given a Due Date, finished and reopene
   await accepted(page, "restore", () => said.getByRole("button", { name: "Restore" }).click());
   await expect(row).toBeVisible();
 });
+
+test("a Due Date picked on a Task's page opened from its Project's page is the Task's, even with Escape pressed at once", async ({
+  page,
+}, testInfo) => {
+  const { id, tasks } = await contextWith(page, testInfo, ["Prime the walls"]);
+  const { record: hall } = await callContextTool(page, id, "create_project", { name: "Hall" });
+  await callContextTool(page, id, "move_task", { id: tasks[0]?.id, project_id: hall.id });
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  await attention.getByRole("button", { name: "Hall", exact: true }).click();
+  const project = attention.getByRole("dialog", { name: "Hall" });
+  await project
+    .getByRole("list", { name: "Tasks in Hall" })
+    .getByRole("button", { name: "Prime the walls", exact: true })
+    .click();
+  const opened = attention.getByRole("dialog", { name: "Prime the walls" });
+
+  // Picked, then Escape before it settles: the Project's page is shown when the day is sent.
+  await opened.getByLabel("Due Date", { exact: true }).fill("2099-04-07");
+  await page.keyboard.press("Escape");
+  await expect(project).toBeVisible();
+
+  // Read afresh, the Task has the day and its Project none.
+  await expect
+    .poll(async () => (await callContextTool(page, id, "get_task", { id: tasks[0]?.id })).due_date)
+    .toBe("2099-04-07");
+  expect(await callContextTool(page, id, "get_project", { id: hall.id })).toHaveProperty(
+    "due_date",
+    null,
+  );
+});

@@ -207,6 +207,15 @@ export function DueMark(props: { due: Day; overdue: boolean; timeZone: string })
 }
 
 /**
+ * Each send of a Task's dates from the Journal is numbered, and an answer is placed only if no
+ * later send's answer for that Task is placed already: one from before it would show the Task
+ * without the later day (#162). The count is the Journal's, not an editor's: dates closed and
+ * opened again are a new editor, and an answer to the first still lands.
+ */
+let dateSends = 0;
+const datesPlaced = new Map<string, number>();
+
+/**
  * A Task's Due Date and Defer Date, each set once it settles and cleared by emptying it. Kept or
  * refused, the field shows the day the server last said the Task has, once left (`SettlingField`).
  */
@@ -216,23 +225,30 @@ function TaskDatesEditor(props: {
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();
-  async function setDate(field: keyof TaskDates, day: string) {
+  async function setDate(id: string, field: keyof TaskDates, day: string) {
+    // biome-ignore lint/plugin: a write, not a read: latestRead() would drop an earlier answer once a later day is sent, though the later one may be refused, and send it again after a change.
+    const mine = ++dateSends;
     try {
-      const result = await callTool("set_task_dates", {
-        id: props.task.id,
-        [field]: day === "" ? null : day,
-      });
+      const result = await callTool("set_task_dates", { id, [field]: day === "" ? null : day });
       if (!result.ok) return props.onProblem(result.error.message);
+      if (mine < (datesPlaced.get(id) ?? 0)) return;
+      datesPlaced.set(id, mine);
       props.onTask(result.value.record);
     } catch (error) {
       props.onProblem(unreachableMessage(error));
     }
   }
 
+  // The Task the fields are for, as they are drawn: a day sent once they are gone is still its.
+  const id = props.task.id;
   const field = (name: keyof TaskDates, label: string) => (
     <label class="task-date">
       {label}
-      <SettlingField type="date" value={props.task[name]} onSettle={(day) => setDate(name, day)} />
+      <SettlingField
+        type="date"
+        value={props.task[name]}
+        onSettle={(day) => setDate(id, name, day)}
+      />
     </label>
   );
 

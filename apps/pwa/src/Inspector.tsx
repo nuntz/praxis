@@ -298,14 +298,9 @@ export function Inspector(props: {
     else await writeProject("rename_project", { id, name: now }, { holds: false });
   }
 
-  async function setDate(field: keyof TaskDates, day: string) {
-    const shown = shownTask();
-    if (!shown) return;
-    await writeTask(
-      "set_task_dates",
-      { id: shown.id, [field]: day === "" ? null : day },
-      { holds: false },
-    );
+  /** A day for the Task whose page it was picked on, which may no longer be the one shown. */
+  async function setDate(id: string, field: keyof TaskDates, day: string) {
+    await writeTask("set_task_dates", { id, [field]: day === "" ? null : day }, { holds: false });
   }
 
   async function setRecurrence(rule: NewRecurrence | null) {
@@ -400,12 +395,10 @@ export function Inspector(props: {
 
   // Each Project's.
 
-  async function setProjectDue(day: string) {
-    const shown = shownProject();
-    if (!shown) return;
+  async function setProjectDue(id: string, day: string) {
     await writeProject(
       "set_project_due_date",
-      { id: shown.id, due_date: day === "" ? null : day },
+      { id, due_date: day === "" ? null : day },
       { holds: false },
     );
   }
@@ -562,7 +555,7 @@ export function Inspector(props: {
                 <RecurrencePage
                   task={shown()}
                   sending={sending()}
-                  onDate={(day) => setDate("due_date", day)}
+                  onDate={(id, day) => setDate(id, "due_date", day)}
                   onChoose={(rule) => void setRecurrence(rule)}
                 />
               )}
@@ -778,14 +771,21 @@ function ActionLine(props: {
   );
 }
 
-/** A day on its own line, sent once it settles (`SettlingField`). */
+/**
+ * A day on its own line, sent once it settles (`SettlingField`), for the record whose page draws
+ * it: that may be sent as the page goes, when the panel shows another (#162).
+ */
 function DateLine(props: {
   icon: LucideIcon;
   label: string;
+  /** The id of the record the day is for. */
+  record: string;
   value: Day | null;
   overdue?: boolean;
-  onSettle: (day: string) => Promise<unknown>;
+  onSettle: (record: string, day: string) => Promise<unknown>;
 }) {
+  // Taken as the line is drawn: it stays the record's however late the day is sent.
+  const record = props.record;
   return (
     <label class="inspector-line inspector-date">
       <Dynamic component={props.icon} size={18} aria-hidden="true" />
@@ -794,7 +794,7 @@ function DateLine(props: {
         type="date"
         value={props.value}
         overdue={props.overdue}
-        onSettle={props.onSettle}
+        onSettle={(day) => props.onSettle(record, day)}
       />
     </label>
   );
@@ -830,7 +830,7 @@ function TaskPage(props: {
   projectName: (id: string) => string | undefined;
   sending: boolean;
   onRename: (typed: string) => Promise<void>;
-  onDate: (field: keyof TaskDates, day: string) => Promise<void>;
+  onDate: (id: string, field: keyof TaskDates, day: string) => Promise<void>;
   onPush: (kind: "recurrence" | "delegate" | "wait" | "place") => void;
   onMakeProject: () => void;
   onDrop: () => void;
@@ -913,15 +913,17 @@ function TaskPage(props: {
           <DateLine
             icon={Calendar}
             label="Due Date"
+            record={props.task.id}
             value={props.task.due_date}
             overdue={open()?.overdue != null}
-            onSettle={(day) => props.onDate("due_date", day)}
+            onSettle={(id, day) => props.onDate(id, "due_date", day)}
           />
           <DateLine
             icon={Clock}
             label="Defer Date"
+            record={props.task.id}
             value={props.task.defer_date}
-            onSettle={(day) => props.onDate("defer_date", day)}
+            onSettle={(id, day) => props.onDate(id, "defer_date", day)}
           />
           <ChoiceLine
             icon={Repeat}
@@ -1023,7 +1025,7 @@ function ProjectPage(props: {
   timeZone: string;
   sending: boolean;
   onRename: (typed: string) => Promise<void>;
-  onDue: (day: string) => Promise<void>;
+  onDue: (id: string, day: string) => Promise<void>;
   onMove: () => void;
   onOpenTask: (task: Task) => void;
   onEnd: (end: "finish_project" | "drop_project") => void;
@@ -1062,6 +1064,7 @@ function ProjectPage(props: {
         <DateLine
           icon={Calendar}
           label="Due Date"
+          record={props.project.id}
           value={props.project.due_date}
           overdue={overdue()}
           onSettle={props.onDue}
@@ -1136,7 +1139,7 @@ function ProjectPage(props: {
 function RecurrencePage(props: {
   task: Task;
   sending: boolean;
-  onDate: (day: string) => Promise<void>;
+  onDate: (id: string, day: string) => Promise<void>;
   onChoose: (rule: NewRecurrence | null) => void;
 }) {
   const held = () => props.task.recurrence;
@@ -1147,7 +1150,13 @@ function RecurrencePage(props: {
         <>
           <p class="inspector-note">A Recurrence counts from a Due Date: give it one first.</p>
           <div class="inspector-group">
-            <DateLine icon={Calendar} label="Due Date" value={null} onSettle={props.onDate} />
+            <DateLine
+              icon={Calendar}
+              label="Due Date"
+              record={props.task.id}
+              value={null}
+              onSettle={props.onDate}
+            />
           </div>
         </>
       }
