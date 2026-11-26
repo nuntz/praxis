@@ -14,6 +14,7 @@ import {
   thisDevice,
   unsubscribeHere,
 } from "./device.ts";
+import { followRecord } from "./follow-record.ts";
 import { latestRead } from "./latest-read.ts";
 import { clearCopy, copyProblem, offlineCopy, startCopy } from "./offline-copy.ts";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
@@ -365,18 +366,23 @@ function DeviceRow(props: {
 }) {
   const [sending, setSending] = createSignal(false);
   let nameField!: HTMLInputElement;
+  const name = followRecord(
+    () => nameField,
+    () => props.device.name,
+  );
 
   async function rename(event: SubmitEvent) {
     event.preventDefault();
     setSending(true);
-    const renamed = await writeToDeployment(
-      "rename_device",
-      { id: props.device.id, name: nameField.value },
-      props.onProblem,
-    );
-    setSending(false);
-    if (renamed) props.onRenamed(renamed);
-    else nameField.value = props.device.name;
+    await name.send(async () => {
+      const renamed = await writeToDeployment(
+        "rename_device",
+        { id: props.device.id, name: nameField.value },
+        props.onProblem,
+      );
+      setSending(false);
+      if (renamed) props.onRenamed(renamed);
+    });
   }
 
   return (
@@ -386,7 +392,7 @@ function DeviceRow(props: {
           ref={nameField}
           type="text"
           aria-label={`Name of ${props.device.name}`}
-          value={props.device.name}
+          onInput={name.typed}
           required
         />
         <button type="submit" class="quiet" disabled={sending() || props.sending}>

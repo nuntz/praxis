@@ -6,6 +6,7 @@ import type {
 } from "@praxis/domain";
 import { createEffect, createSignal, createUniqueId, For, on, Show } from "solid-js";
 import { SwitchInput } from "./design/SettingRows.tsx";
+import { followRecord } from "./follow-record.ts";
 import { latestRead } from "./latest-read.ts";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
 
@@ -118,6 +119,10 @@ function ConnectionRow(props: {
   const [sending, setSending] = createSignal(false);
   const readingOnly = createUniqueId();
   let nameField!: HTMLInputElement;
+  const name = followRecord(
+    () => nameField,
+    () => props.connection.name,
+  );
 
   async function send<N extends ConnectionChange>(tool: N, input: DeploymentToolInput<N>) {
     setSending(true);
@@ -129,11 +134,9 @@ function ConnectionRow(props: {
 
   async function rename(event: SubmitEvent) {
     event.preventDefault();
-    const done = await send("rename_connection", {
-      id: props.connection.id,
-      name: nameField.value,
-    });
-    if (!done) nameField.value = props.connection.name;
+    await name.send(() =>
+      send("rename_connection", { id: props.connection.id, name: nameField.value }),
+    );
   }
 
   return (
@@ -143,7 +146,7 @@ function ConnectionRow(props: {
           ref={nameField}
           type="text"
           aria-label={`Name of ${props.connection.name}`}
-          value={props.connection.name}
+          onInput={name.typed}
           required
         />
         <button type="submit" class="quiet" disabled={sending()}>

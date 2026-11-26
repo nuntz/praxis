@@ -1,6 +1,7 @@
 import { FIRST_TIMES, namedZone, type Settings, type Weekday, weekdays } from "@praxis/domain";
 import { createSignal, For, Show } from "solid-js";
 import { SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
+import { SettlingField } from "./SettlingField.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /** The time zone this Device is in, as its browser names it. */
@@ -140,16 +141,15 @@ export function BriefAndReview(props: {
           title="Time"
           labels
           control={(ids) => (
-            <input
+            <SettlingField
               id={ids.id}
               type="time"
               value={props.settings.brief_time ?? briefTime()}
               disabled={sending() || !briefOn()}
-              onChange={(event) => {
-                const time = event.currentTarget.value;
+              onSettle={async (time) => {
                 if (time === "") return;
                 setBriefTime(time);
-                void setBrief(time);
+                await setBrief(time);
               }}
             />
           )}
@@ -195,16 +195,15 @@ export function BriefAndReview(props: {
           title="Time"
           labels
           control={(ids) => (
-            <input
+            <SettlingField
               id={ids.id}
               type="time"
               value={props.settings.review_time ?? reviewTime()}
               disabled={sending() || !reviewOn()}
-              onChange={(event) => {
-                const time = event.currentTarget.value;
+              onSettle={async (time) => {
                 if (time === "") return;
                 setReviewTime(time);
-                void setReview({ time });
+                await setReview({ time });
               }}
             />
           )}
