@@ -2,6 +2,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import {
   callContextTool,
   contextOfOwn,
+  enterSearch,
   expect,
   onPhone,
   openJournal,
@@ -46,7 +47,7 @@ async function contextWithProjects(page: Page, testInfo: TestInfo) {
 async function openSearch(page: Page, testInfo: TestInfo) {
   await page.goto("/");
   const { journal } = await openJournal(page, testInfo);
-  const field = journal.getByRole("searchbox", { name: "Search this Context" });
+  const field = await enterSearch(page);
   const chips = journal.getByRole("group", { name: "Narrow the search" });
   const found = journal.getByRole("region", { name: "Found" });
   return { journal, field, chips, found, excerpts: found.getByTestId("search-excerpt") };
@@ -143,6 +144,10 @@ test("tapping a Project found narrows the search to it and clears the words, a F
   // Opening a hit ends the search, its chip too, and shows it in the Journal.
   await found.getByRole("link", { name: new RegExp(`Seeds sown ${tag}`) }).click();
   await expect(found).toHaveCount(0);
-  await expect(chips.getByRole("button", { name: "Project", exact: true })).toBeVisible();
+  // Its chip is lifted, not only folded away with the others.
+  await expect(
+    journal.getByRole("button", { name: `Project: ${garden}, remove`, includeHidden: true }),
+  ).toHaveCount(0);
+  await expect(chips).toBeHidden();
   await expect(journal.getByRole("list", { name: "Entries" })).toBeVisible();
 });

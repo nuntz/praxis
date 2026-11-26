@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { expect, onPhone, sharedContext, test } from "./fixtures.ts";
+import { expect, onPhone, sharedContext, showTab, test } from "./fixtures.ts";
 
 // The main screen is Attention, the Journal and the Conversation as three peers (section 8.1,
 // ADR 0022), in the Atelier look of section 8.11.
@@ -154,6 +154,60 @@ test("the person records an Entry by keyboard alone, in a composer that names it
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(switcher).toHaveCSS("background-color", BLUE.dark);
   await expect(frame).toHaveCSS("border-top-color", BLUE.dark);
+});
+
+test("at rest each composer is one line, its label where the words will go, and opens to two lines once focused", async ({
+  page,
+}, testInfo) => {
+  const { name } = await sharedContext(page);
+  await page.goto("/");
+  for (const [tab, title, label] of [
+    ["Journal", "Journal", `Record an Entry in ${name}`],
+    ["Agent", "Conversation", `Message the Agent in ${name}`],
+  ] as const) {
+    await showTab(page, testInfo, tab);
+    const shown = column(page, title);
+    const field = shown.getByRole("textbox", { name: label, exact: true });
+    const frame = shown
+      .locator("form")
+      .filter({ has: page.getByRole("textbox", { name: label, exact: true }) });
+    const words = shown.getByText(label, { exact: true });
+    const boxOf = async (part: typeof field) => {
+      const box = await part.boundingBox();
+      if (!box) throw new Error(`${title}'s composer is shown`);
+      return box;
+    };
+    const leave = () => shown.getByRole("heading", { name: title, exact: true }).click();
+    await expect(field).toBeVisible();
+
+    // At rest its label is on the field's one line, where the words will go.
+    const atRest = await boxOf(frame);
+    let [labelBox, fieldBox] = [await boxOf(words), await boxOf(field)];
+    expect(labelBox.y).toBeGreaterThanOrEqual(fieldBox.y);
+    expect(labelBox.y + labelBox.height).toBeLessThanOrEqual(fieldBox.y + fieldBox.height);
+
+    // Focused, it opens at once, its label above the field.
+    await field.click();
+    await expect(field).toBeFocused();
+    const opened = await boxOf(frame);
+    expect(opened.height).toBeGreaterThan(atRest.height + 20);
+    [labelBox, fieldBox] = [await boxOf(words), await boxOf(field)];
+    expect(labelBox.y + labelBox.height).toBeLessThanOrEqual(fieldBox.y);
+
+    // Left with words in it, it stays open; left empty, it folds back to its one line.
+    await field.fill("Half a thought");
+    await leave();
+    await expect(field).not.toBeFocused();
+    // Read once a fold would have run: it waits for the press to be done, then a turn of the page.
+    await page.evaluate(
+      () => new Promise((settled) => setTimeout(() => requestAnimationFrame(settled))),
+    );
+    await expect(frame).not.toHaveAttribute("data-folded");
+    expect((await boxOf(frame)).height).toBe(opened.height);
+    await field.fill("");
+    await leave();
+    await expect.poll(async () => (await boxOf(frame)).height).toBe(atRest.height);
+  }
 });
 
 test("light and dark follow the Device, with no switch", async ({ page }) => {

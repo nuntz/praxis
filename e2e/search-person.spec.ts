@@ -1,5 +1,13 @@
 import type { Page, TestInfo } from "@playwright/test";
-import { callContextTool, contextOfOwn, expect, openJournal, pickTime, test } from "./fixtures.ts";
+import {
+  callContextTool,
+  contextOfOwn,
+  enterSearch,
+  expect,
+  openJournal,
+  pickTime,
+  test,
+} from "./fixtures.ts";
 
 // The Person chip narrows search to a Person, with words or without, and a Person found leads to
 // everything about them (section 8.4). Its picker is the composer's `@` picker. With no words, a
@@ -40,7 +48,7 @@ async function contextWithPersons(page: Page, testInfo: TestInfo) {
 async function openSearch(page: Page, testInfo: TestInfo) {
   await page.goto("/");
   const { journal } = await openJournal(page, testInfo);
-  const field = journal.getByRole("searchbox", { name: "Search this Context" });
+  const field = await enterSearch(page);
   const chips = journal.getByRole("group", { name: "Narrow the search" });
   const found = journal.getByRole("region", { name: "Found" });
   return { journal, field, chips, found, excerpts: found.getByTestId("search-excerpt") };
@@ -150,6 +158,10 @@ test("tapping a Person found narrows the search to them and clears the words", a
   await expect(anaChip).toBeVisible();
   await found.getByRole("link", { name: new RegExp(`Called Ana ${tag}`) }).click();
   await expect(found).toHaveCount(0);
-  await expect(chips.getByRole("button", { name: "Person", exact: true })).toBeVisible();
+  // Its chip is lifted, not only folded away with the others.
+  await expect(
+    journal.getByRole("button", { name: `Person: ${ana}, remove`, includeHidden: true }),
+  ).toHaveCount(0);
+  await expect(chips).toBeHidden();
   await expect(journal.getByRole("list", { name: "Entries" })).toBeVisible();
 });

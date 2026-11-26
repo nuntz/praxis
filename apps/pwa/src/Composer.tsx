@@ -17,6 +17,7 @@ import {
   personsOffered,
   referencesOffered,
 } from "./Pickers.tsx";
+import { afterPress } from "./press.ts";
 import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { recordEntry } from "./unsent.ts";
 
@@ -62,6 +63,9 @@ export function Composer(props: {
   const [highlight, setHighlight] = createSignal(-1);
   const [sending, setSending] = createSignal(false);
   const canRecord = () => !sending() && words().trim() !== "";
+  // At rest, with nothing written, no Follow-up chosen and the focus elsewhere, it folds to one line.
+  const [focused, setFocused] = createSignal(false);
+  const folded = () => !focused() && words() === "" && !props.followingUp;
   const open = () => query() !== null && choices().length > 0;
   // A draft on its way is no longer the draft: kept, it would show again in the next Context and
   // could be sent twice.
@@ -220,6 +224,12 @@ export function Composer(props: {
       <form
         class="composer"
         data-testid="composer"
+        data-folded={folded() ? "" : undefined}
+        onFocusIn={() => setFocused(true)}
+        onFocusOut={(event) => {
+          const form = event.currentTarget;
+          afterPress(() => setFocused(form.contains(document.activeElement)));
+        }}
         onSubmit={(event) => {
           event.preventDefault();
           void record();

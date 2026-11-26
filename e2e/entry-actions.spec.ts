@@ -47,7 +47,7 @@ test("on a desktop, an Entry's actions are a toolbar of icons, shown on hover or
 
   // Each action an icon with no words, named, and its tooltip saying the same.
   const actions = toolbar.getByRole("button");
-  const names = ["Edit", "Follow up", "Mark Standing", "More: Move, Delete"];
+  const names = ["Edit", "Add a Task", "Follow up", "Mark Standing", "More: Move, Delete"];
   await expect(actions).toHaveText(names.map(() => ""));
   for (const [at, name] of names.entries()) {
     await expect(actions.nth(at)).toHaveAccessibleName(name);
@@ -102,7 +102,7 @@ test("on a desktop, an Entry's actions are a toolbar of icons, shown on hover or
   await expect(keptToolbar).toHaveCSS("opacity", "1");
 });
 
-test("on a touch screen, an Entry's one button opens a menu of its five actions", async ({
+test("on a touch screen, an Entry's one button opens a menu of its six actions", async ({
   page,
 }, testInfo) => {
   test.skip(!onPhone(testInfo), "A desktop's pointer hovers, and has the toolbar.");
@@ -120,6 +120,7 @@ test("on a touch screen, an Entry's one button opens a menu of its five actions"
   const menu = entry.getByRole("menu", { name, exact: true });
   await expect(menu.getByRole("menuitem")).toHaveText([
     "Edit",
+    "Add a Task",
     "Follow up",
     "Mark Standing",
     "Move",
@@ -129,7 +130,7 @@ test("on a touch screen, an Entry's one button opens a menu of its five actions"
   await button.click();
   await expect(menu).toHaveCount(0);
   await button.click();
-  await expect(menu.getByRole("menuitem")).toHaveCount(5);
+  await expect(menu.getByRole("menuitem")).toHaveCount(6);
 });
 
 test("an edited Entry and a Standing Entry show their marks with nothing hovered or focused", async ({

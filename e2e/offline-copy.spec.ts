@@ -3,11 +3,13 @@ import {
   callContextTool,
   callDeploymentTool,
   closeSettings,
+  enterSearch,
   entryAction,
   expect,
   holdNext,
   lastShown,
   makeContext,
+  onPhone,
   openJournal,
   openSettings,
   showTab,
@@ -212,11 +214,17 @@ test("the Offline Copy is read with no network, as last fetched, in any Context,
   // Versions and search need the network, and say so.
   await entry.getByRole("button", { name: "Edited", exact: true }).click();
   await expect(journal.getByText("Versions need the network.", { exact: true })).toBeVisible();
-  // Search's field is shown but cannot be used.
+  // Search's field is shown but cannot be used: on a phone its button opens it to say so.
+  const onThePhone = onPhone(testInfo);
+  if (onThePhone)
+    await journal.getByRole("button", { name: "Open the search", exact: true }).click();
   await expect(
     journal.getByRole("searchbox", { name: "Search this Context", exact: true }),
   ).toBeDisabled();
   await expect(journal.getByText("Search needs the network.", { exact: true })).toBeVisible();
+  if (onThePhone) {
+    await journal.getByRole("button", { name: "Back to the Journal", exact: true }).click();
+  }
 
   // A Follow-up to an Entry the copy holds, Mentioning a Person it holds, kept Unsent.
   await (await entryAction(entry, "Follow up", testInfo)).click();
@@ -365,7 +373,7 @@ test("an older Entry opened while the copy is being fetched stays in it once the
   await page.reload();
   await held.asked();
   const { journal } = await openJournal(page, testInfo);
-  await journal.getByRole("searchbox", { name: "Search this Context", exact: true }).fill(tag);
+  await (await enterSearch(page)).fill(tag);
   await journal.getByTestId("search-hit").filter({ hasText: tag }).getByRole("link").click();
   await expect(
     journal.getByTestId("entry").filter({ hasText: `Kept from the summer ${tag}` }),

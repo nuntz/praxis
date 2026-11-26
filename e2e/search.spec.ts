@@ -4,6 +4,7 @@ import {
   callContextTool,
   callDeploymentTool,
   contextOfOwn,
+  enterSearch,
   entryAction,
   expect,
   openJournal,
@@ -25,7 +26,7 @@ test("the person searches the Journal, sees the excerpt as typed, opens the Entr
   const entry = journal.getByTestId("entry").filter({ hasText: tag });
   await expect(entry).toBeVisible();
 
-  const search = journal.getByRole("searchbox", { name: "Search this Context" });
+  const search = await enterSearch(page);
   await search.fill(`storage ${tag}`);
   const hit = journal.getByTestId("search-hit");
   await expect(hit).toHaveCount(1);
@@ -40,6 +41,7 @@ test("the person searches the Journal, sees the excerpt as typed, opens the Entr
   await expect(search).toHaveValue("");
   await expect(entry).toBeFocused();
 
+  await enterSearch(page);
   await search.fill(tag);
   await expect(hit).toHaveCount(1);
   await search.press("Escape");
@@ -49,6 +51,7 @@ test("the person searches the Journal, sees the excerpt as typed, opens the Entr
   // Sent to the Trash, it is found no more.
   await (await entryAction(entry, "Delete", testInfo)).click();
   await expect(entry).toHaveCount(0);
+  await enterSearch(page);
   await search.fill(tag);
   await expect(journal.getByText("Nothing found")).toBeVisible();
   await expect(hit).toHaveCount(0);
@@ -66,7 +69,7 @@ test("the person finds an Entry by what it means, though it shares no word with 
   await journal.getByRole("button", { name: "Record" }).click();
   await expect(journal.getByTestId("entry").filter({ hasText: tag })).toBeVisible();
 
-  const search = journal.getByRole("searchbox", { name: "Search this Context" });
+  const search = await enterSearch(page);
   // Other runs' Entries are found too, so this one is picked out by its tag.
   const hit = journal.getByTestId("search-hit").filter({ hasText: tag });
   // Found by meaning shortly after it is saved, not at once: each try asks afresh.
@@ -92,7 +95,7 @@ test("an Entry found only by meaning is set apart under Close in meaning, folded
 
   await page.goto("/");
   const { journal } = await openJournal(page, testInfo);
-  const search = journal.getByRole("searchbox", { name: "Search this Context" });
+  const search = await enterSearch(page);
   const found = journal.getByRole("region", { name: "Found" });
   const headings = found.getByRole("heading");
   const entries = found.getByRole("region", { name: /^Entries / });
@@ -194,7 +197,7 @@ test("what a search finds is grouped by kind in a fixed order, what matched is m
   const client = await connectTo(new URL(connection.address, page.url()).href);
   await client.callTool({ name: "record_entry", arguments: { words: `Quoted for ${tag}` } });
   const { journal } = await openJournal(page, testInfo);
-  await journal.getByRole("searchbox", { name: "Search this Context" }).fill(tag);
+  await (await enterSearch(page)).fill(tag);
   const found = journal.getByRole("region", { name: "Found" });
   const headings = found.getByRole("heading");
   await expect(headings).toHaveText(["Projects 1", "Persons 1", "Tasks 1", "Entries 3"]);
@@ -260,7 +263,7 @@ test("one Show more found ends the list, and what it brings joins its kind's gro
 
   await page.goto("/");
   const { journal } = await openJournal(page, testInfo);
-  await journal.getByRole("searchbox", { name: "Search this Context" }).fill(tag);
+  await (await enterSearch(page)).fill(tag);
   const found = journal.getByRole("region", { name: "Found" });
   const hits = found.getByTestId("search-hit");
   await expect(hits).toHaveCount(50);
@@ -334,7 +337,7 @@ test("a Task found says where it stands as Attention does, is finished and reope
 
   await page.goto("/");
   const { journal } = await openJournal(page, testInfo);
-  const search = journal.getByRole("searchbox", { name: "Search this Context" });
+  const search = await enterSearch(page);
   await search.fill(tag);
   const found = journal.getByRole("region", { name: "Found" });
   const tasks = found.getByRole("region", { name: /^Tasks / });

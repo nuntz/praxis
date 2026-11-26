@@ -9,6 +9,7 @@ import {
 import { imageLoadingIn } from "@praxis/domain/markdown";
 import ArrowRightLeft from "lucide-solid/icons/arrow-right-left";
 import CornerDownRight from "lucide-solid/icons/corner-down-right";
+import ListPlus from "lucide-solid/icons/list-plus";
 import Pencil from "lucide-solid/icons/pencil";
 import Pin from "lucide-solid/icons/pin";
 import Trash from "lucide-solid/icons/trash";
@@ -18,7 +19,7 @@ import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
 import { dayAndTimeIn, partIntoDays } from "./days.tsx";
 import { EntryActions } from "./EntryActions.tsx";
-import { EntryEditor } from "./EntryEditor.tsx";
+import { EntryPage } from "./EntryPage.tsx";
 import { followNewest } from "./follow-newest.tsx";
 import { heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { useLive } from "./live-context.ts";
@@ -480,7 +481,9 @@ function EntryItem(props: {
   const heldChanges = useHeldChanges();
   // The newest Held Change left on it, which its marker leads to in Attention.
   const held = () => heldChanges.all().find((each) => each.entry.id === props.entry.id);
-  const [editing, setEditing] = createSignal(false);
+  // The Entry's page, open on its words or on adding a Task, or shut.
+  const [page, setPage] = createSignal<"words" | "task" | null>(null);
+  let item!: HTMLLIElement;
   const [showingVersions, setShowingVersions] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
   const [marking, setMarking] = createSignal(false);
@@ -518,7 +521,13 @@ function EntryItem(props: {
     }
   }
   return (
-    <li class="entry" id={recordAnchor("entry", props.entry.id)} data-testid="entry" tabIndex={-1}>
+    <li
+      ref={item}
+      class="entry"
+      id={recordAnchor("entry", props.entry.id)}
+      data-testid="entry"
+      tabIndex={-1}
+    >
       <div class="entry-head">
         <time class="entry-time" datetime={props.entry.at}>
           {props.formatTime(props.entry.at)}
@@ -557,9 +566,8 @@ function EntryItem(props: {
         </Show>
         <EntryActions
           frequent={[
-            ...(editing()
-              ? []
-              : [{ label: "Edit", icon: Pencil, onSelect: () => setEditing(true) }]),
+            { label: "Edit", icon: Pencil, onSelect: () => setPage("words") },
+            { label: "Add a Task", icon: ListPlus, onSelect: () => setPage("task") },
             { label: "Follow up", icon: CornerDownRight, onSelect: () => props.onFollowUp() },
             {
               label: props.entry.standing ? "Unmark Standing" : "Mark Standing",
@@ -598,26 +606,37 @@ function EntryItem(props: {
           </Show>
         )}
       </Show>
-      <Show
-        when={editing()}
-        fallback={
-          <Words
-            words={props.entry.words}
-            // Read with no network, as from the copy, an image shows its description (section 8.8).
-            images={online() && !readFromCopy(contextId) ? imageLoadingIn(props.entry) : "never"}
-            testId="words"
+      <Words
+        words={props.entry.words}
+        // Read with no network, as from the copy, an image shows its description (section 8.8).
+        images={online() && !readFromCopy(contextId) ? imageLoadingIn(props.entry) : "never"}
+        testId="words"
+      />
+      <Show when={page()}>
+        {(start) => (
+          <EntryPage
+            entry={props.entry}
+            timeZone={props.timeZone}
+            when={props.formatWhen(props.entry.at)}
+            start={start()}
+            column={item.closest<HTMLElement>(".peer") ?? document.body}
+            onSaved={props.onEntry}
+            onTask={props.onTask}
+            onClose={() => {
+              const opener = start() === "task" ? "Add a Task" : "Edit";
+              setPage(null);
+              // The focus goes back to the action that opened the page: its button in the
+              // toolbar, or the one button of a touch screen's menu.
+              queueMicrotask(() =>
+                (
+                  item.querySelector<HTMLElement>(
+                    `[aria-label="${opener}"], [aria-label="Actions for this Entry"]`,
+                  ) ?? item
+                ).focus(),
+              );
+            }}
           />
-        }
-      >
-        <EntryEditor
-          entry={props.entry}
-          onSaved={(entry) => {
-            setEditing(false);
-            props.onEntry(entry);
-          }}
-          onCancel={() => setEditing(false)}
-          onProblem={props.onProblem}
-        />
+        )}
       </Show>
       <Show when={showingVersions() && props.entry.edited}>
         <Versions
