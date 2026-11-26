@@ -8,6 +8,7 @@ import {
 import { createSignal, For, Show } from "solid-js";
 import { deviceTimeZone } from "./ContextSettings.tsx";
 import { MakeExport } from "./Export.tsx";
+import { followRecord } from "./follow-record.ts";
 import { DOWNLOADED } from "./Trash.tsx";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
 
@@ -77,6 +78,10 @@ function ContextRow(props: {
   const [sending, setSending] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
   let nameField!: HTMLInputElement;
+  const name = followRecord(
+    () => nameField,
+    () => props.context.name,
+  );
 
   async function send<N extends ContextChange>(tool: N, input: DeploymentToolInput<N>) {
     setSending(true);
@@ -92,8 +97,7 @@ function ContextRow(props: {
 
   async function rename(event: SubmitEvent) {
     event.preventDefault();
-    const done = await send("rename_context", { id: props.context.id, name: nameField.value });
-    if (!done) nameField.value = props.context.name;
+    await name.send(() => send("rename_context", { id: props.context.id, name: nameField.value }));
   }
 
   return (
@@ -104,7 +108,7 @@ function ContextRow(props: {
           ref={nameField}
           type="text"
           aria-label={`Name of ${props.context.name}`}
-          value={props.context.name}
+          onInput={name.typed}
           required
         />
         <button type="submit" class="quiet" disabled={sending()}>

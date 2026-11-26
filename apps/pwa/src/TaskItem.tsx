@@ -2,6 +2,7 @@ import { type Day, type Task, type TaskDates, utcMidnight, waitedOnName } from "
 import Calendar from "lucide-solid/icons/calendar";
 import { createMemo, createSignal, type JSX, Show } from "solid-js";
 import { todayIn } from "./days.tsx";
+import { SettlingField } from "./SettlingField.tsx";
 import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { discardUnsent, finishTask, unsentFinishOf } from "./unsent.ts";
 
@@ -205,37 +206,33 @@ export function DueMark(props: { due: Day; overdue: boolean; timeZone: string })
   );
 }
 
-/** A Task's Due Date and Defer Date, each set as it is picked and cleared by emptying it. */
+/**
+ * A Task's Due Date and Defer Date, each set once it settles and cleared by emptying it. Kept or
+ * refused, the field shows the day the server last said the Task has, once left (`SettlingField`).
+ */
 function TaskDatesEditor(props: {
   task: Task;
   onTask: (task: Task) => void;
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();
-  async function setDate(field: keyof TaskDates, input: HTMLInputElement) {
+  async function setDate(field: keyof TaskDates, day: string) {
     try {
       const result = await callTool("set_task_dates", {
         id: props.task.id,
-        [field]: input.value === "" ? null : input.value,
+        [field]: day === "" ? null : day,
       });
       if (!result.ok) return props.onProblem(result.error.message);
       props.onTask(result.value.record);
     } catch (error) {
       props.onProblem(unreachableMessage(error));
-    } finally {
-      // Whatever the answer, the field shows the day the server last said the Task has.
-      input.value = props.task[field] ?? "";
     }
   }
 
   const field = (name: keyof TaskDates, label: string) => (
     <label class="task-date">
       {label}
-      <input
-        type="date"
-        value={props.task[name] ?? ""}
-        onChange={(event) => void setDate(name, event.currentTarget)}
-      />
+      <SettlingField type="date" value={props.task[name]} onSettle={(day) => setDate(name, day)} />
     </label>
   );
 

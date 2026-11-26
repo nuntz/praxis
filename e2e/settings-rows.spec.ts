@@ -4,6 +4,7 @@ import {
   callDeploymentTool,
   contextOfOwn,
   expect,
+  holdNext,
   lastShown,
   makeContext,
   onPhone,
@@ -116,6 +117,33 @@ test("each switch in Brief and Review turns with Space and with a tap", async ({
       expect(await callContextTool(page, id, "get_settings", {})).toMatchObject(kept);
     }
   }
+});
+
+test("a Review time left for its Day is sent first, and the Day picked meanwhile lands with it", async ({
+  page,
+}, testInfo) => {
+  const { id } = await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  const settings = await openSettings(page, "Brief and Review");
+  const review = settings.getByRole("group", { name: "Review, each week", exact: true });
+  const time = review.getByLabel("Time", { exact: true });
+  const day = review.getByRole("combobox", { name: "Day", exact: true });
+
+  // The time is sent as its field is left for the Day, and its answer is held while the Day is
+  // picked: the Day waits for nothing, and goes with the time just sent, never the one before.
+  const answer = await holdNext(page, new RegExp(`/api/contexts/${id}/tools/set_review_time$`));
+  await time.fill("18:30");
+  await time.press("Shift+Tab");
+  await answer.asked();
+  await expect(day).toBeFocused();
+  await day.selectOption("friday");
+  await answer.release();
+
+  await expect(day).toHaveValue("friday");
+  await expect(time).toHaveValue("18:30");
+  await expect
+    .poll(() => callContextTool(page, id, "get_settings", {}))
+    .toMatchObject({ review_day: "friday", review_time: "18:30" });
 });
 
 test("on a phone the list of sections shows each one's current value, where it is known", async ({

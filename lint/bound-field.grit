@@ -1,0 +1,16 @@
+language js
+
+JsxAttribute(name=$name, initializer=$initializer) as $bound where {
+  $name <: `value`,
+  $initializer <: JsxAttributeInitializerClause(value=JsxExpressionAttributeValue(expression=$value)),
+  $value <: r"(?s)props[.\[].*",
+  $bound <: within or {
+    JsxSelfClosingElement(name=$element),
+    JsxOpeningElement(name=$element)
+  },
+  $element <: or {
+    `input`,
+    `textarea`
+  },
+  register_diagnostic(span=$bound, message="Set a field from its record only while it is left alone: a day or a time is a SettlingField, a name typed and sent is followRecord() (apps/pwa/src/follow-record.ts), as TitleField sets a title from an effect. Bound to its record's value, a field is written over each time the record is read again, taking back what the person is typing.")
+}

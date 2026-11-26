@@ -15,7 +15,15 @@
   },
   "formatter": { "indentStyle": "space", "lineWidth": 100 },
   "linter": {
-    "rules": { "preset": "recommended" }
+    "rules": {
+      "preset": "recommended",
+      "a11y": {
+        "noLabelWithoutControl": {
+          "level": "error",
+          "options": { "inputComponents": ["SettlingField"] }
+        }
+      }
+    }
   },
   "overrides": [
     {
@@ -61,7 +69,11 @@
     },
     {
       "includes": ["apps/pwa/src/**"],
-      "plugins": ["./lint/computed-on.grit", "./lint/use-only-reads.grit"]
+      "plugins": [
+        "./lint/computed-on.grit",
+        "./lint/use-only-reads.grit",
+        "./lint/bound-field.grit"
+      ]
     },
     {
       "includes": ["apps/pwa/src/**", "!apps/pwa/src/latest-read.ts"],

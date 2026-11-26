@@ -81,6 +81,24 @@ const fixtures: Record<string, string> = {
     "];",
     "export const followed = [on(currentId, () => {}), on(() => props.contexts, () => {})];",
   ].join("\n"),
+  // A field is set from an effect while it is left alone, never bound to its record's value,
+  // which writes the record over what is typed each time it is read again.
+  "apps/pwa/src/bound.tsx": [
+    "declare const props: { name: string; task: Record<string, string | null> };",
+    "declare const at: string;",
+    "declare function Field(field: { value: string }): unknown;",
+    "declare function shown(name: string): string;",
+    "export const bound = [",
+    '  <input type="text" value={props.name} />,',
+    "  <textarea value={props.name} />,",
+    '  <input type="date" value={props.task[at] ?? ""} />,',
+    "];",
+    "export const unbound = [",
+    "  <Field value={props.name} />,",
+    "  <select value={props.name} />,",
+    "  <input readOnly value={shown(props.name)} />,",
+    "];",
+  ].join("\n"),
   // The Worker makes or names an object only in routing.ts, in the Deployment's jurisdiction.
   "apps/worker/src/made-elsewhere.ts": [
     "declare const env: Env;",
@@ -183,6 +201,7 @@ const midnightAsked = "plugin";
 const pinned = "plugin";
 const unthrown = "plugin";
 const stoodIn = "plugin";
+const boundField = "plugin";
 
 describe("the lint guards", () => {
   test("the domain package cannot import Cloudflare or Bun", () => {
@@ -232,6 +251,10 @@ describe("the lint guards", () => {
 
   test("a time on the screen cannot be shown without naming its zone", () => {
     expect(rulesAt("apps/pwa/src/zones.ts")).toEqual(Array(5).fill(zoneUnnamed));
+  });
+
+  test("a field on the screen cannot be bound to its record's value, only a component's", () => {
+    expect(rulesAt("apps/pwa/src/bound.tsx")).toEqual(Array(3).fill(boundField));
   });
 
   test("the Worker makes or names an object only in routing.ts, which finds it in the jurisdiction", () => {

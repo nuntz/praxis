@@ -1,6 +1,7 @@
 import { FIRST_TIMES, namedZone, type Settings, type Weekday, weekdays } from "@praxis/domain";
 import { createSignal, For, Show } from "solid-js";
 import { SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
+import { SettlingField } from "./SettlingField.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /** The time zone this Device is in, as its browser names it. */
@@ -15,11 +16,28 @@ export function deviceTimeZone(): string {
  */
 function settingsChange(onChanged: (settings: Settings) => void) {
   const callTool = useCallTool();
-  const [sending, setSending] = createSignal(false);
+  const [holding, setHolding] = createSignal(0);
   const [problem, setProblem] = createSignal<string | null>(null);
+  let queued: Promise<boolean> = Promise.resolve(true);
 
-  async function change(send: () => ReturnType<typeof callTool<"set_time_zone">>) {
-    setSending(true);
+  /**
+   * A change, sent once every change before it is answered, so they land in the order they were
+   * made, and `send` reads the settings as the ones before it left them. One made by a control
+   * holds the others while it is out (`holds`). A time sent as its field is left holds nothing: the
+   * press that left it lands as meant, and its change waits behind the time's.
+   */
+  function change(send: () => ReturnType<typeof callTool<"set_time_zone">>, { holds = true } = {}) {
+    if (holds) setHolding((count) => count + 1);
+    const sent = queued
+      .then(() => sendNow(send))
+      .finally(() => {
+        if (holds) setHolding((count) => count - 1);
+      });
+    queued = sent;
+    return sent;
+  }
+
+  async function sendNow(send: () => ReturnType<typeof callTool<"set_time_zone">>) {
     try {
       const result = await send();
       if (!result.ok) {
@@ -32,10 +50,9 @@ function settingsChange(onChanged: (settings: Settings) => void) {
     } catch (error) {
       setProblem(unreachableMessage(error));
       return false;
-    } finally {
-      setSending(false);
     }
   }
+  const sending = () => holding() > 0;
   return { callTool, sending, problem, change };
 }
 
@@ -108,9 +125,13 @@ export function BriefAndReview(props: {
   const briefOn = () => props.settings.brief_time !== null;
   const reviewOn = () => props.settings.review_time !== null;
 
-  const setBrief = (time: string | null) => change(() => callTool("set_brief_time", { time }));
-  const setReview = (input: { day?: Weekday; time: string | null }) =>
-    change(() => callTool("set_review_time", input));
+  const setBrief = (time: string | null, options?: { holds: boolean }) =>
+    change(() => callTool("set_brief_time", { time }), options);
+  const setReview = (time: string | null, options?: { holds: boolean }) =>
+    change(() => callTool("set_review_time", { time }), options);
+  /** The Review's day, with its time as the changes before it leave it, a time just sent among them. */
+  const setReviewDay = (day: Weekday) =>
+    change(() => callTool("set_review_time", { day, time: props.settings.review_time }));
 
   return (
     <section id="brief-and-review" class="settings" aria-labelledby="brief-and-review-heading">
@@ -140,16 +161,15 @@ export function BriefAndReview(props: {
           title="Time"
           labels
           control={(ids) => (
-            <input
+            <SettlingField
               id={ids.id}
               type="time"
               value={props.settings.brief_time ?? briefTime()}
               disabled={sending() || !briefOn()}
-              onChange={(event) => {
-                const time = event.currentTarget.value;
+              onSettle={async (time) => {
                 if (time === "") return;
                 setBriefTime(time);
-                void setBrief(time);
+                await setBrief(time, { holds: false });
               }}
             />
           )}
@@ -166,7 +186,7 @@ export function BriefAndReview(props: {
               aria-describedby={ids.describedBy}
               checked={reviewOn()}
               disabled={sending()}
-              onTurn={(on) => setReview({ time: on ? reviewTime() : null })}
+              onTurn={(on) => setReview(on ? reviewTime() : null)}
             />
           )}
         />
@@ -178,12 +198,7 @@ export function BriefAndReview(props: {
               id={ids.id}
               value={props.settings.review_day}
               disabled={sending()}
-              onChange={(event) =>
-                void setReview({
-                  day: event.currentTarget.value as Weekday,
-                  time: props.settings.review_time,
-                })
-              }
+              onChange={(event) => void setReviewDay(event.currentTarget.value as Weekday)}
             >
               <For each={weekdays}>
                 {(day) => <option value={day}>{weekdayName(day, "long")}</option>}
@@ -195,16 +210,15 @@ export function BriefAndReview(props: {
           title="Time"
           labels
           control={(ids) => (
-            <input
+            <SettlingField
               id={ids.id}
               type="time"
               value={props.settings.review_time ?? reviewTime()}
               disabled={sending() || !reviewOn()}
-              onChange={(event) => {
-                const time = event.currentTarget.value;
+              onSettle={async (time) => {
                 if (time === "") return;
                 setReviewTime(time);
-                void setReview({ time });
+                await setReview(time, { holds: false });
               }}
             />
           )}

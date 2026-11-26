@@ -49,6 +49,7 @@ import { latestRead } from "./latest-read.ts";
 import { MoveRecord } from "./Move.tsx";
 import { ChoicePicker, personsOffered, referencesOffered, waitTargetsOffered } from "./Pickers.tsx";
 import { recurrencesOffered, recurrenceWords, sameRule } from "./recurrence-words.ts";
+import { SettlingField } from "./SettlingField.tsx";
 import { createFinishing, DueMark, TaskMarks } from "./TaskItem.tsx";
 import {
   type CallTool,
@@ -524,7 +525,7 @@ export function Inspector(props: {
                   projectName={props.projectName}
                   sending={sending()}
                   onRename={(typed) => rename(typed, "task")}
-                  onDate={(field, day) => void setDate(field, day)}
+                  onDate={setDate}
                   onPush={(kind) => push({ kind, task: shown().id })}
                   onMakeProject={() => void makeProject()}
                   onDrop={() => void dropTask()}
@@ -545,7 +546,7 @@ export function Inspector(props: {
                   timeZone={props.timeZone}
                   sending={sending()}
                   onRename={(typed) => rename(typed, "project")}
-                  onDue={(day) => void setProjectDue(day)}
+                  onDue={setProjectDue}
                   onMove={() => push({ kind: "move", project: shown().id })}
                   onOpenTask={(opened) => push({ kind: "task", id: opened.id, held: opened })}
                   onEnd={(end) => void endProject(end)}
@@ -561,7 +562,7 @@ export function Inspector(props: {
                 <RecurrencePage
                   task={shown()}
                   sending={sending()}
-                  onDate={(day) => void setDate("due_date", day)}
+                  onDate={(day) => setDate("due_date", day)}
                   onChoose={(rule) => void setRecurrence(rule)}
                 />
               )}
@@ -777,54 +778,23 @@ function ActionLine(props: {
   );
 }
 
-/** How long a picked day stays as it is before it is sent, unless its field is left sooner. */
-const DATE_SETTLES_MS = 700;
-
-/**
- * A day, sent once its field is left or the day has stayed as it is a moment: typed by keyboard,
- * a date changes at each keystroke of its year, through days nobody meant. What is picked is the
- * person's until then, and a fresh read shows the record's day only in a field left alone.
- */
+/** A day on its own line, sent once it settles (`SettlingField`). */
 function DateLine(props: {
   icon: LucideIcon;
   label: string;
   value: Day | null;
   overdue?: boolean;
-  onChange: (day: string) => void;
+  onSettle: (day: string) => Promise<unknown>;
 }) {
-  let input!: HTMLInputElement;
-  let settling: ReturnType<typeof setTimeout> | undefined;
-  let picked: string | null = null;
-  createEffect(
-    on(
-      () => props.value,
-      (value) => {
-        if (picked === null) input.value = value ?? "";
-      },
-    ),
-  );
-  function send() {
-    clearTimeout(settling);
-    if (picked === null) return;
-    const day = picked;
-    picked = null;
-    if (day !== (props.value ?? "")) props.onChange(day);
-  }
-  onCleanup(send);
   return (
     <label class="inspector-line inspector-date">
       <Dynamic component={props.icon} size={18} aria-hidden="true" />
       <span class="inspector-line-label">{props.label}</span>
-      <input
-        ref={input}
+      <SettlingField
         type="date"
-        classList={{ overdue: props.overdue }}
-        onChange={(event) => {
-          picked = event.currentTarget.value;
-          clearTimeout(settling);
-          settling = setTimeout(send, DATE_SETTLES_MS);
-        }}
-        onBlur={send}
+        value={props.value}
+        overdue={props.overdue}
+        onSettle={props.onSettle}
       />
     </label>
   );
@@ -860,7 +830,7 @@ function TaskPage(props: {
   projectName: (id: string) => string | undefined;
   sending: boolean;
   onRename: (typed: string) => Promise<void>;
-  onDate: (field: keyof TaskDates, day: string) => void;
+  onDate: (field: keyof TaskDates, day: string) => Promise<void>;
   onPush: (kind: "recurrence" | "delegate" | "wait" | "place") => void;
   onMakeProject: () => void;
   onDrop: () => void;
@@ -945,13 +915,13 @@ function TaskPage(props: {
             label="Due Date"
             value={props.task.due_date}
             overdue={open()?.overdue != null}
-            onChange={(day) => props.onDate("due_date", day)}
+            onSettle={(day) => props.onDate("due_date", day)}
           />
           <DateLine
             icon={Clock}
             label="Defer Date"
             value={props.task.defer_date}
-            onChange={(day) => props.onDate("defer_date", day)}
+            onSettle={(day) => props.onDate("defer_date", day)}
           />
           <ChoiceLine
             icon={Repeat}
@@ -1053,7 +1023,7 @@ function ProjectPage(props: {
   timeZone: string;
   sending: boolean;
   onRename: (typed: string) => Promise<void>;
-  onDue: (day: string) => void;
+  onDue: (day: string) => Promise<void>;
   onMove: () => void;
   onOpenTask: (task: Task) => void;
   onEnd: (end: "finish_project" | "drop_project") => void;
@@ -1094,7 +1064,7 @@ function ProjectPage(props: {
           label="Due Date"
           value={props.project.due_date}
           overdue={overdue()}
-          onChange={props.onDue}
+          onSettle={props.onDue}
         />
         <ChoiceLine
           icon={ArrowRightLeft}
@@ -1166,7 +1136,7 @@ function ProjectPage(props: {
 function RecurrencePage(props: {
   task: Task;
   sending: boolean;
-  onDate: (day: string) => void;
+  onDate: (day: string) => Promise<void>;
   onChoose: (rule: NewRecurrence | null) => void;
 }) {
   const held = () => props.task.recurrence;
@@ -1177,7 +1147,7 @@ function RecurrencePage(props: {
         <>
           <p class="inspector-note">A Recurrence counts from a Due Date: give it one first.</p>
           <div class="inspector-group">
-            <DateLine icon={Calendar} label="Due Date" value={null} onChange={props.onDate} />
+            <DateLine icon={Calendar} label="Due Date" value={null} onSettle={props.onDate} />
           </div>
         </>
       }
