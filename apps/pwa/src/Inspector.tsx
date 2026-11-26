@@ -1,0 +1,1046 @@
+import type {
+  Day,
+  NewRecurrence,
+  Project,
+  Task,
+  TaskDates,
+  ToolInput,
+  ToolName,
+  ToolOutput,
+  ToolResult,
+  WaitTarget,
+} from "@praxis/domain";
+import { waitedOnName } from "@praxis/domain";
+import type { LucideIcon } from "lucide-solid";
+import ArrowRightLeft from "lucide-solid/icons/arrow-right-left";
+import Ban from "lucide-solid/icons/ban";
+import Calendar from "lucide-solid/icons/calendar";
+import Check from "lucide-solid/icons/check";
+import ChevronLeft from "lucide-solid/icons/chevron-left";
+import ChevronRight from "lucide-solid/icons/chevron-right";
+import Clock from "lucide-solid/icons/clock";
+import Folder from "lucide-solid/icons/folder";
+import FolderMinus from "lucide-solid/icons/folder-minus";
+import FolderPlus from "lucide-solid/icons/folder-plus";
+import Hourglass from "lucide-solid/icons/hourglass";
+import Repeat from "lucide-solid/icons/repeat";
+import Trash from "lucide-solid/icons/trash";
+import Undo from "lucide-solid/icons/undo-2";
+import UserRound from "lucide-solid/icons/user-round";
+import X from "lucide-solid/icons/x";
+import {
+  createEffect,
+  createSignal,
+  For,
+  type JSX,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  untrack,
+} from "solid-js";
+import { Dynamic } from "solid-js/web";
+import { TaskRow } from "./AttentionRows.tsx";
+import { todayIn } from "./days.tsx";
+import { latestRead } from "./latest-read.ts";
+import { MoveRecord } from "./Move.tsx";
+import { ChoicePicker, personsOffered, referencesOffered, waitTargetsOffered } from "./Pickers.tsx";
+import { recurrencesOffered, recurrenceWords, sameRule } from "./recurrence-words.ts";
+import { createFinishing, DueMark, TaskMarks } from "./TaskItem.tsx";
+import { type CallTool, unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+
+/**
+ * A Task's or a Project's page, opened from its row in Attention over the whole column (section
+ * 8.3): everything it has, each changed from here, and its ends. A choice opens as a page of its
+ * own on top; back returns to the page under it. The column is left as it was underneath.
+ */
+
+/** One page of the panel: a Task's or a Project's own, or a choice made for the one under it. */
+export type Page =
+  | { kind: "task"; id: string }
+  | { kind: "project"; id: string }
+  | { kind: "recurrence" | "delegate" | "wait" | "place"; task: string }
+  | { kind: "move"; project: string };
+
+/** What a change said in Attention's status line, and how to undo it, where it can be. */
+export type Said = {
+  text: string;
+  undo?: { label: string; run: (callTool: CallTool) => Promise<void> };
+};
+
+const CHOICE_TITLES = {
+  recurrence: "Recurrence",
+  delegate: "Delegated to",
+  wait: "Waits on",
+  place: "Project",
+  move: "Move to another Context",
+} as const;
+
+export function Inspector(props: {
+  pages: Page[];
+  setPages: (pages: Page[]) => void;
+  timeZone: string;
+  /** An open Project's name, as Attention's view holds it. */
+  projectName: (id: string) => string | undefined;
+  /** Read again each time Attention's view is, so the page shows what it shows. */
+  version: () => unknown;
+  /** A change was made: Attention reads its view again. */
+  onChanged: () => void;
+  onSaid: (said: Said) => void;
+  /** The panel closed: the focus goes back to the row it was opened from. */
+  onClosed: () => void;
+}) {
+  const callTool = useCallTool();
+  const contextId = useContextId();
+  const [task, setTask] = createSignal<Task | null>(null);
+  const [project, setProject] = createSignal<Project | null>(null);
+  const [problem, setProblem] = createSignal<string | null>(null);
+  const [sending, setSending] = createSignal(false);
+  // A page pushed comes in from the side; one returned to by back is simply there.
+  const [pushed, setPushed] = createSignal(true);
+  let panel: HTMLDivElement | undefined;
+
+  const top = () => props.pages[props.pages.length - 1];
+  /** The Task or Project the page on top is of, or is a choice for. */
+  const subject = (): { kind: "task" | "project"; id: string } | null => {
+    const page = top();
+    if (!page) return null;
+    if (page.kind === "task" || page.kind === "project") return page;
+    if (page.kind === "move") return { kind: "project", id: page.project };
+    return { kind: "task", id: page.task };
+  };
+  const shownTask = () => {
+    const shown = task();
+    return subject()?.kind === "task" && shown?.id === subject()?.id ? shown : null;
+  };
+  const shownProject = () => {
+    const shown = project();
+    return subject()?.kind === "project" && shown?.id === subject()?.id ? shown : null;
+  };
+
+  const { read, changed } = latestRead(async (current) => {
+    const of = untrack(subject);
+    if (!of) return;
+    try {
+      if (of.kind === "task") {
+        const result = await callTool("get_task", { id: of.id });
+        if (!current()) return;
+        if (!result.ok) return setProblem(result.error.message);
+        setTask(result.value);
+      } else {
+        const result = await callTool("get_project", { id: of.id });
+        if (!current()) return;
+        if (!result.ok) return setProblem(result.error.message);
+        setProject(result.value);
+      }
+    } catch (error) {
+      if (current()) setProblem(unreachableMessage(error));
+    }
+  });
+  // Read on opening a page, and again whenever Attention's view is: a change made here or
+  // elsewhere moves both.
+  createEffect(
+    on([() => JSON.stringify(subject()), props.version], () => {
+      void read();
+    }),
+  );
+
+  function push(page: Page) {
+    setProblem(null);
+    setPushed(true);
+    props.setPages([...props.pages, page]);
+    queueMicrotask(focusPage);
+  }
+
+  function back() {
+    setProblem(null);
+    const left = top();
+    const rest = props.pages.slice(0, -1);
+    setPushed(false);
+    props.setPages(rest);
+    if (rest.length === 0) return props.onClosed();
+    // The focus goes back to the line that opened the choice, or to the page's start.
+    queueMicrotask(() => {
+      const line = left && panel?.querySelector<HTMLElement>(`[data-page="${left.kind}"]`);
+      (line ?? panel?.querySelector<HTMLElement>(".inspector-back"))?.focus();
+    });
+  }
+
+  /** Leave the page of what has left Attention, or the panel when it was the first. */
+  function leave() {
+    const at = props.pages.findIndex(
+      (page) => (page.kind === "task" || page.kind === "project") && page.id === subject()?.id,
+    );
+    const rest = props.pages.slice(0, Math.max(at, 0));
+    setPushed(false);
+    props.setPages(rest);
+    if (rest.length === 0) props.onClosed();
+    else queueMicrotask(focusPage);
+  }
+
+  function focusPage() {
+    const first = panel?.querySelector<HTMLElement>(
+      ".inspector-page .choice-field, .inspector-page button.inspector-choice, .inspector-back",
+    );
+    first?.focus();
+  }
+
+  /** A write from the panel: its answer, or null once its problem is shown. */
+  async function write<N extends ToolName>(
+    tool: N,
+    input: ToolInput<N>,
+  ): Promise<ToolOutput[N] | null> {
+    setSending(true);
+    setProblem(null);
+    changed();
+    try {
+      // A Context tool's input and output are its own, whatever the caller also reaches.
+      const call = callTool as unknown as (
+        tool: N,
+        input: ToolInput<N>,
+      ) => Promise<ToolResult<ToolOutput[N]>>;
+      const result = await call(tool, input);
+      if (!result.ok) {
+        setProblem(result.error.message);
+        return null;
+      }
+      props.onChanged();
+      return result.value;
+    } catch (error) {
+      setProblem(unreachableMessage(error));
+      return null;
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function writeTask<N extends ToolName>(tool: N, input: ToolInput<N>): Promise<Task | null> {
+    const answer = (await write(tool, input)) as { record: Task } | null;
+    if (answer) setTask(answer.record);
+    return answer?.record ?? null;
+  }
+
+  async function writeProject<N extends ToolName>(
+    tool: N,
+    input: ToolInput<N>,
+  ): Promise<Project | null> {
+    const answer = (await write(tool, input)) as { record: Project } | null;
+    if (answer) setProject(answer.record);
+    return answer?.record ?? null;
+  }
+
+  // Each Task's actions.
+
+  async function rename(field: HTMLTextAreaElement, kind: "task" | "project") {
+    const was = field.defaultValue;
+    const now = field.value.replace(/\s+/g, " ").trim();
+    if (now === was) return;
+    if (now === "") {
+      field.value = was;
+      return;
+    }
+    const id = subject()?.id;
+    if (!id) return;
+    const done =
+      kind === "task"
+        ? await writeTask("rename_task", { id, title: now })
+        : await writeProject("rename_project", { id, name: now });
+    if (!done) field.value = was;
+  }
+
+  async function setDate(field: keyof TaskDates, input: HTMLInputElement) {
+    const shown = shownTask();
+    if (!shown) return;
+    await writeTask("set_task_dates", {
+      id: shown.id,
+      [field]: input.value === "" ? null : input.value,
+    });
+    input.value = (shownTask() ?? shown)[field] ?? "";
+  }
+
+  async function setRecurrence(rule: NewRecurrence | null) {
+    const shown = shownTask();
+    if (!shown) return;
+    const done =
+      rule === null
+        ? await writeTask("remove_recurrence", { id: shown.id })
+        : await writeTask("set_recurrence", { id: shown.id, recurrence: rule });
+    if (done) back();
+  }
+
+  async function delegate(personId: string | null) {
+    const shown = shownTask();
+    if (!shown) return;
+    const done =
+      personId === null
+        ? await writeTask("take_back_task", { id: shown.id })
+        : await writeTask("delegate_task", { id: shown.id, person_id: personId });
+    if (done) back();
+  }
+
+  async function waitOn(on: WaitTarget, name: string) {
+    const shown = shownTask();
+    if (!shown) return;
+    const done = await writeTask("wait_on", { id: shown.id, on });
+    if (!done) return;
+    // A Task left Waiting and not due leaves Attention until the wait ends (section 8.3).
+    const due = done.due_date !== null && done.due_date <= todayIn(props.timeZone);
+    if (done.state.is === "open" && done.state.waiting && !due) {
+      props.onSaid({
+        text: `“${done.title}” waits on “${name}”, and leaves Attention until that ends.`,
+      });
+    }
+    back();
+  }
+
+  async function stopWaiting(on: WaitTarget) {
+    const shown = shownTask();
+    if (!shown) return;
+    await writeTask("stop_waiting", { id: shown.id, on });
+  }
+
+  async function place(projectId: string | null) {
+    const shown = shownTask();
+    if (!shown) return;
+    const done = await writeTask("move_task", { id: shown.id, project_id: projectId });
+    if (done) back();
+  }
+
+  async function makeProject() {
+    const shown = shownTask();
+    if (!shown) return;
+    const made = await writeProject("make_project_from_task", { id: shown.id });
+    if (!made) return;
+    setPushed(true);
+    props.setPages([...props.pages.slice(0, -1), { kind: "project", id: made.id }]);
+    queueMicrotask(focusPage);
+    props.onSaid({ text: `“${shown.title}” is now a Project, with the Task as its first.` });
+  }
+
+  async function dropTask() {
+    const shown = shownTask();
+    if (!shown) return;
+    const done = await writeTask("drop_task", { id: shown.id });
+    if (!done) return;
+    props.onSaid({
+      text: `Dropped “${done.title}”.`,
+      undo: { label: "Reopen", run: (call) => sent(call("reopen_task", { id: done.id })) },
+    });
+    leave();
+  }
+
+  async function deleteTask() {
+    const shown = shownTask();
+    if (!shown) return;
+    const done = await write("delete_task", { id: shown.id });
+    if (!done) return;
+    props.onSaid({
+      text: `“${shown.title}” is in the Trash.`,
+      undo: { label: "Restore", run: (call) => sent(call("restore", { id: shown.id })) },
+    });
+    leave();
+  }
+
+  // Each Project's.
+
+  async function setProjectDue(input: HTMLInputElement) {
+    const shown = shownProject();
+    if (!shown) return;
+    await writeProject("set_project_due_date", {
+      id: shown.id,
+      due_date: input.value === "" ? null : input.value,
+    });
+    input.value = (shownProject() ?? shown).due_date ?? "";
+  }
+
+  async function endProject(end: "finish_project" | "drop_project") {
+    const shown = shownProject();
+    if (!shown) return;
+    const open = openTasks(shown);
+    const done = await writeProject(end, { id: shown.id });
+    if (!done) return;
+    const dropped =
+      open === 0 ? "" : ` Its ${open} open ${open === 1 ? "Task was" : "Tasks were"} dropped.`;
+    props.onSaid({
+      text: `${end === "finish_project" ? "Finished" : "Dropped"} ${done.name}.${dropped}`,
+      undo: { label: "Reopen", run: (call) => sent(call("reopen_project", { id: done.id })) },
+    });
+    leave();
+  }
+
+  async function deleteProject() {
+    const shown = shownProject();
+    if (!shown) return;
+    const done = await write("delete_project", { id: shown.id });
+    if (!done) return;
+    props.onSaid({
+      text: `${shown.name} is in the Trash. Its Tasks stay, in no Project.`,
+      undo: { label: "Restore", run: (call) => sent(call("restore", { id: shown.id })) },
+    });
+    leave();
+  }
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    const field = event.target;
+    if (field instanceof HTMLTextAreaElement) field.value = field.defaultValue;
+    event.preventDefault();
+    event.stopPropagation();
+    back();
+  };
+
+  onMount(focusPage);
+  // A control that answered a change can leave the page with it, and the focus with it: Escape
+  // from nowhere still goes back.
+  const strayEscape = (event: KeyboardEvent) => {
+    if (event.key === "Escape" && document.activeElement === document.body) onKeyDown(event);
+  };
+  document.addEventListener("keydown", strayEscape);
+  onCleanup(() => document.removeEventListener("keydown", strayEscape));
+
+  const backName = () => {
+    const under = props.pages[props.pages.length - 2];
+    if (!under) return "Attention";
+    if (under.kind === "task") return task()?.id === under.id ? (task()?.title ?? "Task") : "Task";
+    if (under.kind === "project")
+      return project()?.id === under.id ? (project()?.name ?? "Project") : "Project";
+    return "Back";
+  };
+
+  return (
+    <div
+      ref={panel}
+      class="inspector"
+      role="dialog"
+      aria-label={shownTask()?.title ?? shownProject()?.name ?? "Attention"}
+      onKeyDown={onKeyDown}
+    >
+      <header class="inspector-head">
+        <button
+          type="button"
+          class="inspector-back"
+          aria-label={`Back to ${backName()}`}
+          onClick={back}
+        >
+          <ChevronLeft size={20} aria-hidden="true" />
+          <span>{backName()}</span>
+        </button>
+        <Show when={top() && top()?.kind !== "task" && top()?.kind !== "project"}>
+          <h3 class="inspector-head-title">
+            {CHOICE_TITLES[top()?.kind as keyof typeof CHOICE_TITLES]}
+          </h3>
+        </Show>
+      </header>
+      <Show when={top()} keyed>
+        {(page) => (
+          <div class="inspector-page" classList={{ entering: untrack(pushed) }}>
+            <Show when={problem()}>
+              {(message) => (
+                <p class="problem" role="alert">
+                  {message()}
+                </p>
+              )}
+            </Show>
+            <Show when={page.kind === "task" && shownTask()}>
+              {(shown) => (
+                <TaskPage
+                  task={shown()}
+                  timeZone={props.timeZone}
+                  projectName={props.projectName}
+                  sending={sending()}
+                  onRename={(field) => void rename(field, "task")}
+                  onDate={(field, input) => void setDate(field, input)}
+                  onPush={(kind) => push({ kind, task: shown().id })}
+                  onMakeProject={() => void makeProject()}
+                  onDrop={() => void dropTask()}
+                  onDelete={() => void deleteTask()}
+                  onTask={(changedTask) => {
+                    setTask(changedTask);
+                    props.onChanged();
+                  }}
+                  onProblem={setProblem}
+                />
+              )}
+            </Show>
+            <Show when={page.kind === "project" && shownProject()}>
+              {(shown) => (
+                <ProjectPage
+                  project={shown()}
+                  timeZone={props.timeZone}
+                  sending={sending()}
+                  onRename={(field) => void rename(field, "project")}
+                  onDue={(input) => void setProjectDue(input)}
+                  onMove={() => push({ kind: "move", project: shown().id })}
+                  onOpenTask={(id) => push({ kind: "task", id })}
+                  onEnd={(end) => void endProject(end)}
+                  onDelete={() => void deleteProject()}
+                  onChanged={props.onChanged}
+                  onProblem={setProblem}
+                />
+              )}
+            </Show>
+            <Show when={page.kind === "recurrence" && shownTask()}>
+              {(shown) => (
+                <RecurrencePage
+                  task={shown()}
+                  sending={sending()}
+                  onDate={(input) => void setDate("due_date", input)}
+                  onChoose={(rule) => void setRecurrence(rule)}
+                />
+              )}
+            </Show>
+            <Show when={page.kind === "delegate" && shownTask()}>
+              {(shown) => (
+                <>
+                  <Show when={shown().state.is === "open" && openState(shown())?.delegated}>
+                    {(delegated) => (
+                      <ChoiceButton icon={Undo} onClick={() => void delegate(null)}>
+                        Take back from {delegated().to.name}
+                      </ChoiceButton>
+                    )}
+                  </Show>
+                  <ChoicePicker
+                    label="Persons"
+                    fieldLabel="Find a Person"
+                    placeholder="Find a Person"
+                    none="No Person has that name."
+                    offer={(typed) => personsOffered(callTool, contextId, typed, props.timeZone)}
+                    onPick={(choice) =>
+                      void delegate(choice.to.kind === "person" ? choice.to.id : null)
+                    }
+                  />
+                </>
+              )}
+            </Show>
+            <Show when={page.kind === "wait" && shownTask()}>
+              {(shown) => (
+                <>
+                  <For each={openState(shown())?.waiting ?? []}>
+                    {({ on }) => (
+                      <ChoiceButton
+                        icon={X}
+                        onClick={() => void stopWaiting({ kind: on.kind, id: on.id })}
+                      >
+                        Stop waiting on {waitedOnName(on)}
+                      </ChoiceButton>
+                    )}
+                  </For>
+                  <ChoicePicker
+                    label="Tasks and Projects"
+                    fieldLabel="Find a Task or Project to wait on"
+                    placeholder="Find a Task or Project to wait on"
+                    none="No open Task or Project has that name."
+                    offer={(typed) => waitTargetsOffered(callTool, shown().id, typed)}
+                    onPick={(choice) => {
+                      const to = choice.to;
+                      if (to.kind === "task" || to.kind === "project") {
+                        void waitOn({ kind: to.kind, id: to.id }, choice.name);
+                      }
+                    }}
+                  />
+                </>
+              )}
+            </Show>
+            <Show when={page.kind === "place" && shownTask()}>
+              {(shown) => (
+                <>
+                  <Show when={shown().project}>
+                    <ChoiceButton icon={FolderMinus} onClick={() => void place(null)}>
+                      Take it out of its Project
+                    </ChoiceButton>
+                  </Show>
+                  <ChoicePicker
+                    label="Projects"
+                    fieldLabel="Find a Project"
+                    placeholder="Find a Project"
+                    none="No Project has that name."
+                    offer={(typed) => referencesOffered(callTool, contextId, typed, "projects")}
+                    onPick={(choice) => {
+                      if (choice.to.kind === "project") void place(choice.to.id);
+                    }}
+                  />
+                </>
+              )}
+            </Show>
+            <Show when={page.kind === "move" && shownProject()}>
+              {(shown) => (
+                <MoveRecord
+                  record={{ kind: "project", id: shown().id }}
+                  onMoved={(said) => {
+                    props.onSaid({ text: said });
+                    props.setPages([]);
+                    props.onClosed();
+                  }}
+                  onClose={back}
+                />
+              )}
+            </Show>
+          </div>
+        )}
+      </Show>
+    </div>
+  );
+}
+
+/** A write sent from the status line, whose refusal is thrown to be said there. */
+async function sent(answer: Promise<{ ok: boolean; error?: { message: string } }>) {
+  const result = await answer;
+  if (!result.ok) throw new Error(result.error?.message ?? "Praxis refused it.");
+}
+
+function openState(task: Task) {
+  return task.state.is === "open" ? task.state : null;
+}
+
+function openTasks(project: Project): number {
+  return project.tasks.filter((task) => task.state.is === "open").length;
+}
+
+/** The title, or a Project's name, changed where it is shown: on leaving it or on Enter. */
+function TitleField(props: {
+  value: string;
+  label: string;
+  onCommit: (field: HTMLTextAreaElement) => void;
+}) {
+  let field: HTMLTextAreaElement | undefined;
+  const size = () => {
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${field.scrollHeight}px`;
+  };
+  createEffect(
+    on(
+      () => props.value,
+      (value) => {
+        if (!field) return;
+        field.defaultValue = value;
+        if (document.activeElement !== field) field.value = value;
+        size();
+      },
+    ),
+  );
+  onMount(size);
+  return (
+    <textarea
+      ref={field}
+      class="inspector-title"
+      rows={1}
+      aria-label={props.label}
+      value={props.value}
+      onInput={size}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+      onBlur={(event) => props.onCommit(event.currentTarget)}
+    />
+  );
+}
+
+/** A line that opens a choice, saying what is chosen now. */
+function ChoiceLine(props: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  page: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" class="inspector-line" data-page={props.page} onClick={props.onClick}>
+      <Dynamic component={props.icon} size={18} aria-hidden="true" />
+      <span class="inspector-line-label">{props.label}</span>
+      <span class="inspector-line-value">{props.value}</span>
+      <ChevronRight size={16} aria-hidden="true" />
+    </button>
+  );
+}
+
+/** A line that does what it says, with what follows from it under its name. */
+function ActionLine(props: {
+  icon: LucideIcon;
+  label: string;
+  sub?: string | undefined;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      class="inspector-line"
+      classList={{ danger: props.danger }}
+      disabled={props.disabled}
+      onClick={props.onClick}
+    >
+      <Dynamic component={props.icon} size={18} aria-hidden="true" />
+      <span class="inspector-line-label">
+        {props.label}
+        <Show when={props.sub}>{(sub) => <span class="inspector-line-sub">{sub()}</span>}</Show>
+      </span>
+    </button>
+  );
+}
+
+function DateLine(props: {
+  icon: LucideIcon;
+  label: string;
+  value: Day | null;
+  overdue?: boolean;
+  onChange: (input: HTMLInputElement) => void;
+}) {
+  return (
+    <label class="inspector-line inspector-date">
+      <Dynamic component={props.icon} size={18} aria-hidden="true" />
+      <span class="inspector-line-label">{props.label}</span>
+      <input
+        type="date"
+        classList={{ overdue: props.overdue }}
+        value={props.value ?? ""}
+        onChange={(event) => props.onChange(event.currentTarget)}
+      />
+    </label>
+  );
+}
+
+function ChoiceButton(props: {
+  icon: LucideIcon;
+  pressed?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: JSX.Element;
+}) {
+  return (
+    <button
+      type="button"
+      class="inspector-choice"
+      aria-pressed={props.pressed}
+      disabled={props.disabled}
+      onClick={props.onClick}
+    >
+      <Dynamic component={props.icon} size={16} aria-hidden="true" />
+      <span>{props.children}</span>
+      <Show when={props.pressed}>
+        <Check size={16} aria-hidden="true" class="inspector-choice-check" />
+      </Show>
+    </button>
+  );
+}
+
+function TaskPage(props: {
+  task: Task;
+  timeZone: string;
+  projectName: (id: string) => string | undefined;
+  sending: boolean;
+  onRename: (field: HTMLTextAreaElement) => void;
+  onDate: (field: keyof TaskDates, input: HTMLInputElement) => void;
+  onPush: (kind: "recurrence" | "delegate" | "wait" | "place") => void;
+  onMakeProject: () => void;
+  onDrop: () => void;
+  onDelete: () => void;
+  onTask: (task: Task) => void;
+  onProblem: (message: string) => void;
+}) {
+  const callTool = useCallTool();
+  const finishing = createFinishing({
+    task: () => props.task,
+    onTask: props.onTask,
+    onProblem: props.onProblem,
+  });
+  const open = () => openState(props.task);
+  const [origin, setOrigin] = createSignal<string | null>(null);
+  // The Entry it came from, which says what there is to say about it (section 3.3).
+  const { read: readOrigin } = latestRead(async (current) => {
+    try {
+      const result = await callTool("get_entry", { id: props.task.origin_entry });
+      if (current() && result.ok) setOrigin(result.value.words);
+    } catch {
+      // With no network the page shows the Task without its Entry.
+    }
+  });
+  createEffect(
+    on(
+      () => props.task.origin_entry,
+      () => void readOrigin(),
+    ),
+  );
+
+  const waitsOn = () => {
+    const waiting = open()?.waiting ?? [];
+    if (waiting.length === 0) return "Nothing";
+    if (waiting.length === 1) return waitedOnName((waiting[0] as (typeof waiting)[number]).on);
+    return `${waiting.length} Tasks and Projects`;
+  };
+
+  async function toggle(box: HTMLInputElement) {
+    await finishing.setFinished(box.checked);
+    box.checked = finishing.shownFinished();
+  }
+
+  return (
+    <>
+      <div class="inspector-title-row">
+        <label class="inspector-control">
+          <input
+            type="checkbox"
+            aria-label={props.task.title}
+            checked={finishing.shownFinished()}
+            disabled={finishing.sending() || finishing.dropped()}
+            onChange={(event) => void toggle(event.currentTarget)}
+          />
+        </label>
+        <TitleField value={props.task.title} label="Title" onCommit={props.onRename} />
+      </div>
+      <p class="inspector-marks">
+        <TaskMarks task={props.task} timeZone={props.timeZone} />
+      </p>
+      <Show when={props.task.state.is === "open"}>
+        <div class="inspector-group">
+          <DateLine
+            icon={Calendar}
+            label="Due Date"
+            value={props.task.due_date}
+            overdue={open()?.overdue != null}
+            onChange={(input) => props.onDate("due_date", input)}
+          />
+          <DateLine
+            icon={Clock}
+            label="Defer Date"
+            value={props.task.defer_date}
+            onChange={(input) => props.onDate("defer_date", input)}
+          />
+          <ChoiceLine
+            icon={Repeat}
+            label="Recurrence"
+            value={props.task.recurrence ? recurrenceWords(props.task.recurrence) : "None"}
+            page="recurrence"
+            onClick={() => props.onPush("recurrence")}
+          />
+        </div>
+        <div class="inspector-group">
+          <ChoiceLine
+            icon={UserRound}
+            label="Delegated to"
+            value={open()?.delegated?.to.name ?? "Nobody"}
+            page="delegate"
+            onClick={() => props.onPush("delegate")}
+          />
+          <ChoiceLine
+            icon={Hourglass}
+            label="Waits on"
+            value={waitsOn()}
+            page="wait"
+            onClick={() => props.onPush("wait")}
+          />
+          <ChoiceLine
+            icon={Folder}
+            label="Project"
+            value={
+              props.task.project === null
+                ? "None"
+                : (props.projectName(props.task.project) ?? "A closed Project")
+            }
+            page="place"
+            onClick={() => props.onPush("place")}
+          />
+        </div>
+        <div class="inspector-group">
+          <ActionLine
+            icon={FolderPlus}
+            label="Turn into a Project"
+            sub="The Task becomes its first"
+            disabled={props.sending}
+            onClick={props.onMakeProject}
+          />
+        </div>
+        <div class="inspector-group">
+          <ActionLine
+            icon={Ban}
+            label="Drop"
+            sub="Not doing it. It stays on its Entry."
+            disabled={props.sending}
+            onClick={props.onDrop}
+          />
+          <ActionLine
+            icon={Trash}
+            label="Delete"
+            sub="To the Trash for 30 days"
+            danger
+            disabled={props.sending}
+            onClick={props.onDelete}
+          />
+        </div>
+      </Show>
+      <Show when={origin()}>
+        {(words) => (
+          <figure class="inspector-origin">
+            <figcaption>From its Entry</figcaption>
+            <blockquote>{words()}</blockquote>
+          </figure>
+        )}
+      </Show>
+    </>
+  );
+}
+
+function ProjectPage(props: {
+  project: Project;
+  timeZone: string;
+  sending: boolean;
+  onRename: (field: HTMLTextAreaElement) => void;
+  onDue: (input: HTMLInputElement) => void;
+  onMove: () => void;
+  onOpenTask: (id: string) => void;
+  onEnd: (end: "finish_project" | "drop_project") => void;
+  onDelete: () => void;
+  onChanged: () => void;
+  onProblem: (message: string) => void;
+}) {
+  const overdue = () => props.project.state.is === "open" && props.project.state.overdue !== null;
+  const open = () => openTasks(props.project);
+  const drops = () =>
+    open() === 0 ? undefined : `Drops its ${open()} open ${open() === 1 ? "Task" : "Tasks"}`;
+  return (
+    <>
+      <div class="inspector-title-row">
+        <span class="inspector-control">
+          <Folder size={20} aria-hidden="true" />
+        </span>
+        <TitleField value={props.project.name} label="Name" onCommit={props.onRename} />
+      </div>
+      <p class="inspector-marks">
+        <span class="task-mark">Project</span>
+        <Show when={props.project.due_date}>
+          {(due) => <DueMark due={due()} overdue={overdue()} timeZone={props.timeZone} />}
+        </Show>
+        <Show when={props.project.state.is === "open" && open() === 0}>
+          <span class="task-mark flag">Needs a next Task or finishing</span>
+        </Show>
+      </p>
+      <div class="inspector-group">
+        <DateLine
+          icon={Calendar}
+          label="Due Date"
+          value={props.project.due_date}
+          overdue={overdue()}
+          onChange={props.onDue}
+        />
+        <ChoiceLine
+          icon={ArrowRightLeft}
+          label="Move to another Context"
+          value=""
+          page="move"
+          onClick={props.onMove}
+        />
+      </div>
+      <h4 class="inspector-group-title">Its Tasks</h4>
+      <Show when={props.project.tasks.length > 0} fallback={<p class="peer-note">No Tasks yet.</p>}>
+        <ul class="task-list inspector-group" aria-label={`Tasks in ${props.project.name}`}>
+          <For each={props.project.tasks}>
+            {(task) => (
+              <TaskRow
+                task={task}
+                timeZone={props.timeZone}
+                openKey={`task-${task.id}`}
+                onOpen={() => props.onOpenTask(task.id)}
+                onTask={() => props.onChanged()}
+                onProblem={props.onProblem}
+              />
+            )}
+          </For>
+        </ul>
+      </Show>
+      <div class="inspector-group">
+        <ActionLine
+          icon={Check}
+          label="Finish"
+          sub={drops()}
+          disabled={props.sending}
+          onClick={() => props.onEnd("finish_project")}
+        />
+        <ActionLine
+          icon={Ban}
+          label="Drop"
+          sub={drops()}
+          disabled={props.sending}
+          onClick={() => props.onEnd("drop_project")}
+        />
+        <ActionLine
+          icon={Trash}
+          label="Delete"
+          sub="Its Tasks stay, in no Project"
+          danger
+          disabled={props.sending}
+          onClick={props.onDelete}
+        />
+      </div>
+    </>
+  );
+}
+
+/** The Recurrences offered for a Task, each read from its Due Date, which it needs first. */
+function RecurrencePage(props: {
+  task: Task;
+  sending: boolean;
+  onDate: (input: HTMLInputElement) => void;
+  onChoose: (rule: NewRecurrence | null) => void;
+}) {
+  const held = () => props.task.recurrence;
+  return (
+    <Show
+      when={props.task.due_date}
+      fallback={
+        <>
+          <p class="inspector-note">A Recurrence counts from a Due Date: give it one first.</p>
+          <div class="inspector-group">
+            <DateLine icon={Calendar} label="Due Date" value={null} onChange={props.onDate} />
+          </div>
+        </>
+      }
+    >
+      {(due) => (
+        <fieldset class="inspector-choices">
+          <legend class="visually-hidden">Recurrence</legend>
+          <ChoiceButton
+            icon={X}
+            pressed={held() === null}
+            disabled={props.sending}
+            onClick={() => props.onChoose(null)}
+          >
+            No Recurrence
+          </ChoiceButton>
+          <Show
+            when={(() => {
+              const rule = held();
+              return rule && !recurrencesOffered(due()).some((offered) => sameRule(rule, offered))
+                ? rule
+                : null;
+            })()}
+          >
+            {(own) => (
+              <ChoiceButton icon={Repeat} pressed onClick={() => undefined}>
+                {recurrenceWords(own())}
+              </ChoiceButton>
+            )}
+          </Show>
+          <For each={recurrencesOffered(due())}>
+            {(rule) => (
+              <ChoiceButton
+                icon={Repeat}
+                pressed={(() => {
+                  const own = held();
+                  return own !== null && sameRule(own, rule);
+                })()}
+                disabled={props.sending}
+                onClick={() => props.onChoose(rule)}
+              >
+                {recurrenceWords(rule, due())}
+              </ChoiceButton>
+            )}
+          </For>
+        </fieldset>
+      )}
+    </Show>
+  );
+}

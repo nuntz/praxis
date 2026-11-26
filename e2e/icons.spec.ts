@@ -75,7 +75,7 @@ test("on a phone the Agent tab carries a mark, read out by name, while a Brief i
   await expect(agent).toHaveAccessibleName("Agent");
 });
 
-test("Attention's sections carry their icons, a Task's dates are a calendar button named for it, and only Overdue is in warn", async ({
+test("Attention's sections carry their icons, a Task's page has an icon on each line, and only Overdue is in warn", async ({
   page,
 }) => {
   const { id } = await makeContext(page, {
@@ -110,30 +110,33 @@ test("Attention's sections carry their icons, a Task's dates are a calendar butt
     await expect(heading.locator("svg")).toBeVisible();
   }
 
-  // Due today is bold in the muted colour, and only Overdue is in warn.
+  // Due today is bold in the muted colour, and only Overdue is in warn, each at the end of its row.
   const due = attention.getByRole("region", { name: "Due", exact: true });
-  const todays = due.getByRole("listitem").filter({ hasText: dueToday }).getByText("Due today");
+  const todays = due.getByRole("button", { name: dueToday, exact: true }).getByText("Due today");
   await expect(todays).toBeVisible();
   await expect(todays).toHaveCSS("color", MUTED);
   await expect(todays).toHaveCSS("font-weight", "700");
-  const lates = due
-    .getByRole("listitem")
-    .filter({ hasText: overdue })
-    .getByText(/^Due .+2020, Overdue$/);
+  const lates = due.getByRole("button", { name: overdue, exact: true }).getByText(/2020, Overdue$/);
   await expect(lates).toHaveCSS("color", WARN);
 
-  // No Task carries the word: each one's dates are a calendar button named for it, with a tooltip.
-  await expect(page.getByText("Dates", { exact: true })).toHaveCount(0);
-  for (const title of [dueToday, overdue, loose]) {
-    const dates = attention.getByRole("button", { name: `Dates for ${title}`, exact: true });
-    await expect(dates).toBeVisible();
-    await expect(dates).toHaveAttribute("title", `Dates for ${title}`);
-    await expect(dates.locator("svg")).toBeVisible();
+  // A row carries no word for its actions: each opens its Task's page, where each line has its icon
+  // beside its name.
+  await expect(attention.getByText("Dates", { exact: true })).toHaveCount(0);
+  await attention.getByRole("button", { name: loose, exact: true }).click();
+  const opened = attention.getByRole("dialog", { name: loose });
+  for (const line of ["Due Date", "Defer Date"]) {
+    await expect(opened.getByLabel(line, { exact: true })).toBeVisible();
   }
-  const dates = attention.getByRole("button", { name: `Dates for ${loose}`, exact: true });
-  await dates.click();
-  await expect(dates).toHaveAttribute("aria-expanded", "true");
-  await expect(attention.getByLabel("Due Date", { exact: true })).toBeVisible();
+  for (const line of [
+    /^Recurrence/,
+    /^Delegated to/,
+    /^Waits on/,
+    /^Project/,
+    /^Drop/,
+    /^Delete/,
+  ]) {
+    await expect(opened.getByRole("button", { name: line }).locator("svg").first()).toBeVisible();
+  }
 });
 
 test("Send is a round button with its icon, Record a pill with its icon and its word, and both composers show their label", async ({

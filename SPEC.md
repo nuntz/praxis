@@ -111,7 +111,7 @@ An open Task can be any of the following at once:
 - Every Task in every tool result carries its derived state and the reason for it: which end it reached and when, what it waits on, who it is Delegated to, the day it is Deferred until, the day it became Overdue. No caller works out state.
 - "Today", and so Overdue and Deferred, is the current day in the Context's time zone.
 
-- There is no leading state. On the screen each state that holds is its own mark, Overdue is marked on the date, and nothing is ranked. The only order is in Attention, where a Task sits in the first section it fits (section 8.3).
+- There is no leading state. On the screen each state that holds is its own mark, Overdue is marked on the date, and nothing is ranked. The only order is in Attention, where a Task sits in the first section it fits (section 8.3). A row of Attention, kept to a line, shows one mark and the rest as signs; that is for room, and its page shows every mark.
 
 This replaces the single ordered state decided earlier in [Sub-tasks and dependencies](https://github.com/nuntz/praxis/issues/6).
 
@@ -628,7 +628,7 @@ The column is composed by the screen from four sources, in this order:
 | **Due** | Every open Task that is Overdue or due today, whatever else holds for it, and every open Project that is. | Oldest Due Date first |
 | **Newly actionable** | Actionable Tasks whose wait ended, whose Defer Date came or that were taken back in the last seven days. | Newest first |
 | **Delegated** | Every other Delegated Task that is neither Waiting nor Deferred, with the Person and the day it was Delegated. | Oldest delegation first |
-| **Projects** | Every open Project, with its count of actionable Tasks, flagged when it has no open Task. Opening one shows its Tasks. | By name |
+| **Projects** | Every open Project, with its count of actionable Tasks, flagged when it has no open Task. Opening one shows its page, with its Tasks. | By name |
 | **Loose** | Every other actionable Task with no Project. | Oldest first |
 
 - A Task appears once, in the first section it fits. The rule covers Tasks only: a Project in Due appears as itself and is still in Projects, and its Tasks are placed by their own dates.
@@ -639,6 +639,17 @@ The column is composed by the screen from four sources, in this order:
 - Nothing in Attention says what has gone quiet. That is the Agent's judgment, said in a Brief or a Review (section 5.4).
 - **The count** on the Attention tab, and on the top-bar button at middle widths, is the refused Unsent writes, the Held Changes and the Due section. Nothing else is counted.
 - A Task is finished from wherever it is shown: Attention, the Entry it hangs off, or search (section 8.4). Each is its round control, which reopens a finished one, through the same tools.
+
+**Rows and pages.**
+
+- **A row is one line**: its round control, its title, a second line only when the title is long and cut there, then one mark at its end. That mark is, in this order, the Due Date with Overdue, Due today, why its section shows it (as "Wait ended" and the day), the Person it is Delegated to, the day it is Deferred until, Waiting, or its Due Date. Overdue and due today are never left out. Recurring, Waiting and Delegated, when not that mark, are small signs before it. A screen reader is told every mark. A Project's row shows its name and one mark: Overdue, due today, "Needs a next Task", or its count of actionable Tasks.
+- **Opening a row shows its page**, over the whole column, which stays as it was underneath. Back, or Escape, returns to the row. A choice the page needs opens as a page on top of it, pushed in from the side; back returns.
+- **A Task's page**: its round control and title, the title changed where it is shown; every mark; its Due Date and Defer Date, each set as it is picked and cleared by emptying it; its Recurrence; who it is Delegated to, with taking it back; what it waits on, each wait stopped from there; its Project, with taking it out of one; turning it into a Project, which opens the new Project's page; dropping and deleting it; and the words of its Origin Entry, as much as fits.
+- **A Recurrence is picked from those its Due Date gives**: every day, every week or two on its weekday, every month on its day, every year on its date, or a week or a month after it is closed; or none. A rule set otherwise, as by the Agent, is shown as the Task's own. A Task with no Due Date is asked for one first.
+- **A Project's page**: its name, changed where it is shown; its Due Date; moving it to another Context (section 3.9); its Tasks, each opening its own page; finishing, dropping and deleting it, saying how many open Tasks an end drops.
+- **What leaves the column is said** at its top, with the way back where there is one: a Task or Project dropped or finished is offered Reopen, one deleted Restore, and a Task set Waiting, not due, is said to leave Attention until the wait ends. A Project moved says where it went. A Project reopened leaves its Tasks dropped, as section 3.6 says.
+- A Task moves to another Context only with its Entry, from the Journal (section 3.9), so its page offers no move.
+- Each of these needs the network and says so, as every write but recording an Entry and finishing a Task does (section 8.8).
 
 ### 8.4 The Journal
 

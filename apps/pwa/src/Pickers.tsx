@@ -80,6 +80,35 @@ export async function referencesOffered(
   }
 }
 
+/**
+ * The open Tasks and Projects whose names hold what was typed, as a Task can wait on them (section
+ * 3.4): never the Task itself, nor anything closed, which a wait is refused on. It needs the
+ * network, as every write but two does (section 8.8).
+ */
+export async function waitTargetsOffered(
+  callTool: CallTool,
+  waiting: string,
+  typed: string,
+): Promise<Offered> {
+  try {
+    const [projects, tasks] = await Promise.all([
+      callTool("list_projects", { state: "open", ...named(typed) }),
+      callTool("list_tasks", { state: "open", ...named(typed) }),
+    ]);
+    if (!projects.ok) return { problem: projects.error.message };
+    if (!tasks.ok) return { problem: tasks.error.message };
+    return {
+      choices: [
+        ...projects.value.items.map((project) => projectChoice(project, true)),
+        ...tasks.value.items.filter((task) => task.id !== waiting).map(taskChoice),
+      ].slice(0, OFFERED),
+      held: false,
+    };
+  } catch (error) {
+    return { problem: unreachableMessage(error) };
+  }
+}
+
 function named(typed: string): { named?: string } {
   return typed === "" ? {} : { named: typed };
 }
@@ -157,6 +186,8 @@ export function ChoicePicker(props: {
   label: string;
   /** The field's name: "Find a Project". */
   fieldLabel: string;
+  /** Said in the field while it is empty, where nothing else names it on the screen. */
+  placeholder?: string;
   /** What is said when nothing it lists holds what was typed. */
   none: string;
   offer: (typed: string) => Promise<Offered>;
@@ -188,6 +219,7 @@ export function ChoicePicker(props: {
         class="choice-field"
         role="combobox"
         aria-label={props.fieldLabel}
+        placeholder={props.placeholder}
         aria-autocomplete="list"
         aria-expanded={shown().length > 0}
         aria-controls={`${id}-choices`}

@@ -86,8 +86,11 @@ test("the person moves a Project from Attention, with its Tasks and their Entrie
   await page.goto("/");
   const attention = page.getByRole("region", { name: "Attention", exact: true });
   const projects = attention.getByRole("region", { name: "Projects", exact: true });
-  await projects.getByRole("button", { name: `Move ${name}` }).click();
-  const form = projects.getByRole("form", { name: "Move this Project to another Context" });
+  // A Project moves from its page.
+  await projects.getByRole("button", { name, exact: true }).click();
+  const opened = attention.getByRole("dialog", { name });
+  await opened.getByRole("button", { name: /^Move to another Context/ }).click();
+  const form = opened.getByRole("form", { name: "Move this Project to another Context" });
   await form.getByRole("combobox", { name: "Move to" }).selectOption({ label: home.name });
   await expect(form.getByRole("list", { name: "What moves" }).getByRole("listitem")).toHaveText([
     `Project ${name}`,

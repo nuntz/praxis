@@ -784,6 +784,8 @@ input[type="checkbox"].switch:disabled {
 }
 
 .peer.attention {
+  /* A Task's or Project's page opens over the whole column, header and all. */
+  position: relative;
   flex: 0 0 350px;
 }
 
@@ -1312,22 +1314,406 @@ button.task-dates-toggle[aria-expanded="true"] {
   background: var(--inset);
 }
 
-button.quiet.attention-project-toggle {
-  gap: var(--space-3);
-  text-decoration: none;
-}
-
-.attention-project > .task-list {
-  flex-basis: 100%;
-}
-
-.attention-project .task {
-  background: var(--surface);
-}
-
 .task-mark.flag {
   color: var(--ink);
   font-weight: 600;
+}
+
+/*
+ * Attention's rows (section 8.3): a title of one line, two when it is long, the mark that matters
+ * most at its end, and the rest as small signs. The row opens its record's page.
+ */
+
+.attention-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  outline: none;
+}
+
+.task-list:has(> .attention-row) {
+  gap: 2px;
+}
+
+.task.attention-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0 var(--space-2);
+  min-height: 40px;
+  padding: 0 0 0 var(--space-3);
+}
+
+.attention-row-control {
+  display: flex;
+  align-items: center;
+}
+
+.attention-project-row .attention-row-control {
+  color: var(--muted);
+}
+
+button.attention-row-open {
+  justify-content: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px var(--space-2) 6px 2px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: none;
+  color: var(--ink);
+  font: var(--type-body);
+  text-align: left;
+}
+
+.attention-row .attention-row-open > .task-title {
+  display: -webkit-box;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.attention-row-signs {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--space-1);
+  color: var(--muted);
+}
+
+.attention-row-signs:empty {
+  display: none;
+}
+
+.attention-row-lead {
+  flex-shrink: 0;
+  max-width: 50%;
+  overflow: hidden;
+  color: var(--muted);
+  font: var(--type-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Due today, Overdue and a Project needing a next Task are bold; only Overdue takes warn. */
+.attention-row-lead.overdue,
+.attention-row-lead.due-today,
+.attention-row-lead.flag {
+  font-weight: 700;
+}
+
+.attention-row-lead.overdue {
+  color: var(--warn);
+}
+
+.attention-row-lead.flag {
+  color: var(--ink);
+}
+
+.attention-row-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button.attention-row-open:hover .attention-row-chevron {
+    color: var(--ink);
+  }
+}
+
+/* A record's page, over the column: its title, its lines in groups, its ends and its Entry. */
+
+.inspector {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  border-radius: inherit;
+  background: var(--surface);
+}
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 56px;
+  padding: var(--space-3) var(--space-3) 0;
+}
+
+button.inspector-back {
+  gap: 2px;
+  min-width: 0;
+  max-width: 60%;
+  min-height: 36px;
+  padding: 0 var(--space-2) 0 2px;
+  background: none;
+  color: var(--ink);
+  font: var(--type-button);
+}
+
+button.inspector-back > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-head-title {
+  margin: 0 0 0 auto;
+  padding-right: var(--space-2);
+  font: var(--type-label);
+}
+
+.inspector-page {
+  /* A grid, so the page scrolls and nothing on it is squeezed to fit. */
+  display: grid;
+  flex: 1;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-2) var(--space-5) var(--space-5);
+  overflow-y: auto;
+}
+
+/* A page pushed comes in from the side, as it goes deeper; one gone back to is simply there. */
+.inspector-page.entering {
+  animation: inspector-push 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes inspector-push {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inspector-page.entering {
+    animation: inspector-fade 160ms ease-out;
+  }
+}
+
+@keyframes inspector-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.inspector-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.inspector-control {
+  display: flex;
+  flex-shrink: 0;
+  padding-top: 6px;
+  color: var(--muted);
+}
+
+/* A Task's round control, as `.task input` draws it in a row, a step larger beside its title. */
+.inspector-control input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.inspector-control input:checked {
+  border-color: var(--ink);
+  background: radial-gradient(var(--ink) 0 5px, transparent 6px);
+}
+
+.inspector-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0 -4px;
+  padding: 2px 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font: var(--type-column-title);
+  resize: none;
+}
+
+.inspector-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-2);
+  margin: calc(-1 * var(--space-2)) 0 0 34px;
+}
+
+.inspector-marks:empty {
+  display: none;
+}
+
+.inspector-group {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--inset);
+}
+
+.inspector-group > :is(.inspector-line, .attention-row) + :is(.inspector-line, .attention-row) {
+  border-top: 1px solid var(--rule);
+}
+
+.inspector-group-title {
+  margin: var(--space-2) 0 calc(-1 * var(--space-2));
+  color: var(--muted);
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+.inspector-line,
+button.inspector-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 44px;
+  padding: 6px var(--space-3);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--type-body);
+  text-align: left;
+}
+
+.inspector-line > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.inspector-line-label {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.inspector-line-sub {
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.inspector-line-value {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  /* Lighter than the group, so its muted value keeps its contrast under the pointer. */
+  button.inspector-line:hover:not(:disabled) {
+    background: var(--surface);
+  }
+}
+
+.inspector-date input {
+  margin-left: auto;
+  padding: 4px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--type-body);
+}
+
+.inspector-date input.overdue {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+/* A Project's Tasks, as Attention lists them, on the page's own ground. */
+.inspector-group > .task.attention-row {
+  border-radius: 0;
+  background: none;
+}
+
+.inspector-choices {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+button.inspector-choice {
+  justify-content: flex-start;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 8px var(--space-3);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font: var(--type-body);
+  text-align: left;
+}
+
+button.inspector-choice > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+button.inspector-choice > .inspector-choice-check {
+  margin-left: auto;
+  color: var(--ink);
+}
+
+.inspector-line.danger,
+.inspector-line.danger > svg {
+  color: var(--warn);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button.inspector-choice:hover:not(:disabled) {
+    background: var(--inset);
+  }
+}
+
+.inspector-note {
+  margin: 0;
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
+.inspector-origin {
+  margin: var(--space-2) 0 0;
+}
+
+.inspector-origin figcaption {
+  color: var(--muted);
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+.inspector-origin blockquote {
+  display: -webkit-box;
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-3);
+  overflow: hidden;
+  border-left: 2px solid var(--rule);
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
 }
 
 /* A composer marks where the person is about to write: the Context's tint, edged in its accent. */
@@ -1987,6 +2373,15 @@ button.chip.set .chip-end {
   padding: 6px 10px;
   color: var(--muted);
   font: var(--type-meta);
+}
+
+/* A picker on a record's page, across it. */
+.inspector .choice-picker {
+  min-width: 0;
+}
+
+.inspector .link-picker [role="option"] {
+  padding: 10px var(--space-3);
 }
 
 .entry-list[hidden] {
@@ -2973,6 +3368,32 @@ a.entry-mark.held-mark {
   button.task-dates-toggle {
     width: 44px;
     min-height: 44px;
+  }
+
+  /* Attention's rows and a record's page, touch targets of 48px, and fields that do not zoom. */
+  .task.attention-row,
+  button.attention-row-open {
+    min-height: 48px;
+  }
+
+  .inspector-head {
+    padding: var(--space-2) var(--space-2) 0;
+  }
+
+  .inspector-page {
+    padding: var(--space-2) var(--space-4) var(--space-5);
+  }
+
+  .inspector-line,
+  button.inspector-line,
+  button.inspector-choice {
+    min-height: 48px;
+    font: var(--type-body-phone);
+  }
+
+  .inspector .inspector-date input,
+  .inspector .choice-field {
+    font-size: 16px;
   }
 
   button.send-button {
