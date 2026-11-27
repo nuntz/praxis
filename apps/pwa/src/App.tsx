@@ -150,10 +150,19 @@ export function App() {
   const [pressedOut, setPressedOut] = createSignal(false);
   const underLayer = () => layered() || pressedOut();
 
+  /**
+   * What in Attention takes the focus as it is brought into view: a Task's or Project's page open
+   * over it, by its Back, since the page covers the column, header and all; else its heading.
+   */
+  function focusAttention() {
+    const page = document.querySelector<HTMLElement>("#attention .inspector-back");
+    (page ?? attentionHeading)?.focus();
+  }
+
   /** Open Attention from the top bar, the focus on its heading, read out with its count. */
   function openAttention() {
     setAttentionOpen(true);
-    attentionHeading?.focus();
+    focusAttention();
   }
 
   /** Put Attention away, by its button, its Close or Escape, the focus back on its button. */
@@ -162,8 +171,9 @@ export function App() {
     attentionButton.focus();
   }
 
+  /** Escape puts Attention away only where it is a layer: elsewhere its button is not shown. */
   function putAttentionAway(event: KeyboardEvent) {
-    if (event.key !== "Escape" || !attentionOpen()) return;
+    if (event.key !== "Escape" || !layered()) return;
     closeAttention();
   }
 
@@ -207,7 +217,7 @@ export function App() {
       if (inBetween()) openAttention();
       else {
         setTab("attention");
-        attentionHeading.focus();
+        focusAttention();
       }
       return true;
     },
@@ -233,7 +243,7 @@ export function App() {
    */
   function showHeldChange(anchor: string) {
     setTab("attention");
-    setAttentionOpen(true);
+    if (inBetween()) setAttentionOpen(true);
     requestAnimationFrame(() => {
       const shown = document.getElementById(anchor);
       shown?.scrollIntoView({ block: "center" });

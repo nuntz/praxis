@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { expect, onPhone, test } from "./fixtures.ts";
+import { callContextTool, contextOfOwn, expect, onPhone, test } from "./fixtures.ts";
 
 // The main screen's ways past what stands before the composers: skip links as its first Tab stops,
 // and outside a field, `r`, `m` and `a` (section 8.11).
@@ -191,4 +191,43 @@ test("on a phone, the skip link to the Conversation's composer shows the Agent t
   await expect(column(page, "Journal")).toBeVisible();
   await expect(entry).toBeFocused();
   await expect(entry).toHaveValue("");
+});
+
+test("on a desktop a works over a Task's page, r works from a Task's round control, and r held types nothing", async ({
+  page,
+}, testInfo) => {
+  test.skip(onPhone(testInfo), "A phone's keys switch tabs first, in a journey of their own.");
+  const { id } = await contextOfOwn(page, testInfo, "Keys over a page");
+  const title = "Post the parcel";
+  await callContextTool(page, id, "record_entry", { words: "Errands", tasks: [{ title }] });
+  await page.goto("/");
+  const { entry } = composers(page);
+  await expect(entry).toBeVisible();
+  const attention = column(page, "Attention");
+
+  // From a Task's round control, a checkbox and not a field, `r` gives the composer the caret.
+  await attention.getByRole("checkbox", { name: title, exact: true }).focus();
+  await page.keyboard.press("r");
+  await expect(entry).toBeFocused();
+  await expect(entry).toHaveValue("");
+
+  // Held, `r` gives the caret once and its repeats type nothing there.
+  await column(page, "Journal").getByRole("heading", { name: "Journal" }).click();
+  await page.keyboard.down("r");
+  await page.keyboard.down("r");
+  await page.keyboard.down("r");
+  await page.keyboard.up("r");
+  await expect(entry).toBeFocused();
+  await expect(entry).toHaveValue("");
+
+  // With a Task's page open over Attention, `a` gives the focus to the page, not to the heading
+  // it covers.
+  await attention.getByRole("button", { name: title, exact: true }).click();
+  const back = attention
+    .getByRole("dialog", { name: title })
+    .getByRole("button", { name: "Back to Attention" });
+  await expect(back).toBeVisible();
+  await column(page, "Journal").getByRole("heading", { name: "Journal" }).click();
+  await page.keyboard.press("a");
+  await expect(back).toBeFocused();
 });

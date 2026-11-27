@@ -21,10 +21,16 @@ export const CONVERSATION_COMPOSER = "new-message";
 /** The main screen's letter keys, each declared on what it leads to. */
 export type ScreenKey = "r" | "m" | "a";
 
-/** Whether a key goes to where it is typed as text: a field, a composer or the like. */
+/**
+ * Whether a key goes to where it is typed as text: a field, a composer or the like. A control
+ * pressed rather than typed into, as a Task's round checkbox is, is no field.
+ */
 function typedInto(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || target.closest("input, textarea, select") !== null;
+  const pressed = ["checkbox", "radio", "button", "submit", "reset", "range", "color", "file"];
+  const field = target.closest("input, textarea, select");
+  if (field instanceof HTMLInputElement && pressed.includes(field.type)) return false;
+  return target.isContentEditable || field !== null;
 }
 
 /**
@@ -42,7 +48,14 @@ export function screenKey(event: KeyboardEvent): boolean {
  * is taken, so it is not typed into the composer it gave the caret.
  */
 export function followScreenKeys(targets: KeyTargets, live: () => boolean) {
+  // A key that led somewhere, while it is held: its repeats reach the composer it gave the caret,
+  // and are taken too, so holding `r` a moment long types nothing there.
+  let held: string | null = null;
   const onKey = (event: KeyboardEvent) => {
+    if (event.repeat && event.key === held) {
+      event.preventDefault();
+      return;
+    }
     if (!screenKey(event) || !live()) return;
     const keys: Record<ScreenKey, () => boolean> = {
       r: targets.toJournalComposer,
@@ -50,10 +63,20 @@ export function followScreenKeys(targets: KeyTargets, live: () => boolean) {
       a: targets.toAttention,
     };
     const to = keys[event.key as ScreenKey];
-    if (to?.()) event.preventDefault();
+    if (to?.()) {
+      event.preventDefault();
+      held = event.key;
+    }
+  };
+  const onRelease = (event: KeyboardEvent) => {
+    if (event.key === held) held = null;
   };
   document.addEventListener("keydown", onKey);
-  onCleanup(() => document.removeEventListener("keydown", onKey));
+  document.addEventListener("keyup", onRelease);
+  onCleanup(() => {
+    document.removeEventListener("keydown", onKey);
+    document.removeEventListener("keyup", onRelease);
+  });
 }
 
 /**
