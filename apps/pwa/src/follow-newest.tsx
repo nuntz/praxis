@@ -44,13 +44,21 @@ export function followNewest(options: {
     toEnd();
   }
 
-  /** Where the person scrolled to: at the newest, what arrived is seen. */
+  /**
+   * Where the person scrolled to: at the newest, what arrived is seen. Only scrolling up leaves the
+   * newest. A scroll is heard a frame after it is made, and the column may be shorter by then, as a
+   * composer growing with words pasted in makes it: read then, the column seems far from its end
+   * where nobody moved it, and is followed there once it is resized.
+   */
   function scrolled() {
     if (!scroller || scroller.clientHeight === 0 || !anchored()) return;
+    const up = scroller.scrollTop < left;
     left = scroller.scrollTop;
     const near = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= NEAR_THE_END;
-    setAtNewest(near);
-    if (near) setArrived(0);
+    if (near) {
+      setAtNewest(true);
+      setArrived(0);
+    } else if (up) setAtNewest(false);
   }
 
   /** The column or what it holds changed size: at its newest it stays there. */
