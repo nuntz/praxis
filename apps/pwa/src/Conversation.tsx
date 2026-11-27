@@ -35,7 +35,7 @@ import { afterPress } from "./press.ts";
 import { CapLink } from "./SettingsLink.tsx";
 import { CapNotice, readSpend, spend } from "./Spend.tsx";
 import { callDeploymentTool, unreachableMessage, useCallTool } from "./tools.ts";
-import { Words } from "./Words.tsx";
+import { spokenWords, Words } from "./Words.tsx";
 
 const moneyFormat = new Intl.NumberFormat(undefined, {
   style: "currency",
@@ -115,6 +115,8 @@ export function Conversation(props: {
   const [announcement, setAnnouncement] = createSignal("");
   const [toAnnounce, setToAnnounce] = createSignal<string | null>(null);
   function announce(words: string) {
+    // Once only: its item is drawn again whenever the newest page is read afresh.
+    setToAnnounce(null);
     // Emptied first, so an answer worded as the last one is read out too.
     setAnnouncement("");
     requestAnimationFrame(() => setAnnouncement(`The Agent answered: ${words}`));
@@ -253,12 +255,11 @@ export function Conversation(props: {
   }
 
   /**
-   * Whether the Agent is at work on the person's newest Message: its answer is being written, or it
-   * was sent and its Run has neither failed nor been answered. A Brief or a Review left meanwhile
-   * answers nothing, so it is passed over.
+   * Whether the Agent is at work on the person's newest Message: it was sent and its Run has
+   * neither failed nor been answered, its answer being written or not. A Brief or a Review left
+   * meanwhile answers nothing, so it is passed over, and one being written is no work on it.
    */
   const agentWorking = () => {
-    if (writing() !== null) return true;
     for (let at = messages.length - 1; at >= 0; at--) {
       const message = messages[at];
       if (message?.from === "person") return message.notice === null;
@@ -367,7 +368,10 @@ export function Conversation(props: {
           void readNotices();
         },
       });
-      if (typeof started === "string") {
+      if (typeof started !== "string" && switched) {
+        // Switched away while it was being set up: it ended with the Context it was started in.
+        void started.switchedAway();
+      } else if (typeof started === "string") {
         setProblem(started);
         // Refused at the cap, whose Notice then takes the composer's place, or for the voice key,
         // whose standing Notice the Deployment now holds.
@@ -386,8 +390,13 @@ export function Conversation(props: {
     }
   }
 
-  // A Call belongs to the Context it was started in: switching away ends it, as the switcher said.
-  onCleanup(() => void call()?.switchedAway());
+  // A Call belongs to the Context it was started in: switching away ends it, as the switcher said,
+  // and one still being set up is ended once it is.
+  let switched = false;
+  onCleanup(() => {
+    switched = true;
+    void call()?.switchedAway();
+  });
 
   // Read once the live channel is open, so a Message added meanwhile is either read or brought.
   onMount(async () => {
@@ -952,7 +961,8 @@ function AgentMessageItem(props: {
   onMount(() => {
     // Read out as rendered, so a screen reader hears the words and not their Markdown.
     if (props.announce) {
-      const words = item.querySelector(":scope > .words")?.textContent?.trim();
+      const shown = item.querySelector(":scope > .words");
+      const words = shown ? spokenWords(shown) : "";
       if (words) props.onAnnounce(words);
     }
     if (props.message.clock?.read !== false) return;
@@ -1185,7 +1195,13 @@ function MessageComposer(props: {
             value={words()}
             onInput={(event) => setWords(event.currentTarget.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && pointerHovers()) {
+              // Not while an input method composes, where Return picks what is being composed.
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.isComposing &&
+                pointerHovers()
+              ) {
                 event.preventDefault();
                 void send();
               }

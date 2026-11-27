@@ -610,6 +610,28 @@ test("switching to another Context during a Call ends it, as switched", async ({
   await expect(contexts.getByText("Switching ends the Call.", { exact: true })).toHaveCount(0);
 });
 
+test("switching to another Context while a Call is set up ends it once it is, as switched", async ({
+  page,
+}, testInfo) => {
+  const voice = await fakeVoice(page);
+  const elsewhere = `Elsewhere ${testInfo.project.name}-${crypto.randomUUID().slice(0, 8)}`;
+  await makeContext(page, { name: elsewhere, time_zone: "UTC", accent: "rust" });
+  const { name, conversation } = await inContext(page, testInfo, "Switching early");
+  const setUp = await holdNext(page, /\/tools\/start_call$/);
+  await callButton(conversation, name).click();
+  await setUp.asked();
+
+  await page.getByRole("button", { name: /^Context: / }).click();
+  await page
+    .getByRole("list", { name: "Contexts" })
+    .getByRole("button", { name: elsewhere, exact: true })
+    .click();
+  const ended = page.waitForResponse(/\/tools\/end_call$/);
+  await setUp.release();
+  expect((await (await ended).json()).value.call).toMatchObject({ ended: "switched" });
+  expect(await voice.faults()).toEqual([]);
+});
+
 test("a Call going is said in Settings, which leads back to it, and on a phone on the Agent tab", async ({
   page,
 }, testInfo) => {

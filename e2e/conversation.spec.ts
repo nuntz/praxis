@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import type { WebSocketRoute } from "@playwright/test";
 import {
   closeSettings,
   expect,
@@ -265,6 +266,66 @@ test("an answer to the person's Message is read out once whole, as shown, with n
   ).toHaveCount(0);
 });
 
+test("an answer read out keeps its paragraphs and list items apart", async ({ page }, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const name = `Apart ${tag}`;
+  const context = await makeContext(page, { name, time_zone: "UTC", accent: "moss" });
+  await lastShown(page, context.id);
+  await page.goto("/");
+  await showTab(page, testInfo, "Agent");
+  const conversation = page.getByRole("region", { name: "Conversation" });
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true })
+    .fill(`Say: Booked ${tag}.\n\n- milk\n- eggs`);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+
+  const readOut = conversation.getByRole("status").filter({ hasText: /^The Agent answered: / });
+  await expect(readOut).toHaveText(`The Agent answered: Booked ${tag}. milk eggs`);
+});
+
+test("an answer is read out once, and not again when the newest Messages are read afresh", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const name = `Once ${tag}`;
+  const context = await makeContext(page, { name, time_zone: "UTC", accent: "moss" });
+  await lastShown(page, context.id);
+  // The live channel as it goes, so the journey can drop it.
+  let channel: WebSocketRoute | undefined;
+  await page.routeWebSocket(/\/live$/, (socket) => {
+    socket.connectToServer();
+    channel = socket;
+  });
+  await page.goto("/");
+  await showTab(page, testInfo, "Agent");
+  const conversation = page.getByRole("region", { name: "Conversation" });
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true })
+    .fill(`Say: Booked ${tag}.`);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+  const readOut = conversation.getByRole("status").filter({ hasText: /^The Agent answered: / });
+  await expect(readOut).toHaveText(`The Agent answered: Booked ${tag}.`);
+
+  // From here, each time the answer is read out again is counted.
+  await readOut.evaluate((element) => {
+    const counted = window as unknown as { readOutAgain: number };
+    counted.readOutAgain = 0;
+    new MutationObserver(() => {
+      if (element.textContent?.startsWith("The Agent answered: ")) counted.readOutAgain++;
+    }).observe(element, { childList: true, characterData: true, subtree: true });
+  });
+  // The live channel drops and rejoins, and the newest page is read afresh.
+  const readAfresh = page.waitForResponse(/\/tools\/list_messages$/);
+  await channel?.close();
+  await readAfresh;
+  await page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  );
+  expect(
+    await page.evaluate(() => (window as unknown as { readOutAgain: number }).readOutAgain),
+  ).toBe(0);
+});
+
 test("Return in the Conversation's composer sends where there is hover, and on a touch screen starts a new line", async ({
   page,
 }, testInfo) => {
@@ -281,6 +342,18 @@ test("Return in the Conversation's composer sends where there is hover, and on a
   });
   await expect(composer).toHaveAttribute("enterkeyhint", onPhone(testInfo) ? "enter" : "send");
   await composer.fill(`Say: First line ${tag}`);
+  // Return that picks what an input method is composing is the input method's, and sends nothing.
+  const takenToSend = await composer.evaluate((element) => {
+    const picking = new KeyboardEvent("keydown", {
+      key: "Enter",
+      isComposing: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    element.dispatchEvent(picking);
+    return picking.defaultPrevented;
+  });
+  expect(takenToSend).toBe(false);
   await composer.press("Enter");
   const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
   if (onPhone(testInfo)) {

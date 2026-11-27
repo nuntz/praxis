@@ -4062,12 +4062,12 @@ a.entry-mark.held-mark {
     letter-spacing: var(--tracking-caption);
   }
 
-  /* The Call's phone at the Agent icon's other shoulder, so it is never taken for the unread dot. */
   /* On a phone a Run's fold is opened with a thumb. */
   .run-calls summary {
     min-height: 44px;
   }
 
+  /* The Call's phone at the Agent icon's other shoulder, so it is never taken for the unread dot. */
   .tabs .call-mark {
     position: absolute;
     top: 1px;
