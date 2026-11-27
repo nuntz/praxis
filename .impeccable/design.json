@@ -729,18 +729,28 @@
     ],
     "motion": [
       {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "The one curve motion takes: fast at once, settling softly."
+      },
+      {
+        "name": "press-release",
+        "value": "opacity 160ms var(--ease-out)",
+        "purpose": "A press fading back from 70% as it lifts; at once under reduced motion."
+      },
+      {
         "name": "page-push",
-        "value": "220ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "value": "220ms var(--ease-out)",
         "purpose": "A Task's, Project's or Entry's page coming in 24px from the side as the person goes deeper."
       },
       {
         "name": "page-fade-reduced",
-        "value": "160ms ease-out",
+        "value": "160ms var(--ease-out)",
         "purpose": "The same page under reduced motion: a fade only."
       },
       {
         "name": "switch-knob",
-        "value": "left 150ms",
+        "value": "transform 150ms var(--ease-out)",
         "purpose": "A switch's knob, only when motion is allowed."
       }
     ],

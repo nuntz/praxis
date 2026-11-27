@@ -372,7 +372,7 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **Jump to latest:** an `ink` pill with `surface` text, the arrow-down icon and a count, centred above the composer.
 - **End Call:** a 60px circle of solid `warn` under `on-accent`, the phone icon turned 135°, its word underneath. Mute beside it is the same circle on `inset` with the Lucide `mic` icon; muted, it turns `ink` under `surface` with `mic-off`, and keeps its word, since the Call bar says "Muted".
 - **Disabled:** 50% opacity, for every control but a composer's send with nothing to send. A Call that cannot start stays focusable and says why in `meta` under it, since a touch screen has no tooltip.
-- **Pressed:** a button, a link, a disclosure or a picker's choice that can be pressed is dimmed to 70% the moment the press lands, and back over 160ms once it lifts, as a native control answers a finger; with reduced motion, back at once. A link that is a row, such as a section of Settings, sits on `inset` while pressed instead, as it does when hovered. The browser's grey tap box is never drawn.
+- **Pressed:** a button, a link, a disclosure or a picker's choice that can be pressed is dimmed to 70% the moment the press lands, and back over 160ms on `ease-out` once it lifts, as a native control answers a finger; with reduced motion, back at once. A link that is a row, such as a section of Settings, sits on `inset` while pressed instead, as it does when hovered. The browser's grey tap box is never drawn.
 - **Focus:** a 2px `ink` outline, 2px off, on everything.
 
 ### Chips
@@ -390,7 +390,7 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **Composer:** the accent's tint, a 1.5px accent border, `radius-lg`. Its `label` sits in the accent above the words. At rest it is one line, its label where the words will go and its send at its end. A label too long for its line is cut short with an ellipsis; the send never is, and Record keeps its icon and its word at every width. Focused, it opens to two lines at once, with no animation, and takes a 2px accent outline 2px off. As the words run past two lines it grows with them, a line at a time and with no animation, up to 40% of its column's height, and then scrolls within itself. On a phone that is 40% of the column as shown, above the on-screen keyboard, so the composer never covers the column.
 - **Search field:** a 44px `inset` pill with a `muted` search icon. Focused, its 1.5px border turns `ink`, and the 2px `ink` outline is drawn 2px off round the whole field, as its input draws none. The browser's clear button is hidden for the screen's own.
 - **Date field:** a `surface` field with a `rule` border and `radius-sm`, in a Task's row. With no day in it, its placeholder ("dd/mm/yyyy", or the locale's) is `muted` until it is typed in.
-- **Switch:** a 46×28 pill, `muted` when off and accent when on, its knob `surface`. The knob slides in 150ms only when motion is allowed.
+- **Switch:** a 46×28 pill, `muted` when off and accent when on, its knob `surface`. The knob slides in 150ms on `ease-out` only when motion is allowed.
 
 ### Navigation
 - **Top bar:** on `ground`, 52px high (60px on a phone): the mark and wordmark, then the Context switcher, then (between 720px and 1199px) the Attention button with its count, and Settings as an icon button at the far end. On a phone it shows the mark alone, still named "Praxis", and the switcher takes the width, its name cut with an ellipsis; Settings never shrinks from its 44px circle. Search belongs to the Journal: a field in its header, or a button on a phone.
@@ -413,7 +413,7 @@ The person's Message sits on the right, no wider than 85%, on `inset` with `radi
 On a phone, while a Call goes on, the Agent tab carries the Call's mark: the Lucide `phone` at 12px in the accent, on a `surface` ring, at the icon's other shoulder from the unread dot, so the two are never taken for each other. In Settings the top bar carries the Call bar's dot beside "On a Call", a quiet button back to the Conversation; on a phone, short of room beside the switcher, it takes a line of its own under it.
 
 ### Motion
-The one motion is a page going one level deeper, beside a press fading back as it lifts (Pressed, under Buttons), which is feedback on the person's own touch. A Task's, Project's or Entry's page slides in 24px from the side, fading in over 220ms on `cubic-bezier(0.23, 1, 0.32, 1)`. A page gone back to is simply there. With reduced motion it is a 160ms fade, ease-out. Composers, menus, pickers and tabs appear at once.
+The one motion is a page going one level deeper, beside a press fading back as it lifts (Pressed, under Buttons), which is feedback on the person's own touch. A Task's, Project's or Entry's page slides in 24px from the side, fading in over 220ms on `ease-out`. Motion takes one curve, the `ease-out` token, `cubic-bezier(0.23, 1, 0.32, 1)`: fast at once, settling softly. A page gone back to is simply there. With reduced motion it is a 160ms fade, ease-out. Composers, menus, pickers and tabs appear at once.
 
 ## Do's and Don'ts
 
