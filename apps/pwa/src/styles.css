@@ -2120,7 +2120,9 @@ button.call-button[aria-disabled="true"] {
 
 /*
  * On the Device in a Call, a status bar on the accent's tint takes the header's place. The header
- * is hidden as .visually-hidden is, so its title stays in the outline for a screen reader.
+ * is hidden as .visually-hidden is, so its title stays in the outline for a screen reader. The bar
+ * keeps the header's 12px over the column's edge, so what scrolls is cut a step below the bar's
+ * rounded foot, never against it.
  */
 .peer.conversation:has(> .call-bar) > .peer-header {
   position: absolute;
@@ -2135,18 +2137,20 @@ button.call-button[aria-disabled="true"] {
 .call-bar {
   display: flex;
   flex-shrink: 0;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-4);
-  margin: var(--space-3) var(--space-5) 0;
-  padding: 14px 14px 14px var(--space-5);
+  margin: var(--space-3) var(--space-5);
+  padding: 14px var(--space-5);
   border-radius: var(--radius-lg);
   background: var(--accent-tint);
 }
 
+/* The dot leads its words: centred on the title's first 22px line, however many lines follow. */
 .call-dot {
   flex-shrink: 0;
   width: 10px;
   height: 10px;
+  margin-top: 6px;
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 4px var(--surface);
@@ -4221,7 +4225,7 @@ a.entry-mark.held-mark {
   }
 
   .call-bar {
-    margin: var(--space-1) var(--space-4) 0;
+    margin: var(--space-1) var(--space-4) var(--space-3);
   }
 
   .call-controls {

@@ -34,12 +34,11 @@ Record each run below, replacing the last one: the date, the commit deployed, th
 
 ## The last run
 
-2026-11-27, iOS 26.1, Safari only: the commit that brought a Call's state into words and marks (the Call bar's "Muted" and "Agent working", the Agent tab's mark, Settings' "On a Call", the switcher's warning), built from the checkout before it was committed, on 2894b2c.
+2026-11-27, Safari only: the Call bar's layout (its 12px over the column's edge, and its dot beside the title's first line), built from the checkout before it was committed, on 01f9e07.
 
 | Case | Result |
 |---|---|
-| The screen draws | Pass, through the real-phone loop with no reads replayed: the build drew and beat through Journal, Agent and Attention, never `FROZEN`. Attention held no rows to count. |
-| A composer's words | Pass in the Agent's tab, on the journeys' Worker so the Agent answers: Return starts a line, the caret stays above the keyboard, the page does not zoom, Send is in reach, and it folds back once sent. The Journal's composer was not run, and nor was Praxis from the Home Screen. |
-| An Entry's words, Adding a Task, A Task's title, A Task's dates | Not run: their pages did not change. |
+| The screen draws | Pass, through the real-phone loop on the journeys' Worker with six Messages and the browser's voice fake served beside the heartbeat, counting the Conversation's Messages: each load drew all 25 within half a second, and none went `FROZEN` while shown. |
+| An Entry's words, Adding a Task, A Task's title, A composer's words, A Task's dates | Not run: no page with text fields changed. |
 
-Beyond the table, on the journeys' Worker with the browser's voice fake served beside the heartbeat, each passed: a Run's fold opened; a failed Run's Notice under the bubble; a Call started, muted with the bar saying so; the Agent tab's mark from the Journal's tab; Settings' "On a Call" on its own line under the switcher, leading back to the Call; the switcher's warning; and End Call.
+Beyond the table, each passed: a Call started from the Agent's tab, the Messages scrolled under the bar were cut a step below its foot, never against it, the dot stood beside "On a Call in", Mute said "Muted" in the bar, and End Call ended it.
