@@ -110,6 +110,19 @@ button:disabled {
   cursor: default;
 }
 
+/*
+ * A composer's send with nothing to send, which is most of the time, is at rest and not broken: the
+ * accent's icon (and Record's word) on the composer's tint, at full opacity, with no fill of its own.
+ * With something to send it turns the solid accent, as a primary is, and while that is being sent
+ * it is disabled as any control is.
+ */
+button.record-button[data-nothing-to-send],
+button.send-button[data-nothing-to-send] {
+  opacity: 1;
+  background: none;
+  color: var(--accent);
+}
+
 /* A quiet button is words in ink: nothing but the primary takes the accent. */
 button.quiet {
   min-height: 24px;
@@ -1916,11 +1929,17 @@ button.send-button {
   padding: 0;
 }
 
-/* A Call starts from a primary pill at the end of the Conversation's header. */
+/*
+ * A Call starts from a neutral pill at the end of the Conversation's header: its rarest act, so it
+ * never takes the accent from the Conversation's one primary, its Send. Its rule gives it an edge
+ * on the panel's surface, where tone alone is not enough.
+ */
 button.call-button {
   flex-shrink: 0;
-  min-height: 44px;
   padding: 0 18px 0 14px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 /* Shown but not pressable, offline or at the cap: it stays focusable, so its reason is heard. */
@@ -3745,17 +3764,6 @@ a.entry-mark.held-mark {
 
   button.send-button {
     width: 44px;
-  }
-
-  /* The Call button is the phone icon alone, round, and the Call's controls are larger. */
-  button.call-button {
-    width: 48px;
-    min-height: 48px;
-    padding: 0;
-  }
-
-  .call-button-word {
-    display: none;
   }
 
   .call-unavailable {

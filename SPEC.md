@@ -693,7 +693,7 @@ The column is composed by the screen from four sources, in this order:
 
 - Every Message, scrollable to the start, opening at the newest (section 8.1).
 - The Conversation's header holds its title and the Call button alone: its composer names the Agent and the Context.
-- **The Call button** sits in the Conversation's header: a phone icon and "Call", and on a phone the icon alone. It is there wherever a Call can be offered (section 6). Offline, or at the cap, it is shown but cannot be pressed, and says why. In a Call the header says so, with the time so far, and the composer gives way to Mute and End, End in `warn`.
+- **The Call button** sits in the Conversation's header: a phone icon and "Call", on a phone too, a neutral pill that leaves the accent to the Conversation's Send. It is there wherever a Call can be offered (section 6). Offline, or at the cap, it is shown but cannot be pressed, and says why. In a Call the header says so, with the time so far, and the composer gives way to Mute and End, End in `warn`.
 - A Message from the Agent, a Brief and a Review included, is rendered as an Entry's words are (section 8.4), except that an image never loads and shows as its description. The person's own Messages show as typed.
 - A Run's calls fold under the Message it left, each change linking to its record, with the Run's cost on opening it.
 - A Held Change waits where the Agent left it, as well as at the top of Attention and on its Entry. It is counted in the Attention badge.

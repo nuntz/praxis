@@ -29,6 +29,7 @@ const pairings: [ColorToken, ColorToken[]][] = [
   ["warn", ["surface", "inset"]],
   // The "Jump to latest" pill and a set search chip, the reverse of ink on surface.
   ["surface", ["ink"]],
+  // A composer's label, a Mention, and Record's word while it has nothing to send.
   ...ACCENTS.map((accent): [ColorToken, ColorToken[]] => [accent, ["surface", `${accent}-tint`]]),
   ...ACCENTS.map((accent): [ColorToken, ColorToken[]] => ["on-accent", [accent]]),
   // The End Call button's icon, on its solid warn: warn's one fill.
@@ -42,6 +43,22 @@ const cases = (["light", "dark"] as Theme[]).flatMap((theme) =>
 describe("every text pairing is at least 4.5:1", () => {
   test.each(cases)("in %s, %s on %s", (theme, text, ground) => {
     expect(contrast(colors[text][theme], colors[ground][theme])).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+// A composer's send with nothing to send is the accent's icon on the accent's tint, with no fill of
+// its own: a mark the person must still see, so at least 3:1, WCAG 2.2's bar for a non-text mark.
+// The accent's 4.5:1 as text on its tint implies it today; it is its own bar should that one change.
+// Record's word beside it is the accent as text on its tint, among the pairings above.
+const atRestCases = (["light", "dark"] as Theme[]).flatMap((theme) =>
+  ACCENTS.map((accent) => [theme, accent] as const),
+);
+
+describe("a composer's send with nothing to send", () => {
+  test.each(atRestCases)("in %s, %s's icon on its tint is at least 3:1", (theme, accent) => {
+    expect(contrast(colors[accent][theme], colors[`${accent}-tint`][theme])).toBeGreaterThanOrEqual(
+      3,
+    );
   });
 });
 

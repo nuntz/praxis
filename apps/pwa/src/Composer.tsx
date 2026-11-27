@@ -274,7 +274,12 @@ export function Composer(props: {
             onClick={look}
             onBlur={shutPicker}
           />
-          <button type="submit" class="record-button" disabled={!canRecord()}>
+          <button
+            type="submit"
+            class="record-button"
+            disabled={!canRecord()}
+            data-nothing-to-send={words().trim() === "" ? "" : undefined}
+          >
             <Check size={16} aria-hidden="true" />
             Record
           </button>

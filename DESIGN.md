@@ -134,6 +134,18 @@ components:
     typography: "{typography.button}"
     padding: "0"
     height: "24px"
+  button-send-at-rest:
+    textColor: "{colors.blue}"
+    typography: "{typography.button}"
+    rounded: "{rounded.radius-pill}"
+    height: "40px"
+  button-call:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.button}"
+    rounded: "{rounded.radius-pill}"
+    padding: "0 18px 0 14px"
+    height: "40px"
   button-icon:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.muted}"
@@ -347,12 +359,14 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 
 ### Buttons
 - **Shape:** a pill (999px), 40px high on a desktop and 44px on a phone, with its icon and word `space-2` apart.
-- **Primary:** the solid accent with `on-accent` text, 20px each side. The Journal's **Record** is a pill with the check icon and its word. The Conversation's **Send** is a 40px round button with the arrow-up icon. **Call** is a 44px pill with the phone icon.
+- **Primary:** the solid accent with `on-accent` text, 20px each side. The Journal's **Record** is a pill with the check icon and its word. The Conversation's **Send** is a 40px round button (44px on a phone) with the arrow-up icon.
+- **A send with nothing to send:** while its composer is empty, Record or Send is the accent's icon (and Record's word) on the composer's tint, at full opacity with no fill of its own, and is still disabled, so it is announced as unavailable. It is at rest, not broken, so it is never washed out. With something to send it turns the solid accent.
+- **Call:** a `surface` pill with a `rule` edge, the Lucide `phone` icon and the word "Call" in `ink` at 700, at the button's height, the word kept on a phone. It is the Conversation's rarest act, so it never takes the accent from its Send.
 - **Quiet:** words in `ink` at 600, underlined 3px below, with no fill. It is every secondary action, because nothing but the primary takes the accent.
 - **Icon button:** a 40px circle (44px on a phone), `surface` with a `muted` icon. Used alone only on a well-known action (Edit, Follow up, Dates, Send, Search, Close, More), with an accessible name and a tooltip.
 - **Jump to latest:** an `ink` pill with `surface` text, the arrow-down icon and a count, centred above the composer.
 - **End Call:** a 60px circle of solid `warn` under `on-accent`, the phone icon turned 135°, its word underneath. Mute beside it is the same circle on `inset`.
-- **Disabled:** 50% opacity. A disabled Call stays focusable and says why in `meta` under it, since a touch screen has no tooltip.
+- **Disabled:** 50% opacity, for every control but a composer's send with nothing to send. A Call that cannot start stays focusable and says why in `meta` under it, since a touch screen has no tooltip.
 - **Focus:** a 2px `ink` outline, 2px off, on everything.
 
 ### Chips

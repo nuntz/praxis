@@ -576,8 +576,8 @@ const NO_CALL = {
 const CALL_UNAVAILABLE = "call-unavailable";
 
 /**
- * The Call button in the Conversation's header (section 8.5): the phone icon and "Call", the icon
- * alone on a phone. Offline or at the cap it is shown but cannot be pressed, and is described by
+ * The Call button in the Conversation's header (section 8.5): the phone icon and "Call", on a phone
+ * too. Offline or at the cap it is shown but cannot be pressed, and is described by
  * why, in the words shown under it: it stays focusable, so the reason is heard as well as seen.
  */
 function CallButton(props: {
@@ -603,7 +603,7 @@ function CallButton(props: {
       }}
     >
       <PhoneIcon size={18} aria-hidden="true" />
-      <span class="call-button-word">Call</span>
+      Call
     </button>
   );
 }
@@ -1058,6 +1058,7 @@ function MessageComposer(props: {
             aria-label="Send"
             title="Send"
             disabled={!canSend()}
+            data-nothing-to-send={words().trim() === "" ? "" : undefined}
           >
             <ArrowUp size={20} aria-hidden="true" />
           </button>
