@@ -12,11 +12,15 @@ import {
 } from "./fixtures.ts";
 
 // Rules of DESIGN.md held by measuring the screen as rendered: the 44px Rule and the Round Controls
-// Rule in the phone's top bar and Attention, the focus outline on the search field, and the type
-// scale on a tab's badge (#174).
+// Rule in the phone's top bar and Attention, the focus outline on the search field, the type
+// scale on a tab's badge (#174), the Tracking Rule, and the hairlines asked for with more contrast.
 
 /** Ink, the focus outline's colour, in light. */
 const INK = "rgb(26, 29, 35)";
+/** Muted, in light: a hairline's colour when the Device asks for more contrast. */
+const MUTED = "rgb(89, 96, 112)";
+/** Rule, in light: a hairline's colour otherwise. */
+const RULE = "rgb(213, 217, 224)";
 
 async function boxOf(locator: Locator) {
   const box = await locator.boundingBox();
@@ -157,8 +161,26 @@ test("on a phone, a tab's count is set in Caption, inside its 18px badge", async
   await expect(badge).toBeVisible();
   const type = await badge.evaluate((span) => {
     const style = getComputedStyle(span);
-    return `${style.fontWeight} ${style.fontSize}/${style.lineHeight}`;
+    return `${style.fontWeight} ${style.fontSize}/${style.lineHeight} ${style.letterSpacing}`;
   });
-  expect(type).toBe("600 12px/16px");
+  // Caption is opened up 0.01em, as small type is by the Tracking Rule.
+  expect(type).toBe("600 12px/16px 0.12px");
   expect((await boxOf(badge)).height).toBeCloseTo(18, 0);
+});
+
+test("in between, Attention's edge over the Journal is a rule hairline, and muted when the Device asks for more contrast", async ({
+  page,
+}, testInfo) => {
+  test.skip(onPhone(testInfo), "Only in between does Attention open over the Journal.");
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 900, height: 800 });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Attention/ }).click();
+  const attention = page.locator("#attention");
+  await expect(attention).toBeVisible();
+  const edge = () => attention.evaluate((panel) => getComputedStyle(panel).borderLeftColor);
+
+  expect(await edge()).toBe(RULE);
+  await page.emulateMedia({ colorScheme: "light", contrast: "more" });
+  expect(await edge()).toBe(MUTED);
 });

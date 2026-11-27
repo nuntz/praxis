@@ -94,6 +94,7 @@ typography:
     fontSize: "13px"
     fontWeight: 700
     lineHeight: "18px"
+    letterSpacing: "0.01em"
   meta:
     fontFamily: "Figtree Variable, system-ui, sans-serif"
     fontSize: "13px"
@@ -104,6 +105,7 @@ typography:
     fontSize: "12px"
     fontWeight: 600
     lineHeight: "16px"
+    letterSpacing: "0.01em"
   code-block:
     fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace"
     fontSize: "14px"
@@ -276,7 +278,7 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 - **Ground** (`ground`): the page behind the panels, and the top bar.
 - **Surface** (`surface`): a panel (Attention, the Journal, the Conversation), a card on the phone, the tab bar, a menu or picker.
 - **Inset** (`inset`): what sits inside a panel: a Task row, the search field, a Reference, the current tab, the person's own Message, code. It always sits on `surface`.
-- **Rule** (`rule`): a hairline border or divider, and the edge of a chip, a menu or a picker.
+- **Rule** (`rule`): a hairline border or divider, and the edge of a chip, a menu or a picker. When the Device asks for more contrast, it takes `muted`'s value, so every edge stands out at 3:1 or more.
 - **Ink** (`ink`): text on every neutral, on `notice` and on any tint. Also the app icon's tile, the focus ring, a chip that is set, and the Jump to latest pill.
 - **Muted** (`muted`): secondary text (times, meta, notes, an inactive tab, a field's placeholder at full opacity on `surface` or `inset`) and the border of a Task's empty control.
 
@@ -309,13 +311,15 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 - **Body** (400, 15px/22px): the interface's base on a desktop, and a Message's words.
 - **Row title** (500, 15px/22px): a Task's or a search hit's title.
 - **Button** (700, 15px/22px): every button's word.
-- **Label** (700, 13px/18px): a composer's label, a group heading in Settings, a chip, every badge but a tab's.
+- **Label** (700, 13px/18px, +0.01em): a composer's label, a group heading in Settings, a chip, every badge but a tab's.
 - **Meta** (400, 13px/18px): a time, an author, a Task's mark ("Due today" at 700 in `muted`, "Overdue" at 700 in `warn`).
-- **Caption** (600, 12px/16px): a day's label, a tab's name, a tab's badge.
+- **Caption** (600, 12px/16px, +0.01em): a day's label, a tab's name, a tab's badge.
 - **Code block** (400, 14px/22px, mono): code in an Entry's words.
 
 ### Named Rules
 **The Words Lead Rule.** An Entry's words are always the largest running text on the screen (17px). Markdown inside them changes weight, indentation and face, never size, and never takes the accent.
+
+**The Tracking Rule.** Tracking follows size: the titles and the wordmark are drawn tighter, the reading sizes at none, and Label and Caption opened up 0.01em, since Figtree has none of a system face's own tracking for small sizes. A style's tracking is its `--tracking-<name>`, set beside its `font`, which cannot carry it.
 
 **The One Family Rule.** Figtree is the only typeface. A second family never comes in for headings or emphasis. Monospace is for code, never for numbers or labels. Tabular figures serve the time on a Call.
 
