@@ -26,6 +26,10 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 A journey that keeps coming back flaky, or fails on its retry in CI: `docs/flaky-journeys.md`.
 
+### Real phone
+
+A bug only an iPhone shows, or a change to the screen's styles before merge: `docs/phone-pages.md`.
+
 ### Production
 
 The weekly Prod Review of production is the `/prod-review praxis` skill; it inspects only.
