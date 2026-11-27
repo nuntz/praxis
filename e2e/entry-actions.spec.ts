@@ -11,7 +11,7 @@ import {
 
 // An Entry's actions are quiet (section 8.4): with a pointer that hovers, a toolbar of icons shown
 // while the Entry is hovered or has the keyboard's focus, Move and Delete behind More; on a touch
-// screen, one "⋯" button opening a menu of all five. Its marks are always shown. Each journey has
+// screen, one "⋯" button opening a menu of all six. Its marks are always shown. Each journey has
 // a Context of its own, so the Entries it reads are its own.
 
 /** A Context of the journey's own, its Journal open on the Entries recorded in it. */
@@ -62,8 +62,11 @@ test("on a desktop, an Entry's actions are a toolbar of icons, shown on hover or
   await page.mouse.move(0, 0);
   await expect(toolbar).toHaveCSS("opacity", "0");
 
-  // Tabbing into the Entry reaches each, and shows the toolbar while it has the focus.
+  // Given the focus, as Restore gives it, the Entry is named by its time, not read out whole.
   await entry.focus();
+  await expect(entry).toHaveAccessibleName(`Entry at ${await entry.locator("time").textContent()}`);
+
+  // Tabbing into the Entry reaches each, and shows the toolbar while it has the focus.
   for (const name of names) {
     await page.keyboard.press("Tab");
     await expect(toolbar.getByRole("button", { name, exact: true })).toBeFocused();
@@ -102,6 +105,43 @@ test("on a desktop, an Entry's actions are a toolbar of icons, shown on hover or
   await expect(keptToolbar).toHaveCSS("opacity", "1");
 });
 
+test("on a desktop, Delete chosen by pointer from a one-line Entry's More deletes that Entry, not the one after it", async ({
+  page,
+}, testInfo) => {
+  test.skip(onPhone(testInfo), "A phone's screen is touched, with no pointer that hovers.");
+  const { id, entries, shown } = await journalWith(page, testInfo, ["Pointed at", "After it"]);
+  const [deleted] = entries;
+  const entry = shown("Pointed at");
+  const after = shown("After it");
+  const { journal } = await openJournal(page, testInfo);
+
+  // The menu of a one-line Entry reaches over the Entry after it, whose own toolbar is not shown.
+  await entry.hover();
+  const toolbar = entry.getByRole("toolbar", { name: "Entry actions", exact: true });
+  await toolbar.getByRole("button", { name: "More: Move, Delete", exact: true }).click();
+  const item = toolbar.getByRole("menu").getByRole("menuitem", { name: "Delete", exact: true });
+  await expect(item).toBeVisible();
+  const box = await item.boundingBox();
+  const afterBox = await after.boundingBox();
+  if (!box || !afterBox) throw new Error("The menu's Delete or the Entry after it is not drawn.");
+  expect(box.y + box.height / 2).toBeGreaterThan(afterBox.y);
+
+  // Pressed where the pointer is, as a person's press lands: whatever is drawn on top takes it.
+  const deleting = page.waitForResponse(/\/tools\/delete_entry$/);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  // Its toolbar stays shown while its menu is open, with the pointer gone from the Entry.
+  await expect(toolbar).toHaveCSS("opacity", "1");
+  await page.mouse.down();
+  await page.mouse.up();
+  expect((await (await deleting).json()).ok).toBe(true);
+
+  await expect(entry).toHaveCount(0);
+  const { items } = await callContextTool(page, id, "list_trash", {});
+  expect(items.map((each: { record: { id: string } }) => each.record.id)).toContain(deleted?.id);
+  await expect(after).toHaveCount(1);
+  await expect(journal.getByText(/^Following up/)).toHaveCount(0);
+});
+
 test("on a touch screen, an Entry's one button opens a menu of its six actions", async ({
   page,
 }, testInfo) => {
@@ -131,6 +171,51 @@ test("on a touch screen, an Entry's one button opens a menu of its six actions",
   await expect(menu).toHaveCount(0);
   await button.click();
   await expect(menu.getByRole("menuitem")).toHaveCount(6);
+});
+
+test("on a touch screen, the newest Entry's menu opens over its button and shows all six actions", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "A desktop's pointer hovers, and has the toolbar.");
+  // Enough Entries to fill the column, so the newest is at its foot, beside the composer.
+  const older = Array.from({ length: 10 }, (_, at) => `Older than it ${at + 1}`);
+  const { shown } = await journalWith(page, testInfo, [...older, "Newest of all"]);
+  const entry = shown("Newest of all");
+  const name = "Actions for this Entry";
+  const button = entry.getByRole("button", { name, exact: true });
+
+  // With no room under its button, at the foot of the column, the menu opens over it, each of its
+  // actions in view and none cut off by the column.
+  await button.click();
+  const menu = entry.getByRole("menu", { name, exact: true });
+  const actions = ["Edit", "Add a Task", "Follow up", "Mark Standing", "Move", "Delete"];
+  await expect(menu.getByRole("menuitem")).toHaveText(actions);
+  for (const action of actions) {
+    await expect(menu.getByRole("menuitem", { name: action, exact: true })).toBeInViewport({
+      ratio: 1,
+    });
+  }
+  const [menuBox, buttonBox] = [await menu.boundingBox(), await button.boundingBox()];
+  if (!menuBox || !buttonBox) throw new Error("The menu or its button is not drawn.");
+  expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(buttonBox.y);
+
+  // The focus moves into it as it opens, and Escape puts it away, the focus back on its button.
+  await expect(menu.getByRole("menuitem", { name: "Edit", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(button).toBeFocused();
+
+  // A tap outside puts it away too.
+  await button.click();
+  await expect(menu.getByRole("menuitem")).toHaveCount(6);
+  await shown("Older than it 10").getByTestId("words").click();
+  await expect(menu).toHaveCount(0);
+
+  // Opened once more, as the accessibility check sees it.
+  await button.click();
+  await expect(menu.getByRole("menuitem", { name: "Delete", exact: true })).toBeInViewport({
+    ratio: 1,
+  });
 });
 
 test("an edited Entry and a Standing Entry show their marks with nothing hovered or focused", async ({

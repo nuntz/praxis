@@ -9,6 +9,7 @@ import type { LucideIcon } from "lucide-solid";
 import ImageIcon from "lucide-solid/icons/image";
 import ImageOffIcon from "lucide-solid/icons/image-off";
 import { createMemo, createSignal, type JSX, Match, Switch } from "solid-js";
+import { Dynamic } from "solid-js/web";
 
 /**
  * Words as the screen shows them: an Entry's, and an Agent's Message's, which is shown as an
@@ -23,11 +24,37 @@ export function Words(props: { words: string; images: ImageLoading; testId?: str
   const words = createMemo(() => props.words);
   const images = createMemo(() => props.images);
   const blocks = createMemo(() => renderMarkdown(words()));
+  const drawn = createMemo(() => ({ images: images(), headings: headingsIn(blocks()) }));
   return (
     <div class="words" data-testid={props.testId}>
-      {blocks().map((shown) => block(shown, images()))}
+      {blocks().map((shown) => block(shown, drawn()))}
     </div>
   );
+}
+
+/** How the words' blocks are drawn: how each image loads, and each heading's element. */
+type Drawn = { images: ImageLoading; headings: Headings };
+
+/** The element a heading of each Markdown level is drawn as, within one showing of the words. */
+type Headings = (level: 1 | 2 | 3) => "h4" | "h5" | "h6";
+
+/**
+ * The words' shallowest heading level is an `h4`, the next an `h5` and the last an `h6`, counted
+ * within the words, so their outline never skips a level under the `h3` they sit beneath, as an
+ * Entry's day is in the Journal: words that open with `##` have no `h5` straight under it. A
+ * Message's words are counted as an Entry's are. Each keeps the look of its Markdown level.
+ */
+function headingsIn(blocks: MarkdownBlock[]): Headings {
+  const levels = new Set<number>();
+  const visit = (shown: MarkdownBlock) => {
+    if (shown.kind === "heading") levels.add(shown.level);
+    if (shown.kind === "quote") shown.children.forEach(visit);
+    if (shown.kind === "list") shown.items.flat().forEach(visit);
+  };
+  blocks.forEach(visit);
+  const used = [...levels].sort((a, b) => a - b);
+  const elements = ["h4", "h5", "h6"] as const;
+  return (level) => elements[used.indexOf(level)] ?? "h6";
 }
 
 /** What a block holds, each image in it loading as the words' images do. */
@@ -35,19 +62,22 @@ function inlines(all: MarkdownInline[], images: ImageLoading): JSX.Element[] {
   return all.map((shown) => inline(shown, images));
 }
 
-function block(shown: MarkdownBlock, images: ImageLoading): JSX.Element {
+function block(shown: MarkdownBlock, drawn: Drawn): JSX.Element {
+  const { images } = drawn;
   switch (shown.kind) {
     case "paragraph":
       return <p>{inlines(shown.children, images)}</p>;
     case "heading":
-      // Under the column's own heading and an Entry's Follow-ups, so the page's outline holds.
-      if (shown.level === 1) return <h4>{inlines(shown.children, images)}</h4>;
-      if (shown.level === 2) return <h5>{inlines(shown.children, images)}</h5>;
-      return <h6>{inlines(shown.children, images)}</h6>;
+      // Under the day's heading, its element by the levels the words use; its look by its own.
+      return (
+        <Dynamic component={drawn.headings(shown.level)} class={`heading-${shown.level}`}>
+          {inlines(shown.children, images)}
+        </Dynamic>
+      );
     case "quote":
-      return <blockquote>{shown.children.map((child) => block(child, images))}</blockquote>;
+      return <blockquote>{shown.children.map((child) => block(child, drawn))}</blockquote>;
     case "list": {
-      const items = shown.items.map((item) => <li>{item.map((child) => block(child, images))}</li>);
+      const items = shown.items.map((item) => <li>{item.map((child) => block(child, drawn))}</li>);
       return shown.ordered ? <ol start={shown.start}>{items}</ol> : <ul>{items}</ul>;
     }
     case "code_block":

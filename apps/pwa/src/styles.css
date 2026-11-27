@@ -28,7 +28,8 @@ button,
 a,
 label,
 summary,
-[role="button"] {
+[role="button"],
+[role="option"] {
   touch-action: manipulation;
 }
 
@@ -130,29 +131,43 @@ button:disabled {
 
 /*
  * A press shows as the finger lands, as a native control's does: dimmed at once, back over 160ms once
- * it lifts. It is a button's, a link's and a disclosure's, since the browser's tap box is gone for
- * all three, but not one that cannot be pressed, nor a row link, which sits on inset instead. A
- * button's words are not text to select, so a long press on one selects nothing and opens no
- * callout.
+ * it lifts. It is a button's, a link's, a disclosure's and a picker's choice's, in a composer's `@`
+ * and `#` offer, a search chip's picker or a record's page, since the browser's tap box is gone for
+ * all of them, but not one that cannot be pressed, nor a row link, which sits on inset instead. The
+ * words of a button or a choice are not text to select, so a long press on one selects nothing and
+ * opens no callout. A choice is named in `:where()`, so these rules weigh what they did for a button
+ * alone, and a later `button.…` rule still takes their place.
  */
-button {
+:is(button, :where([role="option"])) {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
 }
 
-:is(button, a, summary):not(:disabled, [aria-disabled="true"], .settings-section-link) {
+:is(button, a, summary, :where([role="option"])):not(
+  :disabled,
+  [aria-disabled="true"],
+  .settings-section-link
+) {
   transition: opacity 160ms ease-out;
 }
 
-:is(button, a, summary):active:not(:disabled, [aria-disabled="true"], .settings-section-link) {
+:is(button, a, summary, :where([role="option"])):active:not(
+  :disabled,
+  [aria-disabled="true"],
+  .settings-section-link
+) {
   opacity: 0.7;
   transition-duration: 0s;
 }
 
 /* With reduced motion a press lifts at once, as it lands. */
 @media (prefers-reduced-motion: reduce) {
-  :is(button, a, summary):not(:disabled, [aria-disabled="true"], .settings-section-link) {
+  :is(button, a, summary, :where([role="option"])):not(
+    :disabled,
+    [aria-disabled="true"],
+    .settings-section-link
+  ) {
     transition: none;
   }
 }
@@ -1100,7 +1115,8 @@ button.jump-to-latest {
   font: var(--type-body);
 }
 
-.words :is(p, h4, h5, h6, ul, ol, blockquote, pre, .table-scroll) {
+/* The reset has no specificity of its own, so the spacing after it wins (#183). */
+.words :where(p, h4, h5, h6, ul, ol, blockquote, pre, .table-scroll) {
   margin: 0;
 }
 
@@ -1125,19 +1141,20 @@ button.jump-to-latest {
   font-weight: 600;
 }
 
-.words h4 {
+/* By its Markdown level, whichever element the Entry's outline draws it as. */
+.words .heading-1 {
   font-weight: 700;
 }
 
-.words h6 {
+.words .heading-3 {
   color: var(--muted);
 }
 
-.words > h4:not(:first-child) {
+.words > .heading-1:not(:first-child) {
   margin-top: var(--space-5);
 }
 
-.words > h5:not(:first-child) {
+.words > .heading-2:not(:first-child) {
   margin-top: var(--space-4);
 }
 
@@ -1155,7 +1172,6 @@ button.jump-to-latest {
 
 /* A quote is indented behind a hairline, in the muted colour, with no box. */
 .words blockquote {
-  margin: 0;
   padding-left: var(--space-4);
   border-left: 2px solid var(--rule);
   color: var(--muted);
@@ -1168,7 +1184,7 @@ button.jump-to-latest {
 
 .words .code-span {
   padding: 1px 5px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--inset);
   font-size: 0.88em;
 }
@@ -1929,7 +1945,6 @@ button.inspector-choice > .inspector-choice-check {
 
 .inspector-origin blockquote {
   display: -webkit-box;
-  margin: var(--space-1) 0 0;
   padding-left: var(--space-3);
   overflow: hidden;
   border-left: 2px solid var(--rule);
@@ -1983,12 +1998,16 @@ button.inspector-choice > .inspector-choice-check {
   text-overflow: ellipsis;
 }
 
-/* At rest, a composer's key, drawn as search's `/`, only where there is hover (section 8.11). */
+/*
+ * At rest, a composer's key, drawn as search's `/`, only where there is hover (section 8.11): a fine
+ * pointer's, since a touch screen that says it hovers is still a phone's, where the key cap is never
+ * shown, even with a keyboard joined to it.
+ */
 .composer-key {
   display: none;
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .composer-key {
     display: inline-block;
     margin-right: 0;
@@ -2958,12 +2977,15 @@ button.search-hit-body {
   font-weight: 600;
 }
 
-/* Editing an Entry: its marks and controls beside its time, the editor showing the words as typed. */
+/*
+ * Editing an Entry: its marks and controls beside its time, each line of them centred, so the time
+ * lines up with a phone's 44px button. The editor shows the words as typed.
+ */
 
 .entry-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-1) var(--space-3);
   min-height: 32px;
 }
@@ -2977,7 +2999,6 @@ button.quiet.entry-mark {
 /* A Standing Entry's mark, always shown, in ink where the others stay muted. */
 .entry-mark.standing-mark {
   display: inline-flex;
-  align-self: center;
   gap: var(--space-1);
   align-items: center;
   color: var(--ink);
@@ -2985,17 +3006,16 @@ button.quiet.entry-mark {
   font-weight: 600;
 }
 
-/* A menu of actions, opened under its button, at its right edge. */
-.menu {
-  position: relative;
-}
-
+/*
+ * A menu of actions, in the top layer (a popover), so it is above every Entry and column and no
+ * column cuts it off. Menu.tsx sets its top and left from its button: under it at its right edge,
+ * or over it where there is no room under it.
+ */
 .menu-list {
-  position: absolute;
-  top: calc(100% + var(--space-1));
-  right: 0;
-  z-index: 2;
-  display: flex;
+  /* Fixed in the window, as every popover is: its top and left are set where it opens. */
+  inset: auto;
+  margin: 0;
+  overflow: auto;
   flex-direction: column;
   gap: 2px;
   min-width: 180px;
@@ -3003,6 +3023,11 @@ button.quiet.entry-mark {
   border: 1px solid var(--rule);
   border-radius: var(--radius-md);
   background: var(--surface);
+  color: var(--ink);
+}
+
+.menu-list:popover-open {
+  display: flex;
 }
 
 .menu-list [role="menuitem"] {
@@ -3032,7 +3057,6 @@ button.quiet.entry-mark {
  * order of the keyboard, so Tab shows it. On a touch screen, one button at the end of the meta line.
  */
 .entry-head > .menu {
-  align-self: center;
   margin-left: auto;
 }
 
@@ -3048,21 +3072,29 @@ button.quiet.entry-mark {
   border-radius: var(--radius-pill);
   background: var(--surface);
   opacity: 0;
+  /* Not shown, it takes no press either, which would otherwise land on an action no one sees. */
+  pointer-events: none;
 }
 
-.entry:focus-within .entry-actions {
+/*
+ * An Entry holds the focus while its menu is open too: the focus is in the menu then, which is in
+ * the top layer, and Chromium matches :focus-within no further out than a popover.
+ */
+.entry:is(:focus-within, :has(:popover-open)) .entry-actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .entry:hover .entry-actions {
     opacity: 1;
+    pointer-events: auto;
   }
 }
 
 .entry-actions .icon-button {
-  width: 32px;
-  min-height: 32px;
+  width: 36px;
+  min-height: 36px;
   background: none;
 }
 
@@ -3081,7 +3113,10 @@ button.quiet.entry-mark {
   background: none;
 }
 
-/* Beyond a phone, a hairline parts one Entry from the next, and the one hovered or focused sits on inset. */
+/*
+ * Beyond a phone, a hairline parts one Entry from the next, its ends square, and the one hovered or
+ * focused sits on inset with its corners rounded.
+ */
 @media (width >= 720px) {
   .entry-list {
     gap: 0;
@@ -3089,23 +3124,23 @@ button.quiet.entry-mark {
 
   .entry {
     padding: var(--space-4) var(--space-3);
-    border-radius: var(--radius-md);
   }
 
   .entry + .entry:not(.unsent) {
     border-top: 1px solid var(--rule);
   }
 
-  .entry:focus-within {
+  .entry:is(:focus-within, :has(:popover-open)) {
+    border-radius: var(--radius-md);
     background: var(--inset);
   }
 
-  .entry:focus-within:not(.unsent),
-  .entry:focus-within + .entry:not(.unsent) {
+  .entry:is(:focus-within, :has(:popover-open)):not(.unsent),
+  .entry:is(:focus-within, :has(:popover-open)) + .entry:not(.unsent) {
     border-top-color: transparent;
   }
 
-  .entry:focus-within .task {
+  .entry:is(:focus-within, :has(:popover-open)) .task {
     background: var(--surface);
   }
 }
@@ -3113,6 +3148,7 @@ button.quiet.entry-mark {
 /* Hovered, only by a pointer that hovers: a tap on a touch screen leaves no Entry on inset. */
 @media (width >= 720px) and (hover: hover) and (pointer: fine) {
   .entry:hover {
+    border-radius: var(--radius-md);
     background: var(--inset);
   }
 
@@ -3415,6 +3451,11 @@ button.entry-page-add-button {
   font: var(--type-meta);
 }
 
+/* The Journal's status line stays in the page with nothing said, and then takes no room in the foot. */
+.peer-foot > .moved:empty {
+  position: absolute;
+}
+
 /* A Version compared against the current words, as typed: what is gone struck, what came underlined. */
 
 .versions {
@@ -3549,9 +3590,10 @@ a.entry-mark.held-mark {
   font-weight: 400;
 }
 
+/* An Unsent Entry is boxed by a dashed hairline, with an Entry's own corner. */
 .entry.unsent {
   border: 1px dashed var(--rule);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
 }
 
 .entry-mark.unsent-mark,

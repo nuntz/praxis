@@ -70,6 +70,9 @@ test("an Entry recorded with no network sits Unsent in the Journal, can be edite
   const unsent = journal.getByTestId("unsent-entry");
   await expect(unsent).toHaveCount(1);
   await expect(unsent.getByText("Unsent", { exact: true })).toBeVisible();
+  // A dashed hairline round it, with an Entry's own corner.
+  await expect(unsent).toHaveCSS("border-top-style", "dashed");
+  await expect(unsent).toHaveCSS("border-top-left-radius", "14px");
   await expect(composer).toHaveValue("");
   await expect(unsentCount).toBeVisible();
   // Its Inline Task is part of its words, and not yet a Task.
@@ -106,6 +109,27 @@ test("an Entry recorded with no network sits Unsent in the Journal, can be edite
   ).toBeVisible();
   const { items } = await callContextTool(page, id, "list_entries", {});
   expect(items).toHaveLength(1);
+});
+
+test("an Unsent Entry discarded is gone with nothing said, since it never reached Praxis and is not in the Trash", async ({
+  page,
+}, testInfo) => {
+  await contextWith(page, testInfo, []);
+  await page.goto("/");
+  const { journal, composer } = await openJournal(page, testInfo);
+  await expect(composer).toHaveAccessibleName(/^Record an Entry in Lift /);
+  const line = journal.getByRole("status");
+
+  await page.context().setOffline(true);
+  await composer.fill("Thought of on the stairs");
+  await journal.getByRole("button", { name: "Record" }).click();
+  const unsent = journal.getByTestId("unsent-entry");
+  await expect(unsent).toHaveCount(1);
+
+  await (await entryAction(unsent, "Discard", testInfo)).click();
+  await expect(unsent).toHaveCount(0);
+  await expect(line).toHaveText("");
+  await page.context().setOffline(false);
 });
 
 test("a Task finished with no network leaves Attention marked Unsent, can be undone, and is sent", async ({

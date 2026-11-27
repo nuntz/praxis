@@ -9,8 +9,10 @@ import {
 import Check from "lucide-solid/icons/check";
 import { createEffect, createSignal, onCleanup, Show, untrack } from "solid-js";
 import { keepDraft, type Pick, takeCaret, takeDraft, takeShared, withShared } from "./draft.ts";
+import { growWithWords } from "./grow-with-words.ts";
 import { ComposerKey, JOURNAL_COMPOSER } from "./keys.tsx";
 import { latestRead } from "./latest-read.ts";
+import { pointerHovers } from "./media.ts";
 import { type Aim, putTasksMadeIn, takeAim } from "./next-task.ts";
 import {
   type Choice,
@@ -251,6 +253,10 @@ export function Composer(props: {
         }}
         onSubmit={(event) => {
           event.preventDefault();
+          // Record is disabled while the Entry is on its way, which would leave the focus on the
+          // page: where the pointer hovers it goes back to the words, as Ctrl or Cmd and Enter
+          // keeps it. On a touch screen it does not, so the keyboard closes.
+          if (pointerHovers()) field.focus();
           void record();
         }}
       >
@@ -283,7 +289,10 @@ export function Composer(props: {
         </Show>
         <div class="composer-row">
           <textarea
-            ref={field}
+            ref={(element) => {
+              field = element;
+              growWithWords(element, () => [words(), props.followingUp, aim()]);
+            }}
             id={JOURNAL_COMPOSER}
             rows={2}
             aria-keyshortcuts="r"

@@ -81,3 +81,65 @@ test("the person deletes an Entry, sees it and its Task in the Trash, and restor
     `#${title}`,
   );
 });
+
+test("an Entry deleted in the Journal is said with Restore, which has the focus and brings it back with its Task", async ({
+  page,
+}, testInfo) => {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const { id } = await makeContext(page, {
+    name: `Hallway ${testInfo.project.name} ${tag}`,
+    time_zone: "UTC",
+    accent: "teal",
+  });
+  await lastShown(page, id);
+  const [summary, title] = [`Paint the hall ${tag}`, `Buy paint ${tag}`];
+  const { record: entry } = await callContextTool(page, id, "record_entry", {
+    words: `${summary}\nTwo coats, the second after a day`,
+    tasks: [{ title }],
+  });
+
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const shown = journal.locator(`[id="entry-${entry.id}"]`);
+  await expect(shown.getByRole("checkbox", { name: title, exact: true })).toBeVisible();
+  // The status line is in the page before anything is said, and only its words change, so a
+  // screen reader announces each.
+  const line = journal.getByRole("status");
+  await expect(line).toHaveText("");
+  const element = await line.elementHandle();
+  const stillThere = () => element?.evaluate((each) => each.isConnected);
+
+  const deleting = page.waitForResponse(/\/tools\/delete_entry$/);
+  await (await entryAction(shown, "Delete", testInfo)).click();
+  expect((await (await deleting).json()).ok).toBe(true);
+  await expect(shown).toHaveCount(0);
+  // Said as a Follow-up names it, by its summary, with the way back, which has the focus.
+  await expect(line).toHaveText(`“${summary}” is in the Trash. Restore`);
+  const restore = line.getByRole("button", { name: "Restore", exact: true });
+  await expect(restore).toBeFocused();
+  expect(await stillThere()).toBe(true);
+
+  // With no network it is refused as Attention's Restore is, and stays said.
+  await page.context().setOffline(true);
+  await page.keyboard.press("Enter");
+  await expect(journal.getByRole("alert")).toHaveText(
+    "Praxis could not be reached: this needs the network.",
+  );
+  await expect(line).toHaveText(`“${summary}” is in the Trash. Restore`);
+  await expect(shown).toHaveCount(0);
+  await page.context().setOffline(false);
+
+  const restoring = page.waitForResponse(/\/tools\/restore$/);
+  await restore.click();
+  expect((await (await restoring).json()).ok).toBe(true);
+  // Back with what went with it, and the focus on it, as the line it was said on empties.
+  await expect(shown.getByRole("checkbox", { name: title, exact: true })).toBeVisible();
+  await expect(shown).toBeFocused();
+  await expect(line).toHaveText("");
+  await expect(journal.getByRole("alert")).toHaveCount(0);
+  expect(await stillThere()).toBe(true);
+
+  // Deleted again, the journey ends on the line saying so, as the accessibility check sees it.
+  await (await entryAction(shown, "Delete", testInfo)).click();
+  await expect(restore).toBeFocused();
+});
