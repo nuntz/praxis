@@ -23,6 +23,47 @@ async function attention(page: Page, testInfo: TestInfo) {
   return page.getByRole("region", { name: "Attention", exact: true });
 }
 
+test("each standing Notice in Attention is a card titled by its kind, its words under the title", async ({
+  page,
+}, testInfo) => {
+  const since = new Date().toISOString();
+  const titled: [StandingNotice, string][] = [
+    [{ kind: "key_refused", since }, "Model key refused"],
+    [{ kind: "voice_key_refused", since }, "Voice key refused"],
+    [{ kind: "cap_reached", spent: 20, cap: 20 }, "Spend cap reached"],
+    [{ kind: "nearing_cap", spent: 17, cap: 20 }, "Spend near its cap"],
+    [
+      { kind: "clock_failed", clock: "brief", failure: "model_unavailable", since },
+      "Brief not run",
+    ],
+    [{ kind: "clock_failed", clock: "review", failure: "key_refused", since }, "Review not run"],
+    [{ kind: "no_backup", last_made: null }, "No recent Backup"],
+    [
+      { kind: "context_stuck", context: "Elsewhere", release: "r1", backup_kept: null },
+      "Elsewhere stuck on an upgrade",
+    ],
+  ];
+  await noticesAre(
+    page,
+    titled.map(([notice]) => notice),
+  );
+  await page.goto("/");
+  const shown = await attention(page, testInfo);
+  const notices = shown.getByTestId("standing-notice");
+  await expect(notices).toHaveCount(titled.length);
+
+  for (const [at, [notice, title]] of titled.entries()) {
+    const card = notices.nth(at);
+    // The card is the status, named by its title, so the title is what is heard first.
+    await expect(
+      shown.getByRole("status", { name: title, exact: true }),
+      notice.kind,
+    ).toBeVisible();
+    await expect(card.getByTestId("standing-notice-title"), notice.kind).toHaveText(title);
+    await expect(card.getByTestId("standing-notice-words"), notice.kind).not.toBeEmpty();
+  }
+});
+
 test("the no-Backup Notice in Attention opens Backups and Export in settings", async ({
   page,
 }, testInfo) => {
@@ -68,7 +109,7 @@ test("a Brief whose request the provider refused says so in Attention, and not t
   await page.goto("/");
   const notice = (await attention(page, testInfo)).getByTestId("standing-notice");
 
-  await expect(notice).toHaveText(
+  await expect(notice.getByTestId("standing-notice-words")).toHaveText(
     /^The Brief could not run since .+: the model's provider refused Praxis's request\. It is not tried again: the next one runs at its time\.\s*$/,
   );
   await expect(notice).not.toContainText("could not be reached");
@@ -90,7 +131,7 @@ test("a Review whose key the provider refused says so in Attention, and not that
   const notice = (await attention(page, testInfo)).getByTestId("standing-notice");
 
   // Where the key is set is the refused key's own Notice to say, not this one's.
-  await expect(notice).toHaveText(
+  await expect(notice.getByTestId("standing-notice-words")).toHaveText(
     /^The Review could not run since .+: the model's provider refused this Deployment's key\. It is not tried again: the next one runs at its time\.\s*$/,
   );
 });

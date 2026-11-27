@@ -4,7 +4,8 @@ import {
   type SpendNotice,
   type StandingNotice,
 } from "@praxis/domain";
-import { createSignal, For, type JSX } from "solid-js";
+import Info from "lucide-solid/icons/info";
+import { createSignal, createUniqueId, For, type JSX } from "solid-js";
 import { deviceTimeZone } from "./ContextSettings.tsx";
 import { latestRead } from "./latest-read.ts";
 import { CapLink, SettingsLink } from "./SettingsLink.tsx";
@@ -51,19 +52,55 @@ export function followNotices(callTool: CallTool): () => void {
 }
 
 /**
- * Each standing Notice, as a line of its own, leading to the section of Settings that deals with
- * it, where there is one.
+ * Each standing Notice, as a card on `notice`: the information icon beside a bold title, its words
+ * under the title, and the way to the section of Settings that deals with it, where there is one.
+ * The card is a status named by its title, so the title is heard before the words.
  */
 export function StandingNotices() {
+  return <For each={notices()}>{(notice) => <StandingNoticeCard notice={notice} />}</For>;
+}
+
+function StandingNoticeCard(props: { notice: StandingNotice }) {
+  const title = createUniqueId();
   return (
-    <For each={notices()}>
-      {(notice) => (
-        <p class="notice" role="status" data-testid="standing-notice">
-          {noticeWords(notice)} {noticeLink(notice)}
+    <div
+      class="standing-notice"
+      role="status"
+      aria-labelledby={title}
+      data-testid="standing-notice"
+    >
+      <Info class="standing-notice-icon" size={18} aria-hidden="true" />
+      <div class="standing-notice-text">
+        <p id={title} class="standing-notice-title" data-testid="standing-notice-title">
+          {noticeTitle(props.notice)}
         </p>
-      )}
-    </For>
+        <p class="standing-notice-words" data-testid="standing-notice-words">
+          {noticeWords(props.notice)}
+        </p>
+        {noticeLink(props.notice)}
+      </div>
+    </div>
   );
+}
+
+/** A standing Notice's title: what is wrong, in a few words, with its words under it to say more. */
+function noticeTitle(notice: StandingNotice): string {
+  switch (notice.kind) {
+    case "key_refused":
+      return "Model key refused";
+    case "voice_key_refused":
+      return "Voice key refused";
+    case "cap_reached":
+      return "Spend cap reached";
+    case "nearing_cap":
+      return "Spend near its cap";
+    case "clock_failed":
+      return notice.clock === "brief" ? "Brief not run" : "Review not run";
+    case "no_backup":
+      return "No recent Backup";
+    case "context_stuck":
+      return `${notice.context} stuck on an upgrade`;
+  }
 }
 
 /**

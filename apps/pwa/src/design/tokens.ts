@@ -32,8 +32,9 @@ export const colors = {
   /** Secondary text on ground, surface and inset, and the border of a Task's round control. */
   muted: { light: "#596070", dark: "#A3AAB8" },
   /**
-   * Overdue, and a Project with no open Task. Text on surface and inset, always with words. Also
-   * the solid fill of the End Call button, under on-accent, its one fill.
+   * Overdue, a Project with no open Task, and a refusal the screen shows in words. Text on surface
+   * and inset, always with words. Also the solid fill of the End Call button, under on-accent, its
+   * one fill.
    */
   warn: { light: "#B42318", dark: "#FF9388" },
   /** The ground of a standing Notice. Text on it is ink. */
