@@ -40,6 +40,45 @@ p {
   opacity: 1;
 }
 
+/*
+ * The main screen's skip links, its first Tab stops, at the start of the top bar: out of sight until
+ * one is focused, then drawn over the whole bar from its left on `surface`, with the focus ring
+ * everything takes (section 8.11). Over the whole of it, no control in the bar is left half under
+ * the link, and each stays in reach of Tab, showing again as the link loses the focus. The bar is
+ * 52px high, 60px on a phone, so the link is a touch target there.
+ */
+.skip-links {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.skip-links a {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--type-label);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.skip-links a:not(:focus) {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -71,6 +110,19 @@ button:disabled {
   cursor: default;
 }
 
+/*
+ * A composer's send with nothing to send, which is most of the time, is at rest and not broken: the
+ * accent's icon (and Record's word) on the composer's tint, at full opacity, with no fill of its own.
+ * With something to send it turns the solid accent, as a primary is, and while that is being sent
+ * it is disabled as any control is.
+ */
+button.record-button[data-nothing-to-send],
+button.send-button[data-nothing-to-send] {
+  opacity: 1;
+  background: none;
+  color: var(--accent);
+}
+
 /* A quiet button is words in ink: nothing but the primary takes the accent. */
 button.quiet {
   min-height: 24px;
@@ -82,7 +134,9 @@ button.quiet {
   text-underline-offset: 3px;
 }
 
+/* A circle: in a row short of room, as the top bar is on a phone, it never gives up its width. */
 .icon-button {
+  flex-shrink: 0;
   width: 40px;
   padding: 0;
   background: var(--surface);
@@ -121,6 +175,7 @@ button.quiet {
 }
 
 .top-bar {
+  position: relative;
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -225,6 +280,13 @@ button.quiet {
 .attention-toggle {
   background: var(--surface);
   color: var(--ink);
+}
+
+/* Open, it sits as the current phone tab does: on inset, in ink at 700 (section 8.11). */
+.attention-toggle[aria-expanded="true"] {
+  background: var(--inset);
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .settings {
@@ -822,9 +884,30 @@ input[type="checkbox"].switch:disabled {
   letter-spacing: -0.01em;
 }
 
+/* What is beside the title sits at the header's end, with anything after it, such as a Close. */
+.peer-aside {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.peer-aside:empty {
+  display: none;
+}
+
 .peer-note {
   color: var(--muted);
   font: var(--type-meta);
+}
+
+/* A Journal or a Conversation with nothing in it says so, centred in the column (section 8.1). */
+.peer-empty {
+  align-self: stretch;
+  margin: auto 0;
+  color: var(--muted);
+  text-align: center;
 }
 
 .peer-body {
@@ -834,8 +917,18 @@ input[type="checkbox"].switch:disabled {
   align-items: flex-start;
   gap: var(--space-3);
   min-height: 0;
-  padding: var(--space-1) var(--space-5) var(--space-5);
+  /* Its hairline's 1px comes out of the space above what it holds, so nothing moves as it shows. */
+  padding: calc(var(--space-1) - 1px) var(--space-5) var(--space-5);
+  border-top: 1px solid transparent;
   overflow-y: auto;
+}
+
+/*
+ * Scrolled away from its top, what the column holds is cut under its header, or under what stands
+ * under the header, such as the search's chips: the cut has an edge, the width of the column.
+ */
+.peer-body[data-scrolled] {
+  border-top-color: var(--rule);
 }
 
 .peer-foot {
@@ -863,14 +956,24 @@ button.jump-to-latest {
 }
 
 .tabs,
-.attention-toggle {
+.attention-toggle,
+.attention-close {
   display: none;
 }
 
-/* In between: the Journal and the Conversation, with Attention opened from the top bar over them. */
+/*
+ * In between: the Journal and the Conversation, with Attention opened from the top bar over them
+ * as a layer, with a Close of its own. The Conversation takes up to 360px and is never wider than
+ * the Journal: both grow from nothing, and it stops at 360px.
+ */
 @media (720px <= width < 1200px) {
-  .attention-toggle {
+  .attention-toggle,
+  .attention-close {
     display: inline-flex;
+  }
+
+  .attention-close {
+    flex-shrink: 0;
   }
 
   .peer.attention {
@@ -886,7 +989,8 @@ button.jump-to-latest {
   }
 
   .peer.conversation {
-    flex-basis: 360px;
+    flex: 1 1 0;
+    max-width: 360px;
   }
 }
 
@@ -1749,9 +1853,36 @@ button.inspector-choice > .inspector-choice-check {
   outline-offset: 2px;
 }
 
+/*
+ * A label too long for its line, as a Context's long name makes it, is cut short, never the send,
+ * nor the key at its end.
+ */
 .composer-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
   color: var(--accent);
   font: var(--type-label);
+}
+
+.composer-label-words {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* At rest, a composer's key, drawn as search's `/`, only where there is hover (section 8.11). */
+.composer-key {
+  display: none;
+}
+
+@media (hover: hover) {
+  .composer-key {
+    display: inline-block;
+    margin-right: 0;
+  }
 }
 
 .composer-row {
@@ -1780,35 +1911,36 @@ button.inspector-choice > .inspector-choice-check {
 /*
  * At rest, with nothing written and the focus elsewhere, a composer is one line: its label where
  * the words will go, its send at the end. Focused, it opens to its two lines, at once: it is
- * reached many times a day, so it does not animate (section 8.2).
+ * reached many times a day, so it does not animate (section 8.2). The label and the field share
+ * the first track, which gives way to the send's, so a narrow column cuts the label short first.
  */
 .composer:where([data-folded]) {
-  position: relative;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  column-gap: var(--space-3);
   padding: 6px 6px 6px var(--space-4);
 }
 
+.composer:where([data-folded]) .composer-row {
+  display: contents;
+}
+
 .composer:where([data-folded]) .composer-label {
-  position: absolute;
-  top: 50%;
-  left: var(--space-4);
-  transform: translateY(-50%);
+  grid-area: 1 / 1;
   pointer-events: none;
 }
 
-.composer:where([data-folded]) .composer-row {
-  flex: 1;
-  align-items: center;
-}
-
 .composer:where([data-folded]) textarea {
+  grid-area: 1 / 1;
   height: 40px;
 }
 
 /* The two sends: Record a pill with its check and its word, Send a round button with its arrow. */
 button.record-button {
+  flex-shrink: 0;
   padding: 0 var(--space-4);
+  white-space: nowrap;
 }
 
 button.send-button {
@@ -1817,11 +1949,17 @@ button.send-button {
   padding: 0;
 }
 
-/* A Call starts from a primary pill at the end of the Conversation's header. */
+/*
+ * A Call starts from a neutral pill at the end of the Conversation's header: its rarest act, so it
+ * never takes the accent from the Conversation's one primary, its Send. Its rule gives it an edge
+ * on the panel's surface, where tone alone is not enough.
+ */
 button.call-button {
   flex-shrink: 0;
-  min-height: 44px;
   padding: 0 18px 0 14px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 /* Shown but not pressable, offline or at the cap: it stays focusable, so its reason is heard. */
@@ -2215,6 +2353,12 @@ button.call-control {
 
 .search-field:focus-within {
   border-color: var(--ink);
+}
+
+/* The focus outline is drawn round the whole field, since its input draws none of its own. */
+.search-field:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
 .search-field:has(input:disabled) {
@@ -3299,11 +3443,21 @@ a.entry-mark.held-mark {
     padding: 0 var(--space-4);
   }
 
-  .wordmark {
-    gap: var(--space-2);
+  /* The mark alone, still named Praxis, so the Context switcher has the row's width. */
+  .wordmark-word {
+    /* As .visually-hidden, which the word cannot carry since it is shown from 720px up. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
-  /* A touch target is at least 44px on a phone. A Task's control is reached through its label. */
+  /*
+   * A touch target is at least 44px on a phone. A Task's control is reached through its label,
+   * except in Attention's rows, where the control itself is the 44px (below).
+   */
   .context,
   .icon-button,
   button,
@@ -3570,8 +3724,7 @@ a.entry-mark.held-mark {
     min-width: 18px;
     height: 18px;
     padding: 0 5px;
-    font-size: 11px;
-    line-height: 18px;
+    font: var(--type-caption);
   }
 
   .tabs .unread-mark {
@@ -3624,6 +3777,47 @@ a.entry-mark.held-mark {
     min-height: 48px;
   }
 
+  /*
+   * A Task's control is a 44px target, its 20px circle drawn at the centre, where it sat before,
+   * and the row's open button begins where it ends. The checkbox itself is the 44px, not only its
+   * label: a phone's browser moves a tap on a bare label to the nearest control, the open button.
+   */
+  .task.attention-row {
+    gap: 0;
+    padding-left: 0;
+  }
+
+  .attention-row-control {
+    justify-content: center;
+    width: 44px;
+  }
+
+  .attention-row-control input[type="checkbox"],
+  .attention-row-control input[type="checkbox"]:checked {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    background: none;
+    /* Its ring 2px off the circle drawn inside it, not off the whole target. */
+    outline-offset: -10px;
+  }
+
+  .attention-row-control input[type="checkbox"]::after {
+    content: "";
+    position: absolute;
+    /* 12px in from each side of the 44px: the 20px circle, its border inside it. */
+    inset: 12px;
+    box-sizing: border-box;
+    border: 2px solid var(--muted);
+    border-radius: 50%;
+  }
+
+  .attention-row-control input[type="checkbox"]:checked::after {
+    border-color: var(--ink);
+    background: radial-gradient(var(--ink) 0 4px, transparent 5px);
+  }
+
   .inspector-head {
     padding: var(--space-2) var(--space-2) 0;
   }
@@ -3646,17 +3840,6 @@ a.entry-mark.held-mark {
 
   button.send-button {
     width: 44px;
-  }
-
-  /* The Call button is the phone icon alone, round, and the Call's controls are larger. */
-  button.call-button {
-    width: 48px;
-    min-height: 48px;
-    padding: 0;
-  }
-
-  .call-button-word {
-    display: none;
   }
 
   .call-unavailable {

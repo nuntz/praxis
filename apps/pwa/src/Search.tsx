@@ -12,6 +12,7 @@ import X from "lucide-solid/icons/x";
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { todayIn } from "./days.tsx";
+import { screenKey } from "./keys.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { onPhone } from "./media.ts";
@@ -313,11 +314,11 @@ export function createSearch(props: {
     field?.focus();
   }
 
-  // On a desktop, `/` puts the cursor in the field, unless it is typed where it is a `/`.
+  // Wider than a phone, `/` puts the cursor in the field, unless it is typed where it is a `/`, or
+  // the field is out of reach, under Attention opened in between.
   const onSlash = (event: KeyboardEvent) => {
-    if (event.key !== "/" || event.defaultPrevented || event.ctrlKey || event.metaKey) return;
-    if (onPhone() || !online() || typedInto(event.target)) return;
-    if (!field?.checkVisibility()) return;
+    if (event.key !== "/" || !screenKey(event) || onPhone() || !online()) return;
+    if (!field?.checkVisibility() || field.closest("[inert]")) return;
     event.preventDefault();
     field.focus();
   };
@@ -525,12 +526,6 @@ export function createSearch(props: {
     Field,
     Found,
   };
-}
-
-/** Whether a key goes to where it is typed as text: a field, a composer or the like. */
-function typedInto(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || target.closest("input, textarea, select") !== null;
 }
 
 /** What a search asks: its words, and what its chips narrow it to. */

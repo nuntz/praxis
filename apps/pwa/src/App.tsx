@@ -8,6 +8,7 @@ import BookOpen from "lucide-solid/icons/book-open";
 import Inbox from "lucide-solid/icons/inbox";
 import MessageCircle from "lucide-solid/icons/message-circle";
 import SettingsIcon from "lucide-solid/icons/settings";
+import X from "lucide-solid/icons/x";
 import {
   createEffect,
   createMemo,
@@ -22,7 +23,7 @@ import { Attention } from "./Attention.tsx";
 import { deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
 import { NewContext } from "./Contexts.tsx";
-import { Conversation, unreadBriefs } from "./Conversation.tsx";
+import { Conversation, conversationComposerShown, unreadBriefs } from "./Conversation.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
@@ -30,14 +31,23 @@ import { receiveShared, wantComposer } from "./draft.ts";
 import { RestoreExport } from "./Export.tsx";
 import { CurrentHeldChanges, followHeldChanges } from "./HeldChanges.tsx";
 import { Journal } from "./Journal.tsx";
+import {
+  CONVERSATION_COMPOSER,
+  followScreenKeys,
+  JOURNAL_COMPOSER,
+  type KeyTargets,
+  SkipLinks,
+} from "./keys.tsx";
 import { latestRead } from "./latest-read.ts";
 import { Live, socketOpener } from "./live.ts";
 import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
 import { CurrentMoveTargets } from "./Move.tsx";
+import { inBetween } from "./media.ts";
 import { followNotices } from "./Notices.tsx";
 import { contextCopy, copyFetchedAt, fetchIfMissing, keepCopyFresh } from "./offline-copy.ts";
 import { online } from "./online.ts";
 import { followAddress, leaveSettings, openSettings, place } from "./place.ts";
+import { afterPress } from "./press.ts";
 import { SettingsBar, SettingsScreen } from "./Settings.tsx";
 import { followSpend } from "./Spend.tsx";
 import { readStored, store } from "./stored.ts";
@@ -73,8 +83,9 @@ const CONTEXTS_LAST_READ = "praxis.contexts";
  * peers (section 8.1, ADR 0022). Three columns on a desktop; in between, the Journal and the
  * Conversation, with Attention opened from the top bar; on a phone, three tabs, opening on
  * Attention. The widths are the stylesheet's; this holds which Context is current, which tab is
- * shown and whether Attention is open. Settings takes the main screen's place at its own address
- * (section 8.6), with the main screen kept underneath as it was left.
+ * shown and whether Attention is open: in between, a layer over the other two, which are inert
+ * while it is. Settings takes the main screen's place at its own address (section 8.6), with the
+ * main screen kept underneath as it was left.
  */
 export function App() {
   // The Deployment's Contexts, once read. One is current: the one this browser last showed, or
@@ -129,13 +140,89 @@ export function App() {
   };
   const count = () => refusedCount() + dueCount() + heldCount();
   let attentionButton!: HTMLButtonElement;
+  let attentionHeading: HTMLHeadingElement | undefined;
 
-  /** Opened from the top bar in between, Attention is put away with Escape, from it or its button. */
-  function putAttentionAway(event: KeyboardEvent) {
-    if (event.key !== "Escape" || !attentionOpen()) return;
+  // In between, Attention open is a layer: the Journal and the Conversation under it are inert, so
+  // Tab, a pointer and a screen reader reach only Attention and the top bar. A press outside it
+  // closes it, and they stay inert until that press is done: on a touch screen the press's mouse
+  // events and its click are aimed once the finger lifts, and would land on what is under it.
+  const layered = () => attentionOpen() && inBetween();
+  const [pressedOut, setPressedOut] = createSignal(false);
+  const underLayer = () => layered() || pressedOut();
+
+  /**
+   * What in Attention takes the focus as it is brought into view: a Task's or Project's page open
+   * over it, by its Back, since the page covers the column, header and all; else its heading.
+   */
+  function focusAttention() {
+    const page = document.querySelector<HTMLElement>("#attention .inspector-back");
+    (page ?? attentionHeading)?.focus();
+  }
+
+  /** Open Attention from the top bar, the focus on its heading, read out with its count. */
+  function openAttention() {
+    setAttentionOpen(true);
+    focusAttention();
+  }
+
+  /** Put Attention away, by its button, its Close or Escape, the focus back on its button. */
+  function closeAttention() {
     setAttentionOpen(false);
     attentionButton.focus();
   }
+
+  /** Escape puts Attention away only where it is a layer: elsewhere its button is not shown. */
+  function putAttentionAway(event: KeyboardEvent) {
+    if (event.key !== "Escape" || !layered()) return;
+    closeAttention();
+  }
+
+  createEffect(() => {
+    if (!layered()) return;
+    const outside = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("#attention, .top-bar")) return;
+      setPressedOut(true);
+      setAttentionOpen(false);
+      afterPress(() => setPressedOut(false));
+    };
+    document.addEventListener("pointerdown", outside, true);
+    onCleanup(() => document.removeEventListener("pointerdown", outside, true));
+  });
+
+  /**
+   * Give a composer the caret: its column shown first, on a phone its tab and in between with
+   * Attention shut, since a field in a hidden tab or under the layer takes no focus. Whether it had
+   * one to give.
+   */
+  function toComposer(column: "journal" | "conversation", id: string): boolean {
+    const field = document.getElementById(id);
+    if (!field) return false;
+    setTab(column);
+    setAttentionOpen(false);
+    setPressedOut(false);
+    field.focus();
+    return document.activeElement === field;
+  }
+
+  /**
+   * Where the skip links and the keys lead (section 8.11). Attention opens in between, as from its
+   * button; on a phone its tab shows first; on a desktop it is there, and its heading takes the focus.
+   */
+  const keyTargets: KeyTargets = {
+    toJournalComposer: () => toComposer("journal", JOURNAL_COMPOSER),
+    toConversationComposer: () => toComposer("conversation", CONVERSATION_COMPOSER),
+    toAttention() {
+      if (!attentionHeading) return false;
+      if (inBetween()) openAttention();
+      else {
+        setTab("attention");
+        focusAttention();
+      }
+      return true;
+    },
+  };
+  onMount(() => followScreenKeys(keyTargets, () => current() !== null && !inSettings()));
 
   /**
    * Bring a record shown in the Journal into view, from a change a Run made: on a phone, the
@@ -156,7 +243,7 @@ export function App() {
    */
   function showHeldChange(anchor: string) {
     setTab("attention");
-    setAttentionOpen(true);
+    if (inBetween()) setAttentionOpen(true);
     requestAnimationFrame(() => {
       const shown = document.getElementById(anchor);
       shown?.scrollIntoView({ block: "center" });
@@ -182,7 +269,9 @@ export function App() {
     }),
   );
 
+  /** Show another Context, with Attention shut. */
   function switchTo(id: string) {
+    setAttentionOpen(false);
     setChosen(id);
     store(LAST_SHOWN, id);
   }
@@ -400,12 +489,19 @@ export function App() {
       data-attention={attentionOpen() ? "open" : "shut"}
     >
       <header class="top-bar">
+        <Show when={current() && !inSettings()}>
+          <SkipLinks
+            targets={keyTargets}
+            attentionOpens={inBetween()}
+            conversationComposerShown={conversationComposerShown()}
+          />
+        </Show>
         <Show
           when={inSettings() ? current() : null}
           fallback={
             <h1 class="wordmark">
               <Mark />
-              Praxis
+              <span class="wordmark-word">Praxis</span>
             </h1>
           }
         >
@@ -413,7 +509,12 @@ export function App() {
         </Show>
         <Show when={current()}>
           {(shown) => (
-            <ContextSwitcher current={shown()} contexts={contexts() ?? []} onSwitch={switchTo} />
+            <ContextSwitcher
+              current={shown()}
+              contexts={contexts() ?? []}
+              onOpen={() => setAttentionOpen(false)}
+              onSwitch={switchTo}
+            />
           )}
         </Show>
         <Show when={current() && !inSettings()}>
@@ -423,7 +524,9 @@ export function App() {
             class="attention-toggle"
             aria-expanded={attentionOpen()}
             aria-controls="attention"
-            onClick={() => setAttentionOpen((open) => !open)}
+            aria-keyshortcuts="a"
+            title="Attention (a)"
+            onClick={() => (attentionOpen() ? closeAttention() : openAttention())}
             onKeyDown={putAttentionAway}
           >
             Attention
@@ -440,7 +543,10 @@ export function App() {
             type="button"
             class="icon-button"
             aria-label="Settings"
-            onClick={() => openSettings()}
+            onClick={() => {
+              setAttentionOpen(false);
+              openSettings();
+            }}
           >
             <SettingsIcon size={18} aria-hidden="true" />
           </button>
@@ -505,6 +611,21 @@ export function App() {
                           id="attention"
                           title="Attention"
                           aside={<AttentionCount count={count()} />}
+                          end={
+                            <button
+                              type="button"
+                              class="icon-button attention-close"
+                              aria-label="Close Attention"
+                              title="Close Attention"
+                              onClick={closeAttention}
+                            >
+                              <X size={18} aria-hidden="true" />
+                            </button>
+                          }
+                          headingRef={(heading) => {
+                            attentionHeading = heading;
+                          }}
+                          headingKey={inBetween() ? undefined : "a"}
                           onKeyDown={putAttentionAway}
                         >
                           <Show when={timeZone()} keyed>
@@ -514,7 +635,7 @@ export function App() {
                         {/* Today and the Entries' times follow the time zone, so a new one reads afresh,
                       inside a column that stays: the region is the same one before the zone is read
                       and after. */}
-                        <Peer id="journal" title="Journal">
+                        <Peer id="journal" title="Journal" inert={underLayer()}>
                           <Show when={timeZone()} keyed>
                             {(zone) => (
                               <Journal
@@ -530,6 +651,7 @@ export function App() {
                           contextName={current()?.name}
                           timeZone={timeZone()}
                           onShowRecord={showRecord}
+                          inert={underLayer()}
                         />
                       </main>
                       <nav class="tabs" aria-label="Columns" hidden={inSettings()}>

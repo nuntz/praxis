@@ -9,6 +9,7 @@ import {
 import Check from "lucide-solid/icons/check";
 import { createEffect, createSignal, onCleanup, Show, untrack } from "solid-js";
 import { keepDraft, type Pick, takeCaret, takeDraft, takeShared, withShared } from "./draft.ts";
+import { ComposerKey, JOURNAL_COMPOSER } from "./keys.tsx";
 import { latestRead } from "./latest-read.ts";
 import {
   type Choice,
@@ -236,8 +237,11 @@ export function Composer(props: {
         }}
       >
         {/* Colour never carries the Context alone: the composer names it. */}
-        <label for="new-entry" class="composer-label">
-          {props.contextName ? `Record an Entry in ${props.contextName}` : "Record an Entry"}
+        <label for={JOURNAL_COMPOSER} class="composer-label">
+          <span class="composer-label-words">
+            {props.contextName ? `Record an Entry in ${props.contextName}` : "Record an Entry"}
+          </span>
+          <ComposerKey shown={folded()} letter="r" />
         </label>
         <Show when={props.followingUp}>
           {(earlier) => (
@@ -252,8 +256,9 @@ export function Composer(props: {
         <div class="composer-row">
           <textarea
             ref={field}
-            id="new-entry"
+            id={JOURNAL_COMPOSER}
             rows={2}
+            aria-keyshortcuts="r"
             value={words()}
             aria-autocomplete="list"
             aria-controls={open() ? "link-picker" : undefined}
@@ -269,7 +274,12 @@ export function Composer(props: {
             onClick={look}
             onBlur={shutPicker}
           />
-          <button type="submit" class="record-button" disabled={!canRecord()}>
+          <button
+            type="submit"
+            class="record-button"
+            disabled={!canRecord()}
+            data-nothing-to-send={words().trim() === "" ? "" : undefined}
+          >
             <Check size={16} aria-hidden="true" />
             Record
           </button>

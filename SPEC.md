@@ -594,13 +594,15 @@ Three peers, none hosting the others: **Attention**, the **Journal** and the **C
 | Width | Layout |
 |---|---|
 | Desktop | Three columns: Attention left, Journal middle, Conversation right. |
-| In between | Journal and Conversation side by side. Attention is a column opened from a button in the top bar that carries its count. |
+| In between | Journal and Conversation side by side, the Conversation never wider than the Journal. Attention is a layer over them, opened from a button in the top bar that carries its count. |
 | Phone | Three bottom tabs: Attention, Journal, Agent. It opens on Attention. |
 
 - The Context switcher is in the top bar at every width. Settings opens from the top bar too, as a screen of its own (section 8.6).
+- **Attention in between.** Opening it moves the focus to its heading, read out with its count. While it is open the Journal and the Conversation are inert, out of reach of Tab, a pointer and a screen reader, and only Attention and the top bar are live. A press on either closes it and does nothing else. Its Close, Escape and its button each close it and return the focus to its button; `r` and `m` close it and give their composer the caret (section 8.11). The Context switcher and Settings close it first, then do what they do, so a Context switched to shows with Attention shut. A Task's or a Project's page pushed inside it goes back with Escape, as at any width.
 - A change the Agent makes shows in the other two columns as it happens, patched from its Effects.
 - **The newest is where the person types.** The Journal and the Conversation keep time order, oldest first, and open at their newest, beside their composer. They stay there as more arrives. Scrolled away from it, a column stays where the person is, and a pill above its composer, "Jump to latest" with a count of what arrived, takes them back. The person's own send always brings what they sent into view.
 - **Days.** Both are parted into days, "Today", "Yesterday", then the weekday and the date, by the Context's time zone, the zone their times are shown in.
+- **Empty.** A Journal with no Entries says "Nothing recorded in *the Context's name* yet.", and a Conversation with no Messages, cleared ones included, "Nothing said to the Agent in *the Context's name* yet.", each in one line centred in the column. With no network the Conversation shows only that it needs one (section 8.8), and a search that finds nothing says so in its own words (section 8.4). Attention with nothing in it says "Nothing is open to act on."
 
 ### 8.2 Composers
 
@@ -692,7 +694,7 @@ The column is composed by the screen from four sources, in this order:
 
 - Every Message, scrollable to the start, opening at the newest (section 8.1).
 - The Conversation's header holds its title and the Call button alone: its composer names the Agent and the Context.
-- **The Call button** sits in the Conversation's header: a phone icon and "Call", and on a phone the icon alone. It is there wherever a Call can be offered (section 6). Offline, or at the cap, it is shown but cannot be pressed, and says why. In a Call the header says so, with the time so far, and the composer gives way to Mute and End, End in `warn`.
+- **The Call button** sits in the Conversation's header: a phone icon and "Call", on a phone too, a neutral pill that leaves the accent to the Conversation's Send. It is there wherever a Call can be offered (section 6). Offline, or at the cap, it is shown but cannot be pressed, and says why. In a Call the header says so, with the time so far, and the composer gives way to Mute and End, End in `warn`.
 - A Message from the Agent, a Brief and a Review included, is rendered as an Entry's words are (section 8.4), except that an image never loads and shows as its description. The person's own Messages show as typed.
 - A Run's calls fold under the Message it left, each change linking to its record, with the Run's cost on opening it.
 - A Held Change waits where the Agent left it, as well as at the top of Attention and on its Entry. It is counted in the Attention badge.
@@ -814,6 +816,17 @@ Glossary: Device.
   - one accent colour per Context, from a fixed set of six, Blue, Rust, Teal, Plum, Moss and Slate, shown in the top bar, the Context switcher and both composers, so the person sees where they are about to write. There is no theme beyond it;
   - the interface in English, with no translation layer. An Entry can be in any language. Dates and numbers follow the Device's locale;
   - WCAG 2.2 AA, in light and in dark. Everything is reachable by keyboard.
+- **The main screen's keys.** Outside a field, with no `Ctrl`, `Meta` or `Alt` held, and unless something on the screen took the key first:
+
+  | Key | Desktop | In between | Phone, with a keyboard |
+  |---|---|---|---|
+  | `/` | Gives the search field the caret, unless there is no network, where search cannot be used. | As on a desktop, while Attention is shut. | Nothing. |
+  | `r` | Gives the Journal's composer the caret. | The same, with Attention shut first. | Shows the Journal's tab, then gives its composer the caret. |
+  | `m` | Gives the Conversation's composer the caret. | The same, with Attention shut first. | Shows the Agent tab, then gives its composer the caret. |
+  | `a` | Focuses Attention's heading. | Opens Attention, as its button does. | Shows the Attention tab, then focuses its heading. |
+
+  Each target declares its key with `aria-keyshortcuts`. At rest, a composer shows its key as a key cap at the end of its label, as the search field shows `/`, only where there is hover, so never on a phone; with words, or focused, it shows none. The Attention button in between names `a` in its tooltip.
+- **Skip links.** The first Tab stops of the main screen are three links, hidden until focused and then shown at the top left on `surface` with the focus ring, over the whole top bar, so no control in it is left half under the link: "Skip to the Journal's composer", "Skip to the Conversation's composer" and "Skip to Attention". They lead where `r`, `m` and `a` do. In between, the third reads "Open Attention" and opens it. The Conversation's shows only while its composer does, which offline, at the spend cap and in a Call it does not.
 
 ## 9. Architecture
 

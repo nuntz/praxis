@@ -134,6 +134,18 @@ components:
     typography: "{typography.button}"
     padding: "0"
     height: "24px"
+  button-send-at-rest:
+    textColor: "{colors.blue}"
+    typography: "{typography.button}"
+    rounded: "{rounded.radius-pill}"
+    height: "40px"
+  button-call:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.button}"
+    rounded: "{rounded.radius-pill}"
+    padding: "0 18px 0 14px"
+    height: "40px"
   button-icon:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.muted}"
@@ -290,16 +302,16 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 
 ### Hierarchy
 - **Screen title** (700, 26px/32px): a screen of its own, such as Settings.
-- **Wordmark** (700, 22px/28px, −0.02em): "Praxis" beside the mark in the top bar.
+- **Wordmark** (700, 22px/28px, −0.02em): "Praxis" beside the mark in the top bar, from 720px up.
 - **Column title** (700, 20px/26px, −0.01em): the head of each peer.
 - **Words** (400, 17px/26px): an Entry's words, the person's own, one step larger than the interface. Also the size of a phone's text fields, so they never zoom.
 - **Body on a phone** (400, 16px/23px): the base size below 720px, and the composers' text.
 - **Body** (400, 15px/22px): the interface's base on a desktop, and a Message's words.
 - **Row title** (500, 15px/22px): a Task's or a search hit's title.
 - **Button** (700, 15px/22px): every button's word.
-- **Label** (700, 13px/18px): a composer's label, a group heading in Settings, a chip, a badge.
+- **Label** (700, 13px/18px): a composer's label, a group heading in Settings, a chip, every badge but a tab's.
 - **Meta** (400, 13px/18px): a time, an author, a Task's mark ("Due today" at 700 in `muted`, "Overdue" at 700 in `warn`).
-- **Caption** (600, 12px/16px): a day's label, a tab's name.
+- **Caption** (600, 12px/16px): a day's label, a tab's name, a tab's badge.
 - **Code block** (400, 14px/22px, mono): code in an Entry's words.
 
 ### Named Rules
@@ -312,12 +324,12 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 The main screen is three peers on the ground, none hosting the others (SPEC section 8.1). Its widths are fixed:
 
 - **Desktop (1200px and up):** three panels in a row, `panel-gap` (14px) between them and around the window: Attention 350px, the Journal flexible, the Conversation 420px.
-- **In between (720px to 1199px):** the Journal and the Conversation (360px) side by side. Attention is a 350px panel opened over them from the top bar's button, bordered in `rule`.
+- **In between (720px to 1199px):** the Journal and the Conversation (up to 360px, never wider than the Journal) side by side. Attention is a 350px panel opened over them from the top bar's button, bordered in `rule`, with a Close icon button in its header. While it is open the two under it are inert, and a press on them closes it.
 - **Phone (below 720px):** one peer at a time, edge to edge on the ground, with three tabs in a pill at the bottom. The side gutter is `space-4` (16px), and the base text is 16px.
 
-A panel's header, content and composer share one inset, `space-5` (20px), so their left edges line up. Inside a panel, sections are `space-4` apart, Task rows `space-1`, and controls `space-2` from their neighbours. Settings is a screen of its own, its column of groups no wider than 720px. Pages pushed inside Attention (a Task's or Project's page) cover the whole column, header and all.
+A panel's header, content and composer share one inset, `space-5` (20px), so their left edges line up. While a column's content is scrolled away from its top, the header has an edge: a `rule` hairline the width of the column where what scrolls is cut, under the header, or under what stands beneath it, such as the search's chips. At the top it has none. It is a border, never a shadow, a blur or a gradient. Inside a panel, sections are `space-4` apart, Task rows `space-1`, and controls `space-2` from their neighbours. Settings is a screen of its own, its column of groups no wider than 720px. Pages pushed inside Attention (a Task's or Project's page) cover the whole column, header and all.
 
-The Journal and the Conversation keep time order, oldest first, and open at their newest, just above the composer. A day is a `caption` label in `muted` with a `rule` hairline running to the column's edge.
+The Journal and the Conversation keep time order, oldest first, and open at their newest, just above the composer. A day is a `caption` label in `muted` with a `rule` hairline running to the column's edge. With nothing in it, each says so in one line in `muted`, centred in the column.
 
 **The Newest Beside the Composer Rule.** Where the person types is the bottom of the column, and the newest is just above it. Never invert a column or put a composer at the top.
 
@@ -347,12 +359,14 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 
 ### Buttons
 - **Shape:** a pill (999px), 40px high on a desktop and 44px on a phone, with its icon and word `space-2` apart.
-- **Primary:** the solid accent with `on-accent` text, 20px each side. The Journal's **Record** is a pill with the check icon and its word. The Conversation's **Send** is a 40px round button with the arrow-up icon. **Call** is a 44px pill with the phone icon.
+- **Primary:** the solid accent with `on-accent` text, 20px each side. The Journal's **Record** is a pill with the check icon and its word. The Conversation's **Send** is a 40px round button (44px on a phone) with the arrow-up icon.
+- **A send with nothing to send:** while its composer is empty, Record or Send is the accent's icon (and Record's word) on the composer's tint, at full opacity with no fill of its own, and is still disabled, so it is announced as unavailable. It is at rest, not broken, so it is never washed out. With something to send it turns the solid accent.
+- **Call:** a `surface` pill with a `rule` edge, the Lucide `phone` icon and the word "Call" in `ink` at 700, at the button's height, the word kept on a phone. It is the Conversation's rarest act, so it never takes the accent from its Send.
 - **Quiet:** words in `ink` at 600, underlined 3px below, with no fill. It is every secondary action, because nothing but the primary takes the accent.
 - **Icon button:** a 40px circle (44px on a phone), `surface` with a `muted` icon. Used alone only on a well-known action (Edit, Follow up, Dates, Send, Search, Close, More), with an accessible name and a tooltip.
 - **Jump to latest:** an `ink` pill with `surface` text, the arrow-down icon and a count, centred above the composer.
 - **End Call:** a 60px circle of solid `warn` under `on-accent`, the phone icon turned 135°, its word underneath. Mute beside it is the same circle on `inset`.
-- **Disabled:** 50% opacity. A disabled Call stays focusable and says why in `meta` under it, since a touch screen has no tooltip.
+- **Disabled:** 50% opacity, for every control but a composer's send with nothing to send. A Call that cannot start stays focusable and says why in `meta` under it, since a touch screen has no tooltip.
 - **Focus:** a 2px `ink` outline, 2px off, on everything.
 
 ### Chips
@@ -367,19 +381,20 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **A Notice in the Conversation:** a `rule`-bordered box with `radius-lg`, its words in `muted`. One sits under the person's Message whose Run failed, with a way to try again. Others stand in the Conversation's foot: no key, a model with no price, a Conversation that cannot be opened, no network, the cap reached (with its link), and a Call ended.
 
 ### Inputs / Fields
-- **Composer:** the accent's tint, a 1.5px accent border, `radius-lg`. Its `label` sits in the accent above the words. At rest it is one line, its label where the words will go and its send at its end. Focused, it opens to two lines at once, with no animation, and takes a 2px accent outline 2px off.
-- **Search field:** a 44px `inset` pill with a `muted` search icon. Focused, its 1.5px border turns `ink`. The browser's clear button is hidden for the screen's own.
+- **Composer:** the accent's tint, a 1.5px accent border, `radius-lg`. Its `label` sits in the accent above the words. At rest it is one line, its label where the words will go and its send at its end. A label too long for its line is cut short with an ellipsis; the send never is, and Record keeps its icon and its word at every width. Focused, it opens to two lines at once, with no animation, and takes a 2px accent outline 2px off.
+- **Search field:** a 44px `inset` pill with a `muted` search icon. Focused, its 1.5px border turns `ink`, and the 2px `ink` outline is drawn 2px off round the whole field, as its input draws none. The browser's clear button is hidden for the screen's own.
 - **Date field:** a `surface` field with a `rule` border and `radius-sm`, in a Task's row.
 - **Switch:** a 46×28 pill, `muted` when off and accent when on, its knob `surface`. The knob slides in 150ms only when motion is allowed.
 
 ### Navigation
-- **Top bar:** on `ground`, 52px high (60px on a phone): the mark and wordmark, then the Context switcher, then (between 720px and 1199px) the Attention button with its count, and Settings as an icon button at the far end. Search belongs to the Journal: a field in its header, or a button on a phone.
+- **Top bar:** on `ground`, 52px high (60px on a phone): the mark and wordmark, then the Context switcher, then (between 720px and 1199px) the Attention button with its count, and Settings as an icon button at the far end. On a phone it shows the mark alone, still named "Praxis", and the switcher takes the width, its name cut with an ellipsis; Settings never shrinks from its 44px circle. Search belongs to the Journal: a field in its header, or a button on a phone.
+- **Attention button:** a `surface` pill in `ink`. While Attention is open it sits on `inset` in `ink` at 700, as the current phone tab does, and says so with `aria-expanded` too.
 - **Context switcher:** a pill of the current Context's solid accent with its name at 600. It opens a `surface` list where each Context is its swatch beside its name, and the current one sits on `inset` at 600.
 - **Phone tabs:** a `surface` pill below the content, 16px in from each side, holding Attention (inbox), the Journal (book-open) and the Agent (message-circle). Each tab is 56px high with its icon over its `caption` name, and its count or unread dot at the icon's shoulder. The current tab sits on `inset` in `ink` at 700. The others are `muted`.
 - **Settings:** on a desktop, a `surface` sidebar of sections in two groups, the Context's under its accent dot and the Deployment's, with the section shown on its tint in accent. On a phone, the same groups as rows with an icon, a `muted` value and a chevron.
 
 ### Task row
-The most repeated object in Praxis. An `inset` row with `radius-sm`, 10px by 12px: a 20px circle control with a 2px `muted` border (filled with an `ink` dot once Finished), the title in `row-title`, then its marks in `meta`, then the calendar icon button at the row's end, never the word. Each state that holds is its own mark in words. Due today is bold in `muted`, Overdue bold in `warn`, and a closed Task's title turns `muted`.
+The most repeated object in Praxis. An `inset` row with `radius-sm`, 10px by 12px: a 20px circle control with a 2px `muted` border (filled with an `ink` dot once Finished), the title in `row-title`, then its marks in `meta`, then the calendar icon button at the row's end, never the word. Each state that holds is its own mark in words. Due today is bold in `muted`, Overdue bold in `warn`, and a closed Task's title turns `muted`. In Attention's one-line rows on a phone the control is a 44px target, its 20px circle drawn at the centre, and the row's open button begins where it ends.
 
 ### Links in an Entry
 A Mention is the accent on its tint, a Reference is `ink` on `inset`, both at 600 with `radius-sm`. A link to a record in the Trash is `muted` on `inset` at 400, and says so in words.

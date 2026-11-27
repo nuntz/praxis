@@ -24,3 +24,10 @@ export const pointerHovers = holds("(hover: hover) and (pointer: fine)", true);
  * section as screens of their own; wider, the list is beside the section shown.
  */
 export const onPhone = holds("(width < 720px)", false);
+
+/**
+ * Whether the screen is in between (section 8.1), the stylesheet's `(720px <= width < 1200px)`:
+ * the Journal and the Conversation side by side, with Attention opened over them as a layer that
+ * leaves them inert while it is open.
+ */
+export const inBetween = holds("(720px <= width < 1200px)", false);

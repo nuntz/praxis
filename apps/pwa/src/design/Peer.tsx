@@ -1,4 +1,4 @@
-import type { JSX } from "solid-js";
+import { createSignal, type JSX, onCleanup } from "solid-js";
 
 /** The three peers, which are also a phone's three tabs. */
 export type PeerId = "attention" | "journal" | "conversation";
@@ -12,6 +12,17 @@ export function Peer(props: {
   title: string;
   /** Beside the title: a count, or what the column is about. */
   aside?: JSX.Element;
+  /** At the header's end, after the aside: Attention's Close, in between. */
+  end?: JSX.Element;
+  /**
+   * Given, the heading takes the focus from code (`tabindex="-1"`), and is described by the aside,
+   * so a screen reader reads the title and its count together: Attention's, as it opens in between.
+   */
+  headingRef?: (heading: HTMLHeadingElement) => void;
+  /** The key that brings the heading the focus, declared on it: Attention's `a`. */
+  headingKey?: "a" | undefined;
+  /** Out of reach of Tab, a pointer and a screen reader, as under Attention opened in between. */
+  inert?: boolean | undefined;
   onKeyDown?: (event: KeyboardEvent) => void;
   children?: JSX.Element;
 }) {
@@ -20,15 +31,56 @@ export function Peer(props: {
       id={props.id}
       class={`peer ${props.id}`}
       aria-labelledby={`${props.id}-heading`}
+      inert={props.inert}
       onKeyDown={(event) => props.onKeyDown?.(event)}
     >
       <header class="peer-header">
-        <h2 id={`${props.id}-heading`} class="peer-title">
+        <h2
+          ref={(heading) => props.headingRef?.(heading)}
+          id={`${props.id}-heading`}
+          class="peer-title"
+          tabIndex={props.headingRef ? -1 : undefined}
+          aria-describedby={props.headingRef ? `${props.id}-aside` : undefined}
+          aria-keyshortcuts={props.headingKey}
+        >
           {props.title}
         </h2>
-        {props.aside}
+        <span id={`${props.id}-aside`} class="peer-aside">
+          {props.aside}
+        </span>
+        {props.end}
       </header>
       {props.children}
     </section>
+  );
+}
+
+/**
+ * What a peer holds, scrolling under its header and whatever stands under it, such as the search's
+ * chips. Scrolled away from its top, what it holds is cut at its top edge, which then has a hairline;
+ * at the top it has none.
+ */
+export function PeerBody(props: {
+  class?: string;
+  ref?: (element: HTMLDivElement) => void;
+  children?: JSX.Element;
+}) {
+  const [scrolled, setScrolled] = createSignal(false);
+  return (
+    <div
+      class={props.class ? `peer-body ${props.class}` : "peer-body"}
+      data-scrolled={scrolled() ? "" : undefined}
+      ref={(element) => {
+        props.ref?.(element);
+        const heard = () => setScrolled(element.scrollTop > 0);
+        element.addEventListener("scroll", heard, { passive: true });
+        // Shown again, or changed in size, it may be at another place with no scroll heard.
+        const observer = new ResizeObserver(heard);
+        observer.observe(element);
+        onCleanup(() => observer.disconnect());
+      }}
+    >
+      {props.children}
+    </div>
   );
 }

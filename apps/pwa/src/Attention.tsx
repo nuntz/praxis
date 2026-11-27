@@ -12,6 +12,7 @@ import { WeeksAhead } from "./Ahead.tsx";
 import { ProjectRow, shortDay, TaskRow } from "./AttentionRows.tsx";
 import { followAttentionView } from "./attention-read.ts";
 import { todayIn } from "./days.tsx";
+import { PeerBody } from "./design/Peer.tsx";
 import { SectionTitle } from "./design/SectionTitle.tsx";
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { Inspector, type Page, type Said } from "./Inspector.tsx";
@@ -130,7 +131,7 @@ export function Attention(props: {
   );
 
   return (
-    <div class="peer-body attention-body">
+    <PeerBody class="attention-body">
       <div ref={list} class="attention-list" tabIndex={-1}>
         {/* What this Device sent and the server did not accept comes first (section 8.3). */}
         <RefusedWrites context={contextId} />
@@ -271,7 +272,7 @@ export function Attention(props: {
           onClosed={closed}
         />
       </Show>
-    </div>
+    </PeerBody>
   );
 }
 

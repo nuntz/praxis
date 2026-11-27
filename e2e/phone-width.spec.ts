@@ -27,6 +27,8 @@ async function spills(page: Page, column: Locator) {
       // Search's chips are one row that scrolls sideways on a phone, by design (section 8.4).
       if (element.closest('[aria-label="Narrow the search"]')) continue;
       if (box.right > width + 0.5) found.push(`${named(element)} ends at ${box.right}px`);
+      // A line cut short with an ellipsis, as a composer's label is, holds its overflow by design.
+      if (getComputedStyle(element).textOverflow === "ellipsis") continue;
       if (element.scrollWidth > element.clientWidth + 1 && element.clientWidth > 0) {
         found.push(`${named(element)} scrolls sideways`);
       }
