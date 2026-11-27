@@ -23,7 +23,7 @@ import { Attention } from "./Attention.tsx";
 import { deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
 import { NewContext } from "./Contexts.tsx";
-import { Conversation, unreadBriefs } from "./Conversation.tsx";
+import { Conversation, conversationComposerShown, unreadBriefs } from "./Conversation.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
@@ -31,6 +31,13 @@ import { receiveShared, wantComposer } from "./draft.ts";
 import { RestoreExport } from "./Export.tsx";
 import { CurrentHeldChanges, followHeldChanges } from "./HeldChanges.tsx";
 import { Journal } from "./Journal.tsx";
+import {
+  CONVERSATION_COMPOSER,
+  followScreenKeys,
+  JOURNAL_COMPOSER,
+  type KeyTargets,
+  SkipLinks,
+} from "./keys.tsx";
 import { latestRead } from "./latest-read.ts";
 import { Live, socketOpener } from "./live.ts";
 import { CurrentContextLive, type CurrentLive, liveAddress } from "./live-context.ts";
@@ -172,6 +179,40 @@ export function App() {
     document.addEventListener("pointerdown", outside, true);
     onCleanup(() => document.removeEventListener("pointerdown", outside, true));
   });
+
+  /**
+   * Give a composer the caret: its column shown first, on a phone its tab and in between with
+   * Attention shut, since a field in a hidden tab or under the layer takes no focus. Whether it had
+   * one to give.
+   */
+  function toComposer(column: "journal" | "conversation", id: string): boolean {
+    const field = document.getElementById(id);
+    if (!field) return false;
+    setTab(column);
+    setAttentionOpen(false);
+    setPressedOut(false);
+    field.focus();
+    return document.activeElement === field;
+  }
+
+  /**
+   * Where the skip links and the keys lead (section 8.11). Attention opens in between, as from its
+   * button; on a phone its tab shows first; on a desktop it is there, and its heading takes the focus.
+   */
+  const keyTargets: KeyTargets = {
+    toJournalComposer: () => toComposer("journal", JOURNAL_COMPOSER),
+    toConversationComposer: () => toComposer("conversation", CONVERSATION_COMPOSER),
+    toAttention() {
+      if (!attentionHeading) return false;
+      if (inBetween()) openAttention();
+      else {
+        setTab("attention");
+        attentionHeading.focus();
+      }
+      return true;
+    },
+  };
+  onMount(() => followScreenKeys(keyTargets, () => current() !== null && !inSettings()));
 
   /**
    * Bring a record shown in the Journal into view, from a change a Run made: on a phone, the
@@ -438,6 +479,13 @@ export function App() {
       data-attention={attentionOpen() ? "open" : "shut"}
     >
       <header class="top-bar">
+        <Show when={current() && !inSettings()}>
+          <SkipLinks
+            targets={keyTargets}
+            attentionOpens={inBetween()}
+            conversationComposerShown={conversationComposerShown()}
+          />
+        </Show>
         <Show
           when={inSettings() ? current() : null}
           fallback={
@@ -466,6 +514,8 @@ export function App() {
             class="attention-toggle"
             aria-expanded={attentionOpen()}
             aria-controls="attention"
+            aria-keyshortcuts="a"
+            title="Attention (a)"
             onClick={() => (attentionOpen() ? closeAttention() : openAttention())}
             onKeyDown={putAttentionAway}
           >
@@ -565,6 +615,7 @@ export function App() {
                           headingRef={(heading) => {
                             attentionHeading = heading;
                           }}
+                          headingKey={inBetween() ? undefined : "a"}
                           onKeyDown={putAttentionAway}
                         >
                           <Show when={timeZone()} keyed>

@@ -19,6 +19,8 @@ export function Peer(props: {
    * so a screen reader reads the title and its count together: Attention's, as it opens in between.
    */
   headingRef?: (heading: HTMLHeadingElement) => void;
+  /** The key that brings the heading the focus, declared on it: Attention's `a`. */
+  headingKey?: "a" | undefined;
   /** Out of reach of Tab, a pointer and a screen reader, as under Attention opened in between. */
   inert?: boolean | undefined;
   onKeyDown?: (event: KeyboardEvent) => void;
@@ -39,6 +41,7 @@ export function Peer(props: {
           class="peer-title"
           tabIndex={props.headingRef ? -1 : undefined}
           aria-describedby={props.headingRef ? `${props.id}-aside` : undefined}
+          aria-keyshortcuts={props.headingKey}
         >
           {props.title}
         </h2>

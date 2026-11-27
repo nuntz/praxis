@@ -40,6 +40,45 @@ p {
   opacity: 1;
 }
 
+/*
+ * The main screen's skip links, its first Tab stops, at the start of the top bar: out of sight until
+ * one is focused, then drawn over the whole bar from its left on `surface`, with the focus ring
+ * everything takes (section 8.11). Over the whole of it, no control in the bar is left half under
+ * the link, and each stays in reach of Tab, showing again as the link loses the focus. The bar is
+ * 52px high, 60px on a phone, so the link is a touch target there.
+ */
+.skip-links {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.skip-links a {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--type-label);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.skip-links a:not(:focus) {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -121,6 +160,7 @@ button.quiet {
 }
 
 .top-bar {
+  position: relative;
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -1780,13 +1820,36 @@ button.inspector-choice > .inspector-choice-check {
   outline-offset: 2px;
 }
 
-/* A label too long for its line, as a Context's long name makes it, is cut short, never the send. */
+/*
+ * A label too long for its line, as a Context's long name makes it, is cut short, never the send,
+ * nor the key at its end.
+ */
 .composer-label {
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
   color: var(--accent);
   font: var(--type-label);
+}
+
+.composer-label-words {
+  min-width: 0;
+  overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* At rest, a composer's key, drawn as search's `/`, only where there is hover (section 8.11). */
+.composer-key {
+  display: none;
+}
+
+@media (hover: hover) {
+  .composer-key {
+    display: inline-block;
+    margin-right: 0;
+  }
 }
 
 .composer-row {

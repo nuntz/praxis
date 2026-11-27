@@ -23,6 +23,7 @@ import { download } from "./Export.tsx";
 import { followNewest } from "./follow-newest.tsx";
 import { HeldChangeItem, useHeldChanges } from "./HeldChanges.tsx";
 import { recordAnchor } from "./Journal.tsx";
+import { CONVERSATION_COMPOSER, ComposerKey } from "./keys.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { readNotices } from "./Notices.tsx";
@@ -46,6 +47,14 @@ const moneyFormat = new Intl.NumberFormat(undefined, {
 const [unread, setUnread] = createSignal<ClockFold["kind"][]>([]);
 
 export { unread as unreadBriefs };
+
+/**
+ * Whether the current Context's Conversation shows its composer, which offline, at the cap and in a
+ * Call it does not: the skip link to it shows only while it does (section 8.11).
+ */
+const [composerShown, setComposerShown] = createSignal(false);
+
+export { composerShown as conversationComposerShown };
 
 /**
  * The Conversation with the Agent in the current Context (section 8.5): every Message, scrollable
@@ -985,6 +994,8 @@ function MessageComposer(props: {
   // At rest, with nothing written and the focus elsewhere, it folds to one line (section 8.2).
   const [focused, setFocused] = createSignal(false);
   const folded = () => !focused() && words() === "";
+  setComposerShown(true);
+  onCleanup(() => setComposerShown(false));
 
   async function send() {
     if (!canSend()) return;
@@ -1020,13 +1031,17 @@ function MessageComposer(props: {
         }}
       >
         {/* Colour never carries the Context alone: the composer names it. */}
-        <label for="new-message" class="composer-label">
-          {props.contextName ? `Message the Agent in ${props.contextName}` : "Message the Agent"}
+        <label for={CONVERSATION_COMPOSER} class="composer-label">
+          <span class="composer-label-words">
+            {props.contextName ? `Message the Agent in ${props.contextName}` : "Message the Agent"}
+          </span>
+          <ComposerKey shown={folded()} letter="m" />
         </label>
         <div class="composer-row">
           <textarea
-            id="new-message"
+            id={CONVERSATION_COMPOSER}
             rows={2}
+            aria-keyshortcuts="m"
             value={words()}
             onInput={(event) => setWords(event.currentTarget.value)}
             onKeyDown={(event) => {

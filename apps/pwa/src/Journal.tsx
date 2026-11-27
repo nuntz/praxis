@@ -22,6 +22,7 @@ import { EntryActions } from "./EntryActions.tsx";
 import { EntryPage } from "./EntryPage.tsx";
 import { followNewest } from "./follow-newest.tsx";
 import { heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
+import { JOURNAL_COMPOSER } from "./keys.tsx";
 import { useLive } from "./live-context.ts";
 import { MoveRecord } from "./Move.tsx";
 import { contextCopy, noteOpened, readFromCopy, readingCopy } from "./offline-copy.ts";
@@ -364,7 +365,7 @@ export function Journal(props: {
                     }}
                     onFollowUp={() => {
                       setFollowingUp({ id: entry.id, summary: summarizeWords(entry.words) });
-                      document.getElementById("new-entry")?.focus();
+                      document.getElementById(JOURNAL_COMPOSER)?.focus();
                     }}
                     onTask={showTask}
                     onShowHeldChange={props.onShowHeldChange}

@@ -598,7 +598,7 @@ Three peers, none hosting the others: **Attention**, the **Journal** and the **C
 | Phone | Three bottom tabs: Attention, Journal, Agent. It opens on Attention. |
 
 - The Context switcher is in the top bar at every width. Settings opens from the top bar too, as a screen of its own (section 8.6).
-- **Attention in between.** Opening it moves the focus to its heading, read out with its count. While it is open the Journal and the Conversation are inert, out of reach of Tab, a pointer and a screen reader, and only Attention and the top bar are live. A press on either closes it and does nothing else. Its Close, Escape and its button each close it and return the focus to its button. The Context switcher and Settings close it first, then do what they do, so a Context switched to shows with Attention shut. A Task's or a Project's page pushed inside it goes back with Escape, as at any width.
+- **Attention in between.** Opening it moves the focus to its heading, read out with its count. While it is open the Journal and the Conversation are inert, out of reach of Tab, a pointer and a screen reader, and only Attention and the top bar are live. A press on either closes it and does nothing else. Its Close, Escape and its button each close it and return the focus to its button; `r` and `m` close it and give their composer the caret (section 8.11). The Context switcher and Settings close it first, then do what they do, so a Context switched to shows with Attention shut. A Task's or a Project's page pushed inside it goes back with Escape, as at any width.
 - A change the Agent makes shows in the other two columns as it happens, patched from its Effects.
 - **The newest is where the person types.** The Journal and the Conversation keep time order, oldest first, and open at their newest, beside their composer. They stay there as more arrives. Scrolled away from it, a column stays where the person is, and a pill above its composer, "Jump to latest" with a count of what arrived, takes them back. The person's own send always brings what they sent into view.
 - **Days.** Both are parted into days, "Today", "Yesterday", then the weekday and the date, by the Context's time zone, the zone their times are shown in.
@@ -815,6 +815,17 @@ Glossary: Device.
   - one accent colour per Context, from a fixed set of six, Blue, Rust, Teal, Plum, Moss and Slate, shown in the top bar, the Context switcher and both composers, so the person sees where they are about to write. There is no theme beyond it;
   - the interface in English, with no translation layer. An Entry can be in any language. Dates and numbers follow the Device's locale;
   - WCAG 2.2 AA, in light and in dark. Everything is reachable by keyboard.
+- **The main screen's keys.** Outside a field, with no `Ctrl`, `Meta` or `Alt` held, and unless something on the screen took the key first:
+
+  | Key | Desktop | In between | Phone, with a keyboard |
+  |---|---|---|---|
+  | `/` | Gives the search field the caret, unless there is no network, where search cannot be used. | As on a desktop, while Attention is shut. | Nothing. |
+  | `r` | Gives the Journal's composer the caret. | The same, with Attention shut first. | Shows the Journal's tab, then gives its composer the caret. |
+  | `m` | Gives the Conversation's composer the caret. | The same, with Attention shut first. | Shows the Agent tab, then gives its composer the caret. |
+  | `a` | Focuses Attention's heading. | Opens Attention, as its button does. | Shows the Attention tab, then focuses its heading. |
+
+  Each target declares its key with `aria-keyshortcuts`. At rest, a composer shows its key as a key cap at the end of its label, as the search field shows `/`, only where there is hover, so never on a phone; with words, or focused, it shows none. The Attention button in between names `a` in its tooltip.
+- **Skip links.** The first Tab stops of the main screen are three links, hidden until focused and then shown at the top left on `surface` with the focus ring, over the whole top bar, so no control in it is left half under the link: "Skip to the Journal's composer", "Skip to the Conversation's composer" and "Skip to Attention". They lead where `r`, `m` and `a` do. In between, the third reads "Open Attention" and opens it. The Conversation's shows only while its composer does, which offline, at the spend cap and in a Call it does not.
 
 ## 9. Architecture
 
