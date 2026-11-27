@@ -417,12 +417,16 @@ export function Journal(props: {
           timeZone={props.timeZone}
           followingUp={followingUp()}
           onStopFollowingUp={() => setFollowingUp(null)}
-          onUnsent={(leftOff) => {
+          onUnsent={(leftOff, aimedAt) => {
             setProblem(null);
             if (told() === LINKS_LEFT_OFF) setTold(null);
             setFollowingUp(null);
             // Nothing is dropped silently (section 8.8).
-            if (leftOff) setTold(contextCopy(contextId) ? LEFT_OFF_WITH_COPY : LEFT_OFF);
+            const lost = [
+              leftOff ? (contextCopy(contextId) ? LEFT_OFF_WITH_COPY : LEFT_OFF) : null,
+              aimedAt ? aimLeftOff(aimedAt.name) : null,
+            ].filter((said) => said !== null);
+            if (lost.length > 0) setTold(lost.join(" "));
             // Kept Unsent, it is in the Journal all the same, and the person's own.
             column.toNewest();
           }}
@@ -453,6 +457,14 @@ const LEFT_OFF =
 /** Said when an Entry kept Unsent leaves off what the Offline Copy does not hold. */
 const LEFT_OFF_WITH_COPY =
   "Kept Unsent without what this Device does not hold: a new Person or Project, or a link or Follow-up to a record not in its Offline Copy, needs the network, so add it once it is sent.";
+
+/**
+ * Said when an Entry aimed at a Project is kept Unsent: its Tasks are made only once it is sent,
+ * and the aim lasted the one Entry, so nothing puts them in the Project.
+ */
+function aimLeftOff(project: string): string {
+  return `Kept Unsent, so the Tasks it makes once sent are not put in ${project}: put them there from their pages.`;
+}
 
 /** What Standing means, on the mark a Standing Entry always shows. */
 const STANDING = "A Standing Entry is given to the Agent at the start of every Run";

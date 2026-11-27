@@ -25,6 +25,7 @@ import Folder from "lucide-solid/icons/folder";
 import FolderMinus from "lucide-solid/icons/folder-minus";
 import FolderPlus from "lucide-solid/icons/folder-plus";
 import Hourglass from "lucide-solid/icons/hourglass";
+import ListPlus from "lucide-solid/icons/list-plus";
 import Repeat from "lucide-solid/icons/repeat";
 import RotateCcw from "lucide-solid/icons/rotate-ccw";
 import Trash from "lucide-solid/icons/trash";
@@ -47,6 +48,8 @@ import { TaskRow } from "./AttentionRows.tsx";
 import { todayIn } from "./days.tsx";
 import { latestRead } from "./latest-read.ts";
 import { MoveRecord } from "./Move.tsx";
+import { aimComposer } from "./next-task.ts";
+import { online } from "./online.ts";
 import { ChoicePicker, personsOffered, referencesOffered, waitTargetsOffered } from "./Pickers.tsx";
 import { recurrencesOffered, recurrenceWords, sameRule } from "./recurrence-words.ts";
 import { SettlingField } from "./SettlingField.tsx";
@@ -76,7 +79,10 @@ export type Page =
 /** What a change said in Attention's status line, and how to undo it, where it can be. */
 export type Said = {
   text: string;
-  /** Undoes the change: null once it is undone, or why it was refused. */
+  /**
+   * Undoes the change, or tries again what it could not do: null once that is done, or why it was
+   * refused.
+   */
   undo?: { label: string; run: (callTool: CallTool) => Promise<string | null> };
   /** The row an undo brings back, by its `data-open-key`, which the focus then goes to. */
   returnsTo?: string;
@@ -103,6 +109,8 @@ export function Inspector(props: {
   onSaid: (said: Said) => void;
   /** The panel closed: the focus goes back to the row it was opened from. */
   onClosed: () => void;
+  /** Give the Journal's composer the caret, its column shown first. */
+  toJournalComposer: () => void;
 }) {
   const callTool = useCallTool();
   const contextId = useContextId();
@@ -544,6 +552,12 @@ export function Inspector(props: {
                   onDue={setProjectDue}
                   onMove={() => push({ kind: "move", project: shown().id })}
                   onOpenTask={(opened) => push({ kind: "task", id: opened.id, held: opened })}
+                  onWriteNextTask={() => {
+                    // The page stays as it is: the next Task is written in the Journal.
+                    const { id, name } = shown();
+                    aimComposer({ context: contextId, project: { id, name } });
+                    props.toJournalComposer();
+                  }}
                   onEnd={(end) => void endProject(end)}
                   onReopen={() => void reopenProject()}
                   onDelete={() => void deleteProject()}
@@ -1024,6 +1038,8 @@ function ProjectPage(props: {
   onDue: (id: string, day: string) => Promise<void>;
   onMove: () => void;
   onOpenTask: (task: Task) => void;
+  /** Aim the Journal's composer at the Project for its next Task, and give it the caret. */
+  onWriteNextTask: () => void;
   onEnd: (end: "finish_project" | "drop_project") => void;
   onReopen: () => void;
   onDelete: () => void;
@@ -1089,6 +1105,24 @@ function ProjectPage(props: {
             )}
           </For>
         </ul>
+      </Show>
+      {/* A Task is made only with an Entry, so its next is written in the Journal (section 8.3).
+          Its Tasks are put in the Project once it is recorded, which needs the network. */}
+      <Show when={props.project.state.is === "open" && open() === 0}>
+        <Show
+          when={online()}
+          fallback={<p class="peer-note">Writing its next Task needs the network.</p>}
+        >
+          <div class="inspector-group">
+            <ActionLine
+              icon={ListPlus}
+              label="Write its next Task"
+              sub="In the Journal, as an Entry"
+              disabled={props.sending}
+              onClick={props.onWriteNextTask}
+            />
+          </div>
+        </Show>
       </Show>
       <div class="inspector-group">
         <Show

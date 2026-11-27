@@ -1,5 +1,6 @@
 import type { Anchor, NewLink } from "@praxis/domain";
 import { createSignal } from "solid-js";
+import type { Aim } from "./next-task.ts";
 
 // What the Journal's composer holds for the person beyond its own Context's screen: its draft,
 // which goes with the person to another Context, whether it is to take the caret as it next shows,
@@ -10,10 +11,11 @@ import { createSignal } from "solid-js";
 export type Pick = { to: NewLink["to"]; anchor: Anchor };
 
 /**
- * The composer's draft as it last showed: the Context it was in, its words, its links, and whether
- * links it had in another Context were left off, which the person is told as long as it shows.
+ * The composer's draft as it last showed: the Context it was in, its words, its links, whether
+ * links it had in another Context were left off, which the person is told as long as it shows,
+ * and the Project its next Entry is aimed at, if one is.
  */
-type Draft = { context: string; words: string; picks: Pick[]; leftOff: boolean };
+type Draft = { context: string; words: string; picks: Pick[]; leftOff: boolean; aim: Aim | null };
 
 let kept: Draft | null = null;
 
@@ -26,15 +28,16 @@ export function keepDraft(draft: Draft) {
  * The draft the composer shows in a Context: the one kept, its words whichever Context they were
  * written in, since the person may change the Context before sending (section 8.9). Its links
  * come only within the Context they were picked in, since each is to a record there and nothing
- * crosses a Context (ADR 0003): `leftOff` says some were left.
+ * crosses a Context (ADR 0003): `leftOff` says some were left. Its aim, at a Project there, ends
+ * with the Context too.
  */
 export function takeDraft(context: string): Omit<Draft, "context"> {
   const draft = kept;
   kept = null;
-  if (!draft) return { words: "", picks: [], leftOff: false };
-  const { words, picks, leftOff } = draft;
-  if (draft.context === context) return { words, picks, leftOff };
-  return { words, picks: [], leftOff: leftOff || picks.length > 0 };
+  if (!draft) return { words: "", picks: [], leftOff: false, aim: null };
+  const { words, picks, leftOff, aim } = draft;
+  if (draft.context === context) return { words, picks, leftOff, aim };
+  return { words, picks: [], leftOff: leftOff || picks.length > 0, aim: null };
 }
 
 const [caretWanted, setCaretWanted] = createSignal(false);

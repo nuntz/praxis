@@ -23,6 +23,7 @@ import { SectionTitle } from "./design/SectionTitle.tsx";
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
 import { Inspector, type Page, refusal, type Said } from "./Inspector.tsx";
 import { StandingNotices } from "./Notices.tsx";
+import { type NotPutIn, onNotPutIn, putTasksIn } from "./next-task.ts";
 import { contextCopy, readingCopy } from "./offline-copy.ts";
 import type { Finish } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
@@ -41,6 +42,8 @@ export function Attention(props: {
   timeZone: string;
   /** The Due section's count, each time the view is read. */
   onDueCount: (count: number) => void;
+  /** Give the Journal's composer the caret, its column shown first. */
+  toJournalComposer: () => void;
 }) {
   const contextId = useContextId();
   const callTool = useCallTool();
@@ -188,6 +191,41 @@ export function Attention(props: {
       if (focused) queueMicrotask(focusSaid);
     }),
   );
+
+  // Tasks an Entry aimed at a Project made and could not put in it are said, as a change made from
+  // a page is, with Try again. Nothing is undone: they stay made, where they are (section 8.3).
+  onCleanup(
+    onNotPutIn((left) => {
+      if (left.context === contextId) setSaid(notPutInSaid(left));
+    }),
+  );
+
+  /**
+   * What Tasks made but not put in their Project say, and how to try again to put them there. A
+   * try that puts some leaves the line naming the rest, unless another change is said meanwhile.
+   */
+  function notPutInSaid(left: NotPutIn): Said {
+    const titles = left.tasks.map((task) => `“${task.title}”`);
+    const named =
+      titles.length === 1
+        ? titles[0]
+        : `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
+    const shown: Said = {
+      text: `${named} ${titles.length === 1 ? "was" : "were"} made but not put in ${left.project.name}.`,
+      undo: {
+        label: "Try again",
+        run: async (call) => {
+          const still = await putTasksIn(call, left.project.id, left.tasks);
+          if (still.tasks.length === 0) return null;
+          if (still.tasks.length < left.tasks.length && said() === shown) {
+            setSaid(notPutInSaid({ ...left, tasks: still.tasks }));
+          }
+          return still.problem;
+        },
+      },
+    };
+    return shown;
+  }
 
   function focusSaid() {
     const line = list?.querySelector<HTMLElement>(".moved");
@@ -370,6 +408,7 @@ export function Attention(props: {
           onChanged={() => void read()}
           onSaid={setSaid}
           onClosed={closed}
+          toJournalComposer={props.toJournalComposer}
         />
       </Show>
     </PeerBody>

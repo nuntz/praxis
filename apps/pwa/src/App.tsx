@@ -629,7 +629,13 @@ export function App() {
                           onKeyDown={putAttentionAway}
                         >
                           <Show when={timeZone()} keyed>
-                            {(zone) => <Attention timeZone={zone} onDueCount={setDueCount} />}
+                            {(zone) => (
+                              <Attention
+                                timeZone={zone}
+                                onDueCount={setDueCount}
+                                toJournalComposer={keyTargets.toJournalComposer}
+                              />
+                            )}
                           </Show>
                         </Peer>
                         {/* Today and the Entries' times follow the time zone, so a new one reads afresh,
