@@ -17,6 +17,9 @@ export function growWithWords(field: HTMLTextAreaElement, sizedBy: () => unknown
     if (!composer || !column) return;
     // What the composer holds besides the field: its label, a Follow-up or an aim, its padding.
     const around = composer.offsetHeight - field.offsetHeight;
+    // Held at its height while the field is measured at its least, so the column over it keeps its
+    // size and where it is scrolled to, as at its newest.
+    composer.style.minHeight = `${composer.offsetHeight}px`;
     field.style.height = "";
     const least = field.clientHeight;
     const needed = field.scrollHeight;
@@ -27,6 +30,7 @@ export function growWithWords(field: HTMLTextAreaElement, sizedBy: () => unknown
       const most = least + Math.max(0, Math.floor((room - least) / line) * line);
       field.style.height = `${Math.min(needed, most)}px`;
     }
+    composer.style.minHeight = "";
   }
 
   createEffect(() => {

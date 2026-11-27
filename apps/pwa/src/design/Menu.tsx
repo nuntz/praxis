@@ -56,11 +56,12 @@ export function Menu(props: { label: string; icon: LucideIcon; items: Action[] }
 
   function place() {
     if (!list) return;
-    // Measured at its whole height, before the room it is given is set again.
-    list.style.maxHeight = "";
+    // Measured at its whole height, its own scroll and borders with it, without letting go of the
+    // room it is given, which would send it back to its top.
+    const height = list.scrollHeight + list.offsetHeight - list.clientHeight;
     const { top, left, maxHeight } = placeMenu(
       button.getBoundingClientRect(),
-      list.getBoundingClientRect(),
+      { width: list.getBoundingClientRect().width, height },
       {
         width: document.documentElement.clientWidth,
         height: document.documentElement.clientHeight,
@@ -99,10 +100,14 @@ export function Menu(props: { label: string; icon: LucideIcon; items: Action[] }
   createEffect(() => {
     if (!shown()) return;
     const options = { capture: true, passive: true };
-    document.addEventListener("scroll", place, options);
+    // Its own scroll, where it is too long for the room it has, moves nothing under it.
+    const scrolled = (event: Event) => {
+      if (!list?.contains(event.target as Node)) place();
+    };
+    document.addEventListener("scroll", scrolled, options);
     window.addEventListener("resize", place);
     onCleanup(() => {
-      document.removeEventListener("scroll", place, options);
+      document.removeEventListener("scroll", scrolled, options);
       window.removeEventListener("resize", place);
     });
   });

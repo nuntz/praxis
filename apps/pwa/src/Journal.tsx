@@ -175,6 +175,9 @@ export function Journal(props: {
   /** Show what a change did, by reading each record its Effects name as it now is. */
   async function patch(effects: Effect[]) {
     for (const effect of effects) {
+      // Back from the Trash, however it came back, an Entry is no longer said to be there.
+      const back = effect.kind === "entry" && effect.what !== "deleted";
+      if (back && told()?.restores === effect.id) setTold(null);
       if (effect.kind === "entry") await refreshAround(effect.id);
       if (effect.kind === "task") await refreshTask(effect.id);
       if (effect.what === "changed") renameLinksTo(effect);
@@ -336,12 +339,16 @@ export function Journal(props: {
     void patch(effects);
   }
 
+  let restoring = false;
   /**
    * Bring an Entry back from the Trash, with what went with it. Once it is back, the line that said
    * it went empties, unless another change is said meanwhile, and the focus it had goes to the
    * Entry. With no network it is refused as any write but recording an Entry is (section 8.8).
    */
   async function restore(shown: Told, id: string) {
+    // Pressed again while the first is on its way, it asks nothing more.
+    if (restoring) return;
+    restoring = true;
     try {
       const result = await callTool("restore", { id });
       if (!result.ok) return setProblem(result.error.message);
@@ -354,6 +361,8 @@ export function Journal(props: {
       }
     } catch (error) {
       setProblem(unreachableMessage(error));
+    } finally {
+      restoring = false;
     }
   }
 
