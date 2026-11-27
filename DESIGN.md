@@ -364,7 +364,7 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **Entry:** from 720px up, Entries are parted by `rule` hairlines with no box. The one hovered or focused sits on `inset` with `radius-md`, and its Task rows turn `surface` so they stay one step off it. On a phone, each Entry is a `surface` card with `radius-md` on `ground`, `space-2` apart.
 - **Held Change:** the accent's tint with `radius-sm` and 12px padding: a bold title, the words as they would be, and its actions in a row.
 - **Standing Notice:** a card on `notice` with `radius-md`, in Attention above its sections. The Lucide `info` icon sits beside a bold title of a few words ("Spend cap reached", "Brief not run"), set at the size of the words under it. The words follow in `ink`, then the underlined link to the section of Settings that deals with it, where there is one. The card is a status named by its title.
-- **A Notice under a Message:** a `rule`-bordered box with `radius-lg`, its words in `muted`, under the person's Message whose Run failed, with a way to try again.
+- **A Notice in the Conversation:** a `rule`-bordered box with `radius-lg`, its words in `muted`. One sits under the person's Message whose Run failed, with a way to try again. Others stand in the Conversation's foot: no key, a model with no price, a Conversation that cannot be opened, no network, the cap reached (with its link), and a Call ended.
 
 ### Inputs / Fields
 - **Composer:** the accent's tint, a 1.5px accent border, `radius-lg`. Its `label` sits in the accent above the words. At rest it is one line, its label where the words will go and its send at its end. Focused, it opens to two lines at once, with no animation, and takes a 2px accent outline 2px off.

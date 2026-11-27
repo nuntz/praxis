@@ -99,7 +99,7 @@ test("at the cap, the Conversation's composer gives way to a Notice that opens t
   const notice = page
     .getByRole("region", { name: "Attention", exact: true })
     .getByTestId("standing-notice")
-    .filter({ hasText: capReached });
+    .filter({ has: page.getByTestId("standing-notice-words").filter({ hasText: capReached }) });
   await notice.getByRole("link", { name: "Raise the cap in settings", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/spend$/);
   await expect(capField).toBeFocused();

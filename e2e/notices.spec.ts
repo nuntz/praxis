@@ -27,20 +27,43 @@ test("each standing Notice in Attention is a card titled by its kind, its words 
   page,
 }, testInfo) => {
   const since = new Date().toISOString();
-  const titled: [StandingNotice, string][] = [
-    [{ kind: "key_refused", since }, "Model key refused"],
-    [{ kind: "voice_key_refused", since }, "Voice key refused"],
-    [{ kind: "cap_reached", spent: 20, cap: 20 }, "Spend cap reached"],
-    [{ kind: "nearing_cap", spent: 17, cap: 20 }, "Spend near its cap"],
+  // Each kind, its title, and how its words begin, which the title is not part of.
+  const titled: [StandingNotice, string, RegExp][] = [
+    [
+      { kind: "key_refused", since },
+      "Model key refused",
+      /^The model's provider has refused this Deployment's key since /,
+    ],
+    [
+      { kind: "voice_key_refused", since },
+      "Voice key refused",
+      /^The voice provider has refused this Deployment's voice key since /,
+    ],
+    [
+      { kind: "cap_reached", spent: 20, cap: 20 },
+      "Spend cap reached",
+      /^This month's spend has reached its cap of /,
+    ],
+    [
+      { kind: "nearing_cap", spent: 17, cap: 20 },
+      "Spend near its cap",
+      /^This month's spend, .+, has passed 80% of its cap of /,
+    ],
     [
       { kind: "clock_failed", clock: "brief", failure: "model_unavailable", since },
       "Brief not run",
+      /^The Brief could not run since /,
     ],
-    [{ kind: "clock_failed", clock: "review", failure: "key_refused", since }, "Review not run"],
-    [{ kind: "no_backup", last_made: null }, "No recent Backup"],
+    [
+      { kind: "clock_failed", clock: "review", failure: "key_refused", since },
+      "Review not run",
+      /^The Review could not run since /,
+    ],
+    [{ kind: "no_backup", last_made: null }, "No recent Backup", /^No Backup has been made yet/],
     [
       { kind: "context_stuck", context: "Elsewhere", release: "r1", backup_kept: null },
       "Elsewhere stuck on an upgrade",
+      /^Elsewhere could not be upgraded under release r1: /,
     ],
   ];
   await noticesAre(
@@ -52,7 +75,7 @@ test("each standing Notice in Attention is a card titled by its kind, its words 
   const notices = shown.getByTestId("standing-notice");
   await expect(notices).toHaveCount(titled.length);
 
-  for (const [at, [notice, title]] of titled.entries()) {
+  for (const [at, [notice, title, words]] of titled.entries()) {
     const card = notices.nth(at);
     // The card is the status, named by its title, so the title is what is heard first.
     await expect(
@@ -60,7 +83,8 @@ test("each standing Notice in Attention is a card titled by its kind, its words 
       notice.kind,
     ).toBeVisible();
     await expect(card.getByTestId("standing-notice-title"), notice.kind).toHaveText(title);
-    await expect(card.getByTestId("standing-notice-words"), notice.kind).not.toBeEmpty();
+    await expect(card.getByTestId("standing-notice-words"), notice.kind).toHaveText(words);
+    await expect(card.getByTestId("standing-notice-words"), notice.kind).not.toContainText(title);
   }
 });
 
@@ -69,9 +93,11 @@ test("the no-Backup Notice in Attention opens Backups and Export in settings", a
 }, testInfo) => {
   await noticesAre(page, [{ kind: "no_backup", last_made: null }]);
   await page.goto("/");
-  const notice = (await attention(page, testInfo))
-    .getByTestId("standing-notice")
-    .filter({ hasText: /No Backup has been made yet/ });
+  const notice = (await attention(page, testInfo)).getByTestId("standing-notice").filter({
+    has: page
+      .getByTestId("standing-notice-words")
+      .filter({ hasText: /No Backup has been made yet/ }),
+  });
 
   await notice.getByRole("link", { name: "See Backups and Export", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/backups$/);
@@ -149,7 +175,7 @@ test("a Brief that failed says it is tried again in Attention exactly when waiti
   await expect(notices).toHaveCount(RUN_FAILURES.length);
 
   for (const [at, failure] of RUN_FAILURES.entries()) {
-    const notice = notices.nth(at);
+    const notice = notices.nth(at).getByTestId("standing-notice-words");
     if (mendedByWaiting(failure)) {
       await expect(notice, failure).toContainText(
         "It is tried again a little later each time, until it runs or the next one is due.",

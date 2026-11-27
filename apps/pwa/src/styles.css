@@ -2091,7 +2091,7 @@ button.call-control {
 
 /*
  * A standing Notice in Attention: a card on notice, the information icon beside a bold title, its
- * words under it in ink, and its link, where it has one. A Notice under a Message keeps its box.
+ * words under it in ink, and its link, where it has one. A Notice in the Conversation keeps its box.
  */
 .standing-notice {
   display: flex;
@@ -2103,7 +2103,7 @@ button.call-control {
   color: var(--ink);
 }
 
-/* Set on the title's first line: 18px against its 22px. */
+/* Set on the title's first line, nudged down to its middle: 18px against a line of 22px or 23px. */
 .standing-notice-icon {
   flex-shrink: 0;
   margin-top: 2px;
