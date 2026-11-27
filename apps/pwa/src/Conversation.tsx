@@ -68,6 +68,8 @@ export function Conversation(props: {
   timeZone: string | undefined;
   /** Bring a record a Run changed into view, wherever it is shown. */
   onShowRecord: (anchor: string) => void;
+  /** Out of reach under Attention opened in between (section 8.1). */
+  inert?: boolean;
 }) {
   const callTool = useCallTool();
   const live = useLive();
@@ -364,6 +366,7 @@ export function Conversation(props: {
     <Peer
       id="conversation"
       title="Conversation"
+      inert={props.inert}
       aside={
         <Show when={callOffer()}>
           {(offer) => (

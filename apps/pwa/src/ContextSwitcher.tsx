@@ -10,6 +10,8 @@ import { createSignal, For, Show } from "solid-js";
 export function ContextSwitcher(props: {
   current: ContextListing;
   contexts: ContextListing[];
+  /** As the list opens: in between, Attention is closed first (section 8.1). */
+  onOpen: () => void;
   onSwitch: (id: string) => void;
 }) {
   const [open, setOpen] = createSignal(false);
@@ -41,7 +43,10 @@ export function ContextSwitcher(props: {
         class={`context accent-${props.current.accent}`}
         aria-expanded={open()}
         aria-controls="context-list"
-        onClick={() => setOpen((was) => !was)}
+        onClick={() => {
+          if (!open()) props.onOpen();
+          setOpen((was) => !was);
+        }}
         onKeyDown={putAway}
       >
         <span class="visually-hidden">Context: </span>

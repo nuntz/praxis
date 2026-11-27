@@ -312,7 +312,7 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 The main screen is three peers on the ground, none hosting the others (SPEC section 8.1). Its widths are fixed:
 
 - **Desktop (1200px and up):** three panels in a row, `panel-gap` (14px) between them and around the window: Attention 350px, the Journal flexible, the Conversation 420px.
-- **In between (720px to 1199px):** the Journal and the Conversation (360px) side by side. Attention is a 350px panel opened over them from the top bar's button, bordered in `rule`.
+- **In between (720px to 1199px):** the Journal and the Conversation (up to 360px, never wider than the Journal) side by side. Attention is a 350px panel opened over them from the top bar's button, bordered in `rule`, with a Close icon button in its header. While it is open the two under it are inert, and a press on them closes it.
 - **Phone (below 720px):** one peer at a time, edge to edge on the ground, with three tabs in a pill at the bottom. The side gutter is `space-4` (16px), and the base text is 16px.
 
 A panel's header, content and composer share one inset, `space-5` (20px), so their left edges line up. Inside a panel, sections are `space-4` apart, Task rows `space-1`, and controls `space-2` from their neighbours. Settings is a screen of its own, its column of groups no wider than 720px. Pages pushed inside Attention (a Task's or Project's page) cover the whole column, header and all.
@@ -367,13 +367,14 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **A Notice in the Conversation:** a `rule`-bordered box with `radius-lg`, its words in `muted`. One sits under the person's Message whose Run failed, with a way to try again. Others stand in the Conversation's foot: no key, a model with no price, a Conversation that cannot be opened, no network, the cap reached (with its link), and a Call ended.
 
 ### Inputs / Fields
-- **Composer:** the accent's tint, a 1.5px accent border, `radius-lg`. Its `label` sits in the accent above the words. At rest it is one line, its label where the words will go and its send at its end. Focused, it opens to two lines at once, with no animation, and takes a 2px accent outline 2px off.
+- **Composer:** the accent's tint, a 1.5px accent border, `radius-lg`. Its `label` sits in the accent above the words. At rest it is one line, its label where the words will go and its send at its end. A label too long for its line is cut short with an ellipsis; the send never is, and Record keeps its icon and its word at every width. Focused, it opens to two lines at once, with no animation, and takes a 2px accent outline 2px off.
 - **Search field:** a 44px `inset` pill with a `muted` search icon. Focused, its 1.5px border turns `ink`. The browser's clear button is hidden for the screen's own.
 - **Date field:** a `surface` field with a `rule` border and `radius-sm`, in a Task's row.
 - **Switch:** a 46×28 pill, `muted` when off and accent when on, its knob `surface`. The knob slides in 150ms only when motion is allowed.
 
 ### Navigation
 - **Top bar:** on `ground`, 52px high (60px on a phone): the mark and wordmark, then the Context switcher, then (between 720px and 1199px) the Attention button with its count, and Settings as an icon button at the far end. Search belongs to the Journal: a field in its header, or a button on a phone.
+- **Attention button:** a `surface` pill in `ink`. While Attention is open it sits on `inset` in `ink` at 700, as the current phone tab does, and says so with `aria-expanded` too.
 - **Context switcher:** a pill of the current Context's solid accent with its name at 600. It opens a `surface` list where each Context is its swatch beside its name, and the current one sits on `inset` at 600.
 - **Phone tabs:** a `surface` pill below the content, 16px in from each side, holding Attention (inbox), the Journal (book-open) and the Agent (message-circle). Each tab is 56px high with its icon over its `caption` name, and its count or unread dot at the icon's shoulder. The current tab sits on `inset` in `ink` at 700. The others are `muted`.
 - **Settings:** on a desktop, a `surface` sidebar of sections in two groups, the Context's under its accent dot and the Deployment's, with the section shown on its tint in accent. On a phone, the same groups as rows with an icon, a `muted` value and a chevron.

@@ -227,6 +227,13 @@ button.quiet {
   color: var(--ink);
 }
 
+/* Open, it sits as the current phone tab does: on inset, in ink at 700 (section 8.11). */
+.attention-toggle[aria-expanded="true"] {
+  background: var(--inset);
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .settings {
   display: flex;
   flex-shrink: 0;
@@ -822,6 +829,19 @@ input[type="checkbox"].switch:disabled {
   letter-spacing: -0.01em;
 }
 
+/* What is beside the title sits at the header's end, with anything after it, such as a Close. */
+.peer-aside {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.peer-aside:empty {
+  display: none;
+}
+
 .peer-note {
   color: var(--muted);
   font: var(--type-meta);
@@ -863,14 +883,24 @@ button.jump-to-latest {
 }
 
 .tabs,
-.attention-toggle {
+.attention-toggle,
+.attention-close {
   display: none;
 }
 
-/* In between: the Journal and the Conversation, with Attention opened from the top bar over them. */
+/*
+ * In between: the Journal and the Conversation, with Attention opened from the top bar over them
+ * as a layer, with a Close of its own. The Conversation takes up to 360px and is never wider than
+ * the Journal: both grow from nothing, and it stops at 360px.
+ */
 @media (720px <= width < 1200px) {
-  .attention-toggle {
+  .attention-toggle,
+  .attention-close {
     display: inline-flex;
+  }
+
+  .attention-close {
+    flex-shrink: 0;
   }
 
   .peer.attention {
@@ -886,7 +916,8 @@ button.jump-to-latest {
   }
 
   .peer.conversation {
-    flex-basis: 360px;
+    flex: 1 1 0;
+    max-width: 360px;
   }
 }
 
@@ -1749,9 +1780,13 @@ button.inspector-choice > .inspector-choice-check {
   outline-offset: 2px;
 }
 
+/* A label too long for its line, as a Context's long name makes it, is cut short, never the send. */
 .composer-label {
+  overflow: hidden;
   color: var(--accent);
   font: var(--type-label);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .composer-row {
@@ -1780,35 +1815,36 @@ button.inspector-choice > .inspector-choice-check {
 /*
  * At rest, with nothing written and the focus elsewhere, a composer is one line: its label where
  * the words will go, its send at the end. Focused, it opens to its two lines, at once: it is
- * reached many times a day, so it does not animate (section 8.2).
+ * reached many times a day, so it does not animate (section 8.2). The label and the field share
+ * the first track, which gives way to the send's, so a narrow column cuts the label short first.
  */
 .composer:where([data-folded]) {
-  position: relative;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  column-gap: var(--space-3);
   padding: 6px 6px 6px var(--space-4);
 }
 
+.composer:where([data-folded]) .composer-row {
+  display: contents;
+}
+
 .composer:where([data-folded]) .composer-label {
-  position: absolute;
-  top: 50%;
-  left: var(--space-4);
-  transform: translateY(-50%);
+  grid-area: 1 / 1;
   pointer-events: none;
 }
 
-.composer:where([data-folded]) .composer-row {
-  flex: 1;
-  align-items: center;
-}
-
 .composer:where([data-folded]) textarea {
+  grid-area: 1 / 1;
   height: 40px;
 }
 
 /* The two sends: Record a pill with its check and its word, Send a round button with its arrow. */
 button.record-button {
+  flex-shrink: 0;
   padding: 0 var(--space-4);
+  white-space: nowrap;
 }
 
 button.send-button {

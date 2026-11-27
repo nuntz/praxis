@@ -12,6 +12,15 @@ export function Peer(props: {
   title: string;
   /** Beside the title: a count, or what the column is about. */
   aside?: JSX.Element;
+  /** At the header's end, after the aside: Attention's Close, in between. */
+  end?: JSX.Element;
+  /**
+   * Given, the heading takes the focus from code (`tabindex="-1"`), and is described by the aside,
+   * so a screen reader reads the title and its count together: Attention's, as it opens in between.
+   */
+  headingRef?: (heading: HTMLHeadingElement) => void;
+  /** Out of reach of Tab, a pointer and a screen reader, as under Attention opened in between. */
+  inert?: boolean | undefined;
   onKeyDown?: (event: KeyboardEvent) => void;
   children?: JSX.Element;
 }) {
@@ -20,13 +29,23 @@ export function Peer(props: {
       id={props.id}
       class={`peer ${props.id}`}
       aria-labelledby={`${props.id}-heading`}
+      inert={props.inert}
       onKeyDown={(event) => props.onKeyDown?.(event)}
     >
       <header class="peer-header">
-        <h2 id={`${props.id}-heading`} class="peer-title">
+        <h2
+          ref={(heading) => props.headingRef?.(heading)}
+          id={`${props.id}-heading`}
+          class="peer-title"
+          tabIndex={props.headingRef ? -1 : undefined}
+          aria-describedby={props.headingRef ? `${props.id}-aside` : undefined}
+        >
           {props.title}
         </h2>
-        {props.aside}
+        <span id={`${props.id}-aside`} class="peer-aside">
+          {props.aside}
+        </span>
+        {props.end}
       </header>
       {props.children}
     </section>

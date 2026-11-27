@@ -594,10 +594,11 @@ Three peers, none hosting the others: **Attention**, the **Journal** and the **C
 | Width | Layout |
 |---|---|
 | Desktop | Three columns: Attention left, Journal middle, Conversation right. |
-| In between | Journal and Conversation side by side. Attention is a column opened from a button in the top bar that carries its count. |
+| In between | Journal and Conversation side by side, the Conversation never wider than the Journal. Attention is a layer over them, opened from a button in the top bar that carries its count. |
 | Phone | Three bottom tabs: Attention, Journal, Agent. It opens on Attention. |
 
 - The Context switcher is in the top bar at every width. Settings opens from the top bar too, as a screen of its own (section 8.6).
+- **Attention in between.** Opening it moves the focus to its heading, read out with its count. While it is open the Journal and the Conversation are inert, out of reach of Tab, a pointer and a screen reader, and only Attention and the top bar are live. A press on either closes it and does nothing else. Its Close, Escape and its button each close it and return the focus to its button. The Context switcher and Settings close it first, then do what they do, so a Context switched to shows with Attention shut. A Task's or a Project's page pushed inside it goes back with Escape, as at any width.
 - A change the Agent makes shows in the other two columns as it happens, patched from its Effects.
 - **The newest is where the person types.** The Journal and the Conversation keep time order, oldest first, and open at their newest, beside their composer. They stay there as more arrives. Scrolled away from it, a column stays where the person is, and a pill above its composer, "Jump to latest" with a count of what arrived, takes them back. The person's own send always brings what they sent into view.
 - **Days.** Both are parted into days, "Today", "Yesterday", then the weekday and the date, by the Context's time zone, the zone their times are shown in.

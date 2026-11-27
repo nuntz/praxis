@@ -1,5 +1,15 @@
 import type { Page } from "@playwright/test";
-import { expect, onPhone, sharedContext, showTab, test } from "./fixtures.ts";
+import {
+  closeSettings,
+  contextOfOwn,
+  expect,
+  makeContext,
+  onPhone,
+  sharedContext,
+  showTab,
+  switchTo,
+  test,
+} from "./fixtures.ts";
 
 // The main screen is Attention, the Journal and the Conversation as three peers (section 8.1,
 // ADR 0022), in the Atelier look of section 8.11.
@@ -8,6 +18,8 @@ import { expect, onPhone, sharedContext, showTab, test } from "./fixtures.ts";
 const BLUE = { light: "rgb(43, 85, 196)", dark: "rgb(157, 182, 255)" };
 /** The ground behind the panels. */
 const GROUND = { light: "rgb(236, 238, 242)", dark: "rgb(15, 17, 20)" };
+/** What sits inside a panel, and the current tab. */
+const INSET = { light: "rgb(244, 245, 248)" };
 
 const column = (page: Page, name: string) => page.getByRole("region", { name, exact: true });
 
@@ -55,31 +67,169 @@ test("the Journal's column is the same one before the Context's time zone is rea
   expect(mounted).toEqual({ attention: 1, journal: 1, conversation: 1 });
 });
 
-test("in between, the Journal and the Conversation stand side by side and Attention opens from the top bar", async ({
+test("in between, the Journal and the Conversation stand side by side and Attention opens from the top bar as a layer over them", async ({
   page,
 }, testInfo) => {
   test.skip(onPhone(testInfo), "The in-between width is set on the desktop's Device.");
-  await page.setViewportSize({ width: 960, height: 800 });
+  // A Context of its own, so Attention holds only what this journey leaves in it, and Tab walks it.
+  await contextOfOwn(page, testInfo, "Layer");
+  await page.setViewportSize({ width: 1024, height: 800 });
   await page.goto("/");
 
-  await expect(column(page, "Journal")).toBeVisible();
+  const journal = column(page, "Journal");
+  await expect(journal).toBeVisible();
   await expect(column(page, "Conversation")).toBeVisible();
   await expect(column(page, "Attention")).toBeHidden();
   await expect(page.getByRole("navigation", { name: "Columns" })).toBeHidden();
+  const composer = journal.getByRole("textbox", { name: /^Record an Entry in / });
+  await expect(composer).toBeVisible();
 
-  // By keyboard: the button in the top bar opens Attention, and Escape puts it away again.
+  // By keyboard: the button in the top bar opens Attention, and the focus goes to its heading.
   const open = page.getByRole("banner").getByRole("button", { name: /^Attention/ });
+  const heading = column(page, "Attention").getByRole("heading", { name: "Attention" });
   await expect(open).toHaveAttribute("aria-expanded", "false");
   await open.focus();
   await page.keyboard.press("Enter");
   await expect(open).toHaveAttribute("aria-expanded", "true");
   await expect(column(page, "Attention")).toBeVisible();
+  await expect(heading).toBeFocused();
+
+  // Tab goes through Attention and back round by the top bar, never into the columns under it.
+  // Past the page's end the focus is on nothing, "none", before Tab wraps to the top bar.
+  const where = () =>
+    page.evaluate(() => {
+      const at = document.activeElement?.closest("#attention, #journal, #conversation, .top-bar");
+      return at ? at.id || "top-bar" : "none";
+    });
+  const visited: string[] = [];
+  for (let presses = 0; presses < 40; presses++) {
+    await page.keyboard.press("Tab");
+    visited.push(await where());
+    if (visited.at(-1) === "attention" && visited.includes("top-bar")) break;
+  }
+  expect(visited.at(-1)).toBe("attention");
+  expect(visited).toContain("top-bar");
+  expect(visited).not.toContain("journal");
+  expect(visited).not.toContain("conversation");
+
+  // Escape puts it away, the focus back on its button.
+  await heading.focus();
   await page.keyboard.press("Escape");
   await expect(column(page, "Attention")).toBeHidden();
   await expect(open).toBeFocused();
 
+  // Its own Close does the same.
+  await open.click();
+  const close = column(page, "Attention").getByRole("button", { name: "Close Attention" });
+  await expect(close).toHaveAttribute("title", "Close Attention");
+  await close.click();
+  await expect(column(page, "Attention")).toBeHidden();
+  await expect(open).toBeFocused();
+
+  // A press on the Journal, beside Attention, closes it and does nothing there: the composer it
+  // landed on is not given the caret.
+  await open.click();
+  await expect(heading).toBeFocused();
+  const field = await composer.boundingBox();
+  const layer = await column(page, "Attention").boundingBox();
+  if (!field || !layer) throw new Error("the composer and Attention are shown");
+  expect(field.x + field.width).toBeGreaterThan(layer.x + layer.width + 20);
+  await page.mouse.click(layer.x + layer.width + 10, field.y + field.height / 2);
+  await expect(column(page, "Attention")).toBeHidden();
+  await expect(composer).not.toBeFocused();
+  await expect(journal.getByTestId("composer")).toHaveAttribute("data-folded");
+
+  // Open, the button sits on inset, and the journey ends on the layer for the accessibility check.
+  await open.click();
+  await expect(open).toHaveCSS("background-color", INSET.light);
+  await expect(heading).toBeFocused();
+});
+
+test.describe("on a touch screen in between", () => {
+  test.use({ hasTouch: true });
+
+  test("a tap on the Journal beside Attention closes it and lands on nothing there", async ({
+    page,
+  }, testInfo) => {
+    test.skip(onPhone(testInfo), "The in-between width is set on the desktop's Device.");
+    await contextOfOwn(page, testInfo, "Tapped beside");
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await page.goto("/");
+    const journal = column(page, "Journal");
+    const composer = journal.getByRole("textbox", { name: /^Record an Entry in / });
+    await expect(composer).toBeVisible();
+
+    // On a touch screen the browser aims the press's mouse events and its click once the finger
+    // lifts, at what is under it then: the Journal stays inert until the press is done.
+    const open = page.getByRole("banner").getByRole("button", { name: /^Attention/ });
+    await open.tap();
+    await expect(column(page, "Attention")).toBeVisible();
+    const field = await composer.boundingBox();
+    const layer = await column(page, "Attention").boundingBox();
+    if (!field || !layer) throw new Error("the composer and Attention are shown");
+    await page.touchscreen.tap(layer.x + layer.width + 10, field.y + field.height / 2);
+    await expect(column(page, "Attention")).toBeHidden();
+    // Read once the press's click would have landed: a turn of the page after it.
+    await page.evaluate(
+      () => new Promise((settled) => setTimeout(() => requestAnimationFrame(settled))),
+    );
+    await expect(composer).not.toBeFocused();
+    await expect(journal.getByTestId("composer")).toHaveAttribute("data-folded");
+  });
+});
+
+test("in between, the top bar stays live while Attention is open: Settings and the switcher close it first", async ({
+  page,
+}, testInfo) => {
+  test.skip(onPhone(testInfo), "The in-between width is set on the desktop's Device.");
+  const other = await makeContext(page, {
+    name: `Elsewhere ${crypto.randomUUID().slice(0, 8)}`,
+    time_zone: "UTC",
+    accent: "plum",
+  });
+  await contextOfOwn(page, testInfo, "Live top bar");
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await page.goto("/");
+  const open = page.getByRole("banner").getByRole("button", { name: /^Attention/ });
+
   await open.click();
   await expect(column(page, "Attention")).toBeVisible();
+  await page.getByRole("banner").getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Settings sections" })).toBeVisible();
+  await closeSettings(page);
+  await expect(column(page, "Attention")).toBeHidden();
+  await expect(open).toHaveAttribute("aria-expanded", "false");
+
+  await open.click();
+  await expect(column(page, "Attention")).toBeVisible();
+  await switchTo(page, other.name);
+  await expect(column(page, "Journal")).toBeVisible();
+  await expect(column(page, "Attention")).toBeHidden();
+  await expect(open).toHaveAttribute("aria-expanded", "false");
+});
+
+test("at 720px the Conversation is as wide as the Journal, and Record lies wholly inside the Journal", async ({
+  page,
+}, testInfo) => {
+  test.skip(onPhone(testInfo), "The in-between width is set on the desktop's Device.");
+  await page.setViewportSize({ width: 720, height: 800 });
+  await page.goto("/");
+
+  const journal = column(page, "Journal");
+  const record = journal.getByRole("button", { name: "Record", exact: true });
+  await expect(record).toBeVisible();
+  const [panel, button, conversation] = await Promise.all([
+    journal.boundingBox(),
+    record.boundingBox(),
+    column(page, "Conversation").boundingBox(),
+  ]);
+  if (!panel || !button || !conversation) throw new Error("the Journal and Record are shown");
+  expect(Math.abs(conversation.width - panel.width)).toBeLessThanOrEqual(1);
+  expect(button.x).toBeGreaterThanOrEqual(panel.x);
+  expect(button.x + button.width).toBeLessThanOrEqual(panel.x + panel.width);
+  // Its icon and its word, both kept.
+  await expect(record).toHaveText("Record");
+  await expect(record.locator("svg")).toBeVisible();
 });
 
 test("on a phone, the screen opens on Attention and three tabs move between the columns", async ({
