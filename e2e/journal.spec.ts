@@ -93,6 +93,14 @@ test("the person sees an Entry's words rendered as Markdown, and edits them as t
     "- The boathouse",
     "- The old print works",
     "",
+    "> The boathouse holds forty.",
+    ">",
+    "> The print works holds sixty.",
+    "",
+    "```",
+    "deposit = 1500",
+    "```",
+    "",
     "| Venue | Holds | Per head | Travel from the office | Deposit | Notes |",
     "|---|--:|--:|---|--:|---|",
     "| The boathouse on the lake | 40 | 210 | Fifty minutes by coach from the office | 1,500 | No projector, so bring our own |",
@@ -138,6 +146,24 @@ test("the person sees an Entry's words rendered as Markdown, and edits them as t
   });
   expect(widths.table[0]).toBeGreaterThan(widths.table[1] as number);
   expect(widths.words[0]).toBe(widths.words[1]);
+
+  // Each block is parted from the one before it by space-3, and so is each block in a quote (#183).
+  const gaps = await shown.evaluate((words) =>
+    [...words.querySelectorAll(":scope > * + *, :scope > blockquote > * + *")].map(
+      (block) =>
+        `${block.parentElement === words ? "" : "quote "}${block.tagName} ${getComputedStyle(block).marginTop}`,
+    ),
+  );
+  expect(gaps).toEqual([
+    "P 12px",
+    "P 12px",
+    "UL 12px",
+    "BLOCKQUOTE 12px",
+    "quote P 12px",
+    "PRE 12px",
+    "DIV 12px",
+    "P 12px",
+  ]);
 
   // The Entry's page shows the words as typed, with no preview.
   await (await entryAction(entry, "Edit", testInfo)).click();

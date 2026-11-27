@@ -1100,7 +1100,8 @@ button.jump-to-latest {
   font: var(--type-body);
 }
 
-.words :is(p, h4, h5, h6, ul, ol, blockquote, pre, .table-scroll) {
+/* The reset has no specificity of its own, so the spacing after it wins (#183). */
+.words :where(p, h4, h5, h6, ul, ol, blockquote, pre, .table-scroll) {
   margin: 0;
 }
 
@@ -1155,7 +1156,6 @@ button.jump-to-latest {
 
 /* A quote is indented behind a hairline, in the muted colour, with no box. */
 .words blockquote {
-  margin: 0;
   padding-left: var(--space-4);
   border-left: 2px solid var(--rule);
   color: var(--muted);
@@ -1929,7 +1929,6 @@ button.inspector-choice > .inspector-choice-check {
 
 .inspector-origin blockquote {
   display: -webkit-box;
-  margin: var(--space-1) 0 0;
   padding-left: var(--space-3);
   overflow: hidden;
   border-left: 2px solid var(--rule);
