@@ -33,6 +33,13 @@ p {
   outline-offset: 2px;
 }
 
+/* A placeholder is read, so it is muted like any quiet text, not the browser's fainter grey, and
+   not faded further as Firefox fades it. */
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
