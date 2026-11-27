@@ -11,6 +11,7 @@ import { createEffect, createSignal, onCleanup, Show, untrack } from "solid-js";
 import { keepDraft, type Pick, takeCaret, takeDraft, takeShared, withShared } from "./draft.ts";
 import { ComposerKey, JOURNAL_COMPOSER } from "./keys.tsx";
 import { latestRead } from "./latest-read.ts";
+import { type Aim, putTasksMadeIn, takeAim } from "./next-task.ts";
 import {
   type Choice,
   ChoiceList,
@@ -26,7 +27,8 @@ import { recordEntry } from "./unsent.ts";
  * The Journal's composer, which records an Entry with no model turn. `@` opens a picker of the
  * Context's Persons and `#` one of its Tasks and Projects. Only a pick makes a link: the editor
  * keeps each beside the words and passes them to `record_entry`, and never matches a name to a
- * record. The Entry it records may be a Follow-up to one the person chose.
+ * record. The Entry it records may be a Follow-up to one the person chose, and may be aimed at a
+ * Project, from its page, for its next Task: the Tasks it makes are put in it once it is recorded.
  */
 export function Composer(props: {
   /** The Context the Entry is recorded in, named on the composer once known. */
@@ -38,10 +40,11 @@ export function Composer(props: {
   onStopFollowingUp: () => void;
   onRecorded: (entry: Entry) => void;
   /**
-   * The Entry was kept Unsent on this Device, to be sent once Praxis can be reached, and whether
-   * its links or the Entry it followed up were left off for that.
+   * The Entry was kept Unsent on this Device, to be sent once Praxis can be reached, whether its
+   * links or the Entry it followed up were left off for that, and the Project it was aimed at,
+   * whose Tasks it makes once sent are not put in it.
    */
-  onUnsent: (leftOff: boolean) => void;
+  onUnsent: (leftOff: boolean, aimedAt: Aim["project"] | null) => void;
   /** The draft came from another Context, and its links stayed there. */
   onLinksLeftOff: () => void;
   onProblem: (message: string) => void;
@@ -55,6 +58,8 @@ export function Composer(props: {
   if (leftOff) props.onLinksLeftOff();
   const [words, setWords] = createSignal(draft.words);
   const [picks, setPicks] = createSignal<Pick[]>(draft.picks);
+  // The Project the next Entry is written for, from its page: it lasts one Entry (section 8.4).
+  const [aim, setAim] = createSignal<Aim | null>(draft.aim);
   const [query, setQuery] = createSignal<LinkQuery | null>(null);
   // Where the picker the person shut with Escape starts, so it stays shut as they type on.
   const [shut, setShut] = createSignal<number | null>(null);
@@ -64,14 +69,22 @@ export function Composer(props: {
   const [highlight, setHighlight] = createSignal(-1);
   const [sending, setSending] = createSignal(false);
   const canRecord = () => !sending() && words().trim() !== "";
-  // At rest, with nothing written, no Follow-up chosen and the focus elsewhere, it folds to one line.
+  // At rest, with nothing written, no Follow-up chosen, no aim and the focus elsewhere, it folds
+  // to one line.
   const [focused, setFocused] = createSignal(false);
-  const folded = () => !focused() && words() === "" && !props.followingUp;
+  const folded = () => !focused() && words() === "" && !props.followingUp && !aim();
   const open = () => query() !== null && choices().length > 0;
   // A draft on its way is no longer the draft: kept, it would show again in the next Context and
   // could be sent twice.
   onCleanup(() => {
-    if (!sending()) keepDraft({ context: contextId, words: words(), picks: picks(), leftOff });
+    if (!sending()) {
+      keepDraft({ context: contextId, words: words(), picks: picks(), leftOff, aim: aim() });
+    }
+  });
+  // Aimed from a Project's page, at once, even while an Entry is on its way: it is for the next.
+  createEffect(() => {
+    const asked = takeAim(contextId);
+    if (asked !== null) setAim(asked);
   });
   // Opened by the shortcut or the share sheet, the composer has the caret, after what was shared
   // (section 8.9). Nothing is recorded until the person sends it.
@@ -158,6 +171,8 @@ export function Composer(props: {
   async function record() {
     if (!canRecord()) return;
     setSending(true);
+    // The aim the Entry is sent with: another may be asked for while it is on its way.
+    const aimed = aim();
     try {
       // The editor finds the Inline Tasks and keeps the links; the server never reads words for them.
       // With no network the Entry is kept Unsent, and capture never fails (section 8.8).
@@ -167,8 +182,11 @@ export function Composer(props: {
         follow_up_to: props.followingUp?.id ?? null,
       });
       if (outcome.kind === "refused") return props.onProblem(outcome.message);
-      if (outcome.kind === "made") props.onRecorded(outcome.value);
-      else props.onUnsent(outcome.leftOff);
+      if (outcome.kind === "made") {
+        props.onRecorded(outcome.value);
+        if (aimed) void putTasksMadeIn(callTool, aimed, outcome.value);
+      } else props.onUnsent(outcome.leftOff, aimed?.project ?? null);
+      if (aim() === aimed) setAim(null);
       setWords("");
       setPicks([]);
       leftOff = false;
@@ -249,6 +267,16 @@ export function Composer(props: {
               <span>Following up “{earlier().summary}”</span>
               <button type="button" class="quiet" onClick={() => props.onStopFollowingUp()}>
                 Not a Follow-up
+              </button>
+            </p>
+          )}
+        </Show>
+        <Show when={aim()}>
+          {(aimed) => (
+            <p class="composer-follow-up">
+              <span>Next Task for {aimed().project.name}</span>
+              <button type="button" class="quiet" onClick={() => setAim(null)}>
+                Not for {aimed().project.name}
               </button>
             </p>
           )}

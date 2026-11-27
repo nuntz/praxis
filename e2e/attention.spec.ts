@@ -45,8 +45,10 @@ test("the person finishes a Task from Attention, and it leaves Due and the count
 
   await page.goto("/");
   const attention = page.getByRole("region", { name: "Attention", exact: true });
-  const due = attention.getByRole("region", { name: "Due", exact: true });
+  const due = attention.getByRole("region", { name: /^Due( \d+)?$/ });
   await expect(due.getByRole("listitem")).toHaveCount(2);
+  // Due's heading carries its count, the one the tab or the top bar's button shows.
+  await expect(due.getByRole("heading", { level: 3 })).toHaveText("Due 2");
   const task = due.getByRole("listitem").filter({ hasText: overdue });
   // Its row leads with Overdue on the date, and tells a screen reader every mark.
   const row = task.getByRole("button", { name: overdue, exact: true });
@@ -60,6 +62,7 @@ test("the person finishes a Task from Attention, and it leaves Due and the count
   expect((await (await finished).json()).ok).toBe(true);
 
   await expect(due.getByRole("listitem")).toHaveCount(1);
+  await expect(due.getByRole("heading", { level: 3 })).toHaveText("Due 1");
   await expect(due.getByText(overdue)).toHaveCount(0);
   await expect(count(page, testInfo)).toContainText("1 to act on");
 
@@ -119,6 +122,20 @@ function after(day: string, days: number): string {
   return new Date(Date.UTC(year, month - 1, date + days)).toISOString().slice(0, 10);
 }
 
+/** A day as the line at the top of Attention says it, in the Device's locale. */
+function shortDayOn(page: Page, day: string): Promise<string> {
+  return page.evaluate(
+    (day) =>
+      new Intl.DateTimeFormat(undefined, {
+        day: "numeric",
+        month: "short",
+        year: day.slice(0, 4) === new Date().toISOString().slice(0, 4) ? undefined : "numeric",
+        timeZone: "UTC",
+      }).format(new Date(`${day}T00:00:00Z`)),
+    day,
+  );
+}
+
 test("the person opens the weeks ahead from Due and sees what is coming, a Recurrence's Occurrences to come among it", async ({
   page,
 }, testInfo) => {
@@ -144,7 +161,7 @@ test("the person opens the weeks ahead from Due and sees what is coming, a Recur
   await page.goto("/");
   const attention = page.getByRole("region", { name: "Attention", exact: true });
   // Nothing is due, and the weeks ahead still open from the Due section, in Attention itself.
-  const due = attention.getByRole("region", { name: "Due", exact: true });
+  const due = attention.getByRole("region", { name: /^Due( \d+)?$/ });
   const open = due.getByRole("button", { name: "The weeks ahead" });
   await expect(open).toHaveAttribute("aria-expanded", "false");
   await expect(due.getByRole("listitem")).toHaveCount(0);
@@ -174,10 +191,17 @@ test("the person opens the weeks ahead from Due and sees what is coming, a Recur
     new RegExp(`^${weekly}.*Not made yet`),
   ]);
 
+  // Said at the top of Attention, as a finish from a row there is.
+  const said = attention.getByRole("status").filter({ hasText: weekly });
+  await expect(said).toHaveText(`Finished “${weekly}”. Reopen`);
+
   // Sent, the next Occurrence is made and the weeks ahead follow.
   const finished = page.waitForResponse(/\/tools\/finish_task$/);
   await page.context().setOffline(false);
   expect((await (await finished).json()).ok).toBe(true);
+  await expect(said).toHaveText(
+    `Finished “${weekly}”. Next due ${await shortDayOn(page, after(today, 9))}.`,
+  );
   await expect(items).toHaveText([
     new RegExp(`^${vet}`),
     new RegExp(`^${weekly}`),
@@ -191,6 +215,102 @@ test("the person opens the weeks ahead from Due and sees what is coming, a Recur
   // Left open, so the accessibility check at the end sees it.
   await open.click();
   await expect(items).toHaveCount(4);
+});
+
+test("a Project in the weeks ahead opens its page over Attention, as its row in Attention does, and Back returns to it there", async ({
+  page,
+}, testInfo) => {
+  const { id, tasks } = await contextWith(page, testInfo, ["Trim the hedge"]);
+  const { today } = await callContextTool(page, id, "get_settings", {});
+  const { record: hedge } = await callContextTool(page, id, "create_project", {
+    name: "Hedge",
+    due_date: after(today, 3),
+  });
+  await callContextTool(page, id, "move_task", { id: tasks[0]?.id, project_id: hedge.id });
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  await attention.getByRole("button", { name: "The weeks ahead" }).click();
+  const ahead = attention.getByRole("region", { name: "The weeks ahead", exact: true });
+  const row = ahead.getByRole("button", { name: "Hedge", exact: true });
+  await expect(row).toContainText("Project");
+  await row.click();
+
+  const opened = attention.getByRole("dialog", { name: "Hedge" });
+  await expect(
+    opened
+      .getByRole("list", { name: "Tasks in Hedge" })
+      .getByRole("checkbox", { name: "Trim the hedge", exact: true }),
+  ).toBeVisible();
+  await opened.getByRole("button", { name: "Back to Attention" }).click();
+  await expect(opened).toHaveCount(0);
+  await expect(row).toBeFocused();
+});
+
+test("on a phone the Attention tab, tapped while it is shown, closes every page over it, the focus on the row the first was opened from", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "The tabs are a phone's.");
+  const { id, tasks } = await contextWith(page, testInfo, ["Fix the gate"]);
+  const { record: garden } = await callContextTool(page, id, "create_project", { name: "Garden" });
+  await callContextTool(page, id, "move_task", { id: tasks[0]?.id, project_id: garden.id });
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  const tab = page.getByRole("navigation", { name: "Columns" }).getByRole("button", {
+    name: /^Attention/,
+  });
+  const row = attention
+    .getByRole("region", { name: "Projects", exact: true })
+    .getByRole("button", { name: "Garden", exact: true });
+  await row.click();
+  await attention
+    .getByRole("dialog", { name: "Garden" })
+    .getByRole("button", { name: "Fix the gate", exact: true })
+    .click();
+  await expect(attention.getByRole("button", { name: "Back to Garden" })).toBeVisible();
+
+  await tab.click();
+  await expect(attention.getByRole("dialog")).toHaveCount(0);
+  await expect(row).toBeFocused();
+
+  // With no page open, a tap leaves Attention as it is, the tab taking the focus.
+  await tab.click();
+  await expect(tab).toBeFocused();
+  await expect(row).toBeVisible();
+  await expect(attention.getByRole("dialog")).toHaveCount(0);
+});
+
+test("“From its Entry” on a Task's page opens the Entry in the Journal: on a phone its tab is shown, in between Attention's layer closes", async ({
+  page,
+}, testInfo) => {
+  // In between, Attention is a layer over the Journal, opened from the top bar.
+  if (!onPhone(testInfo)) await page.setViewportSize({ width: 1024, height: 800 });
+  await contextWith(page, testInfo, ["Call the plumber"]);
+
+  await page.goto("/");
+  const button = page.getByRole("banner").getByRole("button", { name: /^Attention/ });
+  if (!onPhone(testInfo)) await button.click();
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  await attention
+    .getByRole("region", { name: "Loose", exact: true })
+    .getByRole("button", { name: "Call the plumber", exact: true })
+    .click();
+  await attention
+    .getByRole("dialog", { name: "Call the plumber" })
+    .getByRole("link", { name: "From its Entry" })
+    .click();
+
+  const journal = page.getByRole("region", { name: "Journal" });
+  await expect(journal).toBeVisible();
+  if (onPhone(testInfo)) {
+    await expect(
+      page.getByRole("navigation", { name: "Columns" }).getByRole("button", { name: /^Journal/ }),
+    ).toHaveAttribute("aria-current", "true");
+  } else {
+    await expect(button).toHaveAttribute("aria-expanded", "false");
+  }
+  await expect(journal.getByTestId("entry").filter({ hasText: "Errands" })).toBeFocused();
 });
 
 /** A write the page sends, once its answer is in: it was accepted. */
@@ -570,4 +690,216 @@ test("a Due Date picked on a Task's page opened from its Project's page is the T
     "due_date",
     null,
   );
+});
+
+test("with nothing due, Due says so under its heading, and with nothing at all only that nothing is open is said", async ({
+  page,
+}, testInfo) => {
+  const title = "Mend the fence";
+  await contextWith(page, testInfo, [title]);
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  const due = attention.getByRole("region", { name: /^Due( \d+)?$/ });
+  await expect(attention.getByRole("region", { name: "Loose", exact: true })).toBeVisible();
+  await expect(due.getByRole("heading", { level: 3 })).toHaveText("Due");
+  await expect(due.getByText("Nothing due today.", { exact: true })).toBeVisible();
+  await expect(attention.getByText("Nothing is open to act on.")).toHaveCount(0);
+
+  await accepted(page, "finish_task", () =>
+    attention.getByRole("checkbox", { name: title, exact: true }).check(),
+  );
+  await expect(attention.getByText("Nothing is open to act on.", { exact: true })).toBeVisible();
+  await expect(attention.getByText("Nothing due today.")).toHaveCount(0);
+});
+
+test("a Task finished from its row is said with Reopen, which has the focus, and Reopen puts the row back where it was", async ({
+  page,
+}, testInfo) => {
+  const titles = ["Wash the car", "Fix the gate", "Mow the lawn"];
+  await contextWith(page, testInfo, titles);
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  const loose = attention.getByRole("region", { name: "Loose", exact: true });
+  const rows = loose.getByRole("listitem");
+  await expect(rows).toHaveText(titles.map((title) => new RegExp(`^${title}`)));
+
+  await accepted(page, "finish_task", () =>
+    loose.getByRole("checkbox", { name: "Fix the gate", exact: true }).check(),
+  );
+  const said = attention.getByRole("status").filter({ hasText: "Fix the gate" });
+  await expect(said).toHaveText("Finished “Fix the gate”. Reopen");
+  await expect(said.getByRole("button", { name: "Reopen" })).toBeFocused();
+  await expect(rows).toHaveText([/^Wash the car/, /^Mow the lawn/]);
+
+  await accepted(page, "reopen_task", () => page.keyboard.press("Enter"));
+  await expect(rows).toHaveText(titles.map((title) => new RegExp(`^${title}`)));
+  await expect(said).toHaveCount(0);
+  await expect(loose.getByRole("button", { name: "Fix the gate", exact: true })).toBeFocused();
+});
+
+test("a finish still Unsent is undone by Reopen with nothing sent, and a recurring Task's finish, once in, is said with its next Due Date and no Reopen", async ({
+  page,
+}, testInfo) => {
+  const [plants, cat] = ["Water the plants", "Feed the cat"];
+  const { id, tasks } = await contextWith(page, testInfo, [plants, cat]);
+  const [watering] = tasks;
+  const { today } = await callContextTool(page, id, "get_settings", {});
+  await callContextTool(page, id, "set_task_dates", { id: watering?.id, due_date: today });
+  await callContextTool(page, id, "set_recurrence", {
+    id: watering?.id,
+    recurrence: { kind: "days", every: 7 },
+  });
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  await expect(attention.getByRole("button", { name: cat, exact: true })).toBeVisible();
+  const sent: string[] = [];
+  page.on("request", (request) => {
+    if (/\/tools\/finish_task$/.test(request.url())) sent.push(request.postDataJSON().id);
+  });
+
+  // Finished with no network, it is said with Reopen, which undoes it on the Device.
+  await page.context().setOffline(true);
+  await attention.getByRole("checkbox", { name: cat, exact: true }).click();
+  const catSaid = attention.getByRole("status").filter({ hasText: cat });
+  await expect(catSaid).toHaveText(`Finished “${cat}”. Reopen`);
+  await expect(page.getByRole("status").filter({ hasText: /^1 Unsent/ })).toBeVisible();
+  await expect(catSaid.getByRole("button", { name: "Reopen" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(attention.getByRole("button", { name: cat, exact: true })).toBeFocused();
+  await expect(catSaid).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: /Unsent/ })).toHaveCount(0);
+
+  // A recurring Task finished Unsent is offered Reopen until its finish is in.
+  await attention.getByRole("checkbox", { name: plants, exact: true }).click();
+  const plantsSaid = attention.getByRole("status").filter({ hasText: plants });
+  await expect(plantsSaid).toHaveText(`Finished “${plants}”. Reopen`);
+
+  const answered = page.waitForResponse(/\/tools\/finish_task$/);
+  await page.context().setOffline(false);
+  expect((await (await answered).json()).ok).toBe(true);
+  const next = await shortDayOn(page, after(today, 7));
+  await expect(plantsSaid).toHaveText(`Finished “${plants}”. Next due ${next}.`);
+  await expect(plantsSaid.getByRole("button")).toHaveCount(0);
+  await expect(plantsSaid).toBeFocused();
+  expect(sent).toEqual([watering?.id]);
+
+  // Its next Occurrence, not due, is Loose once read; finished with the network, it is said the
+  // same at once, the focus on the line.
+  const loose = attention.getByRole("region", { name: "Loose", exact: true });
+  await accepted(page, "finish_task", () =>
+    loose.getByRole("checkbox", { name: plants, exact: true }).check(),
+  );
+  await expect(plantsSaid).toHaveText(
+    `Finished “${plants}”. Next due ${await shortDayOn(page, after(today, 14))}.`,
+  );
+  await expect(plantsSaid).toBeFocused();
+});
+
+test("a change made elsewhere leaves the focus on the row it was on, once Attention has read it", async ({
+  page,
+}, testInfo) => {
+  const { id, tasks } = await contextWith(page, testInfo, ["Book the dentist", "Return the drill"]);
+  const [, drill] = tasks;
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  const dentist = attention.getByRole("button", { name: "Book the dentist", exact: true });
+  await dentist.focus();
+  await expect(dentist).toBeFocused();
+
+  await callContextTool(page, id, "rename_task", { id: drill?.id, title: "Return the ladder" });
+  await expect(
+    attention.getByRole("button", { name: "Return the ladder", exact: true }),
+  ).toBeVisible();
+  await expect(dentist).toBeFocused();
+});
+
+/**
+ * Hold the answer to the finish of one Task, so a journey changes what the screen shows while it is
+ * out; every other finish is answered as ever.
+ */
+async function holdFinishOf(page: Page, task: string | undefined) {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let asked!: () => void;
+  const wasAsked = new Promise<void>((resolve) => {
+    asked = resolve;
+  });
+  await page.route(/\/tools\/finish_task$/, async (route) => {
+    if (route.request().postDataJSON().id !== task) return route.fallback();
+    asked();
+    const answer = await route.fetch();
+    await released;
+    await route.fulfill({ response: answer });
+  });
+  return {
+    asked: () => wasAsked,
+    /** Let the answer through, and wait until the screen has it. */
+    async release() {
+      const answered = page.waitForResponse(/\/tools\/finish_task$/);
+      release();
+      expect((await (await answered).json()).ok).toBe(true);
+    },
+  };
+}
+
+test("a recurring Task's finish coming in leaves the line to a change said since, and Reopen on a finish on its way says to wait for it", async ({
+  page,
+}, testInfo) => {
+  const [plants, cat, letter] = ["Water the plants", "Feed the cat", "Post the letter"];
+  const { id, tasks } = await contextWith(page, testInfo, [plants, cat, letter]);
+  const [watering, , posting] = tasks;
+  const { today } = await callContextTool(page, id, "get_settings", {});
+  await callContextTool(page, id, "set_task_dates", { id: watering?.id, due_date: today });
+  await callContextTool(page, id, "set_recurrence", {
+    id: watering?.id,
+    recurrence: { kind: "days", every: 7 },
+  });
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  await expect(attention.getByRole("button", { name: cat, exact: true })).toBeVisible();
+  const said = attention.locator(".moved");
+
+  // Finished Unsent, its finish held on the way once the network is back.
+  await page.context().setOffline(true);
+  await attention.getByRole("checkbox", { name: plants, exact: true }).click();
+  await expect(said).toHaveText(`Finished “${plants}”. Reopen`);
+  const watered = await holdFinishOf(page, watering?.id);
+  await page.context().setOffline(false);
+  await watered.asked();
+
+  // A change said meanwhile keeps the line once that finish comes in.
+  await attention.getByRole("button", { name: cat, exact: true }).click();
+  await accepted(page, "drop_task", () => attention.getByRole("button", { name: /^Drop/ }).click());
+  await expect(said).toHaveText(`Dropped “${cat}”. Reopen`);
+  await watered.release();
+  await expect(attention.getByRole("button", { name: plants, exact: true })).toBeVisible();
+  await expect(said).toHaveText(`Dropped “${cat}”. Reopen`);
+
+  // Reopen while a finish is on its way says to wait, and undoes nothing.
+  await page.context().setOffline(true);
+  await attention.getByRole("checkbox", { name: letter, exact: true }).click();
+  await expect(said).toHaveText(`Finished “${letter}”. Reopen`);
+  const posted = await holdFinishOf(page, posting?.id);
+  await page.context().setOffline(false);
+  await posted.asked();
+  await said.getByRole("button", { name: "Reopen" }).click();
+  await expect(attention.getByRole("alert")).toHaveText(
+    "Its finish is on its way to Praxis: Reopen it once it is in.",
+  );
+  await posted.release();
+  expect((await callContextTool(page, id, "get_task", { id: posting?.id })).state.is).toBe(
+    "finished",
+  );
+  await expect(said).toHaveText(`Finished “${letter}”. Reopen`);
+
+  // Once it is in, Reopen reopens it on the server, and the focus is on its row again.
+  await accepted(page, "reopen_task", () => said.getByRole("button", { name: "Reopen" }).click());
+  await expect(attention.getByRole("button", { name: letter, exact: true })).toBeFocused();
 });

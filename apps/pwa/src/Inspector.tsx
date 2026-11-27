@@ -25,6 +25,7 @@ import Folder from "lucide-solid/icons/folder";
 import FolderMinus from "lucide-solid/icons/folder-minus";
 import FolderPlus from "lucide-solid/icons/folder-plus";
 import Hourglass from "lucide-solid/icons/hourglass";
+import ListPlus from "lucide-solid/icons/list-plus";
 import Repeat from "lucide-solid/icons/repeat";
 import RotateCcw from "lucide-solid/icons/rotate-ccw";
 import Trash from "lucide-solid/icons/trash";
@@ -45,8 +46,11 @@ import {
 import { Dynamic } from "solid-js/web";
 import { TaskRow } from "./AttentionRows.tsx";
 import { todayIn } from "./days.tsx";
+import { recordAnchor } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
 import { MoveRecord } from "./Move.tsx";
+import { aimComposer } from "./next-task.ts";
+import { online } from "./online.ts";
 import { ChoicePicker, personsOffered, referencesOffered, waitTargetsOffered } from "./Pickers.tsx";
 import { recurrencesOffered, recurrenceWords, sameRule } from "./recurrence-words.ts";
 import { SettlingField } from "./SettlingField.tsx";
@@ -76,8 +80,13 @@ export type Page =
 /** What a change said in Attention's status line, and how to undo it, where it can be. */
 export type Said = {
   text: string;
-  /** Undoes the change: null once it is undone, or why it was refused. */
+  /**
+   * Undoes the change, or tries again what it could not do: null once that is done, or why it was
+   * refused.
+   */
   undo?: { label: string; run: (callTool: CallTool) => Promise<string | null> };
+  /** The row an undo brings back, by its `data-open-key`, which the focus then goes to. */
+  returnsTo?: string;
 };
 
 const CHOICE_TITLES = {
@@ -101,6 +110,16 @@ export function Inspector(props: {
   onSaid: (said: Said) => void;
   /** The panel closed: the focus goes back to the row it was opened from. */
   onClosed: () => void;
+  /** Give the Journal's composer the caret, its column shown first. */
+  toJournalComposer: () => void;
+  /**
+   * Hands over the way back to the list, every page closed, for the Attention tab's tap. It does
+   * nothing once the pages are closed, and the panel hands over a no-op when it is disposed, so it
+   * is safe to call after the panel has gone.
+   */
+  giveToList: (toList: () => void) => void;
+  /** Open an Entry in the Journal, its column shown first. */
+  toJournalEntry: (id: string) => void;
 }) {
   const callTool = useCallTool();
   const contextId = useContextId();
@@ -194,6 +213,21 @@ export function Inspector(props: {
       (line ?? panel?.querySelector<HTMLElement>(".inspector-back"))?.focus();
     });
   }
+
+  /**
+   * Back to the list, every page closed at once, as Back does from the first: the focus goes to the
+   * row it was opened from. Not while a write is out, as Back is not.
+   */
+  props.giveToList(() => {
+    if (sending() || props.pages.length === 0) return;
+    setProblem(null);
+    setPushed(false);
+    props.setPages([]);
+    props.onClosed();
+  });
+  // A switch of Context or time zone disposes the panel with its pages still open: the tab's tap
+  // must not then close the pages of an Attention that has gone.
+  onCleanup(() => props.giveToList(() => {}));
 
   /** Leave the page of what has left Attention, or the panel when it was the first. */
   function leave() {
@@ -524,6 +558,7 @@ export function Inspector(props: {
                   onDrop={() => void dropTask()}
                   onReopen={() => void reopenTask()}
                   onDelete={() => void deleteTask()}
+                  onOpenEntry={props.toJournalEntry}
                   onTask={(changedTask) => {
                     placeTask(changedTask);
                     props.onChanged();
@@ -542,6 +577,12 @@ export function Inspector(props: {
                   onDue={setProjectDue}
                   onMove={() => push({ kind: "move", project: shown().id })}
                   onOpenTask={(opened) => push({ kind: "task", id: opened.id, held: opened })}
+                  onWriteNextTask={() => {
+                    // The page stays as it is: the next Task is written in the Journal.
+                    const { id, name } = shown();
+                    aimComposer({ context: contextId, project: { id, name } });
+                    props.toJournalComposer();
+                  }}
                   onEnd={(end) => void endProject(end)}
                   onReopen={() => void reopenProject()}
                   onDelete={() => void deleteProject()}
@@ -653,9 +694,8 @@ export function Inspector(props: {
   );
 }
 
-/** A write sent from the status line, whose refusal is thrown to be said there. */
 /** A write sent from the status line: null once it is made, or why it was refused. */
-async function refusal(
+export async function refusal(
   answer: Promise<{ ok: boolean; error?: { message: string } }>,
 ): Promise<string | null> {
   const result = await answer;
@@ -750,18 +790,11 @@ function ActionLine(props: {
   icon: LucideIcon;
   label: string;
   sub?: string | undefined;
-  danger?: boolean;
   disabled?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      class="inspector-line"
-      classList={{ danger: props.danger }}
-      disabled={props.disabled}
-      onClick={props.onClick}
-    >
+    <button type="button" class="inspector-line" disabled={props.disabled} onClick={props.onClick}>
       <Dynamic component={props.icon} size={18} aria-hidden="true" />
       <span class="inspector-line-label">
         {props.label}
@@ -836,6 +869,8 @@ function TaskPage(props: {
   onDrop: () => void;
   onReopen: () => void;
   onDelete: () => void;
+  /** Open its Entry in the Journal; the page stays as it is. */
+  onOpenEntry: (id: string) => void;
   onTask: (task: Task) => void;
   onProblem: (message: string) => void;
 }) {
@@ -886,11 +921,6 @@ function TaskPage(props: {
     return `${waiting.length} Tasks and Projects`;
   };
 
-  async function toggle(box: HTMLInputElement) {
-    await finishing.setFinished(box.checked);
-    box.checked = finishing.shownFinished();
-  }
-
   return (
     <>
       <div class="inspector-title-row">
@@ -900,7 +930,7 @@ function TaskPage(props: {
             aria-label={props.task.title}
             checked={finishing.shownFinished()}
             disabled={finishing.sending() || finishing.dropped()}
-            onChange={(event) => void toggle(event.currentTarget)}
+            onChange={(event) => void finishing.toggle(event.currentTarget)}
           />
         </label>
         <TitleField value={props.task.title} label="Title" onCommit={props.onRename} />
@@ -981,7 +1011,6 @@ function TaskPage(props: {
             icon={Trash}
             label="Delete"
             sub="To the Trash for 30 days"
-            danger
             disabled={props.sending}
             onClick={props.onDelete}
           />
@@ -1002,7 +1031,6 @@ function TaskPage(props: {
             icon={Trash}
             label="Delete"
             sub="To the Trash for 30 days"
-            danger
             disabled={props.sending}
             onClick={props.onDelete}
           />
@@ -1011,7 +1039,18 @@ function TaskPage(props: {
       <Show when={origin()}>
         {(entry) => (
           <figure class="inspector-origin">
-            <figcaption>From its Entry</figcaption>
+            <figcaption>
+              <a
+                class="inspector-origin-link"
+                href={`#${recordAnchor("entry", entry().id)}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  props.onOpenEntry(entry().id);
+                }}
+              >
+                From its Entry
+              </a>
+            </figcaption>
             <Words words={entry().words} images={imageLoadingIn(entry())} />
           </figure>
         )}
@@ -1028,6 +1067,8 @@ function ProjectPage(props: {
   onDue: (id: string, day: string) => Promise<void>;
   onMove: () => void;
   onOpenTask: (task: Task) => void;
+  /** Aim the Journal's composer at the Project for its next Task, and give it the caret. */
+  onWriteNextTask: () => void;
   onEnd: (end: "finish_project" | "drop_project") => void;
   onReopen: () => void;
   onDelete: () => void;
@@ -1094,6 +1135,24 @@ function ProjectPage(props: {
           </For>
         </ul>
       </Show>
+      {/* A Task is made only with an Entry, so its next is written in the Journal (section 8.3).
+          Its Tasks are put in the Project once it is recorded, which needs the network. */}
+      <Show when={props.project.state.is === "open" && open() === 0}>
+        <Show
+          when={online()}
+          fallback={<p class="peer-note">Writing its next Task needs the network.</p>}
+        >
+          <div class="inspector-group">
+            <ActionLine
+              icon={ListPlus}
+              label="Write its next Task"
+              sub="In the Journal, as an Entry"
+              disabled={props.sending}
+              onClick={props.onWriteNextTask}
+            />
+          </div>
+        </Show>
+      </Show>
       <div class="inspector-group">
         <Show
           when={props.project.state.is === "open"}
@@ -1126,7 +1185,6 @@ function ProjectPage(props: {
           icon={Trash}
           label="Delete"
           sub="Its Tasks stay, in no Project"
-          danger
           disabled={props.sending}
           onClick={props.onDelete}
         />

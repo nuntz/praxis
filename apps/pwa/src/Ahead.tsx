@@ -1,7 +1,8 @@
-import { type AheadItem, type Task, utcMidnight } from "@praxis/domain";
+import { type AheadItem, type Project, type Task, utcMidnight } from "@praxis/domain";
 import { For, Show } from "solid-js";
-import { followAttentionView } from "./attention-read.ts";
-import { DueMark, formatDay, TaskItem } from "./TaskItem.tsx";
+import { ProjectRow } from "./AttentionRows.tsx";
+import { followAttentionView, keyedBy } from "./attention-read.ts";
+import { DueMark, formatDay, type OnFinished, TaskItem } from "./TaskItem.tsx";
 
 /** A day as the weeks ahead head it, with its weekday, in the Device's locale. */
 const dayHeading = new Intl.DateTimeFormat(undefined, {
@@ -14,11 +15,18 @@ const dayHeading = new Intl.DateTimeFormat(undefined, {
 /**
  * The weeks ahead, opened from Attention's Due section and shown in Attention, not a fourth peer
  * (section 8.3): what `view_ahead` lists in the days it covers unless asked, by day. A Recurrence's
- * Occurrences to come are marked as not made yet, and only what exists is finished from here.
+ * Occurrences to come are marked as not made yet, and only what exists is finished from here. A
+ * Project opens its page over Attention, as its row there does.
  * Derived on the server, like Attention, so any change to a Task, a Project or the Context's
  * settings is answered by reading it again.
  */
-export function WeeksAhead(props: { id: string; timeZone: string }) {
+export function WeeksAhead(props: {
+  id: string;
+  timeZone: string;
+  onFinished: OnFinished;
+  /** Open a Project's page over Attention, the focus coming back to its row by `key`. */
+  onOpenProject: (project: Project, key: string) => void;
+}) {
   // A Task finished Unsent leaves it at once, as it leaves the rest of Attention (section 8.8).
   // It is not in the Offline Copy: with no network it says so.
   const { view, problem, setProblem, read } = followAttentionView({
@@ -27,12 +35,25 @@ export function WeeksAhead(props: { id: string; timeZone: string }) {
       ...shown,
       items: shown.items.filter((item) => item.kind !== "task" || !finishedUnsent(item.task)),
     }),
+    // A Task can be listed twice, on its Defer Date and on its Due Date.
+    keyed: (shown) => ({
+      ...shown,
+      items: shown.items.map((item) =>
+        keyedBy(
+          item,
+          item.kind === "task"
+            ? `${item.which}-task-${item.task.id}`
+            : item.kind === "project"
+              ? `project-${item.project.id}`
+              : `${item.which}-occurrence-${item.occurrence.follows}-${item.occurrence.due_date}`,
+        ),
+      ),
+    }),
   });
 
-  const days = () => {
-    const items = view()?.items ?? [];
-    return [...Map.groupBy(items, (item) => item.on)].map(([day, listed]) => ({ day, listed }));
-  };
+  // The days by themselves, so a day's heading, and its list, stays as its items change.
+  const items = () => view()?.items ?? [];
+  const days = () => [...new Set(items().map((item) => item.on))];
 
   return (
     <section id={props.id} class="weeks-ahead" aria-label="The weeks ahead">
@@ -47,16 +68,18 @@ export function WeeksAhead(props: { id: string; timeZone: string }) {
         {(shown) => (
           <>
             <For each={days()}>
-              {({ day, listed }) => (
+              {(day) => (
                 <div class="weeks-ahead-day">
                   <h4 class="weeks-ahead-day-title">{dayHeading.format(utcMidnight(day))}</h4>
                   <ul class="task-list">
-                    <For each={listed}>
+                    <For each={items().filter((item) => item.on === day)}>
                       {(item) => (
                         <AheadEntry
                           item={item}
                           timeZone={props.timeZone}
                           onTask={() => void read()}
+                          onFinished={props.onFinished}
+                          onOpenProject={props.onOpenProject}
                           onProblem={setProblem}
                         />
                       )}
@@ -80,6 +103,8 @@ function AheadEntry(props: {
   item: AheadItem;
   timeZone: string;
   onTask: (task: Task) => void;
+  onFinished: OnFinished;
+  onOpenProject: (project: Project, key: string) => void;
   onProblem: (message: string) => void;
 }) {
   const item = props.item;
@@ -89,17 +114,21 @@ function AheadEntry(props: {
         task={item.task}
         timeZone={props.timeZone}
         onTask={props.onTask}
+        onFinished={props.onFinished}
         onProblem={props.onProblem}
       />
     );
   }
   if (item.kind === "project") {
+    const key = `ahead-project-${item.project.id}`;
     return (
-      <li class="task attention-project">
-        <span class="task-title">{item.project.name}</span>
-        <span class="task-mark">Project</span>
-        <DueMark due={item.on} overdue={false} timeZone={props.timeZone} />
-      </li>
+      <ProjectRow
+        project={item.project}
+        timeZone={props.timeZone}
+        dueListed
+        openKey={key}
+        onOpen={() => props.onOpenProject(item.project, key)}
+      />
     );
   }
   // It does not exist yet, so there is nothing to finish, open or link to.

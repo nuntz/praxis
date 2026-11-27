@@ -19,7 +19,7 @@ type ThemedColor = Record<Theme, string>;
 
 /** Light and dark both follow the Device. Every colour has a value in each. */
 export const colors = {
-  /** The page behind the panels, and the top bar. */
+  /** The page behind the panels, the top bar, and a row of Attention hovered, a step off inset. */
   ground: { light: "#ECEEF2", dark: "#0F1114" },
   /** A panel: the Attention, Journal and Conversation columns, a card on the phone, the tab bar. */
   surface: { light: "#FFFFFF", dark: "#1B1E24" },
@@ -32,9 +32,9 @@ export const colors = {
   /** Secondary text on ground, surface and inset, and the border of a Task's round control. */
   muted: { light: "#596070", dark: "#A3AAB8" },
   /**
-   * Overdue, a Project with no open Task, and a refusal the screen shows in words. Text on surface
-   * and inset, always with words. Also the solid fill of the End Call button, under on-accent, its
-   * one fill.
+   * Lateness (Overdue), and a refusal the screen shows in words, and nothing else. Text on surface
+   * and inset, and on ground in a row hovered, always with words. Also the solid fill of the End
+   * Call button, under on-accent, its one fill.
    */
   warn: { light: "#B42318", dark: "#FF9388" },
   /** The ground of a standing Notice. Text on it is ink. */

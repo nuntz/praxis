@@ -1465,7 +1465,10 @@ button.task-dates-toggle[aria-expanded="true"] {
   gap: var(--space-1) var(--space-3);
 }
 
-/* The weeks ahead, opened from Due: each day headed, its Tasks, Projects and Occurrences to come. */
+/*
+ * The weeks ahead, opened from Due: each day headed, its Tasks, Projects and Occurrences to come.
+ * A Project is Attention's own row, opening its page.
+ */
 
 .weeks-ahead {
   display: flex;
@@ -1488,16 +1491,6 @@ button.task-dates-toggle[aria-expanded="true"] {
 .task.future-occurrence {
   border: 1px dashed var(--rule);
   background: transparent;
-}
-
-.attention-project {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  padding: 10px var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--inset);
 }
 
 .task-mark.flag {
@@ -1523,7 +1516,14 @@ button.task-dates-toggle[aria-expanded="true"] {
   gap: 2px;
 }
 
+/* A day of the weeks ahead keeps its Tasks' gap with a Project's row among them. */
+.weeks-ahead-day > .task-list {
+  gap: var(--space-1);
+}
+
 .task.attention-row {
+  /* The row's width, which its mark's share is measured against (cqi). */
+  container-type: inline-size;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -1575,9 +1575,14 @@ button.attention-row-open {
   display: none;
 }
 
+/*
+ * The person's words lead: a mark takes at most 40% of the row, and narrower where the title would
+ * be cut short of its two lines (giveWay in AttentionRows.tsx), cut with an ellipsis, never
+ * shortened to part of what it says. Overdue and Due today are never cut.
+ */
 .attention-row-lead {
   flex-shrink: 0;
-  max-width: 50%;
+  max-width: 40cqi;
   overflow: hidden;
   color: var(--muted);
   font: var(--type-meta);
@@ -1590,6 +1595,11 @@ button.attention-row-open {
 .attention-row-lead.due-today,
 .attention-row-lead.flag {
   font-weight: 700;
+}
+
+.attention-row-lead.overdue,
+.attention-row-lead.due-today {
+  max-width: none;
 }
 
 .attention-row-lead.overdue {
@@ -1605,7 +1615,15 @@ button.attention-row-open {
   color: var(--muted);
 }
 
+/*
+ * A row hovered where it opens a page takes one tone step off its inset, to the ground's tone, and
+ * its chevron turns ink; over its round control, which opens nothing, it takes none.
+ */
 @media (hover: hover) and (pointer: fine) {
+  .task.attention-row:has(> button.attention-row-open:hover) {
+    background: var(--ground);
+  }
+
   button.attention-row-open:hover .attention-row-chevron {
     color: var(--ink);
   }
@@ -1835,6 +1853,18 @@ button.inspector-line {
   background: none;
 }
 
+/* Hovered, a step lighter than the group, as a line of the page is. */
+@media (hover: hover) and (pointer: fine) {
+  .inspector-group > .task.attention-row:has(> button.attention-row-open:hover) {
+    background: var(--surface);
+  }
+}
+
+/* A day or a time with none in it shows its placeholder in muted, as any field's is, until typed in. */
+input.empty:not(:focus) {
+  color: var(--muted);
+}
+
 .inspector-choices {
   display: flex;
   flex-direction: column;
@@ -1865,11 +1895,6 @@ button.inspector-choice > .inspector-choice-check {
   color: var(--ink);
 }
 
-.inspector-line.danger,
-.inspector-line.danger > svg {
-  color: var(--warn);
-}
-
 @media (hover: hover) and (pointer: fine) {
   button.inspector-choice:hover:not(:disabled) {
     background: var(--inset);
@@ -1890,6 +1915,13 @@ button.inspector-choice > .inspector-choice-check {
   color: var(--muted);
   font: var(--type-meta);
   font-weight: 600;
+}
+
+/* "From its Entry" opens the Entry in the Journal: a link, in ink and underlined. */
+.inspector-origin-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .inspector-origin blockquote {
@@ -3835,6 +3867,20 @@ a.entry-mark.held-mark {
     background: var(--inset);
   }
 
+  /*
+   * Attention's rows sit on the ground itself here, so they take surface, as inset always sits on
+   * surface, and step to inset while hovered. An Occurrence still to come keeps its open look.
+   */
+  .attention-list .task:not(.future-occurrence) {
+    background: var(--surface);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .attention-list .task.attention-row:has(> button.attention-row-open:hover) {
+      background: var(--inset);
+    }
+  }
+
   .tabs {
     display: grid;
     flex-shrink: 0;
@@ -3887,6 +3933,28 @@ a.entry-mark.held-mark {
     background: var(--inset);
     color: var(--ink);
     font-weight: 700;
+  }
+
+  /*
+   * A standing Notice's link, a touch target of 44px, grown round its 23px line by margins that
+   * take back what it adds, so its text stays where it was.
+   */
+  .standing-notice .settings-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: calc(var(--space-1) - 10.5px) 0 -10.5px;
+  }
+
+  /*
+   * "From its Entry", a touch target of 44px, grown round its 18px line by margins that take back
+   * what it adds, so its text stays where it was.
+   */
+  .inspector-origin-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: -13px 0;
   }
 
   /* The pill back to the newest, a touch target of 44px. */

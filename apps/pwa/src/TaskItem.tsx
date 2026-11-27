@@ -27,21 +27,16 @@ export function TaskItem(props: {
   /** A mark the place showing it adds, such as why it is listed there. */
   mark?: JSX.Element;
   onTask: (task: Task) => void;
+  onFinished?: OnFinished;
   onProblem: (message: string) => void;
 }) {
   const [editingDates, setEditingDates] = createSignal(false);
   const finishing = createFinishing({
     task: () => props.task,
     onTask: props.onTask,
+    onFinished: props.onFinished,
     onProblem: props.onProblem,
   });
-
-  async function toggle(box: HTMLInputElement) {
-    await finishing.setFinished(box.checked);
-    // Whatever the answer, the box shows the Task as the server last said it is, or finished
-    // Unsent on this Device.
-    box.checked = finishing.shownFinished();
-  }
 
   return (
     <li
@@ -55,7 +50,7 @@ export function TaskItem(props: {
           type="checkbox"
           checked={finishing.shownFinished()}
           disabled={finishing.sending() || finishing.dropped()}
-          onChange={(event) => void toggle(event.currentTarget)}
+          onChange={(event) => void finishing.toggle(event.currentTarget)}
         />
         <span class="task-title">{props.task.title}</span>
       </label>
@@ -78,17 +73,34 @@ export function TaskItem(props: {
   );
 }
 
-/** What finishing a Task where it is shown needs of it: its title and where it stands. */
-type Finishable = Pick<Task, "id" | "title" | "state">;
+/**
+ * What finishing a Task where it is shown needs of it: its title, where it stands, and what its
+ * Recurrence makes of the finish.
+ */
+type Finishable = Pick<Task, "id" | "title" | "state" | "recurrence" | "due_date">;
+
+/**
+ * A Task finished from its round control: as it was when finished, and as the server then said it
+ * is, or null while its finish is Unsent on this Device.
+ */
+export type Finish = {
+  task: Omit<Finishable, "state">;
+  finished: Task | null;
+};
+
+/** A Task was finished from its round control, which is given. */
+export type OnFinished = (finish: Finish, control: HTMLElement) => void;
 
 /**
  * Finishing and reopening a Task from where it is shown, by its round control, through the tools
  * Attention uses: with no network a finish is kept Unsent, and a finish still Unsent is undone on
- * the Device. What the server says of the Task after is given to `onTask`.
+ * the Device. What the server says of the Task after is given to `onTask`, and a finish made, sent
+ * or Unsent, is what `setFinished` gives back, and what `toggle` gives `onFinished`.
  */
 export function createFinishing(props: {
   task: () => Finishable;
   onTask: (task: Task) => void;
+  onFinished?: OnFinished | undefined;
   onProblem: (message: string) => void;
 }) {
   const callTool = useCallTool();
@@ -99,22 +111,34 @@ export function createFinishing(props: {
   const unsentFinish = () => unsentFinishOf(props.task().id);
   const shownFinished = () => finished() || unsentFinish() !== null;
 
-  async function setFinished(finish: boolean): Promise<void> {
+  async function setFinished(finish: boolean): Promise<Finish | null> {
     // A finish still Unsent is undone on the Device, with no trace (section 8.8).
     const unsent = unsentFinish();
-    if (unsent) return discardUnsent(unsent.id);
-    const task = props.task();
+    if (unsent) {
+      discardUnsent(unsent.id);
+      return null;
+    }
+    // Read before the answer, since the Task may be a store's, which the live channel changes.
+    const { id, title, recurrence, due_date } = props.task();
+    const task = { id, title, recurrence, due_date };
     setSending(true);
     try {
       if (finish) {
         // With no network the finish is kept Unsent, and the Task shows it.
         const outcome = await finishTask(contextId, task);
-        if (outcome.kind === "refused") return props.onProblem(outcome.message);
-        if (outcome.kind === "made") props.onTask(outcome.value);
-        return;
+        if (outcome.kind === "refused") {
+          props.onProblem(outcome.message);
+          return null;
+        }
+        if (outcome.kind === "unsent") return { task, finished: null };
+        props.onTask(outcome.value);
+        return { task, finished: outcome.value };
       }
-      const result = await callTool("reopen_task", { id: task.id });
-      if (!result.ok) return props.onProblem(result.error.message);
+      const result = await callTool("reopen_task", { id });
+      if (!result.ok) {
+        props.onProblem(result.error.message);
+        return null;
+      }
       // What a rule did besides, releasing a Task waiting on it or making the next Occurrence,
       // comes over the live channel.
       props.onTask(result.value.record);
@@ -123,6 +147,15 @@ export function createFinishing(props: {
     } finally {
       setSending(false);
     }
+    return null;
+  }
+
+  /** The round control changed: whatever the answer, it shows the Task as it now stands. */
+  async function toggle(box: HTMLInputElement) {
+    const finish = await setFinished(box.checked);
+    // As the server last said it is, or finished Unsent on this Device.
+    box.checked = shownFinished();
+    if (finish) props.onFinished?.(finish, box);
   }
 
   return {
@@ -133,6 +166,7 @@ export function createFinishing(props: {
     /** At an end, or finished Unsent: drawn muted. */
     closed: () => props.task().state.is !== "open" || unsentFinish() !== null,
     setFinished,
+    toggle,
   };
 }
 

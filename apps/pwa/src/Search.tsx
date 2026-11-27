@@ -523,6 +523,8 @@ export function createSearch(props: {
      * moment its field is entered until the search ends.
      */
     shown,
+    /** End the search, its words and its chips, as opening a hit does. */
+    end,
     Field,
     Found,
   };

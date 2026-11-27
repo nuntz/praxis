@@ -48,8 +48,14 @@ export function SettlingField(props: {
     }
     input.value = recorded;
     behind = false;
+    showEmpty();
   }
   createEffect(on(() => props.value, show));
+
+  /** Whether the field holds no day or time, so its placeholder is drawn muted (styles.css). */
+  function showEmpty() {
+    input.classList.toggle("empty", input.value === "");
+  }
 
   async function send(settle = props.onSettle) {
     clearTimeout(settling);
@@ -82,8 +88,10 @@ export function SettlingField(props: {
       id={props.id}
       classList={{ overdue: props.overdue }}
       disabled={props.disabled}
+      onInput={showEmpty}
       onChange={(event) => {
         const field = event.currentTarget;
+        showEmpty();
         clearTimeout(settling);
         // A part of a day erased empties the field's value as emptying it all does, but it is a
         // day half there, not none: nothing is picked until it is whole or empty (#162).

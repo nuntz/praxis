@@ -104,14 +104,18 @@ test("Attention's sections carry their icons, a Task's page has an icon on each 
 
   await page.goto("/");
   const attention = page.getByRole("region", { name: "Attention", exact: true });
-  for (const name of ["Due", "Projects", "Loose"]) {
-    const heading = attention.getByRole("heading", { name, exact: true });
+  for (const name of [/^Due \d+$/, /^Projects$/, /^Loose$/]) {
+    const heading = attention.getByRole("heading", { name });
     await expect(heading).toBeVisible();
     await expect(heading.locator("svg")).toBeVisible();
   }
+  // Loose's is a list, not the circle a Task's round control is drawn as.
+  await expect(attention.getByRole("heading", { name: "Loose" }).locator("svg")).toHaveClass(
+    /\blucide-list\b/,
+  );
 
   // Due today is bold in the muted colour, and only Overdue is in warn, each at the end of its row.
-  const due = attention.getByRole("region", { name: "Due", exact: true });
+  const due = attention.getByRole("region", { name: /^Due( \d+)?$/ });
   const todays = due.getByRole("button", { name: dueToday, exact: true }).getByText("Due today");
   await expect(todays).toBeVisible();
   await expect(todays).toHaveCSS("color", MUTED);
