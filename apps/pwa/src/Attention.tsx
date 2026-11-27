@@ -171,10 +171,10 @@ export function Attention(props: {
    */
   function finishedFromRow(finish: Finish, control: HTMLElement) {
     sayFinish(finish);
+    // A control that left with the focus on it leaves the focus on the page: a control gone while
+    // the focus is elsewhere says nothing of whether the person moved on.
     const at = document.activeElement;
-    if (at === control || at === document.body || at === list || !control.isConnected) {
-      queueMicrotask(focusSaid);
-    }
+    if (at === control || at === document.body || at === list) queueMicrotask(focusSaid);
   }
 
   // The finish the status line says, so that one sent later can say what it became.
