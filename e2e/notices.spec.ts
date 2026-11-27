@@ -23,14 +23,81 @@ async function attention(page: Page, testInfo: TestInfo) {
   return page.getByRole("region", { name: "Attention", exact: true });
 }
 
+test("each standing Notice in Attention is a card titled by its kind, its words under the title", async ({
+  page,
+}, testInfo) => {
+  const since = new Date().toISOString();
+  // Each kind, its title, and how its words begin, which the title is not part of.
+  const titled: [StandingNotice, string, RegExp][] = [
+    [
+      { kind: "key_refused", since },
+      "Model key refused",
+      /^The model's provider has refused this Deployment's key since /,
+    ],
+    [
+      { kind: "voice_key_refused", since },
+      "Voice key refused",
+      /^The voice provider has refused this Deployment's voice key since /,
+    ],
+    [
+      { kind: "cap_reached", spent: 20, cap: 20 },
+      "Spend cap reached",
+      /^This month's spend has reached its cap of /,
+    ],
+    [
+      { kind: "nearing_cap", spent: 17, cap: 20 },
+      "Spend near its cap",
+      /^This month's spend, .+, has passed 80% of its cap of /,
+    ],
+    [
+      { kind: "clock_failed", clock: "brief", failure: "model_unavailable", since },
+      "Brief not run",
+      /^The Brief could not run since /,
+    ],
+    [
+      { kind: "clock_failed", clock: "review", failure: "key_refused", since },
+      "Review not run",
+      /^The Review could not run since /,
+    ],
+    [{ kind: "no_backup", last_made: null }, "No recent Backup", /^No Backup has been made yet/],
+    [
+      { kind: "context_stuck", context: "Elsewhere", release: "r1", backup_kept: null },
+      "Elsewhere stuck on an upgrade",
+      /^Elsewhere could not be upgraded under release r1: /,
+    ],
+  ];
+  await noticesAre(
+    page,
+    titled.map(([notice]) => notice),
+  );
+  await page.goto("/");
+  const shown = await attention(page, testInfo);
+  const notices = shown.getByTestId("standing-notice");
+  await expect(notices).toHaveCount(titled.length);
+
+  for (const [at, [notice, title, words]] of titled.entries()) {
+    const card = notices.nth(at);
+    // The card is the status, named by its title, so the title is what is heard first.
+    await expect(
+      shown.getByRole("status", { name: title, exact: true }),
+      notice.kind,
+    ).toBeVisible();
+    await expect(card.getByTestId("standing-notice-title"), notice.kind).toHaveText(title);
+    await expect(card.getByTestId("standing-notice-words"), notice.kind).toHaveText(words);
+    await expect(card.getByTestId("standing-notice-words"), notice.kind).not.toContainText(title);
+  }
+});
+
 test("the no-Backup Notice in Attention opens Backups and Export in settings", async ({
   page,
 }, testInfo) => {
   await noticesAre(page, [{ kind: "no_backup", last_made: null }]);
   await page.goto("/");
-  const notice = (await attention(page, testInfo))
-    .getByTestId("standing-notice")
-    .filter({ hasText: /No Backup has been made yet/ });
+  const notice = (await attention(page, testInfo)).getByTestId("standing-notice").filter({
+    has: page
+      .getByTestId("standing-notice-words")
+      .filter({ hasText: /No Backup has been made yet/ }),
+  });
 
   await notice.getByRole("link", { name: "See Backups and Export", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/backups$/);
@@ -68,7 +135,7 @@ test("a Brief whose request the provider refused says so in Attention, and not t
   await page.goto("/");
   const notice = (await attention(page, testInfo)).getByTestId("standing-notice");
 
-  await expect(notice).toHaveText(
+  await expect(notice.getByTestId("standing-notice-words")).toHaveText(
     /^The Brief could not run since .+: the model's provider refused Praxis's request\. It is not tried again: the next one runs at its time\.\s*$/,
   );
   await expect(notice).not.toContainText("could not be reached");
@@ -90,7 +157,7 @@ test("a Review whose key the provider refused says so in Attention, and not that
   const notice = (await attention(page, testInfo)).getByTestId("standing-notice");
 
   // Where the key is set is the refused key's own Notice to say, not this one's.
-  await expect(notice).toHaveText(
+  await expect(notice.getByTestId("standing-notice-words")).toHaveText(
     /^The Review could not run since .+: the model's provider refused this Deployment's key\. It is not tried again: the next one runs at its time\.\s*$/,
   );
 });
@@ -108,7 +175,7 @@ test("a Brief that failed says it is tried again in Attention exactly when waiti
   await expect(notices).toHaveCount(RUN_FAILURES.length);
 
   for (const [at, failure] of RUN_FAILURES.entries()) {
-    const notice = notices.nth(at);
+    const notice = notices.nth(at).getByTestId("standing-notice-words");
     if (mendedByWaiting(failure)) {
       await expect(notice, failure).toContainText(
         "It is tried again a little later each time, until it runs or the next one is due.",

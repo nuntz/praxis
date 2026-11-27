@@ -2089,6 +2089,48 @@ button.call-control {
   text-underline-offset: 3px;
 }
 
+/*
+ * A standing Notice in Attention: a card on notice, the information icon beside a bold title, its
+ * words under it in ink, and its link, where it has one. A Notice in the Conversation keeps its box.
+ */
+.standing-notice {
+  display: flex;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--notice);
+  color: var(--ink);
+}
+
+/* Set on the title's first line, nudged down to its middle: 18px against a line of 22px or 23px. */
+.standing-notice-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.standing-notice-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Bold at the size of the words under it, which is a step larger on a phone. */
+.standing-notice-title {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.standing-notice-words {
+  overflow-wrap: anywhere;
+}
+
+.standing-notice .settings-link {
+  margin-top: var(--space-1);
+}
+
 /* At the spend cap, the cap's Notice in place of the Conversation's composer, and a way to it. */
 .cap-reached {
   display: flex;
