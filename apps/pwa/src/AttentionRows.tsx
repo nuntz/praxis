@@ -227,7 +227,8 @@ const LEAST_MARK_EM = 3;
  * A mark gives way to its row's title: at most 40% of the row (styles.css), and narrower, cut with
  * an ellipsis, where the title would otherwise be cut short of its two lines. The widest mark that
  * leaves the title whole is found by halving, each try laid out by the browser; with none, the
- * mark is at its narrowest and the title is cut.
+ * mark is at its narrowest and the title is cut. The row is no size container, which this halving
+ * locks iOS Safari up inside (styles.css).
  */
 function giveWay(mark: HTMLElement) {
   const title = mark.parentElement?.querySelector<HTMLElement>(".task-title");
