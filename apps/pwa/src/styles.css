@@ -13,6 +13,23 @@
 html,
 body {
   height: 100%;
+  /* The screen scrolls inside its columns, never as a page: no pull to refresh, no rubber band. */
+  overscroll-behavior: none;
+}
+
+/* A tap draws no grey box of the browser's over what it lands on; a control answers it itself. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Nothing on the screen zooms on a double tap, so a tap on a control is a click at once. */
+button,
+a,
+label,
+summary,
+[role="button"] {
+  touch-action: manipulation;
 }
 
 body {
@@ -111,6 +128,26 @@ button:disabled {
 }
 
 /*
+ * A press shows as the finger lands, as a native control's does: dimmed at once, back over 160ms once
+ * it lifts. A control's words are not text to select, so a long press on one selects nothing and
+ * opens no callout.
+ */
+button {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+button:not(:disabled) {
+  transition: opacity 160ms ease-out;
+}
+
+button:active:not(:disabled) {
+  opacity: 0.7;
+  transition-duration: 0s;
+}
+
+/*
  * A composer's send with nothing to send, which is most of the time, is at rest and not broken: the
  * accent's icon (and Record's word) on the composer's tint, at full opacity, with no fill of its own.
  * With something to send it turns the solid accent, as a primary is, and while that is being sent
@@ -171,7 +208,11 @@ button.quiet {
   flex-direction: column;
   gap: var(--panel-gap);
   height: 100dvh;
-  padding: var(--panel-gap);
+  /* Kept in from a notch, a camera's island and the home indicator, as wide as they are. */
+  padding: max(var(--panel-gap), env(safe-area-inset-top, 0px))
+    max(var(--panel-gap), env(safe-area-inset-right, 0px))
+    max(var(--panel-gap), env(safe-area-inset-bottom, 0px))
+    max(var(--panel-gap), env(safe-area-inset-left, 0px));
 }
 
 .top-bar {
@@ -389,8 +430,14 @@ button.quiet {
   text-decoration: none;
 }
 
-.settings-section-link:hover {
+.settings-section-link:active {
   background: var(--inset);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settings-section-link:hover {
+    background: var(--inset);
+  }
 }
 
 .settings-section-icon {
@@ -1337,10 +1384,16 @@ button.task-dates-toggle {
   color: var(--muted);
 }
 
-button.task-dates-toggle:hover,
 button.task-dates-toggle[aria-expanded="true"] {
   background: var(--surface);
   color: var(--ink);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button.task-dates-toggle:hover {
+    background: var(--surface);
+    color: var(--ink);
+  }
 }
 
 .task-dates {
@@ -2502,9 +2555,14 @@ button.chip.set .chip-end {
   text-align: left;
 }
 
-.chip-choices button:hover,
 .chip-choices button:focus-visible {
   background: var(--inset);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip-choices button:hover {
+    background: var(--inset);
+  }
 }
 
 /* A range of days: its two ends, each a named field, then the button that searches them. */
@@ -2801,11 +2859,18 @@ button.search-hit-body {
   font: var(--type-body);
 }
 
-.search-entry .search-hit-body:hover,
 .search-entry .search-hit-body:focus-visible {
   border-color: transparent;
   border-radius: var(--radius-md);
   background: var(--inset);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .search-entry .search-hit-body:hover {
+    border-color: transparent;
+    border-radius: var(--radius-md);
+    background: var(--inset);
+  }
 }
 
 /* A Task found at an end is muted, and a finished one struck through, as it reads as done. */
@@ -2889,9 +2954,14 @@ button.quiet.entry-mark {
   text-align: left;
 }
 
-.menu-list [role="menuitem"]:hover,
 .menu-list [role="menuitem"]:focus-visible {
   background: var(--inset);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .menu-list [role="menuitem"]:hover {
+    background: var(--inset);
+  }
 }
 
 /*
@@ -2918,9 +2988,14 @@ button.quiet.entry-mark {
   opacity: 0;
 }
 
-.entry:hover .entry-actions,
 .entry:focus-within .entry-actions {
   opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .entry:hover .entry-actions {
+    opacity: 1;
+  }
 }
 
 .entry-actions .icon-button {
@@ -2929,10 +3004,12 @@ button.quiet.entry-mark {
   background: none;
 }
 
-.entry-actions .icon-button:hover,
-.entry-head > .menu > .icon-button:hover {
-  background: var(--inset);
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .entry-actions .icon-button:hover,
+  .entry-head > .menu > .icon-button:hover {
+    background: var(--inset);
+    color: var(--ink);
+  }
 }
 
 /* A touch target is at least 44px (section 8.11). */
@@ -2957,20 +3034,32 @@ button.quiet.entry-mark {
     border-top: 1px solid var(--rule);
   }
 
-  .entry:hover,
   .entry:focus-within {
     background: var(--inset);
   }
 
-  .entry:hover:not(.unsent),
   .entry:focus-within:not(.unsent),
-  .entry:hover + .entry:not(.unsent),
   .entry:focus-within + .entry:not(.unsent) {
     border-top-color: transparent;
   }
 
-  .entry:hover .task,
   .entry:focus-within .task {
+    background: var(--surface);
+  }
+}
+
+/* Hovered, only by a pointer that hovers: a tap on a touch screen leaves no Entry on inset. */
+@media (width >= 720px) and (hover: hover) and (pointer: fine) {
+  .entry:hover {
+    background: var(--inset);
+  }
+
+  .entry:hover:not(.unsent),
+  .entry:hover + .entry:not(.unsent) {
+    border-top-color: transparent;
+  }
+
+  .entry:hover .task {
     background: var(--surface);
   }
 }
@@ -3430,10 +3519,29 @@ a.entry-mark.held-mark {
  * A phone: one column at a time, behind three tabs, on the ground itself. Every rule for a phone is
  * here, last in the file, so each takes the place of the rule it changes, wherever that one is.
  */
+/*
+ * A field a finger types in is 16px at least at any width, or iOS zooms the page into it as it takes
+ * the caret and leaves it zoomed (section 8.11): a phone held sideways is wider than 720px. Before
+ * the phone's rules, so a phone's 17px fields stay 17px.
+ */
+@media (pointer: coarse) {
+  .task-date input,
+  .chip-range input,
+  .inspector .inspector-date input,
+  .inspector .choice-field,
+  .journal-search .search-field input,
+  .task.entry-page-add input,
+  .settings :is(input, select),
+  .first-context :is(input, select) {
+    font-size: 16px;
+  }
+}
+
 @media (width < 720px) {
   .screen {
     gap: 0;
-    padding: 0;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
     font: var(--type-body-phone);
   }
 
@@ -3699,7 +3807,8 @@ a.entry-mark.held-mark {
     flex-shrink: 0;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-1);
-    margin: 0 var(--space-4) var(--space-3);
+    /* Its 12px under it is counted from the screen's edge, so above a home indicator it adds none. */
+    margin: 0 var(--space-4) max(0px, var(--space-3) - env(safe-area-inset-bottom, 0px));
     padding: 6px;
     border-radius: var(--radius-pill);
     background: var(--surface);

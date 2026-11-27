@@ -367,6 +367,7 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **Jump to latest:** an `ink` pill with `surface` text, the arrow-down icon and a count, centred above the composer.
 - **End Call:** a 60px circle of solid `warn` under `on-accent`, the phone icon turned 135°, its word underneath. Mute beside it is the same circle on `inset`.
 - **Disabled:** 50% opacity, for every control but a composer's send with nothing to send. A Call that cannot start stays focusable and says why in `meta` under it, since a touch screen has no tooltip.
+- **Pressed:** dimmed to 70% the moment the press lands, and back over 160ms once it lifts, as a native control answers a finger. The browser's grey tap box is never drawn.
 - **Focus:** a 2px `ink` outline, 2px off, on everything.
 
 ### Chips
@@ -412,7 +413,8 @@ The one motion is a page going one level deeper. A Task's, Project's or Entry's 
 - **Do** wrap anything drawn in a Context's colours in `.accent-<name>` and use `--accent` and `--accent-tint`, never a named accent.
 - **Do** put an icon beside its label on the tabs, the sections of Settings, Attention's section headings, the groups of what a search finds and the primary buttons. Interface icons are Lucide, stroked with round caps, at the text colour.
 - **Do** say every state in words, beside any colour it takes.
-- **Do** keep text fields on a phone at 16px or larger, so the page does not zoom when one is tapped.
+- **Do** keep text fields under a finger at 16px or larger at any width, so the page does not zoom when one is tapped.
+- **Do** put every `:hover` look behind `(hover: hover) and (pointer: fine)`, so a tap on a touch screen leaves nothing hovered.
 
 ### Don't:
 - **Don't** use the accent on anything but where the person is about to write or decide (The One Accent Rule). A secondary button is quiet, in `ink`.
