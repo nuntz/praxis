@@ -1,0 +1,919 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-27T00:57:13.806Z",
+  "title": "Design System: Praxis",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "canonical": "oklch(94.9% 0.006 264.5)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#242527",
+          "#414245",
+          "#5F6165",
+          "#808286",
+          "#A3A5A8",
+          "#C8C9CB",
+          "#EEEEEF"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "inset": {
+        "role": "neutral",
+        "displayName": "Inset",
+        "canonical": "oklch(97.0% 0.004 271.4)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#252526",
+          "#414244",
+          "#606164",
+          "#818285",
+          "#A4A5A7",
+          "#C8C9CA",
+          "#EEEEEF"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "oklch(88.4% 0.011 261.8)",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#232528",
+          "#3F4247",
+          "#5E6167",
+          "#7F8289",
+          "#A2A5AB",
+          "#C7C9CD",
+          "#EDEEF0"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(23.0% 0.012 264.3)",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#232528",
+          "#3F4248",
+          "#5E6169",
+          "#7F828A",
+          "#A2A5AC",
+          "#C7C9CE",
+          "#EDEEF1"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "oklch(48.9% 0.027 266.7)",
+        "tonalRamp": [
+          "#0A0B0E",
+          "#22252C",
+          "#3D424E",
+          "#5A6171",
+          "#7B8293",
+          "#9FA5B4",
+          "#C5C9D3",
+          "#ECEEF3"
+        ]
+      },
+      "warn": {
+        "role": "signal",
+        "displayName": "Warn",
+        "canonical": "oklch(50.0% 0.182 29.5)",
+        "tonalRamp": [
+          "#1A0302",
+          "#4A0704",
+          "#7F0803",
+          "#B12015",
+          "#DA4A3B",
+          "#F47D6C",
+          "#FFB1A4",
+          "#FFE4DD"
+        ]
+      },
+      "notice": {
+        "role": "signal",
+        "displayName": "Notice",
+        "canonical": "oklch(95.8% 0.050 88.1)",
+        "tonalRamp": [
+          "#0D0B06",
+          "#2A2416",
+          "#4B4128",
+          "#6D6040",
+          "#8F8160",
+          "#B0A488",
+          "#D0C9B6",
+          "#F2EEE5"
+        ]
+      },
+      "match": {
+        "role": "signal",
+        "displayName": "Match",
+        "canonical": "oklch(92.4% 0.115 93.9)",
+        "tonalRamp": [
+          "#0F0B01",
+          "#2F2400",
+          "#534000",
+          "#775F00",
+          "#99801E",
+          "#B8A45D",
+          "#D6C99C",
+          "#F5EFD9"
+        ]
+      },
+      "on-accent": {
+        "role": "signal",
+        "displayName": "On-accent",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "blue": {
+        "role": "primary",
+        "displayName": "Blue",
+        "canonical": "oklch(48.8% 0.180 264.7)",
+        "tonalRamp": [
+          "#030A1E",
+          "#0D2053",
+          "#19398F",
+          "#2C56C5",
+          "#4B7AED",
+          "#77A1FF",
+          "#AAC9FF",
+          "#E0EFFF"
+        ]
+      },
+      "blue-tint": {
+        "role": "primary",
+        "displayName": "Blue tint",
+        "canonical": "oklch(94.3% 0.020 267.3)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#23252A",
+          "#3E424B",
+          "#5C616D",
+          "#7D828F",
+          "#A0A5B0",
+          "#C6C9D0",
+          "#EDEEF2"
+        ]
+      },
+      "rust": {
+        "role": "primary",
+        "displayName": "Rust",
+        "canonical": "oklch(52.0% 0.142 45.7)",
+        "tonalRamp": [
+          "#170601",
+          "#411600",
+          "#712700",
+          "#9F4000",
+          "#C5622F",
+          "#E18D65",
+          "#F4BAA0",
+          "#FFE8DB"
+        ]
+      },
+      "rust-tint": {
+        "role": "primary",
+        "displayName": "Rust tint",
+        "canonical": "oklch(94.8% 0.025 65.6)",
+        "tonalRamp": [
+          "#0D0B09",
+          "#2A241E",
+          "#4A4037",
+          "#6B5F53",
+          "#8D8073",
+          "#AEA398",
+          "#CFC8C0",
+          "#F1EEEA"
+        ]
+      },
+      "teal": {
+        "role": "primary",
+        "displayName": "Teal",
+        "canonical": "oklch(47.8% 0.079 189.0)",
+        "tonalRamp": [
+          "#030E0D",
+          "#042C29",
+          "#014D49",
+          "#166F6A",
+          "#41928C",
+          "#74B3AD",
+          "#ABD3CF",
+          "#E0F3F1"
+        ]
+      },
+      "teal-tint": {
+        "role": "primary",
+        "displayName": "Teal tint",
+        "canonical": "oklch(94.4% 0.019 188.8)",
+        "tonalRamp": [
+          "#090C0B",
+          "#202726",
+          "#394544",
+          "#556563",
+          "#768684",
+          "#9BA8A7",
+          "#C2CBCA",
+          "#EBEFEF"
+        ]
+      },
+      "plum": {
+        "role": "primary",
+        "displayName": "Plum",
+        "canonical": "oklch(46.7% 0.155 333.4)",
+        "tonalRamp": [
+          "#140512",
+          "#3B1236",
+          "#67205E",
+          "#923786",
+          "#B75AA9",
+          "#D585C7",
+          "#EBB5E0",
+          "#FFE5FA"
+        ]
+      },
+      "plum-tint": {
+        "role": "primary",
+        "displayName": "Plum tint",
+        "canonical": "oklch(94.2% 0.025 329.7)",
+        "tonalRamp": [
+          "#0D0A0C",
+          "#292328",
+          "#493E47",
+          "#6A5C68",
+          "#8B7D8A",
+          "#ADA1AB",
+          "#CEC6CD",
+          "#F1EDF0"
+        ]
+      },
+      "moss": {
+        "role": "primary",
+        "displayName": "Moss",
+        "canonical": "oklch(48.4% 0.115 127.6)",
+        "tonalRamp": [
+          "#080D02",
+          "#1C2A05",
+          "#344B05",
+          "#4F6D18",
+          "#6F8F3E",
+          "#94B06F",
+          "#BED1A6",
+          "#E9F3DE"
+        ]
+      },
+      "moss-tint": {
+        "role": "primary",
+        "displayName": "Moss tint",
+        "canonical": "oklch(95.0% 0.030 121.4)",
+        "tonalRamp": [
+          "#0B0C08",
+          "#24261E",
+          "#404436",
+          "#5E6451",
+          "#7F8572",
+          "#A2A897",
+          "#C7CBC0",
+          "#EDEFEA"
+        ]
+      },
+      "slate": {
+        "role": "primary",
+        "displayName": "Slate",
+        "canonical": "oklch(44.7% 0.034 261.3)",
+        "tonalRamp": [
+          "#090B0F",
+          "#20252E",
+          "#3A4251",
+          "#566275",
+          "#778397",
+          "#9BA6B7",
+          "#C3CAD5",
+          "#EBEFF4"
+        ]
+      },
+      "slate-tint": {
+        "role": "primary",
+        "displayName": "Slate tint",
+        "canonical": "oklch(94.2% 0.007 260.7)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#242527",
+          "#404245",
+          "#5F6166",
+          "#808287",
+          "#A3A5A9",
+          "#C8C9CC",
+          "#EEEEF0"
+        ]
+      },
+      "ground-dark": {
+        "role": "neutral",
+        "displayName": "Ground (dark)",
+        "canonical": "oklch(17.7% 0.007 258.4)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#242527",
+          "#404245",
+          "#5F6165",
+          "#808287",
+          "#A3A5A9",
+          "#C8C9CC",
+          "#EEEEF0"
+        ]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Surface (dark)",
+        "canonical": "oklch(23.5% 0.012 264.3)",
+        "tonalRamp": [
+          "#0A0B0C",
+          "#232528",
+          "#3F4248",
+          "#5E6169",
+          "#7F828A",
+          "#A2A5AC",
+          "#C7C9CE",
+          "#EDEEF1"
+        ]
+      },
+      "inset-dark": {
+        "role": "neutral",
+        "displayName": "Inset (dark)",
+        "canonical": "oklch(28.0% 0.016 264.3)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#232529",
+          "#3E4249",
+          "#5D616B",
+          "#7E828C",
+          "#A1A5AD",
+          "#C6C9CF",
+          "#EDEEF1"
+        ]
+      },
+      "rule-dark": {
+        "role": "neutral",
+        "displayName": "Rule (dark)",
+        "canonical": "oklch(36.7% 0.020 266.0)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#23252A",
+          "#3E424B",
+          "#5C616D",
+          "#7D828F",
+          "#A0A5B0",
+          "#C6C9D0",
+          "#EDEEF2"
+        ]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Ink (dark)",
+        "canonical": "oklch(95.5% 0.006 264.5)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#242527",
+          "#414245",
+          "#5F6165",
+          "#808286",
+          "#A3A5A8",
+          "#C8C9CB",
+          "#EEEEEF"
+        ]
+      },
+      "muted-dark": {
+        "role": "neutral",
+        "displayName": "Muted (dark)",
+        "canonical": "oklch(73.7% 0.022 264.4)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#22252B",
+          "#3D424C",
+          "#5B616E",
+          "#7C8290",
+          "#9FA5B1",
+          "#C5C9D1",
+          "#EDEEF2"
+        ]
+      },
+      "warn-dark": {
+        "role": "signal",
+        "displayName": "Warn (dark)",
+        "canonical": "oklch(77.5% 0.132 26.7)",
+        "tonalRamp": [
+          "#170605",
+          "#411411",
+          "#712520",
+          "#9F3D36",
+          "#C55F56",
+          "#E18A80",
+          "#F4B8B1",
+          "#FFE7E3"
+        ]
+      },
+      "notice-dark": {
+        "role": "signal",
+        "displayName": "Notice (dark)",
+        "canonical": "oklch(31.4% 0.051 90.6)",
+        "tonalRamp": [
+          "#0D0B06",
+          "#2A2515",
+          "#4A4127",
+          "#6C603F",
+          "#8E825F",
+          "#AFA588",
+          "#D0C9B6",
+          "#F2EEE5"
+        ]
+      },
+      "match-dark": {
+        "role": "signal",
+        "displayName": "Match (dark)",
+        "canonical": "oklch(41.7% 0.078 91.0)",
+        "tonalRamp": [
+          "#0E0B03",
+          "#2D240B",
+          "#4F4014",
+          "#725F27",
+          "#948149",
+          "#B4A477",
+          "#D3C9AB",
+          "#F3EEE0"
+        ]
+      },
+      "on-accent-dark": {
+        "role": "signal",
+        "displayName": "On-accent (dark)",
+        "canonical": "oklch(20.0% 0.010 268.2)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#242528",
+          "#404247",
+          "#5F6167",
+          "#7F8289",
+          "#A3A5AB",
+          "#C7C9CD",
+          "#EEEEF0"
+        ]
+      },
+      "blue-dark": {
+        "role": "primary",
+        "displayName": "Blue (dark)",
+        "canonical": "oklch(78.5% 0.108 269.3)",
+        "tonalRamp": [
+          "#070A17",
+          "#1A2341",
+          "#2F3E71",
+          "#495D9E",
+          "#687FC3",
+          "#8EA3DE",
+          "#BAC8F0",
+          "#E7EEFF"
+        ]
+      },
+      "blue-tint-dark": {
+        "role": "primary",
+        "displayName": "Blue tint (dark)",
+        "canonical": "oklch(27.7% 0.048 268.1)",
+        "tonalRamp": [
+          "#090B10",
+          "#202532",
+          "#394157",
+          "#55617D",
+          "#7682A0",
+          "#9AA5BF",
+          "#C2C9DB",
+          "#EBEEF7"
+        ]
+      },
+      "rust-dark": {
+        "role": "primary",
+        "displayName": "Rust (dark)",
+        "canonical": "oklch(78.8% 0.120 60.6)",
+        "tonalRamp": [
+          "#140801",
+          "#3B1C00",
+          "#663200",
+          "#914D00",
+          "#B66F2B",
+          "#D39663",
+          "#E9C09F",
+          "#FEEADB"
+        ]
+      },
+      "rust-tint-dark": {
+        "role": "primary",
+        "displayName": "Rust tint (dark)",
+        "canonical": "oklch(28.9% 0.040 58.9)",
+        "tonalRamp": [
+          "#0E0A07",
+          "#2D231B",
+          "#503E30",
+          "#735C4A",
+          "#957D6B",
+          "#B5A191",
+          "#D4C6BC",
+          "#F4EDE8"
+        ]
+      },
+      "teal-dark": {
+        "role": "primary",
+        "displayName": "Teal (dark)",
+        "canonical": "oklch(79.6% 0.093 186.8)",
+        "tonalRamp": [
+          "#010E0D",
+          "#002D29",
+          "#004F49",
+          "#00726A",
+          "#2C948B",
+          "#69B5AD",
+          "#A5D4CE",
+          "#DEF4F1"
+        ]
+      },
+      "teal-tint-dark": {
+        "role": "primary",
+        "displayName": "Teal tint (dark)",
+        "canonical": "oklch(28.6% 0.036 189.5)",
+        "tonalRamp": [
+          "#070C0C",
+          "#1A2827",
+          "#2F4745",
+          "#496865",
+          "#6A8A87",
+          "#91ABA9",
+          "#BCCDCC",
+          "#E8F0F0"
+        ]
+      },
+      "plum-dark": {
+        "role": "primary",
+        "displayName": "Plum (dark)",
+        "canonical": "oklch(79.0% 0.107 331.4)",
+        "tonalRamp": [
+          "#120710",
+          "#351A32",
+          "#5C2E57",
+          "#83487D",
+          "#A769A0",
+          "#C691BE",
+          "#E0BCDA",
+          "#FAE8F7"
+        ]
+      },
+      "plum-tint-dark": {
+        "role": "primary",
+        "displayName": "Plum tint (dark)",
+        "canonical": "oklch(27.2% 0.055 331.3)",
+        "tonalRamp": [
+          "#0F090E",
+          "#2E202C",
+          "#50394D",
+          "#745670",
+          "#967792",
+          "#B69BB2",
+          "#D5C3D2",
+          "#F4EBF3"
+        ]
+      },
+      "moss-dark": {
+        "role": "primary",
+        "displayName": "Moss (dark)",
+        "canonical": "oklch(81.7% 0.121 122.6)",
+        "tonalRamp": [
+          "#090D01",
+          "#1F2A00",
+          "#394A00",
+          "#556B00",
+          "#758E32",
+          "#9AAF68",
+          "#C1D1A2",
+          "#EBF2DC"
+        ]
+      },
+      "moss-tint-dark": {
+        "role": "primary",
+        "displayName": "Moss tint (dark)",
+        "canonical": "oklch(28.3% 0.051 126.2)",
+        "tonalRamp": [
+          "#0A0C07",
+          "#222819",
+          "#3C462D",
+          "#5A6747",
+          "#7A8867",
+          "#9EAA8E",
+          "#C4CDBA",
+          "#ECF0E7"
+        ]
+      },
+      "slate-dark": {
+        "role": "primary",
+        "displayName": "Slate (dark)",
+        "canonical": "oklch(79.9% 0.026 261.1)",
+        "tonalRamp": [
+          "#0A0B0E",
+          "#21252C",
+          "#3C424E",
+          "#596271",
+          "#7A8393",
+          "#9DA5B3",
+          "#C4C9D3",
+          "#ECEFF3"
+        ]
+      },
+      "slate-tint-dark": {
+        "role": "primary",
+        "displayName": "Slate tint (dark)",
+        "canonical": "oklch(28.8% 0.020 264.2)",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#22252A",
+          "#3E424B",
+          "#5C616D",
+          "#7C828F",
+          "#A0A5B0",
+          "#C6C9D0",
+          "#EDEEF2"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "screen-title": {
+        "displayName": "Screen title",
+        "purpose": "A screen of its own, such as Settings."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "\"Praxis\" beside the mark in the top bar."
+      },
+      "column-title": {
+        "displayName": "Column title",
+        "purpose": "The head of each peer."
+      },
+      "words": {
+        "displayName": "Words",
+        "purpose": "An Entry's words, one step larger than the interface; also a phone's text fields."
+      },
+      "body-phone": {
+        "displayName": "Body on a phone",
+        "purpose": "The base size below 720px, and the composers' text."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "The interface's base on a desktop, and a Message's words."
+      },
+      "row-title": {
+        "displayName": "Row title",
+        "purpose": "A Task's or a search hit's title."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Every button's word."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "A composer's label, a group heading, a chip, a badge."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "A time, an author, a Task's mark."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "A day's label, a tab's name."
+      },
+      "code-block": {
+        "displayName": "Code block",
+        "purpose": "Code in an Entry's words, in the Device's monospace."
+      }
+    },
+    "shadows": [
+      {
+        "name": "ring-surface",
+        "value": "0 0 0 4px var(--surface)",
+        "purpose": "A ring, not a shadow: lifts the Call's accent dot off its tint."
+      },
+      {
+        "name": "ring-field",
+        "value": "inset 0 0 0 1px var(--rule)",
+        "purpose": "A ring, not a shadow: a field's edge on an Entry's page; 2px ink when focused."
+      }
+    ],
+    "motion": [
+      {
+        "name": "page-push",
+        "value": "220ms cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "A Task's, Project's or Entry's page coming in 24px from the side as the person goes deeper."
+      },
+      {
+        "name": "page-fade-reduced",
+        "value": "160ms ease-out",
+        "purpose": "The same page under reduced motion: a fade only."
+      },
+      {
+        "name": "switch-knob",
+        "value": "left 150ms",
+        "purpose": "A switch's knob, only when motion is allowed."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "below 720px"
+      },
+      {
+        "name": "between",
+        "value": "720px"
+      },
+      {
+        "name": "desktop",
+        "value": "1200px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Record button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary act in a place: the solid Context accent under on-accent, its icon beside its word.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg>Record</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; font: 700 15px/22px \"Figtree Variable\", system-ui, sans-serif; border-radius: 999px; min-height: 40px; padding: 0 16px; background: var(--accent, #2B55C4); color: var(--on-accent, #FFFFFF); } .ds-btn-primary:hover { filter: brightness(0.94); } .ds-btn-primary:active { filter: brightness(0.88); } .ds-btn-primary:focus-visible { outline: 2px solid var(--ink, #1A1D23); outline-offset: 2px; }"
+    },
+    {
+      "name": "Send button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The Conversation's send: a 40px round accent button with the arrow-up icon alone, named for assistive tech.",
+      "html": "<button class=\"ds-btn-send\" type=\"button\" aria-label=\"Send\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m5 12 7-7 7 7\"/><path d=\"M12 19V5\"/></svg></button>",
+      "css": ".ds-btn-send { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; font: 700 15px/22px \"Figtree Variable\", system-ui, sans-serif; border-radius: 999px; width: 40px; height: 40px; padding: 0; background: var(--accent, #2B55C4); color: var(--on-accent, #FFFFFF); } .ds-btn-send:hover { filter: brightness(0.94); } .ds-btn-send:focus-visible { outline: 2px solid var(--ink, #1A1D23); outline-offset: 2px; }"
+    },
+    {
+      "name": "Quiet button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Every secondary action: words in ink at 600, underlined, no fill. Nothing but the primary takes the accent.",
+      "html": "<button class=\"ds-btn-quiet\" type=\"button\">Take back</button>",
+      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; font: 700 15px/22px \"Figtree Variable\", system-ui, sans-serif; border-radius: 999px; min-height: 24px; padding: 0; background: none; color: var(--ink, #1A1D23); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; } .ds-btn-quiet:hover { text-decoration-thickness: 2px; } .ds-btn-quiet:focus-visible { outline: 2px solid var(--ink, #1A1D23); outline-offset: 2px; }"
+    },
+    {
+      "name": "Composer",
+      "kind": "input",
+      "refersTo": "composer",
+      "description": "The Journal's composer at rest: one line on the accent's tint, its label where the words will go, Record at its end.",
+      "html": "<form class=\"ds-composer\"><label class=\"ds-composer-label\" for=\"ds-c\">Write in Work</label><textarea id=\"ds-c\" rows=\"1\"></textarea><button class=\"ds-composer-send\" type=\"button\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg>Record</button></form>",
+      "css": ".ds-composer { position: relative; display: flex; align-items: center; gap: 12px; max-width: 520px; padding: 6px 6px 6px 16px; border: 1.5px solid var(--accent, #2B55C4); border-radius: 20px; background: var(--accent-tint, #E6ECFA); } .ds-composer:focus-within { outline: 2px solid var(--accent, #2B55C4); outline-offset: 2px; } .ds-composer-label { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--accent, #2B55C4); font: 700 13px/18px \"Figtree Variable\", system-ui, sans-serif; pointer-events: none; } .ds-composer:focus-within .ds-composer-label { display: none; } .ds-composer textarea { flex: 1; min-width: 0; height: 40px; padding: 8px 0 0; border: 0; background: transparent; color: var(--ink, #1A1D23); font: 400 16px/26px \"Figtree Variable\", system-ui, sans-serif; resize: none; } .ds-composer textarea:focus-visible { outline: none; } .ds-composer-send { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; font: 700 15px/22px \"Figtree Variable\", system-ui, sans-serif; border-radius: 999px; min-height: 40px; padding: 0 16px; background: var(--accent, #2B55C4); color: var(--on-accent, #FFFFFF); }"
+    },
+    {
+      "name": "Search field",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "A 44px inset pill with a muted search icon; its border turns ink when focused.",
+      "html": "<label class=\"ds-search\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m21 21-4.34-4.34\"/><circle cx=\"11\" cy=\"11\" r=\"8\"/></svg><input type=\"search\" placeholder=\"Search the Journal\" aria-label=\"Search\"></label>",
+      "css": ".ds-search { display: flex; align-items: center; gap: 10px; max-width: 360px; height: 44px; padding: 0 6px 0 14px; border: 1.5px solid transparent; border-radius: 999px; background: var(--inset, #F4F5F8); color: var(--muted, #596070); } .ds-search:focus-within { border-color: var(--ink, #1A1D23); } .ds-search input { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--ink, #1A1D23); font: 400 16px/23px \"Figtree Variable\", system-ui, sans-serif; } .ds-search input:focus-visible { outline: none; } .ds-search input::placeholder { color: var(--muted, #596070); }"
+    },
+    {
+      "name": "Context switcher",
+      "kind": "nav",
+      "refersTo": "context-switcher",
+      "description": "The current Context in its solid accent, in the top bar at every width, opening the list of the others.",
+      "html": "<button class=\"ds-context\" type=\"button\" aria-haspopup=\"listbox\"><span>Work</span><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"/></svg></button>",
+      "css": ".ds-context { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; font: 700 15px/22px \"Figtree Variable\", system-ui, sans-serif; border-radius: 999px; gap: 4px; height: 40px; padding: 0 12px 0 16px; background: var(--accent, #2B55C4); color: var(--on-accent, #FFFFFF); font: 600 15px/22px \"Figtree Variable\", system-ui, sans-serif; } .ds-context:focus-visible { outline: 2px solid var(--ink, #1A1D23); outline-offset: 2px; }"
+    },
+    {
+      "name": "Phone tabs",
+      "kind": "nav",
+      "refersTo": "tab-bar",
+      "description": "Below 720px: a surface pill of three tabs, each its icon over its caption name, the current one on inset in ink.",
+      "html": "<nav class=\"ds-tabs\"><button type=\"button\" aria-current=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"/><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"/></svg>Attention</button><button type=\"button\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 7v14\"/><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"/></svg>Journal</button><button type=\"button\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M7.9 20A9 9 0 1 0 4 16.1L2 22Z\"/></svg>Agent</button></nav>",
+      "css": ".ds-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; max-width: 390px; padding: 6px; border-radius: 999px; background: var(--surface, #FFFFFF); } .ds-tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 56px; border: 0; border-radius: 999px; background: none; color: var(--muted, #596070); font: 600 12px/16px \"Figtree Variable\", system-ui, sans-serif; cursor: pointer; } .ds-tabs button:hover { color: var(--ink, #1A1D23); } .ds-tabs button[aria-current=\"true\"] { background: var(--inset, #F4F5F8); color: var(--ink, #1A1D23); font-weight: 700; } .ds-tabs button:focus-visible { outline: 2px solid var(--ink, #1A1D23); outline-offset: 2px; }"
+    },
+    {
+      "name": "Filter chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "A search narrowing: a 32px surface pill with a rule border; once set, solid ink with surface text. Never the accent.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip\" type=\"button\">Kind<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 9 6 6 6-6\"/></svg></button><button class=\"ds-chip ds-chip-set\" type=\"button\">Last 7 days ×</button></div>",
+      "css": ".ds-chips { display: flex; gap: 8px; } .ds-chip { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; font: 700 15px/22px \"Figtree Variable\", system-ui, sans-serif; border-radius: 999px; gap: 6px; min-height: 32px; padding: 0 10px; border: 1px solid var(--rule, #D5D9E0); background: var(--surface, #FFFFFF); color: var(--ink, #1A1D23); font: 600 13px/18px \"Figtree Variable\", system-ui, sans-serif; } .ds-chip:hover { background: var(--inset, #F4F5F8); } .ds-chip-set, .ds-chip-set:hover { border-color: var(--ink, #1A1D23); background: var(--ink, #1A1D23); color: var(--surface, #FFFFFF); } .ds-chip:focus-visible { outline: 2px solid var(--ink, #1A1D23); outline-offset: 2px; }"
+    },
+    {
+      "name": "Task row",
+      "kind": "custom",
+      "refersTo": "task-row",
+      "description": "The most repeated object: an inset row with a round control, the title, its state in words, and the calendar at its end.",
+      "html": "<div class=\"ds-task\"><label><input type=\"checkbox\"><span class=\"ds-task-title\">Send the lease back</span></label><span class=\"ds-task-mark ds-overdue\">Overdue since Monday</span><button class=\"ds-task-dates\" type=\"button\" aria-label=\"Dates\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 2v4\"/><path d=\"M16 2v4\"/><rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\"/><path d=\"M3 10h18\"/></svg></button></div>",
+      "css": ".ds-task { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; max-width: 420px; padding: 10px 12px; border-radius: 10px; background: var(--inset, #F4F5F8); color: var(--ink, #1A1D23); } .ds-task label { display: flex; align-items: center; gap: 12px; cursor: pointer; } .ds-task input { flex-shrink: 0; width: 20px; height: 20px; margin: 0; border: 2px solid var(--muted, #596070); border-radius: 50%; background: transparent; appearance: none; cursor: pointer; } .ds-task input:checked { border-color: var(--ink, #1A1D23); background: radial-gradient(var(--ink, #1A1D23) 0 4px, transparent 5px); } .ds-task input:focus-visible { outline: 2px solid var(--ink, #1A1D23); outline-offset: 2px; } .ds-task-title { font: 500 15px/22px \"Figtree Variable\", system-ui, sans-serif; } .ds-task-mark { font: 700 13px/18px \"Figtree Variable\", system-ui, sans-serif; color: var(--muted, #596070); } .ds-overdue { color: var(--warn, #B42318); } .ds-task-dates { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin-left: auto; padding: 0; border: 0; border-radius: 999px; background: none; color: var(--muted, #596070); cursor: pointer; } .ds-task-dates:hover { background: var(--surface, #FFFFFF); color: var(--ink, #1A1D23); } .ds-task-dates:focus-visible { outline: 2px solid var(--ink, #1A1D23); outline-offset: 2px; }"
+    },
+    {
+      "name": "Jump to latest",
+      "kind": "button",
+      "refersTo": "jump-to-latest",
+      "description": "Scrolled away from the newest, an ink pill above the composer, with a count of what arrived.",
+      "html": "<button class=\"ds-jump\" type=\"button\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 5v14\"/><path d=\"m19 12-7 7-7-7\"/></svg>3 · Jump to latest</button>",
+      "css": ".ds-jump { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; cursor: pointer; font: 700 15px/22px \"Figtree Variable\", system-ui, sans-serif; border-radius: 999px; gap: 6px; min-height: 38px; padding: 0 16px 0 12px; background: var(--ink, #1A1D23); color: var(--surface, #FFFFFF); font-size: 14px; white-space: nowrap; } .ds-jump:focus-visible { outline: 2px solid var(--ink, #1A1D23); outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Atelier",
+    "overview": "A workroom kept for one person. The walls are a cool tinted ground. The work sits on soft white panels with generous corners, and every tool in reach is round. Nothing is ornamental, because the person's own words are what the room is for. The Journal's words are set one step larger than the interface around them, and Markdown in them changes weight, indentation and face, never size or colour.\n\nThe mood is **calm, soft, exact**. Soft in form: pills, circles, 20px panel corners, tone instead of shadow. Exact in meaning: every state is said in words, every icon that stands alone has a name, and colour never carries a meaning by itself. Praxis is reached many times a day, so it is quiet. Things appear where they are needed, at once, and the only motion is a page sliding in as the person goes one level deeper.\n\nThe one expressive element is the **Context accent**. Each Context has one of six, and it marks where the person is about to write or decide: the Context switcher, both composers, a Held Change and a Mention. Everything else is neutral, so the accent always answers one question: which Context am I in?",
+    "keyCharacteristics": [
+      "Soft panels on a tinted ground: three peers side by side on a desktop, three bottom tabs on a phone.",
+      "One family, Figtree, with the Device's monospace for code only.",
+      "Round controls: every button, switcher, chip, badge, search field and tab bar is a pill, and a Task's control is a circle.",
+      "Flat by rule: depth comes from tone and hairlines, never from shadows.",
+      "One accent per Context, from a fixed six, and nothing else takes it.",
+      "Light and dark follow the Device, WCAG 2.2 AA in both."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "Only the current Context's accent appears on the screen, and only where the person is about to write or decide: the switcher, both composers, the primary button, a Held Change, a Mention, badges. A secondary action, a link, a heading or a selected state never takes it.",
+        "section": "colors"
+      },
+      {
+        "name": "The Words Not Colour Rule",
+        "body": "No state is shown by colour alone. Overdue is `warn` *and* the words \"Overdue since …\". A Context's swatch always sits beside its name. Red means late, or a refusal the person must read, and nothing else is red.",
+        "section": "colors"
+      },
+      {
+        "name": "The Pairing Rule",
+        "body": "Every text-on-ground pairing is held to 4.5:1 in both themes by `apps/pwa/test/tokens.test.ts`. A new pairing is added to that test before it ships.",
+        "section": "colors"
+      },
+      {
+        "name": "The Words Lead Rule",
+        "body": "An Entry's words are always the largest running text on the screen (17px). Markdown inside them changes weight, indentation and face, never size, and never takes the accent.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Family Rule",
+        "body": "Figtree is the only typeface. A second family never comes in for headings or emphasis. Monospace is for code, never for numbers or labels. Tabular figures serve the time on a Call.",
+        "section": "typography"
+      },
+      {
+        "name": "The Newest Beside the Composer Rule",
+        "body": "Where the person types is the bottom of the column, and the newest is just above it. Never invert a column or put a composer at the top.",
+        "section": "layout"
+      },
+      {
+        "name": "The 44px Rule",
+        "body": "On a phone every touch target is at least 44px: buttons, icon buttons, the switcher, a Task's label, a Task's dates. A desktop's controls are 40px, or 36px for a row's own icon button.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Rule",
+        "body": "No drop shadows, no blur, no glow, no gradients for depth. If something must stand above what is under it, it takes `surface` and a `rule` hairline.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Round Controls Rule",
+        "body": "Anything pressable is a pill or a circle. A square button, or a checkbox drawn as a square, never appears. A switch is a 46×28 pill, never a checkbox.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** take every colour from `tokens.ts` through its custom property (`var(--inset)`): the stylesheet holds no raw hex or rgb. Type, spaces and radii mostly come from their tokens too (`var(--type-meta)`, `var(--space-3)`, `var(--radius-md)`), with a few one-off px values.",
+      "**Do** wrap anything drawn in a Context's colours in `.accent-<name>` and use `--accent` and `--accent-tint`, never a named accent.",
+      "**Do** put an icon beside its label on the tabs, the sections of Settings, Attention's section headings, the groups of what a search finds and the primary buttons. Interface icons are Lucide, stroked with round caps, at the text colour.",
+      "**Do** say every state in words, beside any colour it takes.",
+      "**Do** keep text fields on a phone at 16px or larger, so the page does not zoom when one is tapped."
+    ],
+    "donts": [
+      "**Don't** use the accent on anything but where the person is about to write or decide (The One Accent Rule). A secondary button is quiet, in `ink`.",
+      "**Don't** add a shadow, blur, glow or gradient for depth (The Flat Rule).",
+      "**Don't** draw a square control or a checkbox. Controls are pills and circles.",
+      "**Don't** bring in a second typeface, an icon set other than Lucide, or any asset fetched from elsewhere.",
+      "**Don't** give the app icon or the mark a Context's accent. It stands for the whole Deployment, white on an `ink` tile.",
+      "**Don't** animate what is reached many times a day: a composer opening, a menu, a tab change.",
+      "**Don't** use `warn` for anything but lateness, a Project with no open Task, a refusal shown in words, or End Call, and `match` for anything but a search's mark."
+    ]
+  }
+}

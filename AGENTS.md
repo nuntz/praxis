@@ -1,3 +1,9 @@
+## Binding documents
+
+- `CODING_STANDARDS.md`: the coding standards, read at review.
+- `DESIGN.md`: binding for all UI code.
+- `PRODUCT.md`: the product truth design work starts from. Its terminology follows `GLOSSARY.md`.
+
 ## Agent skills
 
 ### Issue tracker
