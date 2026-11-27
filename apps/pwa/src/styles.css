@@ -148,6 +148,13 @@ button:active:not(:disabled) {
   transition-duration: 0s;
 }
 
+/* With reduced motion a press lifts at once, as it lands. */
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled) {
+    transition: none;
+  }
+}
+
 /*
  * A composer's send with nothing to send, which is most of the time, is at rest and not broken: the
  * accent's icon (and Record's word) on the composer's tint, at full opacity, with no fill of its own.
@@ -232,7 +239,7 @@ button.quiet {
   align-items: center;
   gap: 10px;
   font: var(--type-wordmark);
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-wordmark);
 }
 
 /* The app icon's tile, inverting with the theme. It never takes the accent. */
@@ -372,7 +379,7 @@ button.quiet {
 .settings-title {
   margin-left: var(--space-2);
   font: var(--type-screen-title);
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-screen-title);
 }
 
 .settings-hint {
@@ -496,7 +503,7 @@ button.quiet {
 
 .settings-shown > .settings > .column-heading {
   font: var(--type-screen-title);
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-screen-title);
 }
 
 .settings-rows {
@@ -936,7 +943,7 @@ input[type="checkbox"].switch:disabled {
 
 .peer-title {
   font: var(--type-column-title);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--tracking-column-title);
 }
 
 /* What is beside the title sits at the header's end, with anything after it, such as a Close. */
@@ -3337,6 +3344,10 @@ button.entry-page-add-button {
   gap: var(--space-1);
 }
 
+.move-record select {
+  font: var(--type-body);
+}
+
 .move-record-note {
   margin: 0;
   color: var(--muted);
@@ -3544,7 +3555,8 @@ a.entry-mark.held-mark {
   .task-date input,
   .chip-range input,
   .inspector .inspector-date input,
-  .inspector .choice-field,
+  .choice-field,
+  .move-record select,
   .journal-search .search-field input,
   .task.entry-page-add input,
   .settings :is(input, select),
@@ -3715,7 +3727,7 @@ a.entry-mark.held-mark {
 
   .peer-title {
     font: var(--type-screen-title);
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-screen-title);
   }
 
   .peer-body {

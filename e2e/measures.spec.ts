@@ -3,6 +3,7 @@ import {
   callContextTool,
   contextOfOwn,
   enterSearch,
+  entryAction,
   expect,
   lastShown,
   makeContext,
@@ -13,7 +14,8 @@ import {
 
 // Rules of DESIGN.md held by measuring the screen as rendered: the 44px Rule and the Round Controls
 // Rule in the phone's top bar and Attention, the focus outline on the search field, the type
-// scale on a tab's badge (#174), the Tracking Rule, and the hairlines asked for with more contrast.
+// scale on a tab's badge (#174), the Tracking Rule, the hairlines asked for with more contrast, and
+// the 16px a field under a finger takes so the page never zooms.
 
 /** Ink, the focus outline's colour, in light. */
 const INK = "rgb(26, 29, 35)";
@@ -183,4 +185,33 @@ test("in between, Attention's edge over the Journal is a rule hairline, and mute
   expect(await edge()).toBe(RULE);
   await page.emulateMedia({ colorScheme: "light", contrast: "more" });
   expect(await edge()).toBe(MUTED);
+});
+
+test("on a phone, the search's Project picker and the Move to choice are 16px, so neither zooms the page", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "Only a phone's touch screen is a coarse pointer.");
+  const { id, name } = await contextOfOwn(page, testInfo, "Fields");
+  await makeContext(page, { name: `${name} elsewhere`, time_zone: "UTC", accent: "plum" });
+  const words = `Fix the gate ${crypto.randomUUID().slice(0, 8)}`;
+  await callContextTool(page, id, "record_entry", { words });
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const fontSize = (field: Locator) => field.evaluate((shown) => getComputedStyle(shown).fontSize);
+
+  const entry = journal.getByTestId("entry").filter({ hasText: words }).first();
+  await (await entryAction(entry, "Move", testInfo)).click();
+  const moveTo = entry.getByRole("combobox", { name: "Move to" });
+  await expect(moveTo).toBeVisible();
+  expect(await fontSize(moveTo)).toBe("16px");
+  await entry.getByRole("button", { name: "Keep it here" }).click();
+
+  await enterSearch(page);
+  await journal
+    .getByRole("group", { name: "Narrow the search" })
+    .getByRole("button", { name: "Project", exact: true })
+    .click();
+  const finder = journal.getByRole("combobox", { name: "Find a Project" });
+  await expect(finder).toBeFocused();
+  expect(await fontSize(finder)).toBe("16px");
 });

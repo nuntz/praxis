@@ -85,7 +85,8 @@ export const families = {
 /**
  * A type style. `tracking`, in em, is set as `--tracking-<name>` beside `--type-<name>`, since the
  * `font` shorthand cannot carry it. Figtree has no tracking of its own for small sizes, as a
- * system face has, so the smallest styles are opened up a little to stay legible.
+ * system face has, so the smallest styles are opened up a little to stay legible, and the titles
+ * are drawn tighter.
  */
 type TypeStyle = {
   family: keyof typeof families;
@@ -96,9 +97,9 @@ type TypeStyle = {
 };
 
 export const typography = {
-  "screen-title": { family: "sans", size: 26, line: 32, weight: 700 },
-  wordmark: { family: "sans", size: 22, line: 28, weight: 700 },
-  "column-title": { family: "sans", size: 20, line: 26, weight: 700 },
+  "screen-title": { family: "sans", size: 26, line: 32, weight: 700, tracking: -0.02 },
+  wordmark: { family: "sans", size: 22, line: 28, weight: 700, tracking: -0.02 },
+  "column-title": { family: "sans", size: 20, line: 26, weight: 700, tracking: -0.01 },
   /** An Entry's words, one step larger than the interface around them. */
   words: { family: "sans", size: 17, line: 26, weight: 400 },
   "body-phone": { family: "sans", size: 16, line: 23, weight: 400 },

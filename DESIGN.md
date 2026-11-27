@@ -52,6 +52,7 @@ typography:
     fontSize: "26px"
     fontWeight: 700
     lineHeight: "32px"
+    letterSpacing: "-0.02em"
   wordmark:
     fontFamily: "Figtree Variable, system-ui, sans-serif"
     fontSize: "22px"
@@ -247,7 +248,7 @@ The frontmatter lists each colour twice: the bare name is its light value, and `
 
 A workroom kept for one person. The walls are a cool tinted ground. The work sits on soft white panels with generous corners, and every tool in reach is round. Nothing is ornamental, because the person's own words are what the room is for. The Journal's words are set one step larger than the interface around them, and Markdown in them changes weight, indentation and face, never size or colour.
 
-The mood is **calm, soft, exact**. Soft in form: pills, circles, 20px panel corners, tone instead of shadow. Exact in meaning: every state is said in words, every icon that stands alone has a name, and colour never carries a meaning by itself. Praxis is reached many times a day, so it is quiet. Things appear where they are needed, at once, and the only motion is a page sliding in as the person goes one level deeper.
+The mood is **calm, soft, exact**. Soft in form: pills, circles, 20px panel corners, tone instead of shadow. Exact in meaning: every state is said in words, every icon that stands alone has a name, and colour never carries a meaning by itself. Praxis is reached many times a day, so it is quiet. Things appear where they are needed, at once, and the only motion is a page sliding in as the person goes one level deeper, and a press fading back as it lifts.
 
 The one expressive element is the **Context accent**. Each Context has one of six, and it marks where the person is about to write or decide: the Context switcher, both composers, a Held Change and a Mention. Everything else is neutral, so the accent always answers one question: which Context am I in?
 
@@ -303,10 +304,10 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 **Character:** one geometric-humanist family carries the whole interface, with its weights doing the work a second family would: 700 for titles, buttons and labels, 500–600 for row titles and emphasis, 400 for reading.
 
 ### Hierarchy
-- **Screen title** (700, 26px/32px): a screen of its own, such as Settings.
+- **Screen title** (700, 26px/32px, −0.02em): a screen of its own, such as Settings.
 - **Wordmark** (700, 22px/28px, −0.02em): "Praxis" beside the mark in the top bar, from 720px up.
 - **Column title** (700, 20px/26px, −0.01em): the head of each peer.
-- **Words** (400, 17px/26px): an Entry's words, the person's own, one step larger than the interface. Also the size of a phone's text fields, so they never zoom.
+- **Words** (400, 17px/26px): an Entry's words, the person's own, one step larger than the interface. Also the size they are edited at, on an Entry's page and in its editor.
 - **Body on a phone** (400, 16px/23px): the base size below 720px, and the composers' text.
 - **Body** (400, 15px/22px): the interface's base on a desktop, and a Message's words.
 - **Row title** (500, 15px/22px): a Task's or a search hit's title.
@@ -371,7 +372,7 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **Jump to latest:** an `ink` pill with `surface` text, the arrow-down icon and a count, centred above the composer.
 - **End Call:** a 60px circle of solid `warn` under `on-accent`, the phone icon turned 135°, its word underneath. Mute beside it is the same circle on `inset`.
 - **Disabled:** 50% opacity, for every control but a composer's send with nothing to send. A Call that cannot start stays focusable and says why in `meta` under it, since a touch screen has no tooltip.
-- **Pressed:** dimmed to 70% the moment the press lands, and back over 160ms once it lifts, as a native control answers a finger. The browser's grey tap box is never drawn.
+- **Pressed:** dimmed to 70% the moment the press lands, and back over 160ms once it lifts, as a native control answers a finger; with reduced motion, back at once. A link that is a row, such as a section of Settings, sits on `inset` while pressed instead, as it does when hovered. The browser's grey tap box is never drawn.
 - **Focus:** a 2px `ink` outline, 2px off, on everything.
 
 ### Chips
@@ -408,7 +409,7 @@ A Mention is the accent on its tint, a Reference is `ink` on `inset`, both at 60
 The person's Message sits on the right, no wider than 85%, on `inset` with `radius-lg`. The Agent's words sit on the panel with no box, under a `meta` line naming who spoke. A Call going replaces the header with a bar on the accent's tint: an accent dot, "On a Call in" the Context, and the time in tabular figures.
 
 ### Motion
-The one motion is a page going one level deeper. A Task's, Project's or Entry's page slides in 24px from the side, fading in over 220ms on `cubic-bezier(0.23, 1, 0.32, 1)`. A page gone back to is simply there. With reduced motion it is a 160ms fade, ease-out. Composers, menus, pickers and tabs appear at once.
+The one motion is a page going one level deeper, beside a press fading back as it lifts (Pressed, under Buttons), which is feedback on the person's own touch. A Task's, Project's or Entry's page slides in 24px from the side, fading in over 220ms on `cubic-bezier(0.23, 1, 0.32, 1)`. A page gone back to is simply there. With reduced motion it is a 160ms fade, ease-out. Composers, menus, pickers and tabs appear at once.
 
 ## Do's and Don'ts
 
