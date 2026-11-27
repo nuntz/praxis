@@ -372,7 +372,7 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **Jump to latest:** an `ink` pill with `surface` text, the arrow-down icon and a count, centred above the composer.
 - **End Call:** a 60px circle of solid `warn` under `on-accent`, the phone icon turned 135°, its word underneath. Mute beside it is the same circle on `inset`.
 - **Disabled:** 50% opacity, for every control but a composer's send with nothing to send. A Call that cannot start stays focusable and says why in `meta` under it, since a touch screen has no tooltip.
-- **Pressed:** dimmed to 70% the moment the press lands, and back over 160ms once it lifts, as a native control answers a finger; with reduced motion, back at once. A link that is a row, such as a section of Settings, sits on `inset` while pressed instead, as it does when hovered. The browser's grey tap box is never drawn.
+- **Pressed:** a button, a link or a disclosure that can be pressed is dimmed to 70% the moment the press lands, and back over 160ms once it lifts, as a native control answers a finger; with reduced motion, back at once. A link that is a row, such as a section of Settings, sits on `inset` while pressed instead, as it does when hovered. The browser's grey tap box is never drawn.
 - **Focus:** a 2px `ink` outline, 2px off, on everything.
 
 ### Chips
@@ -418,7 +418,7 @@ The one motion is a page going one level deeper, beside a press fading back as i
 - **Do** wrap anything drawn in a Context's colours in `.accent-<name>` and use `--accent` and `--accent-tint`, never a named accent.
 - **Do** put an icon beside its label on the tabs, the sections of Settings, Attention's section headings, the groups of what a search finds and the primary buttons. Interface icons are Lucide, stroked with round caps, at the text colour.
 - **Do** say every state in words, beside any colour it takes.
-- **Do** keep text fields under a finger at 16px or larger at any width, so the page does not zoom when one is tapped.
+- **Do** keep text fields at 16px or larger at any width wherever a finger can reach them, a touch screen beside a trackpad too, so the page does not zoom when one is tapped.
 - **Do** put every `:hover` look behind `(hover: hover) and (pointer: fine)`, so a tap on a touch screen leaves nothing hovered.
 
 ### Don't:
