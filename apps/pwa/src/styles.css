@@ -2985,17 +2985,16 @@ button.quiet.entry-mark {
   font-weight: 600;
 }
 
-/* A menu of actions, opened under its button, at its right edge. */
-.menu {
-  position: relative;
-}
-
+/*
+ * A menu of actions, in the top layer (a popover), so it is above every Entry and column and no
+ * column cuts it off. Menu.tsx sets its top and left from its button: under it at its right edge,
+ * or over it where there is no room under it.
+ */
 .menu-list {
-  position: absolute;
-  top: calc(100% + var(--space-1));
-  right: 0;
-  z-index: 2;
-  display: flex;
+  /* Fixed in the window, as every popover is: its top and left are set where it opens. */
+  inset: auto;
+  margin: 0;
+  overflow: auto;
   flex-direction: column;
   gap: 2px;
   min-width: 180px;
@@ -3003,6 +3002,11 @@ button.quiet.entry-mark {
   border: 1px solid var(--rule);
   border-radius: var(--radius-md);
   background: var(--surface);
+  color: var(--ink);
+}
+
+.menu-list:popover-open {
+  display: flex;
 }
 
 .menu-list [role="menuitem"] {
@@ -3048,15 +3052,23 @@ button.quiet.entry-mark {
   border-radius: var(--radius-pill);
   background: var(--surface);
   opacity: 0;
+  /* Not shown, it takes no press either, which would otherwise land on an action no one sees. */
+  pointer-events: none;
 }
 
-.entry:focus-within .entry-actions {
+/*
+ * An Entry holds the focus while its menu is open too: the focus is in the menu then, which is in
+ * the top layer, and Chromium matches :focus-within no further out than a popover.
+ */
+.entry:is(:focus-within, :has(:popover-open)) .entry-actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .entry:hover .entry-actions {
     opacity: 1;
+    pointer-events: auto;
   }
 }
 
@@ -3096,16 +3108,16 @@ button.quiet.entry-mark {
     border-top: 1px solid var(--rule);
   }
 
-  .entry:focus-within {
+  .entry:is(:focus-within, :has(:popover-open)) {
     background: var(--inset);
   }
 
-  .entry:focus-within:not(.unsent),
-  .entry:focus-within + .entry:not(.unsent) {
+  .entry:is(:focus-within, :has(:popover-open)):not(.unsent),
+  .entry:is(:focus-within, :has(:popover-open)) + .entry:not(.unsent) {
     border-top-color: transparent;
   }
 
-  .entry:focus-within .task {
+  .entry:is(:focus-within, :has(:popover-open)) .task {
     background: var(--surface);
   }
 }
