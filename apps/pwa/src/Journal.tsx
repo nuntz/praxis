@@ -615,6 +615,8 @@ function EntryItem(props: {
       id={recordAnchor("entry", props.entry.id)}
       data-testid="entry"
       tabIndex={-1}
+      // Named by its time, so a screen reader given the focus here does not read all of it.
+      aria-label={`Entry at ${props.formatTime(props.entry.at)}`}
     >
       <div class="entry-head">
         <time class="entry-time" datetime={props.entry.at}>

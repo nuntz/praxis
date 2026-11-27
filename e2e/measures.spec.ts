@@ -15,8 +15,9 @@ import {
 // Rules of DESIGN.md held by measuring the screen as rendered: the 44px Rule and the Round Controls
 // Rule in the phone's top bar and Attention, the focus outline on the search field, the type
 // scale on a tab's badge (#174), the Tracking Rule, the hairlines asked for with more contrast, the
-// 16px a field under a finger takes so the page never zooms, and Attention's rows, their marks, their
-// grounds and what a page draws in which colour (#179).
+// 16px a field under a finger takes so the page never zooms, Attention's rows, their marks, their
+// grounds and what a page draws in which colour (#179), and an Entry's hairline, corners, head and
+// toolbar (#186).
 
 /** Ink, the focus outline's colour, in light. */
 const INK = "rgb(26, 29, 35)";
@@ -414,4 +415,70 @@ test("on a phone, a standing Notice's link is a 44px target, its text where it w
   });
   expect(placed.under).toBeCloseTo(10, 0);
   expect(placed.above).toBeCloseTo(14, 0);
+});
+
+test("on a desktop, an Entry at rest is parted by a square-ended hairline, rounds only while hovered, and its toolbar's buttons are 36px", async ({
+  page,
+}, testInfo) => {
+  test.skip(onPhone(testInfo), "Only a pointer that hovers has the hairlines and the toolbar.");
+  const { id } = await contextOfOwn(page, testInfo, "Hairlines");
+  await callContextTool(page, id, "record_entry", { words: "Swept the porch" });
+  await callContextTool(page, id, "record_entry", { words: "Wound the clock" });
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const entry = journal.getByTestId("entry").filter({ hasText: "Wound the clock" });
+  await expect(entry).toBeVisible();
+  await page.mouse.move(0, 0);
+
+  await expect(entry).toHaveCSS("border-top-style", "solid");
+  await expect(entry).toHaveCSS("border-top-left-radius", "0px");
+  await expect(entry).toHaveCSS("border-top-right-radius", "0px");
+  await entry.hover();
+  await expect(entry).toHaveCSS("border-top-left-radius", "14px");
+  // Given the focus, as Restore gives it, with the pointer away, it rounds too.
+  await page.mouse.move(0, 0);
+  await expect(entry).toHaveCSS("border-top-left-radius", "0px");
+  await entry.focus();
+  await expect(entry).toHaveCSS("border-top-left-radius", "14px");
+
+  // A row's own icon button on a desktop is 36px (the 44px Rule), More among them.
+  const buttons = entry
+    .getByRole("toolbar", { name: "Entry actions", exact: true })
+    .getByRole("button");
+  await expect(buttons).toHaveCount(5);
+  for (const button of await buttons.all()) {
+    const box = await boxOf(button);
+    expect(box.width).toBeCloseTo(36, 0);
+    expect(box.height).toBeCloseTo(36, 0);
+  }
+});
+
+test("on a phone, an Entry's time and its one button sit on one line, centre to centre", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "Only a touch screen has the one button beside the time.");
+  const { id } = await contextOfOwn(page, testInfo, "Heads");
+  await callContextTool(page, id, "record_entry", { words: "Oiled the gate" });
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const entry = journal.getByTestId("entry").filter({ hasText: "Oiled the gate" });
+  const time = entry.locator("time");
+  const button = entry.getByRole("button", { name: "Actions for this Entry", exact: true });
+  await expect(button).toBeVisible();
+
+  const [said, pressed] = [await boxOf(time), await boxOf(button)];
+  expect(said.y + said.height / 2).toBeCloseTo(pressed.y + pressed.height / 2, 0);
+  await expect(entry).toHaveCSS("border-top-left-radius", "14px");
+});
+
+test("inline code in an Entry's words takes the small radius of the scale", async ({
+  page,
+}, testInfo) => {
+  const { id } = await contextOfOwn(page, testInfo, "Code");
+  await callContextTool(page, id, "record_entry", { words: "Ran `make clean` twice" });
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const code = journal.getByTestId("entry").getByRole("code");
+  await expect(code).toBeVisible();
+  await expect(code).toHaveCSS("border-top-left-radius", "10px");
 });

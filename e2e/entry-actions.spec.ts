@@ -62,8 +62,11 @@ test("on a desktop, an Entry's actions are a toolbar of icons, shown on hover or
   await page.mouse.move(0, 0);
   await expect(toolbar).toHaveCSS("opacity", "0");
 
-  // Tabbing into the Entry reaches each, and shows the toolbar while it has the focus.
+  // Given the focus, as Restore gives it, the Entry is named by its time, not read out whole.
   await entry.focus();
+  await expect(entry).toHaveAccessibleName(`Entry at ${await entry.locator("time").textContent()}`);
+
+  // Tabbing into the Entry reaches each, and shows the toolbar while it has the focus.
   for (const name of names) {
     await page.keyboard.press("Tab");
     await expect(toolbar.getByRole("button", { name, exact: true })).toBeFocused();

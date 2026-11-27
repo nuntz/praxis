@@ -70,6 +70,9 @@ test("an Entry recorded with no network sits Unsent in the Journal, can be edite
   const unsent = journal.getByTestId("unsent-entry");
   await expect(unsent).toHaveCount(1);
   await expect(unsent.getByText("Unsent", { exact: true })).toBeVisible();
+  // A dashed hairline round it, with an Entry's own corner.
+  await expect(unsent).toHaveCSS("border-top-style", "dashed");
+  await expect(unsent).toHaveCSS("border-top-left-radius", "14px");
   await expect(composer).toHaveValue("");
   await expect(unsentCount).toBeVisible();
   // Its Inline Task is part of its words, and not yet a Task.

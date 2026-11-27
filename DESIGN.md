@@ -349,8 +349,8 @@ Praxis is flat, by rule. Depth is told by tone: the `ground` behind, a `surface`
 ## Shapes
 
 Round throughout, in four radii:
-- **Small** (10px, `radius-sm`): a Task row, a Mention or Reference, a box inside a card, a Held Change.
-- **Medium** (14px, `radius-md`): a card, a menu, a picker, an Entry hovered on a desktop, an Entry's card on a phone.
+- **Small** (10px, `radius-sm`): a Task row, a Mention or Reference, a box inside a card, a Held Change, code in an Entry's words.
+- **Medium** (14px, `radius-md`): a card, a menu, a picker, an Entry hovered on a desktop, an Entry's card on a phone, an Unsent Entry's box.
 - **Large** (20px, `radius-lg`): a panel, a composer, the person's own Message, a Call's bar.
 - **Pill** (999px, `radius-pill`): every button, the Context switcher, badges, chips, the search field, the tab bar and its tabs. A Task's control, a swatch and the Call's dot are full circles.
 
@@ -381,7 +381,7 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 
 ### Cards / Containers
 - **Panel:** `surface` on `ground`, `radius-lg`, with a 20px inset and a `column-title` head.
-- **Entry:** from 720px up, Entries are parted by `rule` hairlines with no box. The one hovered or focused sits on `inset` with `radius-md`, and its Task rows turn `surface` so they stay one step off it. On a phone, each Entry is a `surface` card with `radius-md` on `ground`, `space-2` apart.
+- **Entry:** from 720px up, Entries are parted by `rule` hairlines with no box, their ends square. The one hovered or focused sits on `inset` with `radius-md`, and its Task rows turn `surface` so they stay one step off it. On a phone, each Entry is a `surface` card with `radius-md` on `ground`, `space-2` apart. Its time and its marks are centred on their line, each line of them where they wrap, so on a phone the time lines up with the 44px button at the line's end. An Unsent Entry is boxed by a dashed `rule` hairline with `radius-md`, in place of the hairlines that part the others, and its time is followed by Unsent in `ink` at 600.
 - **Held Change:** the accent's tint with `radius-sm` and 12px padding: a bold title, the words as they would be, and its actions in a row.
 - **Standing Notice:** a card on `notice` with `radius-md`, in Attention above its sections. The Lucide `info` icon sits beside a bold title of a few words ("Spend cap reached", "Brief not run"), set at the size of the words under it. The words follow in `ink`, then the underlined link to the section of Settings that deals with it, where there is one. The card is a status named by its title.
 - **A Notice in the Conversation:** a `rule`-bordered box with `radius-lg`, its words in `muted`. One sits under the person's Message whose Run failed, with a way to try again. Others stand in the Conversation's foot: no key, a model with no price, a Conversation that cannot be opened, no network, the cap reached (with its link), and a Call ended.

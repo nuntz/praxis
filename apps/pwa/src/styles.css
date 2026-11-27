@@ -1169,7 +1169,7 @@ button.jump-to-latest {
 
 .words .code-span {
   padding: 1px 5px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--inset);
   font-size: 0.88em;
 }
@@ -2958,12 +2958,15 @@ button.search-hit-body {
   font-weight: 600;
 }
 
-/* Editing an Entry: its marks and controls beside its time, the editor showing the words as typed. */
+/*
+ * Editing an Entry: its marks and controls beside its time, each line of them centred, so the time
+ * lines up with a phone's 44px button. The editor shows the words as typed.
+ */
 
 .entry-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-1) var(--space-3);
   min-height: 32px;
 }
@@ -2977,7 +2980,6 @@ button.quiet.entry-mark {
 /* A Standing Entry's mark, always shown, in ink where the others stay muted. */
 .entry-mark.standing-mark {
   display: inline-flex;
-  align-self: center;
   gap: var(--space-1);
   align-items: center;
   color: var(--ink);
@@ -3036,7 +3038,6 @@ button.quiet.entry-mark {
  * order of the keyboard, so Tab shows it. On a touch screen, one button at the end of the meta line.
  */
 .entry-head > .menu {
-  align-self: center;
   margin-left: auto;
 }
 
@@ -3073,8 +3074,8 @@ button.quiet.entry-mark {
 }
 
 .entry-actions .icon-button {
-  width: 32px;
-  min-height: 32px;
+  width: 36px;
+  min-height: 36px;
   background: none;
 }
 
@@ -3093,7 +3094,10 @@ button.quiet.entry-mark {
   background: none;
 }
 
-/* Beyond a phone, a hairline parts one Entry from the next, and the one hovered or focused sits on inset. */
+/*
+ * Beyond a phone, a hairline parts one Entry from the next, its ends square, and the one hovered or
+ * focused sits on inset with its corners rounded.
+ */
 @media (width >= 720px) {
   .entry-list {
     gap: 0;
@@ -3101,7 +3105,6 @@ button.quiet.entry-mark {
 
   .entry {
     padding: var(--space-4) var(--space-3);
-    border-radius: var(--radius-md);
   }
 
   .entry + .entry:not(.unsent) {
@@ -3109,6 +3112,7 @@ button.quiet.entry-mark {
   }
 
   .entry:is(:focus-within, :has(:popover-open)) {
+    border-radius: var(--radius-md);
     background: var(--inset);
   }
 
@@ -3125,6 +3129,7 @@ button.quiet.entry-mark {
 /* Hovered, only by a pointer that hovers: a tap on a touch screen leaves no Entry on inset. */
 @media (width >= 720px) and (hover: hover) and (pointer: fine) {
   .entry:hover {
+    border-radius: var(--radius-md);
     background: var(--inset);
   }
 
@@ -3566,9 +3571,10 @@ a.entry-mark.held-mark {
   font-weight: 400;
 }
 
+/* An Unsent Entry is boxed by a dashed hairline, with an Entry's own corner. */
 .entry.unsent {
   border: 1px dashed var(--rule);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
 }
 
 .entry-mark.unsent-mark,
