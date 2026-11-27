@@ -6,12 +6,20 @@
  */
 
 /**
- * The ways a Device reports a Call ended (`end_call`): the person hung up; the provider ended it
- * itself, at its session limit or by its safety filter; the Device lost its connection to the
- * provider; the person left Praxis, the tab hidden, the screen locked or the network gone; or
- * nothing was said for about two minutes.
+ * The ways a Device reports a Call ended (`end_call`): the person hung up; the screen was switched
+ * to another Context, which the switcher says before one is chosen; the provider ended it itself,
+ * at its session limit or by its safety filter; the Device lost its connection to the provider;
+ * the person left Praxis, the tab hidden, the screen locked or the network gone; or nothing was
+ * said for about two minutes.
  */
-export const CALL_ENDS_REPORTED = ["hung_up", "provider_ended", "lost", "left", "silence"] as const;
+export const CALL_ENDS_REPORTED = [
+  "hung_up",
+  "switched",
+  "provider_ended",
+  "lost",
+  "left",
+  "silence",
+] as const;
 
 /**
  * How a Call ended, as the Device reported it, or as the object found it: another Call started in

@@ -32,6 +32,27 @@ export function Words(props: { words: string; images: ImageLoading; testId?: str
   );
 }
 
+/** Elements whose text stands apart from what is next to it: each block, cell and line break. */
+const APART = new Set(["P", "H4", "H5", "H6", "LI", "BLOCKQUOTE", "PRE", "TH", "TD", "BR"]);
+
+/**
+ * The words drawn in `shown` as a screen reader is told them in one go: their text, with no two
+ * blocks, cells or lines run together, which `textContent` would do, since nothing is drawn
+ * between them.
+ */
+export function spokenWords(shown: Element): string {
+  const parts: string[] = [];
+  const visit = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) parts.push(node.textContent ?? "");
+    const apart = node instanceof Element && APART.has(node.tagName);
+    if (apart) parts.push(" ");
+    node.childNodes.forEach(visit);
+    if (apart) parts.push(" ");
+  };
+  visit(shown);
+  return parts.join("").replace(/\s+/g, " ").trim();
+}
+
 /** How the words' blocks are drawn: how each image loads, and each heading's element. */
 type Drawn = { images: ImageLoading; headings: Headings };
 

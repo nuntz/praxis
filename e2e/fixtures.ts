@@ -376,3 +376,30 @@ export async function installedApp(page: Page) {
       address,
     );
 }
+
+/**
+ * Hold the Agent's Messages on the live channel until released, so a journey sees the screen while
+ * the Agent is at work: the journeys' scripted model answers at once, and the Worker sends nothing
+ * of an answer being written.
+ */
+export async function holdAgentMessages(page: Page) {
+  const held: string[] = [];
+  let toScreen: ((message: string) => void) | undefined;
+  await page.routeWebSocket(/\/live$/, (socket) => {
+    const server = socket.connectToServer();
+    toScreen = (message) => socket.send(message);
+    server.onMessage((message) => {
+      const heard = JSON.parse(String(message));
+      if (heard.kind !== "message" || heard.message.from !== "agent") return socket.send(message);
+      held.push(String(message));
+    });
+  });
+  return {
+    /** How many of the Agent's Messages are held. */
+    held: () => held.length,
+    /** Let every held Message through to the screen, in the order they came. */
+    release: () => {
+      for (const message of held.splice(0)) toScreen?.(message);
+    },
+  };
+}

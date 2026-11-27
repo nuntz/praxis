@@ -34,4 +34,12 @@ Record each run below, replacing the last one: the date, the commit deployed, th
 
 ## The last run
 
-None yet. #159 shipped an Entry's page with this check not run, as its pull request says.
+2026-11-27, iOS 26.1, Safari only: the commit that brought a Call's state into words and marks (the Call bar's "Muted" and "Agent working", the Agent tab's mark, Settings' "On a Call", the switcher's warning), built from the checkout before it was committed, on 2894b2c.
+
+| Case | Result |
+|---|---|
+| The screen draws | Pass, through the real-phone loop with no reads replayed: the build drew and beat through Journal, Agent and Attention, never `FROZEN`. Attention held no rows to count. |
+| A composer's words | Pass in the Agent's tab, on the journeys' Worker so the Agent answers: Return starts a line, the caret stays above the keyboard, the page does not zoom, Send is in reach, and it folds back once sent. The Journal's composer was not run, and nor was Praxis from the Home Screen. |
+| An Entry's words, Adding a Task, A Task's title, A Task's dates | Not run: their pages did not change. |
+
+Beyond the table, on the journeys' Worker with the browser's voice fake served beside the heartbeat, each passed: a Run's fold opened; a failed Run's Notice under the bubble; a Call started, muted with the bar saying so; the Agent tab's mark from the Journal's tab; Settings' "On a Call" on its own line under the switcher, leading back to the Call; the switcher's warning; and End Call.

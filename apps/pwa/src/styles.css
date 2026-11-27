@@ -149,7 +149,7 @@ button:disabled {
   [aria-disabled="true"],
   .settings-section-link
 ) {
-  transition: opacity 160ms ease-out;
+  transition: opacity 160ms var(--ease-out);
 }
 
 :is(button, a, summary, :where([role="option"])):active:not(
@@ -405,6 +405,19 @@ button.quiet {
   font: var(--type-meta);
 }
 
+/* In Settings while a Call goes on: says so beside the Call's dot, and leads back to it. */
+button.on-a-call {
+  flex-shrink: 0;
+  gap: var(--space-2);
+}
+
+/* In the switcher's list while a Call goes on: not a choice, but what each choice does. */
+.switch-ends-call {
+  padding: var(--space-1) var(--space-2);
+  color: var(--muted);
+  font: var(--type-meta);
+}
+
 .settings-screen {
   display: flex;
   flex: 1;
@@ -635,7 +648,7 @@ input[type="checkbox"].switch:checked {
 }
 
 input[type="checkbox"].switch:checked::after {
-  left: 21px;
+  transform: translateX(18px);
 }
 
 input[type="checkbox"].switch:disabled {
@@ -645,7 +658,7 @@ input[type="checkbox"].switch:disabled {
 
 @media (prefers-reduced-motion: no-preference) {
   input[type="checkbox"].switch::after {
-    transition: left 0.15s;
+    transition: transform 150ms var(--ease-out);
   }
 }
 
@@ -1706,7 +1719,7 @@ button.inspector-back > span {
 
 /* A page pushed comes in from the side, as it goes deeper; one gone back to is simply there. */
 .inspector-page.entering {
-  animation: inspector-push 220ms cubic-bezier(0.23, 1, 0.32, 1);
+  animation: inspector-push 220ms var(--ease-out);
 }
 
 @keyframes inspector-push {
@@ -1718,7 +1731,7 @@ button.inspector-back > span {
 
 @media (prefers-reduced-motion: reduce) {
   .inspector-page.entering {
-    animation: inspector-fade 160ms ease-out;
+    animation: inspector-fade 160ms var(--ease-out);
   }
 }
 
@@ -2105,9 +2118,18 @@ button.call-button[aria-disabled="true"] {
   text-align: right;
 }
 
-/* On the Device in a Call, a status bar on the accent's tint takes the header's place. */
+/*
+ * On the Device in a Call, a status bar on the accent's tint takes the header's place. The header
+ * is hidden as .visually-hidden is, so its title stays in the outline for a screen reader.
+ */
 .peer.conversation:has(> .call-bar) > .peer-header {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .call-bar {
@@ -2115,7 +2137,7 @@ button.call-button[aria-disabled="true"] {
   flex-shrink: 0;
   align-items: center;
   gap: var(--space-4);
-  margin: var(--space-3) var(--space-3) 0;
+  margin: var(--space-3) var(--space-5) 0;
   padding: 14px 14px 14px var(--space-5);
   border-radius: var(--radius-lg);
   background: var(--accent-tint);
@@ -2134,10 +2156,14 @@ button.call-button[aria-disabled="true"] {
   min-width: 0;
 }
 
+/* A long Context's name takes two lines at most: the switcher names it whole. */
 .call-bar-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   color: var(--accent);
   font: var(--type-button);
-  font-size: 17px;
   overflow-wrap: anywhere;
 }
 
@@ -2268,18 +2294,38 @@ button.call-control {
   list-style: none;
 }
 
+/* With no network nothing of the Conversation shows (section 8.8): its display would show it. */
+.message-list[hidden] {
+  display: none;
+}
+
 .message {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
 }
 
+/* The person's own: a bubble on the right, with a failed Run's Notice under it, outside it. */
 .message.from-person {
   align-self: flex-end;
+  align-items: flex-end;
   max-width: 85%;
+}
+
+.message-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-lg);
   background: var(--inset);
+}
+
+/* Sent, and nothing of the answer yet: said where the answer will appear, and still. */
+.agent-working-words {
+  margin: 0;
+  color: var(--muted);
+  font: var(--type-meta);
 }
 
 .message-from {
@@ -2300,20 +2346,47 @@ button.call-control {
   overflow-wrap: anywhere;
 }
 
+/* A Run's fold: a meta line with a muted chevron, turned once open, and no browser marker. */
 .run-calls summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 24px;
   color: var(--muted);
   font: var(--type-meta);
+  list-style: none;
   cursor: pointer;
 }
 
+.run-calls summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-calls[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+/* Its tools and their changes are plain lines, each level indented, with no bullets. */
 .run-calls ul {
   margin: var(--space-1) 0 0;
   padding-left: var(--space-4);
+  list-style: none;
   font: var(--type-meta);
 }
 
+.run-call ul {
+  margin: 0;
+}
+
 .run-call code {
+  font: var(--type-meta);
   font-family: ui-monospace, monospace;
+}
+
+.run-call a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .call-result {
@@ -2331,6 +2404,11 @@ button.call-control {
   margin: var(--space-1) 0 0;
 }
 
+/* Saving a transcript is for debugging: a quiet button at meta size, after what matters. */
+.run-transcript button.quiet {
+  font: var(--type-meta);
+}
+
 .run-notice .run-transcript {
   margin: 0;
 }
@@ -2346,15 +2424,16 @@ button.call-control {
   border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
   color: var(--muted);
+  text-wrap: pretty;
 }
 
-/* Under a person's Message whose Run failed: why, and a way to try again. */
+/* Under a person's Message whose Run failed, at its right edge: why, and a way to try again. */
 .run-notice {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 /* A way to the section of Settings that deals with a Notice: words in ink, as a quiet button. */
@@ -3233,7 +3312,7 @@ button.quiet.entry-mark {
   flex-direction: column;
   border-radius: inherit;
   background: var(--surface);
-  animation: entry-page-in 220ms cubic-bezier(0.23, 1, 0.32, 1);
+  animation: entry-page-in 220ms var(--ease-out);
 }
 
 @keyframes entry-page-in {
@@ -3245,7 +3324,7 @@ button.quiet.entry-mark {
 
 @media (prefers-reduced-motion: reduce) {
   .entry-page {
-    animation: entry-page-fade 160ms ease-out;
+    animation: entry-page-fade 160ms var(--ease-out);
   }
 }
 
@@ -3704,6 +3783,27 @@ a.entry-mark.held-mark {
     display: none;
   }
 
+  /* No room beside the switcher on a phone: a Call going is said on a line of its own under it. */
+  .top-bar:has(.on-a-call) {
+    flex-wrap: wrap;
+  }
+
+  /* Wrapping, the switcher still shares the first line, cut short as it is without a Call. */
+  .top-bar:has(.on-a-call) > .switcher {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .top-bar:has(.on-a-call) > .top-bar-fill {
+    display: none;
+  }
+
+  button.on-a-call {
+    order: 1;
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+
   .settings-back {
     min-height: 44px;
     padding: 0 var(--space-2) 0 0;
@@ -3960,6 +4060,23 @@ a.entry-mark.held-mark {
     padding: 0 5px;
     font: var(--type-caption);
     letter-spacing: var(--tracking-caption);
+  }
+
+  /* On a phone a Run's fold is opened with a thumb. */
+  .run-calls summary {
+    min-height: 44px;
+  }
+
+  /* The Call's phone at the Agent icon's other shoulder, so it is never taken for the unread dot. */
+  .tabs .call-mark {
+    position: absolute;
+    top: 1px;
+    right: calc(50% + 9px);
+    display: flex;
+    padding: 2px;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--accent);
   }
 
   .tabs .unread-mark {

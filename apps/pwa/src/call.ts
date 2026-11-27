@@ -377,12 +377,19 @@ export class DeviceCall {
     return this.#close("hung_up");
   }
 
+  /** The screen was switched to another Context, whose switcher said it ends the Call. */
+  switchedAway(): Promise<void> {
+    return this.#close("switched");
+  }
+
   /**
-   * End the Call from this Device, by the person's tap, on leaving Praxis or after two minutes of
-   * silence: the Device ends the session at the provider and waits to hear it ended, then reports
+   * End the Call from this Device, by the person's tap, on a switch to another Context, on leaving
+   * Praxis or after two minutes of silence: the Device ends the session at the provider and waits to hear it ended, then reports
    * the end, saying whether it heard.
    */
-  async #close(ended: "hung_up" | "left" | "silence"): Promise<void> {
+  async #close(
+    ended: Extract<DeviceCallEnd, "hung_up" | "switched" | "left" | "silence">,
+  ): Promise<void> {
     if (this.#ended || this.#ending) return;
     let heard: (end: ProviderEnd) => void = () => {};
     const heardEnd = new Promise<ProviderEnd>((resolve) => {

@@ -138,6 +138,11 @@ export const radius = {
   "radius-pill": 999,
 } as const;
 
+/** The one curve motion takes: fast at once, settling softly, for a press, the switch and a page. */
+export const easing = {
+  "ease-out": "cubic-bezier(0.23, 1, 0.32, 1)",
+} as const;
+
 function declarations(entries: [string, string][]): string {
   return entries.map(([name, value]) => `  --${name}: ${value};`).join("\n");
 }
@@ -164,6 +169,7 @@ export function tokensCss(): string {
       name,
       `${px}px`,
     ]),
+    ...Object.entries(easing),
   ]);
   const accents = ACCENTS.map(
     (accent) =>

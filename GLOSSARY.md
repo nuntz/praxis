@@ -41,7 +41,7 @@ One turn in a Conversation. A Message is never an Entry; something said becomes 
 _Avoid_: Chat message, turn
 
 **Call**:
-A stretch of a Context's Conversation carried out by speaking. The person starts and ends it, and it stays in the Context it was started from. What the person asks in it and what the Agent answers are Messages like any other, kept as text; no sound is kept.
+A stretch of a Context's Conversation carried out by speaking. The person starts and ends it, and it stays in the Context it was started from. What the person asks in it and what the Agent answers are Messages like any other, kept as text; no sound is kept. A Run's calls to its tools are never Calls, and the screen never names them so.
 _Avoid_: Voice session, voice mode, voice chat
 
 **Author**:
