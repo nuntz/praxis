@@ -28,7 +28,8 @@ button,
 a,
 label,
 summary,
-[role="button"] {
+[role="button"],
+[role="option"] {
   touch-action: manipulation;
 }
 
@@ -130,29 +131,43 @@ button:disabled {
 
 /*
  * A press shows as the finger lands, as a native control's does: dimmed at once, back over 160ms once
- * it lifts. It is a button's, a link's and a disclosure's, since the browser's tap box is gone for
- * all three, but not one that cannot be pressed, nor a row link, which sits on inset instead. A
- * button's words are not text to select, so a long press on one selects nothing and opens no
- * callout.
+ * it lifts. It is a button's, a link's, a disclosure's and a picker's choice's, in a composer's `@`
+ * and `#` offer, a search chip's picker or a record's page, since the browser's tap box is gone for
+ * all of them, but not one that cannot be pressed, nor a row link, which sits on inset instead. The
+ * words of a button or a choice are not text to select, so a long press on one selects nothing and
+ * opens no callout. A choice is named in `:where()`, so these rules weigh what they did for a button
+ * alone, and a later `button.…` rule still takes their place.
  */
-button {
+:is(button, :where([role="option"])) {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
 }
 
-:is(button, a, summary):not(:disabled, [aria-disabled="true"], .settings-section-link) {
+:is(button, a, summary, :where([role="option"])):not(
+  :disabled,
+  [aria-disabled="true"],
+  .settings-section-link
+) {
   transition: opacity 160ms ease-out;
 }
 
-:is(button, a, summary):active:not(:disabled, [aria-disabled="true"], .settings-section-link) {
+:is(button, a, summary, :where([role="option"])):active:not(
+  :disabled,
+  [aria-disabled="true"],
+  .settings-section-link
+) {
   opacity: 0.7;
   transition-duration: 0s;
 }
 
 /* With reduced motion a press lifts at once, as it lands. */
 @media (prefers-reduced-motion: reduce) {
-  :is(button, a, summary):not(:disabled, [aria-disabled="true"], .settings-section-link) {
+  :is(button, a, summary, :where([role="option"])):not(
+    :disabled,
+    [aria-disabled="true"],
+    .settings-section-link
+  ) {
     transition: none;
   }
 }
@@ -1983,12 +1998,16 @@ button.inspector-choice > .inspector-choice-check {
   text-overflow: ellipsis;
 }
 
-/* At rest, a composer's key, drawn as search's `/`, only where there is hover (section 8.11). */
+/*
+ * At rest, a composer's key, drawn as search's `/`, only where there is hover (section 8.11): a fine
+ * pointer's, since a touch screen that says it hovers is still a phone's, where the key cap is never
+ * shown, even with a keyboard joined to it.
+ */
 .composer-key {
   display: none;
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .composer-key {
     display: inline-block;
     margin-right: 0;
