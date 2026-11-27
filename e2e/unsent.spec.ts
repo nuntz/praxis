@@ -118,7 +118,7 @@ test("a Task finished with no network leaves Attention marked Unsent, can be und
   }
   await page.goto("/");
   const attention = await openAttention(page, testInfo);
-  const due = attention.getByRole("region", { name: "Due", exact: true });
+  const due = attention.getByRole("region", { name: /^Due( \d+)?$/ });
   await expect(due.getByRole("listitem")).toHaveCount(2);
   await expect(attentionCount(page, testInfo)).toContainText("2 to act on");
 
@@ -156,7 +156,7 @@ test("a Task finished with no network leaves Attention marked Unsent, can be und
   ]);
   const after = await openAttention(page, testInfo);
   await expect(
-    after.getByRole("region", { name: "Due", exact: true }).getByRole("listitem"),
+    after.getByRole("region", { name: /^Due( \d+)?$/ }).getByRole("listitem"),
   ).toHaveCount(1);
   await expect(attentionCount(page, testInfo)).toContainText("1 to act on");
 });

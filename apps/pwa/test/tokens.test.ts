@@ -32,7 +32,8 @@ const tints = ACCENTS.map((accent) => `${accent}-tint` as const);
 const pairings: [ColorToken, ColorToken[]][] = [
   ["ink", ["ground", "surface", "inset", "notice", "match", ...tints]],
   ["muted", ["ground", "surface", "inset"]],
-  ["warn", ["surface", "inset"]],
+  // Overdue on a row of Attention, and on that row hovered, a step off inset to ground's tone.
+  ["warn", ["ground", "surface", "inset"]],
   // The "Jump to latest" pill and a set search chip, the reverse of ink on surface.
   ["surface", ["ink"]],
   // A composer's label, a Mention, and Record's word while it has nothing to send.

@@ -4,7 +4,7 @@ import Folder from "lucide-solid/icons/folder";
 import Hourglass from "lucide-solid/icons/hourglass";
 import Repeat from "lucide-solid/icons/repeat";
 import UserRound from "lucide-solid/icons/user-round";
-import { createUniqueId, type JSX, Show } from "solid-js";
+import { createEffect, createUniqueId, type JSX, on, onCleanup, onMount, Show } from "solid-js";
 import { todayIn } from "./days.tsx";
 import { createFinishing, DueMark, type OnFinished, TaskMarks } from "./TaskItem.tsx";
 
@@ -112,7 +112,7 @@ export function TaskRow(props: {
             <UserRound size={14} />
           </Show>
         </span>
-        <LeadMark lead={lead()} />
+        <LeadMark lead={lead()} title={props.task.title} />
         <ChevronRight size={16} aria-hidden="true" class="attention-row-chevron" />
       </button>
       <span id={marks} class="visually-hidden">
@@ -161,7 +161,7 @@ export function ProjectRow(props: {
         onClick={() => props.onOpen()}
       >
         <span class="task-title">{props.project.name}</span>
-        <LeadMark lead={lead()} />
+        <LeadMark lead={lead()} title={props.project.name} />
         <ChevronRight size={16} aria-hidden="true" class="attention-row-chevron" />
       </button>
       <span id={marks} class="visually-hidden">
@@ -180,22 +180,72 @@ export function ProjectRow(props: {
   );
 }
 
-function LeadMark(props: { lead: Lead | null }): JSX.Element {
+function LeadMark(props: { lead: Lead | null; title: string }): JSX.Element {
   return (
     <Show when={props.lead}>
-      {(lead) => (
-        <span
-          class="attention-row-lead"
-          classList={{
-            overdue: lead().tone === "overdue",
-            "due-today": lead().tone === "today",
-            flag: lead().tone === "flag",
-          }}
-          aria-hidden="true"
-        >
-          {lead().text}
-        </span>
-      )}
+      {(lead) => {
+        // Overdue and due today are never cut: the title takes what they leave.
+        const cut = () => lead().tone !== "overdue" && lead().tone !== "today";
+        let mark!: HTMLSpanElement;
+        onMount(() => {
+          const observer = new ResizeObserver(() => {
+            if (cut()) giveWay(mark);
+          });
+          const row = mark.closest("button");
+          if (row) observer.observe(row);
+          onCleanup(() => observer.disconnect());
+        });
+        createEffect(
+          on([() => lead().text, () => props.title, cut], ([, , cuttable]) => {
+            if (cuttable) giveWay(mark);
+            else mark.style.maxWidth = "";
+          }),
+        );
+        return (
+          <span
+            ref={mark}
+            class="attention-row-lead"
+            classList={{
+              overdue: lead().tone === "overdue",
+              "due-today": lead().tone === "today",
+              flag: lead().tone === "flag",
+            }}
+            aria-hidden="true"
+          >
+            {lead().text}
+          </span>
+        );
+      }}
     </Show>
   );
+}
+
+/** The narrowest a mark is cut to: an ellipsis and a few letters, still something said. */
+const LEAST_MARK_EM = 3;
+
+/**
+ * A mark gives way to its row's title: at most 40% of the row (styles.css), and narrower, cut with
+ * an ellipsis, where the title would otherwise be cut short of its two lines. The widest mark that
+ * leaves the title whole is found by halving, each try laid out by the browser; with none, the
+ * mark is at its narrowest and the title is cut.
+ */
+function giveWay(mark: HTMLElement) {
+  const title = mark.parentElement?.querySelector<HTMLElement>(".task-title");
+  if (!title) return;
+  const whole = () => title.scrollHeight <= title.clientHeight + 1;
+  mark.style.maxWidth = "";
+  if (whole()) return;
+  const least = LEAST_MARK_EM * Number.parseFloat(getComputedStyle(mark).fontSize);
+  let [narrow, wide] = [least, mark.getBoundingClientRect().width];
+  if (wide <= narrow) return;
+  mark.style.maxWidth = `${narrow}px`;
+  if (!whole()) return;
+  // `narrow` leaves the title whole and `wide` does not, down to a pixel apart.
+  while (wide - narrow > 1) {
+    const between = Math.floor((narrow + wide) / 2);
+    mark.style.maxWidth = `${between}px`;
+    if (whole()) narrow = between;
+    else wide = between;
+  }
+  mark.style.maxWidth = `${narrow}px`;
 }

@@ -7,10 +7,10 @@ import {
 } from "@praxis/domain";
 import type { LucideIcon } from "lucide-solid";
 import Calendar from "lucide-solid/icons/calendar";
-import Circle from "lucide-solid/icons/circle";
 import Clock from "lucide-solid/icons/clock";
 import Folder from "lucide-solid/icons/folder";
 import Hand from "lucide-solid/icons/hand";
+import List from "lucide-solid/icons/list";
 import Sparkles from "lucide-solid/icons/sparkles";
 import UserRound from "lucide-solid/icons/user-round";
 import { createEffect, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
@@ -303,97 +303,109 @@ export function Attention(props: {
           )}
         </Section>
         <Show when={view()}>
-          {(shown) => (
-            <>
-              <Section
-                id="due"
-                title="Due"
-                icon={Clock}
-                items={shown().due}
-                shownEmpty
-                aside={
-                  <button
-                    type="button"
-                    class="quiet"
-                    aria-expanded={aheadOpen()}
-                    aria-controls="weeks-ahead"
-                    onClick={() => setAheadOpen((open) => !open)}
-                  >
-                    <Calendar size={16} aria-hidden="true" />
-                    The weeks ahead
-                  </button>
-                }
-                after={
-                  <Show when={aheadOpen()}>
-                    <WeeksAhead
-                      id="weeks-ahead"
-                      timeZone={props.timeZone}
-                      onFinished={finishedFromRow}
-                    />
-                  </Show>
-                }
-              >
-                {(item) =>
-                  item.kind === "task" ? (
-                    taskRow(item.task)
-                  ) : (
+          {(shown) => {
+            // Nothing at all to act on is said once, for the whole column, and Due says nothing.
+            const nothingOpen = () =>
+              heldChanges.all().length === 0 &&
+              refusedIn(contextId).length === 0 &&
+              Object.values(shown()).every((items) => items.length === 0);
+            return (
+              <>
+                <Section
+                  id="due"
+                  title="Due"
+                  icon={Clock}
+                  items={shown().due}
+                  count={shown().due.length > 0 ? shown().due.length : undefined}
+                  shownEmpty
+                  empty={
+                    <Show when={!nothingOpen()}>
+                      <p class="peer-note">Nothing due today.</p>
+                    </Show>
+                  }
+                  aside={
+                    <button
+                      type="button"
+                      class="quiet"
+                      aria-expanded={aheadOpen()}
+                      aria-controls="weeks-ahead"
+                      onClick={() => setAheadOpen((open) => !open)}
+                    >
+                      <Calendar size={16} aria-hidden="true" />
+                      The weeks ahead
+                    </button>
+                  }
+                  after={
+                    <Show when={aheadOpen()}>
+                      <WeeksAhead
+                        id="weeks-ahead"
+                        timeZone={props.timeZone}
+                        onFinished={finishedFromRow}
+                      />
+                    </Show>
+                  }
+                >
+                  {(item) =>
+                    item.kind === "task" ? (
+                      taskRow(item.task)
+                    ) : (
+                      <ProjectRow
+                        project={item.project}
+                        timeZone={props.timeZone}
+                        dueListed
+                        openKey={`due-project-${item.project.id}`}
+                        onOpen={() =>
+                          open(
+                            { kind: "project", id: item.project.id, held: item.project },
+                            `due-project-${item.project.id}`,
+                          )
+                        }
+                      />
+                    )
+                  }
+                </Section>
+                <Section
+                  id="newly-actionable"
+                  title="Newly actionable"
+                  icon={Sparkles}
+                  items={shown().newly_actionable}
+                >
+                  {(item) => taskRow(item.task, cameUpSaid(item.came_up))}
+                </Section>
+                <Section
+                  id="delegated"
+                  title="Delegated"
+                  icon={UserRound}
+                  items={shown().delegated}
+                >
+                  {(task) => taskRow(task)}
+                </Section>
+                <Section id="projects" title="Projects" icon={Folder} items={shown().projects}>
+                  {(item) => (
                     <ProjectRow
                       project={item.project}
                       timeZone={props.timeZone}
-                      dueListed
-                      openKey={`due-project-${item.project.id}`}
+                      actionable={item.actionable_tasks}
+                      noOpenTask={item.no_open_task}
+                      openKey={`project-${item.project.id}`}
                       onOpen={() =>
                         open(
                           { kind: "project", id: item.project.id, held: item.project },
-                          `due-project-${item.project.id}`,
+                          `project-${item.project.id}`,
                         )
                       }
                     />
-                  )
-                }
-              </Section>
-              <Section
-                id="newly-actionable"
-                title="Newly actionable"
-                icon={Sparkles}
-                items={shown().newly_actionable}
-              >
-                {(item) => taskRow(item.task, cameUpSaid(item.came_up))}
-              </Section>
-              <Section id="delegated" title="Delegated" icon={UserRound} items={shown().delegated}>
-                {(task) => taskRow(task)}
-              </Section>
-              <Section id="projects" title="Projects" icon={Folder} items={shown().projects}>
-                {(item) => (
-                  <ProjectRow
-                    project={item.project}
-                    timeZone={props.timeZone}
-                    actionable={item.actionable_tasks}
-                    noOpenTask={item.no_open_task}
-                    openKey={`project-${item.project.id}`}
-                    onOpen={() =>
-                      open(
-                        { kind: "project", id: item.project.id, held: item.project },
-                        `project-${item.project.id}`,
-                      )
-                    }
-                  />
-                )}
-              </Section>
-              <Section id="loose" title="Loose" icon={Circle} items={shown().loose}>
-                {(task) => taskRow(task)}
-              </Section>
-              <Show
-                when={
-                  heldChanges.all().length === 0 &&
-                  refusedIn(contextId).length === 0 &&
-                  Object.values(shown()).every((items) => items.length === 0)
-                }
-              >
-                <p class="peer-note">Nothing is open to act on.</p>
-              </Show>
-            </>
-          )}
+                  )}
+                </Section>
+                <Section id="loose" title="Loose" icon={List} items={shown().loose}>
+                  {(task) => taskRow(task)}
+                </Section>
+                <Show when={nothingOpen()}>
+                  <p class="peer-note">Nothing is open to act on.</p>
+                </Show>
+              </>
+            );
+          }}
         </Show>
       </div>
       <Show when={pages().length > 0}>
@@ -444,7 +456,11 @@ function Section<T>(props: {
   /** Beside its title, as every heading of Attention carries one (section 8.11). */
   icon: LucideIcon;
   items: T[];
+  /** Said after its title, as Due's is, so the count on a tab or a button is found here too. */
+  count?: number | undefined;
   shownEmpty?: boolean;
+  /** Under its title while it holds nothing, where it is `shownEmpty`. */
+  empty?: JSX.Element;
   /** Beside its title. */
   aside?: JSX.Element;
   /** Under its list. */
@@ -455,10 +471,15 @@ function Section<T>(props: {
     <Show when={props.shownEmpty || props.items.length > 0}>
       <section class="attention-section" aria-labelledby={`attention-${props.id}`}>
         <div class="attention-section-head">
-          <SectionTitle id={`attention-${props.id}`} title={props.title} icon={props.icon} />
+          <SectionTitle
+            id={`attention-${props.id}`}
+            title={props.title}
+            icon={props.icon}
+            count={props.count}
+          />
           {props.aside}
         </div>
-        <Show when={props.items.length > 0}>
+        <Show when={props.items.length > 0} fallback={props.empty}>
           <ul class="task-list">
             <For each={props.items}>{(item) => props.children(item)}</For>
           </ul>

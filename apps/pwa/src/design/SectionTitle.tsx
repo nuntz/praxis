@@ -14,7 +14,7 @@ export function SectionTitle(props: {
   id: string;
   title: string;
   icon?: LucideIcon | undefined;
-  count?: number;
+  count?: number | undefined;
 }) {
   return (
     <h3 id={props.id} class="section-title">

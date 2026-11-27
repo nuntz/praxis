@@ -765,18 +765,11 @@ function ActionLine(props: {
   icon: LucideIcon;
   label: string;
   sub?: string | undefined;
-  danger?: boolean;
   disabled?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      class="inspector-line"
-      classList={{ danger: props.danger }}
-      disabled={props.disabled}
-      onClick={props.onClick}
-    >
+    <button type="button" class="inspector-line" disabled={props.disabled} onClick={props.onClick}>
       <Dynamic component={props.icon} size={18} aria-hidden="true" />
       <span class="inspector-line-label">
         {props.label}
@@ -991,7 +984,6 @@ function TaskPage(props: {
             icon={Trash}
             label="Delete"
             sub="To the Trash for 30 days"
-            danger
             disabled={props.sending}
             onClick={props.onDelete}
           />
@@ -1012,7 +1004,6 @@ function TaskPage(props: {
             icon={Trash}
             label="Delete"
             sub="To the Trash for 30 days"
-            danger
             disabled={props.sending}
             onClick={props.onDelete}
           />
@@ -1156,7 +1147,6 @@ function ProjectPage(props: {
           icon={Trash}
           label="Delete"
           sub="Its Tasks stay, in no Project"
-          danger
           disabled={props.sending}
           onClick={props.onDelete}
         />

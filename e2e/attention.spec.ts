@@ -45,8 +45,10 @@ test("the person finishes a Task from Attention, and it leaves Due and the count
 
   await page.goto("/");
   const attention = page.getByRole("region", { name: "Attention", exact: true });
-  const due = attention.getByRole("region", { name: "Due", exact: true });
+  const due = attention.getByRole("region", { name: /^Due( \d+)?$/ });
   await expect(due.getByRole("listitem")).toHaveCount(2);
+  // Due's heading carries its count, the one the tab or the top bar's button shows.
+  await expect(due.getByRole("heading", { level: 3 })).toHaveText("Due 2");
   const task = due.getByRole("listitem").filter({ hasText: overdue });
   // Its row leads with Overdue on the date, and tells a screen reader every mark.
   const row = task.getByRole("button", { name: overdue, exact: true });
@@ -60,6 +62,7 @@ test("the person finishes a Task from Attention, and it leaves Due and the count
   expect((await (await finished).json()).ok).toBe(true);
 
   await expect(due.getByRole("listitem")).toHaveCount(1);
+  await expect(due.getByRole("heading", { level: 3 })).toHaveText("Due 1");
   await expect(due.getByText(overdue)).toHaveCount(0);
   await expect(count(page, testInfo)).toContainText("1 to act on");
 
@@ -158,7 +161,7 @@ test("the person opens the weeks ahead from Due and sees what is coming, a Recur
   await page.goto("/");
   const attention = page.getByRole("region", { name: "Attention", exact: true });
   // Nothing is due, and the weeks ahead still open from the Due section, in Attention itself.
-  const due = attention.getByRole("region", { name: "Due", exact: true });
+  const due = attention.getByRole("region", { name: /^Due( \d+)?$/ });
   const open = due.getByRole("button", { name: "The weeks ahead" });
   await expect(open).toHaveAttribute("aria-expanded", "false");
   await expect(due.getByRole("listitem")).toHaveCount(0);
@@ -591,6 +594,27 @@ test("a Due Date picked on a Task's page opened from its Project's page is the T
     "due_date",
     null,
   );
+});
+
+test("with nothing due, Due says so under its heading, and with nothing at all only that nothing is open is said", async ({
+  page,
+}, testInfo) => {
+  const title = "Mend the fence";
+  await contextWith(page, testInfo, [title]);
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  const due = attention.getByRole("region", { name: /^Due( \d+)?$/ });
+  await expect(attention.getByRole("region", { name: "Loose", exact: true })).toBeVisible();
+  await expect(due.getByRole("heading", { level: 3 })).toHaveText("Due");
+  await expect(due.getByText("Nothing due today.", { exact: true })).toBeVisible();
+  await expect(attention.getByText("Nothing is open to act on.")).toHaveCount(0);
+
+  await accepted(page, "finish_task", () =>
+    attention.getByRole("checkbox", { name: title, exact: true }).check(),
+  );
+  await expect(attention.getByText("Nothing is open to act on.", { exact: true })).toBeVisible();
+  await expect(attention.getByText("Nothing due today.")).toHaveCount(0);
 });
 
 test("a Task finished from its row is said with Reopen, which has the focus, and Reopen puts the row back where it was", async ({

@@ -276,7 +276,7 @@ The primary is **the current Context's accent**, one of six, set by wrapping a r
 An accent is used three ways. Solid, under `on-accent`, for the one primary button in a place, the Context switcher and badges. As text on `surface` or on its own tint, for a composer's label and a Mention. And as a tint ground, for a composer, a Held Change and a Mention.
 
 ### Neutral
-- **Ground** (`ground`): the page behind the panels, and the top bar.
+- **Ground** (`ground`): the page behind the panels, the top bar, and the tone a row of Attention steps to while hovered.
 - **Surface** (`surface`): a panel (Attention, the Journal, the Conversation), a card on the phone, the tab bar, a menu or picker.
 - **Inset** (`inset`): what sits inside a panel: a Task row, the search field, a Reference, the current tab, the person's own Message, code. It always sits on `surface`.
 - **Rule** (`rule`): a hairline border or divider, and the edge of a chip, a menu or a picker. When the Device asks for more contrast, it takes `muted`'s value, so every edge stands out at 3:1 or more.
@@ -284,7 +284,7 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 - **Muted** (`muted`): secondary text (times, meta, notes, an inactive tab, a field's placeholder at full opacity on `surface` or `inset`) and the border of a Task's empty control.
 
 ### Signal
-- **Warn** (`warn`): Overdue, a Project with no open Task, and a refusal the screen shows in words (`.problem`, such as a Context that could not be made), as text on `surface` or `inset`, always with words. Its one solid use is the End Call button, under `on-accent`.
+- **Warn** (`warn`): lateness (Overdue), and a refusal the screen shows in words (`.problem`, such as a Context that could not be made), as text on `surface` or `inset`, or on a hovered row's `ground` tone, always with words. Its one solid use is the End Call button, under `on-accent`. Nothing else takes it: a Project with no open Task is bold `ink`, and Delete on a record's page is `ink`, as Drop is.
 - **Notice** (`notice`): the ground of a standing Notice's card, with `ink` on it, its link included. Nothing else takes it.
 - **Match** (`match`): the mark on what a search matched, in an excerpt or a title, with `ink` at 600 on it. Nothing else takes it.
 - **On-accent** (`on-accent`): text and icons on a solid accent, and the icon on End Call's solid `warn`.
@@ -313,7 +313,7 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 - **Row title** (500, 15px/22px): a Task's or a search hit's title.
 - **Button** (700, 15px/22px): every button's word.
 - **Label** (700, 13px/18px, +0.01em): a composer's label, a group heading in Settings, a chip, every badge but a tab's.
-- **Meta** (400, 13px/18px): a time, an author, a Task's mark ("Due today" at 700 in `muted`, "Overdue" at 700 in `warn`).
+- **Meta** (400, 13px/18px): a time, an author, a Task's mark ("Due today" at 700 in `muted`, "Overdue" at 700 in `warn`, a Project's "Needs a next Task" at 700 in `ink`).
 - **Caption** (600, 12px/16px, +0.01em): a day's label, a tab's name, a tab's badge.
 - **Code block** (400, 14px/22px, mono): code in an Entry's words.
 
@@ -338,7 +338,7 @@ The Journal and the Conversation keep time order, oldest first, and open at thei
 
 **The Newest Beside the Composer Rule.** Where the person types is the bottom of the column, and the newest is just above it. Never invert a column or put a composer at the top.
 
-**The 44px Rule.** On a phone every touch target is at least 44px: buttons, icon buttons, the switcher, a Task's label, a Task's dates. A desktop's controls are 40px, or 36px for a row's own icon button.
+**The 44px Rule.** On a phone every touch target is at least 44px: buttons, icon buttons, the switcher, a Task's label, a Task's dates, a standing Notice's link (its target grown round its text, which stays where it is). A desktop's controls are 40px, or 36px for a row's own icon button.
 
 ## Elevation & Depth
 
@@ -389,7 +389,7 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 ### Inputs / Fields
 - **Composer:** the accent's tint, a 1.5px accent border, `radius-lg`. Its `label` sits in the accent above the words. At rest it is one line, its label where the words will go and its send at its end. A label too long for its line is cut short with an ellipsis; the send never is, and Record keeps its icon and its word at every width. Focused, it opens to two lines at once, with no animation, and takes a 2px accent outline 2px off.
 - **Search field:** a 44px `inset` pill with a `muted` search icon. Focused, its 1.5px border turns `ink`, and the 2px `ink` outline is drawn 2px off round the whole field, as its input draws none. The browser's clear button is hidden for the screen's own.
-- **Date field:** a `surface` field with a `rule` border and `radius-sm`, in a Task's row.
+- **Date field:** a `surface` field with a `rule` border and `radius-sm`, in a Task's row. With no day in it, its placeholder ("dd/mm/yyyy", or the locale's) is `muted` until it is typed in.
 - **Switch:** a 46×28 pill, `muted` when off and accent when on, its knob `surface`. The knob slides in 150ms only when motion is allowed.
 
 ### Navigation
@@ -401,6 +401,8 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 
 ### Task row
 The most repeated object in Praxis. An `inset` row with `radius-sm`, 10px by 12px: a 20px circle control with a 2px `muted` border (filled with an `ink` dot once Finished), the title in `row-title`, then its marks in `meta`, then the calendar icon button at the row's end, never the word. Each state that holds is its own mark in words. Due today is bold in `muted`, Overdue bold in `warn`, and a closed Task's title turns `muted`. In Attention's one-line rows on a phone the control is a 44px target, its 20px circle drawn at the centre, and the row's open button begins where it ends.
+
+In Attention a row's mark takes at most 40% of the row, and gives way to the title, cut with an ellipsis before the title's two lines are; Overdue and Due today are never cut. A row that opens a page takes one tone step while the pointer hovers where it opens, `inset` to `ground`'s tone, and its chevron turns `ink`. On a phone, where Attention sits on the ground itself, its rows are `surface`, as `inset` always sits on `surface`, and step to `inset` when hovered.
 
 ### Links in an Entry
 A Mention is the accent on its tint, a Reference is `ink` on `inset`, both at 600 with `radius-sm`. A link to a record in the Trash is `muted` on `inset` at 400, and says so in words.
@@ -416,7 +418,7 @@ The one motion is a page going one level deeper, beside a press fading back as i
 ### Do:
 - **Do** take every colour from `tokens.ts` through its custom property (`var(--inset)`): the stylesheet holds no raw hex or rgb. Type, spaces and radii mostly come from their tokens too (`var(--type-meta)`, `var(--space-3)`, `var(--radius-md)`), with a few one-off px values.
 - **Do** wrap anything drawn in a Context's colours in `.accent-<name>` and use `--accent` and `--accent-tint`, never a named accent.
-- **Do** put an icon beside its label on the tabs, the sections of Settings, Attention's section headings, the groups of what a search finds and the primary buttons. Interface icons are Lucide, stroked with round caps, at the text colour.
+- **Do** put an icon beside its label on the tabs, the sections of Settings, Attention's section headings (Loose's is `list`, not the circle a Task's control is drawn as), the groups of what a search finds and the primary buttons. Interface icons are Lucide, stroked with round caps, at the text colour.
 - **Do** say every state in words, beside any colour it takes.
 - **Do** keep text fields at 16px or larger at any width wherever a finger can reach them, a touch screen beside a trackpad too, so the page does not zoom when one is tapped.
 - **Do** put every `:hover` look behind `(hover: hover) and (pointer: fine)`, so a tap on a touch screen leaves nothing hovered.
@@ -428,4 +430,4 @@ The one motion is a page going one level deeper, beside a press fading back as i
 - **Don't** bring in a second typeface, an icon set other than Lucide, or any asset fetched from elsewhere.
 - **Don't** give the app icon or the mark a Context's accent. It stands for the whole Deployment, white on an `ink` tile.
 - **Don't** animate what is reached many times a day: a composer opening, a menu, a tab change.
-- **Don't** use `warn` for anything but lateness, a Project with no open Task, a refusal shown in words, or End Call, and `match` for anything but a search's mark.
+- **Don't** use `warn` for anything but lateness, a refusal shown in words, or End Call, and `match` for anything but a search's mark. Delete is `ink`, as Drop is.

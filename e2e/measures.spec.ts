@@ -14,8 +14,9 @@ import {
 
 // Rules of DESIGN.md held by measuring the screen as rendered: the 44px Rule and the Round Controls
 // Rule in the phone's top bar and Attention, the focus outline on the search field, the type
-// scale on a tab's badge (#174), the Tracking Rule, the hairlines asked for with more contrast, and
-// the 16px a field under a finger takes so the page never zooms.
+// scale on a tab's badge (#174), the Tracking Rule, the hairlines asked for with more contrast, the
+// 16px a field under a finger takes so the page never zooms, and Attention's rows, their marks, their
+// grounds and what a page draws in which colour (#179).
 
 /** Ink, the focus outline's colour, in light. */
 const INK = "rgb(26, 29, 35)";
@@ -23,6 +24,12 @@ const INK = "rgb(26, 29, 35)";
 const MUTED = "rgb(89, 96, 112)";
 /** Rule, in light: a hairline's colour otherwise. */
 const RULE = "rgb(213, 217, 224)";
+/** Ground, in light: the page behind the panels, and a hovered row's step off `inset`. */
+const GROUND = "rgb(236, 238, 242)";
+/** Surface, in light: a panel, and an Attention row on a phone. */
+const SURFACE = "rgb(255, 255, 255)";
+/** Inset, in light: what sits inside a panel. */
+const INSET = "rgb(244, 245, 248)";
 
 async function boxOf(locator: Locator) {
   const box = await locator.boundingBox();
@@ -214,4 +221,197 @@ test("on a phone, the search's Project picker and the Move to choice are 16px, s
   const finder = journal.getByRole("combobox", { name: "Find a Project" });
   await expect(finder).toBeFocused();
   expect(await fontSize(finder)).toBe("16px");
+});
+
+test("a row's mark in Attention takes at most 40% of the row, a Person's name is cut before the title is, and Overdue is never cut", async ({
+  page,
+}, testInfo) => {
+  const { id } = await contextOfOwn(page, testInfo, "Marks");
+  const [figures, ladder, notes] = [
+    "Send the quarterly figures",
+    "Return the borrowed ladder",
+    "Write up the notes from Tuesday's long planning meeting with the whole team",
+  ];
+  const { record } = await callContextTool(page, id, "record_entry", {
+    words: "Errands",
+    tasks: [figures, ladder, notes].map((title) => ({ title })),
+  });
+  const [toMaya, toLong, late] = record.tasks as { id: string }[];
+  const { record: maya } = await callContextTool(page, id, "create_person", {
+    name: "Maya Okafor",
+  });
+  const { record: long } = await callContextTool(page, id, "create_person", {
+    name: "Maya Okafor-Lindqvist de la Fontaine",
+  });
+  await callContextTool(page, id, "delegate_task", { id: toMaya?.id, person_id: maya.id });
+  await callContextTool(page, id, "delegate_task", { id: toLong?.id, person_id: long.id });
+  await callContextTool(page, id, "set_task_dates", { id: late?.id, due_date: "2020-01-06" });
+  await page.goto("/");
+
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  /** A row's width, its title's and its mark's, and whether each shows all it holds. */
+  const measured = async (title: string) => {
+    const open = attention.getByRole("button", { name: title, exact: true });
+    await expect(open).toBeVisible();
+    return open.evaluate((button) => {
+      const row = button.closest("li");
+      const shown = button.querySelector<HTMLElement>(".task-title");
+      const lead = button.querySelector<HTMLElement>(".attention-row-lead");
+      if (!row || !shown || !lead) throw new Error("The row has its title and its mark");
+      return {
+        row: row.getBoundingClientRect().width,
+        lead: lead.getBoundingClientRect().width,
+        leadText: lead.textContent,
+        leadCut: lead.scrollWidth > lead.clientWidth,
+        leadEnds: getComputedStyle(lead).textOverflow,
+        titleCut: shown.scrollHeight > shown.clientHeight + 1,
+      };
+    });
+  };
+
+  // The title is whole in its two lines, and the Person and the day at most 40% beside it.
+  const toMayaRow = await measured(figures);
+  expect(toMayaRow.titleCut).toBe(false);
+  expect(toMayaRow.lead).toBeLessThanOrEqual(toMayaRow.row * 0.4 + 1);
+
+  // A name too long for its 40% is cut with an ellipsis, never shortened to part of it.
+  const toLongRow = await measured(ladder);
+  expect(toLongRow.titleCut).toBe(false);
+  expect(toLongRow.lead).toBeLessThanOrEqual(toLongRow.row * 0.4 + 1);
+  expect(toLongRow.leadText).toMatch(/^Maya Okafor-Lindqvist de la Fontaine, \S/);
+  expect(toLongRow.leadCut).toBe(true);
+  expect(toLongRow.leadEnds).toBe("ellipsis");
+
+  // Overdue is never cut, however long the title beside it.
+  const lateRow = await measured(notes);
+  expect(lateRow.leadText).toMatch(/2020, Overdue$/);
+  expect(lateRow.leadCut).toBe(false);
+});
+
+test("Delete on a Task's and a Project's page is in ink, as Drop is, and an empty date field's placeholder is muted", async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  const { id } = await contextOfOwn(page, testInfo, "Inks");
+  const title = "Oil the hinges";
+  await callContextTool(page, id, "record_entry", { words: "Errands", tasks: [{ title }] });
+  await callContextTool(page, id, "create_project", { name: "Workshop" });
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  const color = (locator: Locator) => locator.evaluate((shown) => getComputedStyle(shown).color);
+
+  await attention.getByRole("button", { name: title, exact: true }).click();
+  const task = attention.getByRole("dialog", { name: title });
+  const deleteTask = task.getByRole("button", { name: /^Delete/ });
+  await expect(deleteTask).toBeVisible();
+  expect(await color(deleteTask)).toBe(INK);
+  expect(await color(task.getByRole("button", { name: /^Drop/ }))).toBe(INK);
+  // With no day in it, the field shows only its placeholder, in muted; taken to type in, ink.
+  const due = task.getByLabel("Due Date", { exact: true });
+  await expect(due).toHaveValue("");
+  expect(await color(due)).toBe(MUTED);
+  await due.focus();
+  expect(await color(due)).toBe(INK);
+  await task.getByRole("button", { name: /^Back/ }).click();
+
+  await attention.getByRole("button", { name: "Workshop", exact: true }).click();
+  const project = attention.getByRole("dialog", { name: "Workshop" });
+  const deleteProject = project.getByRole("button", { name: /^Delete/ });
+  await expect(deleteProject).toBeVisible();
+  expect(await color(deleteProject)).toBe(INK);
+});
+
+test("on a phone, Attention's rows sit on surface, a step off the ground", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "Only a phone shows Attention on the ground itself.");
+  await page.emulateMedia({ colorScheme: "light" });
+  const { id } = await contextOfOwn(page, testInfo, "Grounds");
+  const title = "Sweep the porch";
+  await callContextTool(page, id, "record_entry", { words: "Errands", tasks: [{ title }] });
+  await page.goto("/");
+  const row = page
+    .getByRole("region", { name: "Attention", exact: true })
+    .getByRole("listitem")
+    .filter({ hasText: title });
+  await expect(row).toBeVisible();
+  await expect(row).toHaveCSS("background-color", SURFACE);
+});
+
+test("a row that opens a page takes a tone step while hovered, and its chevron turns ink", async ({
+  page,
+}, testInfo) => {
+  test.skip(onPhone(testInfo), "A phone's touch screen hovers nothing.");
+  await page.emulateMedia({ colorScheme: "light" });
+  const { id } = await contextOfOwn(page, testInfo, "Hovers");
+  const title = "Wind the clock";
+  await callContextTool(page, id, "record_entry", { words: "Errands", tasks: [{ title }] });
+  await page.goto("/");
+  const row = page
+    .getByRole("region", { name: "Attention", exact: true })
+    .getByRole("listitem")
+    .filter({ hasText: title });
+  const open = row.getByRole("button", { name: title, exact: true });
+  const chevron = open.locator(".attention-row-chevron");
+  await expect(row).toHaveCSS("background-color", INSET);
+  await expect(chevron).toHaveCSS("color", MUTED);
+
+  await open.hover();
+  await expect(row).toHaveCSS("background-color", GROUND);
+  await expect(chevron).toHaveCSS("color", INK);
+  // Over its round control, which finishes it, the row opens nothing, so it takes no step.
+  await row.getByRole("checkbox", { name: title, exact: true }).hover();
+  await expect(row).toHaveCSS("background-color", INSET);
+});
+
+test("on a phone, a standing Notice's link is a 44px target, its text where it was", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "Only a phone holds a touch target to 44px.");
+  // The shared Deployment has no such Notice for real, so the screen is told of one.
+  await page.route(/\/list_notices$/, async (route) => {
+    const answer = await route.fetch();
+    await route.fulfill({
+      response: answer,
+      json: { ok: true, value: { items: [{ kind: "no_backup", last_made: null }] } },
+    });
+  });
+  await page.goto("/");
+  const card = page.getByTestId("standing-notice");
+  const link = card.getByRole("link", { name: "See Backups and Export" });
+  await expect(link).toBeVisible();
+
+  const target = await boxOf(link);
+  console.log(
+    "PLACED",
+    await link.evaluate((shown) => {
+      const r = document.createRange();
+      r.selectNodeContents(shown.firstChild as Node);
+      const l = r.getBoundingClientRect();
+      const w = shown.parentElement
+        ?.querySelector(".standing-notice-words")
+        ?.getBoundingClientRect();
+      const c = shown.closest(".standing-notice")?.getBoundingClientRect();
+      return [l.top - (w?.bottom ?? 0), (c?.bottom ?? 0) - l.bottom];
+    }),
+  );
+  expect(target.height).toBeGreaterThanOrEqual(44);
+  // Its text stays where it was: 8px under the Notice's words, as the card's gap and the link's
+  // margin set its line, and 12px of the card under that line. The text's own box sits 2px inside
+  // its 23px line, so the target grows round it and moves nothing.
+  const placed = await link.evaluate((shown) => {
+    const words = shown.parentElement?.querySelector(".standing-notice-words");
+    const text = shown.firstChild;
+    const whole = shown.closest(".standing-notice");
+    if (!words || !text || !whole) throw new Error("The Notice has its words and its link");
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    const line = range.getBoundingClientRect();
+    return {
+      under: line.top - words.getBoundingClientRect().bottom,
+      above: whole.getBoundingClientRect().bottom - line.bottom,
+    };
+  });
+  expect(placed.under).toBeCloseTo(10, 0);
+  expect(placed.above).toBeCloseTo(14, 0);
 });
