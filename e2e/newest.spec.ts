@@ -279,3 +279,44 @@ test("the Conversation opens at its newest Message, keeps its place scrolled up,
   await expect(frame).toHaveAttribute("data-folded");
   await expect(messages.filter({ hasText: "Growing line 1" })).toBeInViewport();
 });
+
+test("words that grow the composer in the frame after it opens leave the Conversation at its newest", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const name = `Quick ${tag}`;
+  const context = await makeContext(page, { name, time_zone: "UTC", accent: "plum" });
+  for (let at = 1; at <= 4; at++) {
+    await callContextTool(page, context.id, "send_message", {
+      words: `Say: ${tall(`Answer ${at} ${tag}`, 6)}`,
+    });
+  }
+  await lastShown(page, context.id);
+  await page.goto("/");
+  await showTab(page, testInfo, "Agent");
+  const conversation = page.getByRole("region", { name: "Conversation" });
+  const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
+  await expect(messages).toHaveCount(8);
+  await expect(messages.last()).toBeInViewport();
+
+  // The composer opens, and the column follows it to its end; the scroll that makes is heard a
+  // frame later, by which time words pasted in have grown the composer. The column is not scrolled
+  // away by that, so it still follows the composer to its end.
+  const field = conversation.getByRole("textbox", {
+    name: `Message the Agent in ${name}`,
+    exact: true,
+  });
+  const grown = Array.from({ length: 40 }, (_, at) => `Growing line ${at + 1}`).join("\n");
+  await field.evaluate(async (element: HTMLTextAreaElement, words) => {
+    element.focus();
+    await new Promise(requestAnimationFrame);
+    await new Promise((done) => setTimeout(done, 0));
+    element.value = words;
+    element.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  }, grown);
+  const body = conversation.locator(".peer-body");
+  await expect
+    .poll(() => body.evaluate((it) => it.scrollHeight - it.scrollTop - it.clientHeight))
+    .toBeLessThanOrEqual(1);
+  await expect(messages.last()).toBeInViewport();
+});
