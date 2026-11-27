@@ -179,6 +179,7 @@ test("the person sees an Entry's words rendered as Markdown, and edits them as t
   expect(gaps).toEqual([
     "P 12px",
     "P 12px",
+    "H5 12px",
     "UL 12px",
     "BLOCKQUOTE 12px",
     "quote P 12px",
