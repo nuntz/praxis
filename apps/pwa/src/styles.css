@@ -1465,7 +1465,10 @@ button.task-dates-toggle[aria-expanded="true"] {
   gap: var(--space-1) var(--space-3);
 }
 
-/* The weeks ahead, opened from Due: each day headed, its Tasks, Projects and Occurrences to come. */
+/*
+ * The weeks ahead, opened from Due: each day headed, its Tasks, Projects and Occurrences to come.
+ * A Project is Attention's own row, opening its page.
+ */
 
 .weeks-ahead {
   display: flex;
@@ -1490,16 +1493,6 @@ button.task-dates-toggle[aria-expanded="true"] {
   background: transparent;
 }
 
-.attention-project {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  padding: 10px var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--inset);
-}
-
 .task-mark.flag {
   color: var(--ink);
   font-weight: 600;
@@ -1521,6 +1514,11 @@ button.task-dates-toggle[aria-expanded="true"] {
 
 .task-list:has(> .attention-row) {
   gap: 2px;
+}
+
+/* A day of the weeks ahead keeps its Tasks' gap with a Project's row among them. */
+.weeks-ahead-day > .task-list {
+  gap: var(--space-1);
 }
 
 .task.attention-row {
@@ -1917,6 +1915,13 @@ button.inspector-choice > .inspector-choice-check {
   color: var(--muted);
   font: var(--type-meta);
   font-weight: 600;
+}
+
+/* "From its Entry" opens the Entry in the Journal: a link, in ink and underlined. */
+.inspector-origin-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .inspector-origin blockquote {
@@ -3866,7 +3871,7 @@ a.entry-mark.held-mark {
    * Attention's rows sit on the ground itself here, so they take surface, as inset always sits on
    * surface, and step to inset while hovered.
    */
-  .attention-list :is(.task, .attention-project) {
+  .attention-list .task {
     background: var(--surface);
   }
 
@@ -3939,6 +3944,17 @@ a.entry-mark.held-mark {
     align-items: center;
     min-height: 44px;
     margin: calc(var(--space-1) - 10.5px) 0 -10.5px;
+  }
+
+  /*
+   * "From its Entry", a touch target of 44px, grown round its 18px line by margins that take back
+   * what it adds, so its text stays where it was.
+   */
+  .inspector-origin-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: -13px 0;
   }
 
   /* The pill back to the newest, a touch target of 44px. */

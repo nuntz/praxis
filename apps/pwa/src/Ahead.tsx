@@ -1,5 +1,6 @@
-import { type AheadItem, type Task, utcMidnight } from "@praxis/domain";
+import { type AheadItem, type Project, type Task, utcMidnight } from "@praxis/domain";
 import { For, Show } from "solid-js";
+import { ProjectRow } from "./AttentionRows.tsx";
 import { followAttentionView, keyedBy } from "./attention-read.ts";
 import { DueMark, formatDay, type OnFinished, TaskItem } from "./TaskItem.tsx";
 
@@ -14,11 +15,18 @@ const dayHeading = new Intl.DateTimeFormat(undefined, {
 /**
  * The weeks ahead, opened from Attention's Due section and shown in Attention, not a fourth peer
  * (section 8.3): what `view_ahead` lists in the days it covers unless asked, by day. A Recurrence's
- * Occurrences to come are marked as not made yet, and only what exists is finished from here.
+ * Occurrences to come are marked as not made yet, and only what exists is finished from here. A
+ * Project opens its page over Attention, as its row there does.
  * Derived on the server, like Attention, so any change to a Task, a Project or the Context's
  * settings is answered by reading it again.
  */
-export function WeeksAhead(props: { id: string; timeZone: string; onFinished: OnFinished }) {
+export function WeeksAhead(props: {
+  id: string;
+  timeZone: string;
+  onFinished: OnFinished;
+  /** Open a Project's page over Attention, the focus coming back to its row by `key`. */
+  onOpenProject: (project: Project, key: string) => void;
+}) {
   // A Task finished Unsent leaves it at once, as it leaves the rest of Attention (section 8.8).
   // It is not in the Offline Copy: with no network it says so.
   const { view, problem, setProblem, read } = followAttentionView({
@@ -71,6 +79,7 @@ export function WeeksAhead(props: { id: string; timeZone: string; onFinished: On
                           timeZone={props.timeZone}
                           onTask={() => void read()}
                           onFinished={props.onFinished}
+                          onOpenProject={props.onOpenProject}
                           onProblem={setProblem}
                         />
                       )}
@@ -95,6 +104,7 @@ function AheadEntry(props: {
   timeZone: string;
   onTask: (task: Task) => void;
   onFinished: OnFinished;
+  onOpenProject: (project: Project, key: string) => void;
   onProblem: (message: string) => void;
 }) {
   const item = props.item;
@@ -110,12 +120,15 @@ function AheadEntry(props: {
     );
   }
   if (item.kind === "project") {
+    const key = `ahead-project-${item.project.id}`;
     return (
-      <li class="task attention-project">
-        <span class="task-title">{item.project.name}</span>
-        <span class="task-mark">Project</span>
-        <DueMark due={item.on} overdue={false} timeZone={props.timeZone} />
-      </li>
+      <ProjectRow
+        project={item.project}
+        timeZone={props.timeZone}
+        dueListed
+        openKey={key}
+        onOpen={() => props.onOpenProject(item.project, key)}
+      />
     );
   }
   // It does not exist yet, so there is nothing to finish, open or link to.

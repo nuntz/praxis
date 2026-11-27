@@ -46,6 +46,7 @@ import {
 import { Dynamic } from "solid-js/web";
 import { TaskRow } from "./AttentionRows.tsx";
 import { todayIn } from "./days.tsx";
+import { recordAnchor } from "./Journal.tsx";
 import { latestRead } from "./latest-read.ts";
 import { MoveRecord } from "./Move.tsx";
 import { aimComposer } from "./next-task.ts";
@@ -111,6 +112,13 @@ export function Inspector(props: {
   onClosed: () => void;
   /** Give the Journal's composer the caret, its column shown first. */
   toJournalComposer: () => void;
+  /**
+   * Hands over the way back to the list, every page closed, for the Attention tab's tap. It does
+   * nothing once the pages are closed, so it is safe to call after the panel has gone.
+   */
+  giveToList: (toList: () => void) => void;
+  /** Open an Entry in the Journal, its column shown first. */
+  toJournalEntry: (id: string) => void;
 }) {
   const callTool = useCallTool();
   const contextId = useContextId();
@@ -204,6 +212,18 @@ export function Inspector(props: {
       (line ?? panel?.querySelector<HTMLElement>(".inspector-back"))?.focus();
     });
   }
+
+  /**
+   * Back to the list, every page closed at once, as Back does from the first: the focus goes to the
+   * row it was opened from. Not while a write is out, as Back is not.
+   */
+  props.giveToList(() => {
+    if (sending() || props.pages.length === 0) return;
+    setProblem(null);
+    setPushed(false);
+    props.setPages([]);
+    props.onClosed();
+  });
 
   /** Leave the page of what has left Attention, or the panel when it was the first. */
   function leave() {
@@ -534,6 +554,7 @@ export function Inspector(props: {
                   onDrop={() => void dropTask()}
                   onReopen={() => void reopenTask()}
                   onDelete={() => void deleteTask()}
+                  onOpenEntry={props.toJournalEntry}
                   onTask={(changedTask) => {
                     placeTask(changedTask);
                     props.onChanged();
@@ -844,6 +865,8 @@ function TaskPage(props: {
   onDrop: () => void;
   onReopen: () => void;
   onDelete: () => void;
+  /** Open its Entry in the Journal; the page stays as it is. */
+  onOpenEntry: (id: string) => void;
   onTask: (task: Task) => void;
   onProblem: (message: string) => void;
 }) {
@@ -1012,7 +1035,18 @@ function TaskPage(props: {
       <Show when={origin()}>
         {(entry) => (
           <figure class="inspector-origin">
-            <figcaption>From its Entry</figcaption>
+            <figcaption>
+              <a
+                class="inspector-origin-link"
+                href={`#${recordAnchor("entry", entry().id)}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  props.onOpenEntry(entry().id);
+                }}
+              >
+                From its Entry
+              </a>
+            </figcaption>
             <Words words={entry().words} images={imageLoadingIn(entry())} />
           </figure>
         )}

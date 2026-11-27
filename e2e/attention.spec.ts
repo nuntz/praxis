@@ -217,6 +217,102 @@ test("the person opens the weeks ahead from Due and sees what is coming, a Recur
   await expect(items).toHaveCount(4);
 });
 
+test("a Project in the weeks ahead opens its page over Attention, as its row in Attention does, and Back returns to it there", async ({
+  page,
+}, testInfo) => {
+  const { id, tasks } = await contextWith(page, testInfo, ["Trim the hedge"]);
+  const { today } = await callContextTool(page, id, "get_settings", {});
+  const { record: hedge } = await callContextTool(page, id, "create_project", {
+    name: "Hedge",
+    due_date: after(today, 3),
+  });
+  await callContextTool(page, id, "move_task", { id: tasks[0]?.id, project_id: hedge.id });
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  await attention.getByRole("button", { name: "The weeks ahead" }).click();
+  const ahead = attention.getByRole("region", { name: "The weeks ahead", exact: true });
+  const row = ahead.getByRole("button", { name: "Hedge", exact: true });
+  await expect(row).toContainText("Project");
+  await row.click();
+
+  const opened = attention.getByRole("dialog", { name: "Hedge" });
+  await expect(
+    opened
+      .getByRole("list", { name: "Tasks in Hedge" })
+      .getByRole("checkbox", { name: "Trim the hedge", exact: true }),
+  ).toBeVisible();
+  await opened.getByRole("button", { name: "Back to Attention" }).click();
+  await expect(opened).toHaveCount(0);
+  await expect(row).toBeFocused();
+});
+
+test("on a phone the Attention tab, tapped while it is shown, closes every page over it, the focus on the row the first was opened from", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "The tabs are a phone's.");
+  const { id, tasks } = await contextWith(page, testInfo, ["Fix the gate"]);
+  const { record: garden } = await callContextTool(page, id, "create_project", { name: "Garden" });
+  await callContextTool(page, id, "move_task", { id: tasks[0]?.id, project_id: garden.id });
+
+  await page.goto("/");
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  const tab = page.getByRole("navigation", { name: "Columns" }).getByRole("button", {
+    name: /^Attention/,
+  });
+  const row = attention
+    .getByRole("region", { name: "Projects", exact: true })
+    .getByRole("button", { name: "Garden", exact: true });
+  await row.click();
+  await attention
+    .getByRole("dialog", { name: "Garden" })
+    .getByRole("button", { name: "Fix the gate", exact: true })
+    .click();
+  await expect(attention.getByRole("button", { name: "Back to Garden" })).toBeVisible();
+
+  await tab.click();
+  await expect(attention.getByRole("dialog")).toHaveCount(0);
+  await expect(row).toBeFocused();
+
+  // With no page open, a tap leaves Attention as it is, the tab taking the focus.
+  await tab.click();
+  await expect(tab).toBeFocused();
+  await expect(row).toBeVisible();
+  await expect(attention.getByRole("dialog")).toHaveCount(0);
+});
+
+test("“From its Entry” on a Task's page opens the Entry in the Journal: on a phone its tab is shown, in between Attention's layer closes", async ({
+  page,
+}, testInfo) => {
+  // In between, Attention is a layer over the Journal, opened from the top bar.
+  if (!onPhone(testInfo)) await page.setViewportSize({ width: 1024, height: 800 });
+  await contextWith(page, testInfo, ["Call the plumber"]);
+
+  await page.goto("/");
+  const button = page.getByRole("banner").getByRole("button", { name: /^Attention/ });
+  if (!onPhone(testInfo)) await button.click();
+  const attention = page.getByRole("region", { name: "Attention", exact: true });
+  await attention
+    .getByRole("region", { name: "Loose", exact: true })
+    .getByRole("button", { name: "Call the plumber", exact: true })
+    .click();
+  await attention
+    .getByRole("dialog", { name: "Call the plumber" })
+    .getByRole("link", { name: "From its Entry" })
+    .click();
+
+  const journal = page.getByRole("region", { name: "Journal" });
+  await expect(journal).toBeVisible();
+  if (onPhone(testInfo)) {
+    await expect(
+      page.getByRole("navigation", { name: "Columns" }).getByRole("button", { name: /^Journal/ }),
+    ).toHaveAttribute("aria-current", "true");
+  } else {
+    await expect(button).toHaveAttribute("aria-expanded", "false");
+  }
+  await expect(journal.getByTestId("entry").filter({ hasText: "Errands" })).toBeFocused();
+});
+
 /** A write the page sends, once its answer is in: it was accepted. */
 async function accepted(page: Page, tool: string, act: () => Promise<void>) {
   const answer = page.waitForResponse(new RegExp(`/tools/${tool}$`));

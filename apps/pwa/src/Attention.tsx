@@ -44,6 +44,13 @@ export function Attention(props: {
   onDueCount: (count: number) => void;
   /** Give the Journal's composer the caret, its column shown first. */
   toJournalComposer: () => void;
+  /**
+   * Hands over the way back to the list, every page over it closed, for the Attention tab tapped
+   * while it is shown (section 8.1).
+   */
+  giveToList: (toList: () => void) => void;
+  /** Open an Entry in the Journal, its column shown first. */
+  toJournalEntry: (id: string) => void;
 }) {
   const contextId = useContextId();
   const callTool = useCallTool();
@@ -341,6 +348,9 @@ export function Attention(props: {
                         id="weeks-ahead"
                         timeZone={props.timeZone}
                         onFinished={finishedFromRow}
+                        onOpenProject={(project, key) =>
+                          open({ kind: "project", id: project.id, held: project }, key)
+                        }
                       />
                     </Show>
                   }
@@ -421,6 +431,8 @@ export function Attention(props: {
           onSaid={setSaid}
           onClosed={closed}
           toJournalComposer={props.toJournalComposer}
+          giveToList={props.giveToList}
+          toJournalEntry={props.toJournalEntry}
         />
       </Show>
     </PeerBody>

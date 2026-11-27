@@ -58,6 +58,8 @@ export function Journal(props: {
   contextName: string | undefined;
   /** Bring a Held Change into view in Attention, by its anchor there. */
   onShowHeldChange: (anchor: string) => void;
+  /** Hands over the way to bring an Entry into view, for one opened from elsewhere on the screen. */
+  giveToEntry: (toEntry: (id: string) => void) => void;
 }) {
   const callTool = useCallTool();
   const contextId = useContextId();
@@ -325,6 +327,12 @@ export function Journal(props: {
     onShowInJournal: (entry, anchor) => void bringIntoView(entry, anchor),
   });
   const searching = search.shown;
+  // An Entry opened from elsewhere on the screen is shown as a hit opened is: the search ends, and
+  // earlier Entries are read until it is shown.
+  props.giveToEntry((id) => {
+    if (searching()) search.end();
+    void bringIntoView(id, recordAnchor("entry", id));
+  });
   // The Entries open at their newest, beside the composer; what was found keeps its own order.
   const column = followNewest({ items: withUnsent, anchored: () => !searching() });
   // Parted into days in the zone its times are shown in, each caption inside the list so the

@@ -141,6 +141,29 @@ export function App() {
   const count = () => refusedCount() + dueCount() + heldCount();
   let attentionButton!: HTMLButtonElement;
   let attentionHeading: HTMLHeadingElement | undefined;
+  // Attention's way back to its list, every page over it closed.
+  let attentionToList: (() => void) | undefined;
+  // The Journal's way to bring an Entry into view, reading earlier ones until it is shown.
+  let journalToEntry: ((id: string) => void) | undefined;
+
+  /**
+   * Open an Entry in the Journal, from a Task's page, as a search hit opens: on a phone the
+   * Journal's tab shown, in between Attention's layer shut. The page stays as it is (section 8.3).
+   */
+  function toJournalEntry(id: string) {
+    setTab("journal");
+    setAttentionOpen(false);
+    journalToEntry?.(id);
+  }
+
+  /**
+   * Show a column by its tab. The tab already shown takes the person back to its list: Attention's
+   * pages close, as its Back does (section 8.1).
+   */
+  function showTab(shown: PeerId) {
+    if (shown === "attention" && tab() === "attention") attentionToList?.();
+    setTab(shown);
+  }
 
   // In between, Attention open is a layer: the Journal and the Conversation under it are inert, so
   // Tab, a pointer and a screen reader reach only Attention and the top bar. A press outside it
@@ -634,6 +657,10 @@ export function App() {
                                 timeZone={zone}
                                 onDueCount={setDueCount}
                                 toJournalComposer={keyTargets.toJournalComposer}
+                                giveToList={(toList) => {
+                                  attentionToList = toList;
+                                }}
+                                toJournalEntry={toJournalEntry}
                               />
                             )}
                           </Show>
@@ -648,6 +675,9 @@ export function App() {
                                 timeZone={zone}
                                 contextName={current()?.name}
                                 onShowHeldChange={showHeldChange}
+                                giveToEntry={(toEntry) => {
+                                  journalToEntry = toEntry;
+                                }}
                               />
                             )}
                           </Show>
@@ -661,16 +691,16 @@ export function App() {
                         />
                       </main>
                       <nav class="tabs" aria-label="Columns" hidden={inSettings()}>
-                        <TabButton tab="attention" shown={tab()} onShow={setTab}>
+                        <TabButton tab="attention" shown={tab()} onShow={showTab}>
                           <Inbox size={20} aria-hidden="true" />
                           Attention
                           <AttentionCount count={count()} />
                         </TabButton>
-                        <TabButton tab="journal" shown={tab()} onShow={setTab}>
+                        <TabButton tab="journal" shown={tab()} onShow={showTab}>
                           <BookOpen size={20} aria-hidden="true" />
                           Journal
                         </TabButton>
-                        <TabButton tab="conversation" shown={tab()} onShow={setTab}>
+                        <TabButton tab="conversation" shown={tab()} onShow={showTab}>
                           <MessageCircle size={20} aria-hidden="true" />
                           Agent
                           <UnreadMark kinds={unreadBriefs()} />
