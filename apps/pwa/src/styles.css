@@ -1522,8 +1522,6 @@ button.task-dates-toggle[aria-expanded="true"] {
 }
 
 .task.attention-row {
-  /* The row's width, which its mark's share is measured against (cqi). */
-  container-type: inline-size;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -1579,10 +1577,15 @@ button.attention-row-open {
  * The person's words lead: a mark takes at most 40% of the row, and narrower where the title would
  * be cut short of its two lines (giveWay in AttentionRows.tsx), cut with an ellipsis, never
  * shortened to part of what it says. Overdue and Due today are never cut.
+ *
+ * Its 40% is of the content box of the button that opens the row: the row less its padding, its
+ * round control, the gap and the button's own padding, so a little under 40% of the whole row and
+ * never more. Not of a size container's width (cqi): iOS Safari locks up for good when
+ * giveWay lays a mark out again and again inside a size container, row after row.
  */
 .attention-row-lead {
   flex-shrink: 0;
-  max-width: 40cqi;
+  max-width: 40%;
   overflow: hidden;
   color: var(--muted);
   font: var(--type-meta);
