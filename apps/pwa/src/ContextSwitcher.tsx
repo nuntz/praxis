@@ -5,7 +5,7 @@ import { createSignal, For, Show } from "solid-js";
 /**
  * The Context switcher, in the top bar at every width (section 8.1). It names the current Context
  * in its accent and lists the others not retired. Switching changes what is shown and where new
- * records go; there is no combined view.
+ * records go; there is no combined view. While a Call goes on, its list says switching ends it.
  */
 export function ContextSwitcher(props: {
   current: ContextListing;
@@ -13,6 +13,8 @@ export function ContextSwitcher(props: {
   /** As the list opens: in between, Attention is closed first (section 8.1). */
   onOpen: () => void;
   onSwitch: (id: string) => void;
+  /** A Call goes on in the current Context, which switching ends (section 6). */
+  callGoing: boolean;
 }) {
   const [open, setOpen] = createSignal(false);
   let toggle!: HTMLButtonElement;
@@ -55,6 +57,12 @@ export function ContextSwitcher(props: {
       </button>
       <Show when={open()}>
         <ul id="context-list" class="context-list" aria-label="Contexts">
+          <Show when={props.callGoing}>
+            {/* Not a choice: each choice is described by it. */}
+            <li id="switch-ends-call" class="switch-ends-call" aria-hidden="true">
+              Switching ends the Call.
+            </li>
+          </Show>
           <For each={shown()}>
             {(context) => (
               <li>
@@ -62,6 +70,11 @@ export function ContextSwitcher(props: {
                   type="button"
                   class="context-choice"
                   aria-current={context.id === props.current.id ? "true" : undefined}
+                  aria-describedby={
+                    props.callGoing && context.id !== props.current.id
+                      ? "switch-ends-call"
+                      : undefined
+                  }
                   onClick={() => pick(context.id)}
                   onKeyDown={putAway}
                 >

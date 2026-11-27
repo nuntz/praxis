@@ -9,9 +9,12 @@ import {
 import {
   callContextTool,
   expect,
+  holdAgentMessages,
+  holdNext,
   test as journey,
   lastShown,
   makeContext,
+  onPhone,
   showTab,
 } from "./fixtures.ts";
 import { holdTheCall } from "./one-call.ts";
@@ -92,6 +95,8 @@ test("the person speaks in a Call, the Agent records it as their Entry and its a
   const voice = await fakeVoice(page);
   const { tag, id, name, conversation } = await inContext(page, testInfo, "Call");
   const controls = await startCall(page, conversation, name);
+  // Started by a tap, the focus stays where the tap left it: only the keyboard's moves to Mute.
+  await expect(controls.getByRole("button", { name: "Mute", exact: true })).not.toBeFocused();
   // The header says so, with the time so far, and the Call button is gone from it.
   const header = conversation.getByRole("status").filter({ hasText: `On a Call in ${name}` });
   await expect(header).toBeVisible();
@@ -502,4 +507,158 @@ test("a Message typed elsewhere during a Call is answered in writing only", asyn
   await voice.say(`What is due ${tag}?`);
   await expect.poll(async () => (await voice.spoken()).length).toBe(1);
   expect((await voice.spoken()).map(({ content }) => content)).toEqual(["Noted."]);
+});
+
+test("from the keyboard, starting a Call gives Mute the focus and ending it gives the focus back to the Call button", async ({
+  page,
+}, testInfo) => {
+  await fakeVoice(page);
+  const { name, conversation } = await inContext(page, testInfo, "Keyboard");
+
+  // Reached by the keyboard, as a person tabbing through the header does.
+  await callButton(conversation, name).focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  await expect(callButton(conversation, name)).toBeFocused();
+  const started = page.waitForResponse(/\/tools\/start_call$/);
+  await page.keyboard.press("Enter");
+  expect((await (await started).json()).ok).toBe(true);
+  const controls = conversation.getByRole("region", { name: `Call in ${name}`, exact: true });
+  await expect(controls.getByRole("button", { name: "Mute", exact: true })).toBeFocused();
+
+  const ended = page.waitForResponse(/\/tools\/end_call$/);
+  await page.keyboard.press("Tab");
+  await expect(controls.getByRole("button", { name: "End Call", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  expect((await (await ended).json()).value.call).toMatchObject({ ended: "hung_up" });
+  await expect(callButton(conversation, name)).toBeFocused();
+});
+
+test("while a Call is set up, the Call button says it is starting", async ({ page }, testInfo) => {
+  await fakeVoice(page);
+  const { name, conversation } = await inContext(page, testInfo, "Starting");
+  const setUp = await holdNext(page, /\/tools\/start_call$/);
+  await callButton(conversation, name).click();
+  await setUp.asked();
+  const starting = conversation.getByRole("button", {
+    name: `Starting a Call with the Agent in ${name}`,
+    exact: true,
+  });
+  await expect(starting).toHaveText("Starting…");
+  await expect(starting).toHaveAttribute("aria-busy", "true");
+});
+
+test("the Call bar says the Agent is at work from a handover to its answer, and says when the microphone is off", async ({
+  page,
+}, testInfo) => {
+  const voice = await fakeVoice(page);
+  const agent = await holdAgentMessages(page);
+  const { tag, name, conversation } = await inContext(page, testInfo, "What holds");
+  const controls = await startCall(page, conversation, name);
+
+  await voice.say(`Record: Oars ${tag}`);
+  await expect(conversation.getByText(/^\d\d:\d\d · Agent working$/)).toBeVisible();
+  await expect.poll(agent.held).toBe(1);
+  agent.release();
+  await expect(
+    conversation.getByText(/^\d\d:\d\d · what you say is kept as Messages$/),
+  ).toBeVisible();
+
+  // Mute keeps its name; muted, the bar says so in words.
+  const mute = controls.getByRole("button", { name: "Mute", exact: true });
+  await mute.click();
+  await expect(mute).toHaveAttribute("aria-pressed", "true");
+  expect(await voice.microphoneOn()).toBe(false);
+  await expect(conversation.getByText(/^\d\d:\d\d · Muted$/)).toBeVisible();
+});
+
+test("while a Call goes on, the Context switcher says that switching ends it", async ({
+  page,
+}, testInfo) => {
+  await fakeVoice(page);
+  const elsewhere = `Elsewhere ${testInfo.project.name}-${crypto.randomUUID().slice(0, 8)}`;
+  await makeContext(page, { name: elsewhere, time_zone: "UTC", accent: "rust" });
+  const { name, conversation } = await inContext(page, testInfo, "Warned");
+  await startCall(page, conversation, name);
+
+  await page.getByRole("button", { name: /^Context: / }).click();
+  const contexts = page.getByRole("list", { name: "Contexts" });
+  await expect(contexts.getByText("Switching ends the Call.", { exact: true })).toBeVisible();
+  await expect(
+    contexts.getByRole("button", { name: elsewhere, exact: true }),
+  ).toHaveAccessibleDescription("Switching ends the Call.");
+});
+
+test("switching to another Context during a Call ends it, as switched", async ({
+  page,
+}, testInfo) => {
+  const voice = await fakeVoice(page);
+  const elsewhere = `Elsewhere ${testInfo.project.name}-${crypto.randomUUID().slice(0, 8)}`;
+  await makeContext(page, { name: elsewhere, time_zone: "UTC", accent: "rust" });
+  const { name, conversation } = await inContext(page, testInfo, "Switching");
+  await startCall(page, conversation, name);
+
+  const switcher = page.getByRole("button", { name: /^Context: / });
+  const contexts = page.getByRole("list", { name: "Contexts" });
+  await switcher.click();
+  const ended = page.waitForResponse(/\/tools\/end_call$/);
+  await contexts.getByRole("button", { name: elsewhere, exact: true }).click();
+  expect((await (await ended).json()).value.call).toMatchObject({ ended: "switched" });
+  expect(await voice.faults()).toEqual([]);
+  // With no Call going any more, the switcher no longer warns.
+  await switcher.click();
+  await expect(contexts.getByText("Switching ends the Call.", { exact: true })).toHaveCount(0);
+});
+
+test("a Call going is said in Settings, which leads back to it, and on a phone on the Agent tab", async ({
+  page,
+}, testInfo) => {
+  await fakeVoice(page);
+  const { name, conversation } = await inContext(page, testInfo, "Going on");
+  await startCall(page, conversation, name);
+  const controls = conversation.getByRole("region", { name: `Call in ${name}`, exact: true });
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const onACall = page.getByRole("button", { name: "On a Call", exact: true });
+  await onACall.click();
+  await expect(controls).toBeVisible();
+
+  if (onPhone(testInfo)) {
+    // On another tab the Agent's says a Call goes on. The browser puts a space before the words
+    // hidden for a screen reader, as it does before the unread mark's.
+    await showTab(page, testInfo, "Journal");
+    const columns = page.getByRole("navigation", { name: "Columns" });
+    await expect(columns.getByRole("button", { name: /^Agent ?, on a Call$/ })).toBeVisible();
+  } else {
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(onACall).toBeVisible();
+  }
+});
+
+test("a Call's ending Notice stays with no network, and goes once the next Message is sent", async ({
+  page,
+}, testInfo) => {
+  const voice = await fakeVoice(page);
+  const { tag, name, conversation } = await inContext(page, testInfo, "Ended");
+  await startCall(page, conversation, name);
+  const ended = page.waitForResponse(/\/tools\/end_call$/);
+  await voice.end("content");
+  await ended;
+  const notice = conversation.getByRole("status").filter({ hasText: "safety filter ended it" });
+  await expect(notice).toBeVisible();
+
+  await page.context().setOffline(true);
+  await expect(conversation.getByText(/^No network: the Conversation needs one\./)).toBeVisible();
+  await expect(notice).toBeVisible();
+
+  await page.context().setOffline(false);
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true })
+    .fill(`Say: Back again ${tag}.`);
+  const sent = page.waitForResponse(/\/tools\/send_message$/);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+  expect((await (await sent).json()).ok).toBe(true);
+  const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
+  await expect(messages.first()).toContainText(`Back again ${tag}`);
+  await expect(notice).toHaveCount(0);
 });

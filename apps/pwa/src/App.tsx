@@ -7,6 +7,7 @@ import {
 import BookOpen from "lucide-solid/icons/book-open";
 import Inbox from "lucide-solid/icons/inbox";
 import MessageCircle from "lucide-solid/icons/message-circle";
+import PhoneIcon from "lucide-solid/icons/phone";
 import SettingsIcon from "lucide-solid/icons/settings";
 import X from "lucide-solid/icons/x";
 import {
@@ -23,7 +24,12 @@ import { Attention } from "./Attention.tsx";
 import { deviceTimeZone } from "./ContextSettings.tsx";
 import { ContextSwitcher } from "./ContextSwitcher.tsx";
 import { NewContext } from "./Contexts.tsx";
-import { Conversation, conversationComposerShown, unreadBriefs } from "./Conversation.tsx";
+import {
+  Conversation,
+  conversationCallGoing,
+  conversationComposerShown,
+  unreadBriefs,
+} from "./Conversation.tsx";
 import { Badge } from "./design/Badge.tsx";
 import { Mark } from "./design/Mark.tsx";
 import { Peer, type PeerId } from "./design/Peer.tsx";
@@ -535,6 +541,7 @@ export function App() {
             <ContextSwitcher
               current={shown()}
               contexts={contexts() ?? []}
+              callGoing={conversationCallGoing()}
               onOpen={() => setAttentionOpen(false)}
               onSwitch={switchTo}
             />
@@ -557,6 +564,20 @@ export function App() {
           </button>
         </Show>
         <span class="top-bar-fill" />
+        {/* A Call goes on while Settings is shown: it says so, and leads back to it (section 8.6). */}
+        <Show when={inSettings() && conversationCallGoing()}>
+          <button
+            type="button"
+            class="quiet on-a-call"
+            onClick={() => {
+              leaveSettings();
+              setTab("conversation");
+            }}
+          >
+            <span class="call-dot" aria-hidden="true" />
+            On a Call
+          </button>
+        </Show>
         <Show when={inSettings()}>
           <span class="settings-hint">Esc closes</span>
         </Show>
@@ -704,6 +725,7 @@ export function App() {
                           <MessageCircle size={20} aria-hidden="true" />
                           Agent
                           <UnreadMark kinds={unreadBriefs()} />
+                          <CallMark going={conversationCallGoing()} />
                         </TabButton>
                       </nav>
                     </CurrentMoveTargets.Provider>
@@ -746,6 +768,21 @@ function UnreadMark(props: { kinds: ClockFold["kind"][] }) {
     <Show when={props.kinds.length > 0}>
       <span class="unread-mark" aria-hidden="true" />
       <span class="visually-hidden"> {named()} unread</span>
+    </Show>
+  );
+}
+
+/**
+ * The Call's mark on the Agent tab while a Call goes on (section 8.5): its phone at the icon's
+ * shoulder, so it is not taken for the unread dot, and in words for a screen reader.
+ */
+function CallMark(props: { going: boolean }) {
+  return (
+    <Show when={props.going}>
+      <span class="call-mark" aria-hidden="true">
+        <PhoneIcon size={12} />
+      </span>
+      <span class="visually-hidden">, on a Call</span>
     </Show>
   );
 }

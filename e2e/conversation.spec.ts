@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import {
   closeSettings,
   expect,
+  holdAgentMessages,
   lastShown,
   makeContext,
   onPhone,
@@ -35,7 +36,7 @@ test("asking the Agent for a change, the Journal shows it as it is made", async 
 
   const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
   await expect(messages).toHaveCount(2);
-  const call = messages.last().getByText("1 call", { exact: true });
+  const call = messages.last().getByText("1 tool used", { exact: true });
   await expect(call).toBeVisible();
   if (journal) await expect(journal.getByTestId("entry").filter({ hasText: words })).toBeVisible();
 
@@ -190,7 +191,7 @@ test("the person saves a Run's transcript, then clears the Conversation from the
   await expect(messages).toHaveCount(2);
 
   // One Run, saved as a file by the person's tap: what the Agent was given, said and called.
-  await messages.last().getByText("1 call", { exact: true }).click();
+  await messages.last().getByText("1 tool used", { exact: true }).click();
   const downloading = page.waitForEvent("download");
   await messages.last().getByRole("button", { name: "Save this Run's transcript" }).click();
   const file = await downloading;
@@ -214,4 +215,102 @@ test("the person saves a Run's transcript, then clears the Conversation from the
   await expect(
     conversation.getByText(`Nothing said to the Agent in Cleared ${tag} yet.`, { exact: true }),
   ).toBeVisible();
+});
+
+test("between a Message sent and its answer, the Agent is said to be at work where the answer will appear", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const name = `Working ${tag}`;
+  const context = await makeContext(page, { name, time_zone: "UTC", accent: "moss" });
+  await lastShown(page, context.id);
+  const agent = await holdAgentMessages(page);
+  await page.goto("/");
+  await showTab(page, testInfo, "Agent");
+  const conversation = page.getByRole("region", { name: "Conversation" });
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true })
+    .fill(`Say: Booked ${tag}.`);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+
+  const list = conversation.getByRole("list", { name: "Messages" });
+  await expect(list.getByTestId("message")).toHaveCount(1);
+  await expect.poll(agent.held).toBe(1);
+  await expect(list.getByText("Agent working", { exact: true })).toBeVisible();
+});
+
+test("an answer to the person's Message is read out once whole, as shown, with no Markdown", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const name = `Read out ${tag}`;
+  const context = await makeContext(page, { name, time_zone: "UTC", accent: "moss" });
+  await lastShown(page, context.id);
+  const agent = await holdAgentMessages(page);
+  await page.goto("/");
+  await showTab(page, testInfo, "Agent");
+  const conversation = page.getByRole("region", { name: "Conversation" });
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true })
+    .fill(`Say: The **boathouse** is booked ${tag}.`);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+
+  const readOut = conversation.getByRole("status").filter({ hasText: /^The Agent answered: / });
+  await expect.poll(agent.held).toBe(1);
+  await expect(readOut).toHaveCount(0);
+  agent.release();
+  await expect(readOut).toHaveText(`The Agent answered: The boathouse is booked ${tag}.`);
+  await expect(
+    conversation.getByRole("list", { name: "Messages" }).getByText("Agent working"),
+  ).toHaveCount(0);
+});
+
+test("Return in the Conversation's composer sends where there is hover, and on a touch screen starts a new line", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const name = `Lines ${tag}`;
+  const context = await makeContext(page, { name, time_zone: "UTC", accent: "slate" });
+  await lastShown(page, context.id);
+  await page.goto("/");
+  await showTab(page, testInfo, "Agent");
+  const conversation = page.getByRole("region", { name: "Conversation" });
+  const composer = conversation.getByRole("textbox", {
+    name: `Message the Agent in ${name}`,
+    exact: true,
+  });
+  await expect(composer).toHaveAttribute("enterkeyhint", onPhone(testInfo) ? "enter" : "send");
+  await composer.fill(`Say: First line ${tag}`);
+  await composer.press("Enter");
+  const messages = conversation.getByRole("list", { name: "Messages" }).getByTestId("message");
+  if (onPhone(testInfo)) {
+    await composer.pressSequentially(`Second line ${tag}`);
+    await expect(composer).toHaveValue(`Say: First line ${tag}\nSecond line ${tag}`);
+    await expect(messages).toHaveCount(0);
+    await conversation.getByRole("button", { name: "Send", exact: true }).click();
+  }
+  await expect(messages).toHaveCount(2);
+  await expect(messages.first()).toContainText(`First line ${tag}`);
+});
+
+test("a Conversation shown when the network goes shows nothing of itself but that it needs one", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const name = `Cut off ${tag}`;
+  const context = await makeContext(page, { name, time_zone: "UTC", accent: "blue" });
+  await lastShown(page, context.id);
+  await page.goto("/");
+  await showTab(page, testInfo, "Agent");
+  const conversation = page.getByRole("region", { name: "Conversation" });
+  await conversation
+    .getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true })
+    .fill(`Say: Kept here ${tag}.`);
+  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+  const list = conversation.getByRole("list", { name: "Messages" });
+  await expect(list.getByTestId("message")).toHaveCount(2);
+
+  await page.context().setOffline(true);
+  await expect(conversation.getByText(/^No network: the Conversation needs one\./)).toBeVisible();
+  await expect(list).toBeHidden();
 });

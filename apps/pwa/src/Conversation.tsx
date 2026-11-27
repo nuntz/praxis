@@ -11,6 +11,7 @@ import type {
 } from "@praxis/domain";
 import { runTranscriptName } from "@praxis/domain";
 import ArrowUp from "lucide-solid/icons/arrow-up";
+import ChevronRight from "lucide-solid/icons/chevron-right";
 import MicIcon from "lucide-solid/icons/mic";
 import MicOffIcon from "lucide-solid/icons/mic-off";
 import PhoneIcon from "lucide-solid/icons/phone";
@@ -27,6 +28,7 @@ import { recordAnchor } from "./Journal.tsx";
 import { CONVERSATION_COMPOSER, ComposerKey } from "./keys.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
+import { pointerHovers } from "./media.ts";
 import { readNotices } from "./Notices.tsx";
 import { online } from "./online.ts";
 import { afterPress } from "./press.ts";
@@ -56,6 +58,14 @@ export { unread as unreadBriefs };
 const [composerShown, setComposerShown] = createSignal(false);
 
 export { composerShown as conversationComposerShown };
+
+/**
+ * Whether a Call goes on on this Device in the current Context: the Agent tab carries its mark on a
+ * phone, Settings' top bar says so, and the Context switcher says switching ends it (section 8.5).
+ */
+const [callGoing, setCallGoing] = createSignal(false);
+
+export { callGoing as conversationCallGoing };
 
 /**
  * The Conversation with the Agent in the current Context (section 8.5): every Message, scrollable
@@ -95,8 +105,24 @@ export function Conversation(props: {
   const [call, setCall] = createSignal<DeviceCall | null>(null);
   const [calling, setCalling] = createSignal(false);
   const [muted, setMuted] = createSignal(false);
-  // Why the last Call ended, when it was not the person's tap: a Notice, never a Message.
+  // Why the last Call ended, when it was not the person's tap: a Notice, never a Message. It is
+  // about the last Call, so the next Message sent or the next Call started takes it away.
   const [callEnded, setCallEnded] = createSignal<string | null>(null);
+  createEffect(() => setCallGoing(call() !== null));
+  onCleanup(() => setCallGoing(false));
+  // What a screen reader is told of an answer once it is whole (section 8.11), and the answer whose
+  // item, once shown, tells it: an answer to the person's own Message, outside a Call.
+  const [announcement, setAnnouncement] = createSignal("");
+  const [toAnnounce, setToAnnounce] = createSignal<string | null>(null);
+  function announce(words: string) {
+    // Emptied first, so an answer worded as the last one is read out too.
+    setAnnouncement("");
+    requestAnimationFrame(() => setAnnouncement(`The Agent answered: ${words}`));
+  }
+  // The Call's controls and its button, which take the focus as a Call starts and ends.
+  let muteButton: HTMLButtonElement | undefined;
+  let callButton: HTMLButtonElement | undefined;
+  let callControls: HTMLElement | undefined;
   // The Messages open at their newest, beside the composer (section 8.1). With no network none
   // is shown, and the column is back where it was once one is.
   const column = followNewest({ items: () => messages, anchored: online });
@@ -170,6 +196,8 @@ export function Conversation(props: {
     }
     const at = messages.findIndex((shown) => shown.id === message.id);
     if (at !== -1) return setMessages(at, reconcile(message, { key: "id" }));
+    // Read out once shown, unless a Brief or a Review, or in a Call, where the voice speaks it.
+    if (message.from === "agent" && message.clock === null && !call()) setToAnnounce(message.id);
     const replacing = message.from === "agent" ? message.clock : null;
     setMessages((shown) => [
       ...shown.filter(
@@ -223,6 +251,21 @@ export function Conversation(props: {
       place(message);
     }
   }
+
+  /**
+   * Whether the Agent is at work on the person's newest Message: its answer is being written, or it
+   * was sent and its Run has neither failed nor been answered. A Brief or a Review left meanwhile
+   * answers nothing, so it is passed over.
+   */
+  const agentWorking = () => {
+    if (writing() !== null) return true;
+    for (let at = messages.length - 1; at >= 0; at--) {
+      const message = messages[at];
+      if (message?.from === "person") return message.notice === null;
+      if (message?.clock === null) return false;
+    }
+    return false;
+  };
 
   /** The newest of the person's Messages: only its Run can be tried again. */
   const newestOfPerson = createMemo(() =>
@@ -287,6 +330,8 @@ export function Conversation(props: {
    */
   async function startCall(): Promise<void> {
     if (calling() || call()) return;
+    // Started from the keyboard, the Call's Mute takes the focus once its controls show.
+    const fromKeyboard = callButton?.matches(":focus-visible") ?? false;
     setCalling(true);
     setCallEnded(null);
     setProblem(null);
@@ -311,8 +356,11 @@ export function Conversation(props: {
         },
         failed: (notice) => FAILED[notice.failure],
         ended: ({ ended, reason, record }) => {
+          // The focus in the Call's controls, which go, comes back to the Call button.
+          const fromControls = callControls?.contains(document.activeElement) ?? false;
           setCall(null);
           setMuted(false);
+          if (fromControls) callButton?.focus();
           setCallEnded(callEndedWords(record?.ended ?? ended, record?.provider_reason ?? reason));
           // A Call counts toward the month's spend, which may now near or reach the cap.
           void readSpend();
@@ -325,7 +373,12 @@ export function Conversation(props: {
         // whose standing Notice the Deployment now holds.
         void readSpend();
         void readNotices();
-      } else setCall(started);
+      } else {
+        // Read before the Call's controls take the button's place: the focus may have moved on.
+        const stillOnButton = document.activeElement === callButton;
+        setCall(started);
+        if (fromKeyboard && stillOnButton) muteButton?.focus();
+      }
     } catch (error) {
       setProblem(unreachableMessage(error));
     } finally {
@@ -333,8 +386,8 @@ export function Conversation(props: {
     }
   }
 
-  // A Call belongs to the Context it was started in: switching away, or leaving, ends it.
-  onCleanup(() => void call()?.hangUp());
+  // A Call belongs to the Context it was started in: switching away ends it, as the switcher said.
+  onCleanup(() => void call()?.switchedAway());
 
   // Read once the live channel is open, so a Message added meanwhile is either read or brought.
   onMount(async () => {
@@ -381,6 +434,9 @@ export function Conversation(props: {
         <Show when={callOffer()}>
           {(offer) => (
             <CallButton
+              ref={(element) => {
+                callButton = element;
+              }}
               contextName={props.contextName}
               offer={offer()}
               starting={calling()}
@@ -398,7 +454,14 @@ export function Conversation(props: {
         )}
       </Show>
       <Show when={call()}>
-        {(going) => <CallBar contextName={props.contextName} since={going().since} />}
+        {(going) => (
+          <CallBar
+            contextName={props.contextName}
+            since={going().since}
+            muted={muted()}
+            working={agentWorking()}
+          />
+        )}
       </Show>
       <PeerBody ref={column.scroller}>
         <Show when={online() && earlierCursor()}>
@@ -443,6 +506,8 @@ export function Conversation(props: {
                     <AgentMessageItem
                       contextId={props.contextId}
                       message={said()}
+                      announce={toAnnounce() === said().id}
+                      onAnnounce={announce}
                       timeZone={props.timeZone}
                       onShowRecord={props.onShowRecord}
                       onShown={shown}
@@ -464,7 +529,17 @@ export function Conversation(props: {
               </>
             )}
           </Show>
+          {/* Sent, and nothing of its answer yet: where the answer will appear, the Agent is at work. */}
+          <Show when={writing() === null && agentWorking()}>
+            <li class="message from-agent agent-working">
+              <span class="message-from">Agent</span>
+              <p class="agent-working-words">Agent working</p>
+            </li>
+          </Show>
         </ol>
+        <p class="visually-hidden" role="status">
+          {announcement()}
+        </p>
       </PeerBody>
       <div class="peer-foot">
         <column.JumpToLatest />
@@ -518,6 +593,12 @@ export function Conversation(props: {
         <Show when={call()}>
           {(going) => (
             <CallControls
+              ref={(element) => {
+                callControls = element;
+              }}
+              muteRef={(element) => {
+                muteButton = element;
+              }}
               contextName={props.contextName}
               muted={muted()}
               onMute={(on) => {
@@ -533,6 +614,7 @@ export function Conversation(props: {
             contextName={props.contextName}
             onSent={(message) => {
               setProblem(null);
+              setCallEnded(null);
               placeAnswered(message);
               column.toNewest();
             }}
@@ -546,12 +628,13 @@ export function Conversation(props: {
 
 /**
  * Why a Call ended, as the Notice in the Conversation's foot says it, or null for the person's own
- * tap, which needs none: as the object's record says, or, when the object could not be reached,
+ * tap or a switch to another Context, whose switcher said so, which need none: as the object's record says, or, when the object could not be reached,
  * as this Device saw it. The provider's reason is its own word for it.
  */
 function callEndedWords(ended: CallEnd, reason: string | null): string | null {
   switch (ended) {
     case "hung_up":
+    case "switched":
       return null;
     case "lost":
       return "The Call ended: the connection to the voice provider was lost.";
@@ -596,16 +679,20 @@ const CALL_UNAVAILABLE = "call-unavailable";
  * why, in the words shown under it: it stays focusable, so the reason is heard as well as seen.
  */
 function CallButton(props: {
+  ref: (element: HTMLButtonElement) => void;
   contextName: string | undefined;
   offer: CallOffer;
   starting: boolean;
   onStart: () => void;
 }) {
-  const name = () =>
-    props.contextName ? `Start a Call with the Agent in ${props.contextName}` : "Start a Call";
+  const name = () => {
+    const what = props.starting ? "Starting a Call" : "Start a Call";
+    return props.contextName ? `${what} with the Agent in ${props.contextName}` : what;
+  };
   const why = () => (props.offer === "ready" ? null : NO_CALL[props.offer]);
   return (
     <button
+      ref={props.ref}
       type="button"
       class="call-button"
       aria-label={name()}
@@ -618,7 +705,7 @@ function CallButton(props: {
       }}
     >
       <PhoneIcon size={18} aria-hidden="true" />
-      Call
+      {props.starting ? "Starting…" : "Call"}
     </button>
   );
 }
@@ -634,9 +721,15 @@ function timeSoFar(milliseconds: number): string {
 
 /**
  * The status bar that takes the Conversation's header's place on the Device in a Call (section
- * 8.5): on a Call in this Context, and the time so far, counted on this Device's clock.
+ * 8.5): on a Call in this Context, the time so far, counted on this Device's clock, and what holds:
+ * the microphone off, the Agent at work on what was handed over, or else that what is said is kept.
  */
-function CallBar(props: { contextName: string | undefined; since: number }) {
+function CallBar(props: {
+  contextName: string | undefined;
+  since: number;
+  muted: boolean;
+  working: boolean;
+}) {
   const [now, setNow] = createSignal(Date.now());
   const tick = setInterval(() => setNow(Date.now()), 1000);
   onCleanup(() => clearInterval(tick));
@@ -649,8 +742,12 @@ function CallBar(props: { contextName: string | undefined; since: number }) {
         </p>
         <p class="call-bar-meta">
           {/* A timer is not read out as it changes, so the second hand says nothing. */}
-          <span role="timer">{timeSoFar(now() - props.since)}</span> · what you say is kept as
-          Messages
+          <span role="timer">{timeSoFar(now() - props.since)}</span> ·{" "}
+          {props.muted
+            ? "Muted"
+            : props.working
+              ? "Agent working"
+              : "what you say is kept as Messages"}
         </p>
       </div>
     </div>
@@ -660,9 +757,12 @@ function CallBar(props: { contextName: string | undefined; since: number }) {
 /**
  * The Call's controls, which the Conversation's composer gives way to on the Device in the Call
  * (section 6): mute, which turns the microphone off while the Call goes on, and End, on solid
- * `warn`, the phone icon turned, each a round button with its words under it.
+ * `warn`, the phone icon turned, each a round button with its words under it. Mute takes the focus
+ * when the Call is started from the keyboard.
  */
 function CallControls(props: {
+  ref: (element: HTMLElement) => void;
+  muteRef: (element: HTMLButtonElement) => void;
   contextName: string | undefined;
   muted: boolean;
   onMute: (muted: boolean) => void;
@@ -670,17 +770,22 @@ function CallControls(props: {
 }) {
   return (
     <section
+      ref={props.ref}
       class="call-controls"
       aria-label={props.contextName ? `Call in ${props.contextName}` : "Call"}
     >
       <button
+        ref={props.muteRef}
         type="button"
         class="call-control mute"
         aria-pressed={props.muted}
         onClick={() => props.onMute(!props.muted)}
       >
+        {/* Its name stays Mute; the microphone shows on or off, and the Call bar says "Muted". */}
         <span class="call-control-round">
-          <MicOffIcon size={24} aria-hidden="true" />
+          <Show when={props.muted} fallback={<MicIcon size={24} aria-hidden="true" />}>
+            <MicOffIcon size={24} aria-hidden="true" />
+          </Show>
         </span>
         Mute
       </button>
@@ -712,9 +817,9 @@ const FAILED: Record<RunFailure, string> = {
 };
 
 /**
- * A Message from the person, shown as typed. While its Run has failed, a Notice under it says why,
- * which is not a Message, with a way to try again on the newest (section 8.5), and to save the
- * failed Run's transcript, for debugging.
+ * A Message from the person, shown as typed. While its Run has failed, a Notice under it, outside
+ * its bubble, says why, which is not a Message, with a way to try again on the newest (section
+ * 8.5), and after it a way to save the failed Run's transcript, for debugging.
  */
 function PersonMessageItem(props: {
   contextId: string;
@@ -725,17 +830,19 @@ function PersonMessageItem(props: {
   const [retrying, setRetrying] = createSignal(false);
   return (
     <li class="message from-person" data-testid="message">
-      <span class="message-from">
-        You
-        {/* Said in a Call, not typed: the mark is the screen's, never part of what was said. */}
-        <Show when={props.message.spoken}>
-          <span class="message-spoken">
-            <MicIcon size={12} aria-hidden="true" />
-            Spoken
-          </span>
-        </Show>
-      </span>
-      <p class="message-words">{props.message.words}</p>
+      <div class="message-bubble">
+        <span class="message-from">
+          You
+          {/* Said in a Call, not typed: the mark is the screen's, never part of what was said. */}
+          <Show when={props.message.spoken}>
+            <span class="message-spoken">
+              <MicIcon size={12} aria-hidden="true" />
+              Spoken
+            </span>
+          </Show>
+        </span>
+        <p class="message-words">{props.message.words}</p>
+      </div>
       <Show when={props.message.notice}>
         {(notice) => (
           <div class="run-notice">
@@ -828,6 +935,9 @@ function AgentMessageItem(props: {
   onShowRecord: (anchor: string) => void;
   /** A Brief or Review not yet read has been shown in a focused window. */
   onShown: (message: AgentMessage) => void;
+  /** A new answer, to be read out once shown (section 8.11). */
+  announce: boolean;
+  onAnnounce: (words: string) => void;
 }) {
   const run = () => props.message.run;
   const heldChanges = useHeldChanges();
@@ -840,6 +950,11 @@ function AgentMessageItem(props: {
       .flatMap((effect) => heldChanges.find(effect.id) ?? []);
   let item!: HTMLLIElement;
   onMount(() => {
+    // Read out as rendered, so a screen reader hears the words and not their Markdown.
+    if (props.announce) {
+      const words = item.querySelector(":scope > .words")?.textContent?.trim();
+      if (words) props.onAnnounce(words);
+    }
     if (props.message.clock?.read !== false) return;
     onCleanup(whenShown(item, () => props.onShown(props.message)));
   });
@@ -862,7 +977,8 @@ function AgentMessageItem(props: {
       <Show when={run().calls.length > 0 || run().cost !== null}>
         <details class="run-calls">
           <summary>
-            {callCount(run().calls.length)}
+            <ChevronRight size={14} aria-hidden="true" />
+            {toolsUsed(run().calls)}
             <Show when={run().ended === null}> so far</Show>
           </summary>
           <Show when={run().calls.length > 0}>
@@ -928,9 +1044,14 @@ function SaveTranscript(props: { contextId: string; run: string }) {
   );
 }
 
-function callCount(count: number): string {
-  if (count === 0) return "No calls";
-  return count === 1 ? "1 call" : `${count} calls`;
+/**
+ * What a Run's fold is named by: how many tools it used, each counted once however often it was
+ * called, never its calls, since a Call is spoken (GLOSSARY.md).
+ */
+function toolsUsed(calls: RunCall[]): string {
+  const count = new Set(calls.map((call) => call.tool)).size;
+  if (count === 0) return "No tools used";
+  return count === 1 ? "1 tool used" : `${count} tools used`;
 }
 
 /** What each kind of thing a change can touch is called, in the glossary's words. */
@@ -1058,10 +1179,13 @@ function MessageComposer(props: {
             id={CONVERSATION_COMPOSER}
             rows={2}
             aria-keyshortcuts="m"
+            // Where there is hover Enter sends; on a touch screen Return starts a line and Send
+            // sends, so a Message typed on a phone can hold several (section 8.1).
+            enterkeyhint={pointerHovers() ? "send" : "enter"}
             value={words()}
             onInput={(event) => setWords(event.currentTarget.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (event.key === "Enter" && !event.shiftKey && pointerHovers()) {
                 event.preventDefault();
                 void send();
               }
