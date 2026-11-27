@@ -266,7 +266,7 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 - **Inset** (`inset`): what sits inside a panel: a Task row, the search field, a Reference, the current tab, the person's own Message, code. It always sits on `surface`.
 - **Rule** (`rule`): a hairline border or divider, and the edge of a chip, a menu or a picker.
 - **Ink** (`ink`): text on every neutral, on `notice` and on any tint. Also the app icon's tile, the focus ring, a chip that is set, and the Jump to latest pill.
-- **Muted** (`muted`): secondary text (times, meta, notes, an inactive tab) and the border of a Task's empty control.
+- **Muted** (`muted`): secondary text (times, meta, notes, an inactive tab, a field's placeholder at full opacity on `surface` or `inset`) and the border of a Task's empty control.
 
 ### Signal
 - **Warn** (`warn`): Overdue, a Project with no open Task, and a refusal the screen shows in words (`.problem`, such as a Context that could not be made), as text on `surface` or `inset`, always with words. Its one solid use is the End Call button, under `on-accent`.
