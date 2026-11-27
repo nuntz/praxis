@@ -4,6 +4,7 @@ import {
   expect,
   lastShown,
   makeContext,
+  onPhone,
   openJournal,
   test,
 } from "./fixtures.ts";
@@ -23,6 +24,12 @@ test("the person records Entries in the Journal's composer and sees them in time
   await journal.getByRole("button", { name: "Record" }).click();
   await expect(journal.getByRole("listitem").filter({ hasText: first })).toBeVisible();
   await expect(composer).toHaveValue("");
+  // Where the pointer hovers, the caret is back in the composer for the next Entry; on a touch
+  // screen it is not, so the keyboard closes and the composer folds back to one line.
+  if (onPhone(testInfo)) {
+    await expect(composer).not.toBeFocused();
+    await expect(journal.getByTestId("composer")).toHaveAttribute("data-folded", "");
+  } else await expect(composer).toBeFocused();
 
   await composer.fill(second);
   await composer.press("ControlOrMeta+Enter");
@@ -90,6 +97,7 @@ test("the person sees an Entry's words rendered as Markdown, and edits them as t
     "",
     typedAsIs,
     "",
+    `### Venues ${tag}`,
     "- The boathouse",
     "- The old print works",
     "",
@@ -117,7 +125,21 @@ test("the person sees an Entry's words rendered as Markdown, and edits them as t
   const entry = journal.locator(`[id="${await recorded.getAttribute("id")}"]`);
   const shown = entry.getByTestId("words");
 
-  await expect(shown.getByRole("heading", { name: `Offsite ${tag}`, exact: true })).toBeVisible();
+  // An Entry's outline never skips a level under its day's heading: its shallowest heading is the
+  // fourth level, the next the fifth. Each still looks as its Markdown level does (section 8.4):
+  // `##` semibold, `###` semibold in the muted colour.
+  const offsite = shown.getByRole("heading", { name: `Offsite ${tag}`, exact: true, level: 4 });
+  const venues = shown.getByRole("heading", { name: `Venues ${tag}`, exact: true, level: 5 });
+  await expect(offsite).toBeVisible();
+  await expect(venues).toBeVisible();
+  const ink = await shown
+    .locator("p")
+    .first()
+    .evaluate((each) => getComputedStyle(each).color);
+  await expect(offsite).toHaveCSS("font-weight", "600");
+  await expect(offsite).toHaveCSS("color", ink);
+  await expect(venues).toHaveCSS("font-weight", "600");
+  await expect(venues).not.toHaveCSS("color", ink);
   await expect(shown.locator("strong")).toHaveText("Friday");
   await expect(shown.getByRole("listitem")).toHaveText(["The boathouse", "The old print works"]);
   // Only an https address is a link, and a link opens in a new tab and sends no referrer.

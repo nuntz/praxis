@@ -4,6 +4,7 @@ import {
   expect,
   lastShown,
   makeContext,
+  onPhone,
   openJournal,
   showTab,
   test,
@@ -167,12 +168,19 @@ test("the newest Entry stays just above the composer as its words grow, and so d
   await expect(pill).toBeVisible();
   expect(await bottomOf(pill)).toBeLessThanOrEqual(await topOf(frame));
 
-  // Recorded by its button, which then has nothing to send, the composer folds back to its one
-  // line, and what it recorded is in view above it.
+  // Recorded by its button, which then has nothing to send, the composer shrinks back as its words
+  // go, and what it recorded is in view above it. Where the pointer hovers it keeps the focus, at
+  // its two lines; on a touch screen it folds back to its one line (section 8.2).
   await journal.getByRole("button", { name: "Record" }).click();
   await expect(composer).toHaveValue("");
-  await expect(frame).toHaveAttribute("data-folded");
-  await expect.poll(() => topOf(frame)).toBeGreaterThan(before);
+  if (onPhone(testInfo)) {
+    await expect(frame).toHaveAttribute("data-folded");
+    await expect.poll(() => topOf(frame)).toBeGreaterThan(before);
+  } else {
+    await expect(composer).toBeFocused();
+    await expect(frame).not.toHaveAttribute("data-folded");
+    await expect.poll(() => topOf(frame)).toBe(before);
+  }
   await expect(entries.filter({ hasText: "Growing line 1" })).toBeInViewport();
 });
 

@@ -1126,19 +1126,20 @@ button.jump-to-latest {
   font-weight: 600;
 }
 
-.words h4 {
+/* By its Markdown level, whichever element the Entry's outline draws it as. */
+.words .heading-1 {
   font-weight: 700;
 }
 
-.words h6 {
+.words .heading-3 {
   color: var(--muted);
 }
 
-.words > h4:not(:first-child) {
+.words > .heading-1:not(:first-child) {
   margin-top: var(--space-5);
 }
 
-.words > h5:not(:first-child) {
+.words > .heading-2:not(:first-child) {
   margin-top: var(--space-4);
 }
 
@@ -3424,6 +3425,11 @@ button.entry-page-add-button {
 .moved {
   color: var(--muted);
   font: var(--type-meta);
+}
+
+/* The Journal's status line stays in the page with nothing said, and then takes no room in the foot. */
+.peer-foot > .moved:empty {
+  position: absolute;
 }
 
 /* A Version compared against the current words, as typed: what is gone struck, what came underlined. */

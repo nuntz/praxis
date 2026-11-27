@@ -80,9 +80,12 @@ export function Journal(props: {
   const [entries, setEntries] = createStore<Entry[]>([]);
   const [earlierCursor, setEarlierCursor] = createSignal<string | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
-  // What the screen last told the person under the Journal: what a move did, once its Entry has
-  // left the Journal (section 3.9), or what an Entry kept Unsent left off (section 8.8).
-  const [told, setTold] = createSignal<string | null>(null);
+  // What the screen last told the person under the Journal, until another change replaces it: what
+  // a move did, once its Entry has left the Journal (section 3.9), an Entry in the Trash, with
+  // Restore, or what an Entry kept Unsent left off (section 8.8).
+  const [told, setTold] = createSignal<Told | null>(null);
+  // The status line, always in the page so a screen reader announces each change of its words.
+  let line!: HTMLParagraphElement;
   // The Entry the composer's next Entry is a Follow-up to, if the person chose one.
   const [followingUp, setFollowingUp] = createSignal<EntryNamed | null>(null);
   // Whether the Entries shown are the Offline Copy's, as no network let them be read.
@@ -317,6 +320,43 @@ export function Journal(props: {
     else setEntries(onEntry, "tasks", (tasks) => [...tasks, task]);
   }
 
+  /**
+   * An Entry deleted from its actions is said with Restore, which takes the focus from the Entry
+   * gone, unless the person has moved on meanwhile.
+   */
+  function deleted(entry: Entry, effects: Effect[]) {
+    setProblem(null);
+    const at = document.activeElement;
+    const focused =
+      at === null ||
+      at === document.body ||
+      !!document.getElementById(recordAnchor("entry", entry.id))?.contains(at);
+    setTold({ text: `“${summarizeWords(entry.words)}” is in the Trash.`, restores: entry.id });
+    if (focused) queueMicrotask(() => line.querySelector<HTMLElement>("button")?.focus());
+    void patch(effects);
+  }
+
+  /**
+   * Bring an Entry back from the Trash, with what went with it. Once it is back, the line that said
+   * it went empties, unless another change is said meanwhile, and the focus it had goes to the
+   * Entry. With no network it is refused as any write but recording an Entry is (section 8.8).
+   */
+  async function restore(shown: Told, id: string) {
+    try {
+      const result = await callTool("restore", { id });
+      if (!result.ok) return setProblem(result.error.message);
+      setProblem(null);
+      if (told() === shown) setTold(null);
+      await patch(result.value.effects);
+      const at = document.activeElement;
+      if (at === null || at === document.body) {
+        document.getElementById(recordAnchor("entry", id))?.focus();
+      }
+    } catch (error) {
+      setProblem(unreachableMessage(error));
+    }
+  }
+
   // What a search found is shown in place of the Entries, which stay as they were under it.
   const search = createSearch({
     timeZone: props.timeZone,
@@ -388,13 +428,10 @@ export function Journal(props: {
                     }}
                     onTask={showTask}
                     onShowHeldChange={props.onShowHeldChange}
-                    onDeleted={(effects) => {
-                      setProblem(null);
-                      void patch(effects);
-                    }}
+                    onDeleted={(effects) => deleted(entry, effects)}
                     onMoved={(said) => {
                       setProblem(null);
-                      setTold(said);
+                      setTold({ text: said });
                     }}
                     onProblem={setProblem}
                   />
@@ -406,13 +443,29 @@ export function Journal(props: {
       </PeerBody>
       <div class="peer-foot">
         <column.JumpToLatest />
-        <Show when={told()}>
-          {(said) => (
-            <p class="moved" role="status">
-              {said()}
-            </p>
-          )}
-        </Show>
+        <p class="moved" role="status" ref={line}>
+          <Show when={told()}>
+            {(said) => (
+              <>
+                {said().text}
+                <Show when={said().restores}>
+                  {(id) => (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        class="quiet"
+                        onClick={() => void restore(said(), id())}
+                      >
+                        Restore
+                      </button>
+                    </>
+                  )}
+                </Show>
+              </>
+            )}
+          </Show>
+        </p>
         <Show when={problem()}>
           {(message) => (
             <p class="problem" role="alert">
@@ -427,32 +480,35 @@ export function Journal(props: {
           onStopFollowingUp={() => setFollowingUp(null)}
           onUnsent={(leftOff, aimedAt) => {
             setProblem(null);
-            if (told() === LINKS_LEFT_OFF) setTold(null);
+            if (told()?.text === LINKS_LEFT_OFF) setTold(null);
             setFollowingUp(null);
             // Nothing is dropped silently (section 8.8).
             const lost = [
               leftOff ? (contextCopy(contextId) ? LEFT_OFF_WITH_COPY : LEFT_OFF) : null,
               aimedAt ? aimLeftOff(aimedAt.name) : null,
             ].filter((said) => said !== null);
-            if (lost.length > 0) setTold(lost.join(" "));
+            if (lost.length > 0) setTold({ text: lost.join(" ") });
             // Kept Unsent, it is in the Journal all the same, and the person's own.
             column.toNewest();
           }}
           onRecorded={(entry) => {
             setProblem(null);
-            if (told() === LINKS_LEFT_OFF) setTold(null);
+            if (told()?.text === LINKS_LEFT_OFF) setTold(null);
             setFollowingUp(null);
             showEntry(entry);
             column.toNewest();
             if (entry.follow_up_to) void refreshEntry(entry.follow_up_to.id);
           }}
-          onLinksLeftOff={() => setTold(LINKS_LEFT_OFF)}
+          onLinksLeftOff={() => setTold({ text: LINKS_LEFT_OFF })}
           onProblem={setProblem}
         />
       </div>
     </>
   );
 }
+
+/** What the Journal's status line says, and the Entry its Restore brings back, where it has one. */
+type Told = { text: string; restores?: string };
 
 /** Said when the composer's draft comes from another Context, whose records its links were to. */
 const LINKS_LEFT_OFF =
