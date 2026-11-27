@@ -52,6 +52,7 @@ typography:
     fontSize: "26px"
     fontWeight: 700
     lineHeight: "32px"
+    letterSpacing: "-0.02em"
   wordmark:
     fontFamily: "Figtree Variable, system-ui, sans-serif"
     fontSize: "22px"
@@ -94,6 +95,7 @@ typography:
     fontSize: "13px"
     fontWeight: 700
     lineHeight: "18px"
+    letterSpacing: "0.01em"
   meta:
     fontFamily: "Figtree Variable, system-ui, sans-serif"
     fontSize: "13px"
@@ -104,6 +106,7 @@ typography:
     fontSize: "12px"
     fontWeight: 600
     lineHeight: "16px"
+    letterSpacing: "0.01em"
   code-block:
     fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace"
     fontSize: "14px"
@@ -245,7 +248,7 @@ The frontmatter lists each colour twice: the bare name is its light value, and `
 
 A workroom kept for one person. The walls are a cool tinted ground. The work sits on soft white panels with generous corners, and every tool in reach is round. Nothing is ornamental, because the person's own words are what the room is for. The Journal's words are set one step larger than the interface around them, and Markdown in them changes weight, indentation and face, never size or colour.
 
-The mood is **calm, soft, exact**. Soft in form: pills, circles, 20px panel corners, tone instead of shadow. Exact in meaning: every state is said in words, every icon that stands alone has a name, and colour never carries a meaning by itself. Praxis is reached many times a day, so it is quiet. Things appear where they are needed, at once, and the only motion is a page sliding in as the person goes one level deeper.
+The mood is **calm, soft, exact**. Soft in form: pills, circles, 20px panel corners, tone instead of shadow. Exact in meaning: every state is said in words, every icon that stands alone has a name, and colour never carries a meaning by itself. Praxis is reached many times a day, so it is quiet. Things appear where they are needed, at once, and the only motion is a page sliding in as the person goes one level deeper, and a press fading back as it lifts.
 
 The one expressive element is the **Context accent**. Each Context has one of six, and it marks where the person is about to write or decide: the Context switcher, both composers, a Held Change and a Mention. Everything else is neutral, so the accent always answers one question: which Context am I in?
 
@@ -276,7 +279,7 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 - **Ground** (`ground`): the page behind the panels, and the top bar.
 - **Surface** (`surface`): a panel (Attention, the Journal, the Conversation), a card on the phone, the tab bar, a menu or picker.
 - **Inset** (`inset`): what sits inside a panel: a Task row, the search field, a Reference, the current tab, the person's own Message, code. It always sits on `surface`.
-- **Rule** (`rule`): a hairline border or divider, and the edge of a chip, a menu or a picker.
+- **Rule** (`rule`): a hairline border or divider, and the edge of a chip, a menu or a picker. When the Device asks for more contrast, it takes `muted`'s value, so every edge stands out at 3:1 or more.
 - **Ink** (`ink`): text on every neutral, on `notice` and on any tint. Also the app icon's tile, the focus ring, a chip that is set, and the Jump to latest pill.
 - **Muted** (`muted`): secondary text (times, meta, notes, an inactive tab, a field's placeholder at full opacity on `surface` or `inset`) and the border of a Task's empty control.
 
@@ -301,21 +304,23 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 **Character:** one geometric-humanist family carries the whole interface, with its weights doing the work a second family would: 700 for titles, buttons and labels, 500–600 for row titles and emphasis, 400 for reading.
 
 ### Hierarchy
-- **Screen title** (700, 26px/32px): a screen of its own, such as Settings.
+- **Screen title** (700, 26px/32px, −0.02em): a screen of its own, such as Settings.
 - **Wordmark** (700, 22px/28px, −0.02em): "Praxis" beside the mark in the top bar, from 720px up.
 - **Column title** (700, 20px/26px, −0.01em): the head of each peer.
-- **Words** (400, 17px/26px): an Entry's words, the person's own, one step larger than the interface. Also the size of a phone's text fields, so they never zoom.
+- **Words** (400, 17px/26px): an Entry's words, the person's own, one step larger than the interface. Also the size they are edited at, on an Entry's page and in its editor.
 - **Body on a phone** (400, 16px/23px): the base size below 720px, and the composers' text.
 - **Body** (400, 15px/22px): the interface's base on a desktop, and a Message's words.
 - **Row title** (500, 15px/22px): a Task's or a search hit's title.
 - **Button** (700, 15px/22px): every button's word.
-- **Label** (700, 13px/18px): a composer's label, a group heading in Settings, a chip, every badge but a tab's.
+- **Label** (700, 13px/18px, +0.01em): a composer's label, a group heading in Settings, a chip, every badge but a tab's.
 - **Meta** (400, 13px/18px): a time, an author, a Task's mark ("Due today" at 700 in `muted`, "Overdue" at 700 in `warn`).
-- **Caption** (600, 12px/16px): a day's label, a tab's name, a tab's badge.
+- **Caption** (600, 12px/16px, +0.01em): a day's label, a tab's name, a tab's badge.
 - **Code block** (400, 14px/22px, mono): code in an Entry's words.
 
 ### Named Rules
 **The Words Lead Rule.** An Entry's words are always the largest running text on the screen (17px). Markdown inside them changes weight, indentation and face, never size, and never takes the accent.
+
+**The Tracking Rule.** Tracking follows size: the titles and the wordmark are drawn tighter, the reading sizes at none, and Label and Caption opened up 0.01em, since Figtree has none of a system face's own tracking for small sizes. A style's tracking is its `--tracking-<name>`, set beside its `font`, which cannot carry it.
 
 **The One Family Rule.** Figtree is the only typeface. A second family never comes in for headings or emphasis. Monospace is for code, never for numbers or labels. Tabular figures serve the time on a Call.
 
@@ -367,6 +372,7 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **Jump to latest:** an `ink` pill with `surface` text, the arrow-down icon and a count, centred above the composer.
 - **End Call:** a 60px circle of solid `warn` under `on-accent`, the phone icon turned 135°, its word underneath. Mute beside it is the same circle on `inset`.
 - **Disabled:** 50% opacity, for every control but a composer's send with nothing to send. A Call that cannot start stays focusable and says why in `meta` under it, since a touch screen has no tooltip.
+- **Pressed:** a button, a link or a disclosure that can be pressed is dimmed to 70% the moment the press lands, and back over 160ms once it lifts, as a native control answers a finger; with reduced motion, back at once. A link that is a row, such as a section of Settings, sits on `inset` while pressed instead, as it does when hovered. The browser's grey tap box is never drawn.
 - **Focus:** a 2px `ink` outline, 2px off, on everything.
 
 ### Chips
@@ -403,7 +409,7 @@ A Mention is the accent on its tint, a Reference is `ink` on `inset`, both at 60
 The person's Message sits on the right, no wider than 85%, on `inset` with `radius-lg`. The Agent's words sit on the panel with no box, under a `meta` line naming who spoke. A Call going replaces the header with a bar on the accent's tint: an accent dot, "On a Call in" the Context, and the time in tabular figures.
 
 ### Motion
-The one motion is a page going one level deeper. A Task's, Project's or Entry's page slides in 24px from the side, fading in over 220ms on `cubic-bezier(0.23, 1, 0.32, 1)`. A page gone back to is simply there. With reduced motion it is a 160ms fade, ease-out. Composers, menus, pickers and tabs appear at once.
+The one motion is a page going one level deeper, beside a press fading back as it lifts (Pressed, under Buttons), which is feedback on the person's own touch. A Task's, Project's or Entry's page slides in 24px from the side, fading in over 220ms on `cubic-bezier(0.23, 1, 0.32, 1)`. A page gone back to is simply there. With reduced motion it is a 160ms fade, ease-out. Composers, menus, pickers and tabs appear at once.
 
 ## Do's and Don'ts
 
@@ -412,7 +418,8 @@ The one motion is a page going one level deeper. A Task's, Project's or Entry's 
 - **Do** wrap anything drawn in a Context's colours in `.accent-<name>` and use `--accent` and `--accent-tint`, never a named accent.
 - **Do** put an icon beside its label on the tabs, the sections of Settings, Attention's section headings, the groups of what a search finds and the primary buttons. Interface icons are Lucide, stroked with round caps, at the text colour.
 - **Do** say every state in words, beside any colour it takes.
-- **Do** keep text fields on a phone at 16px or larger, so the page does not zoom when one is tapped.
+- **Do** keep text fields at 16px or larger at any width wherever a finger can reach them, a touch screen beside a trackpad too, so the page does not zoom when one is tapped.
+- **Do** put every `:hover` look behind `(hover: hover) and (pointer: fine)`, so a tap on a touch screen leaves nothing hovered.
 
 ### Don't:
 - **Don't** use the accent on anything but where the person is about to write or decide (The One Accent Rule). A secondary button is quiet, in `ink`.

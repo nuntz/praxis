@@ -65,6 +65,15 @@ export const colors = {
 export type ColorToken = keyof typeof colors;
 
 /**
+ * What a colour takes instead when the Device asks for more contrast. A hairline is then drawn in
+ * muted, so an edge that tone alone does not give, such as Attention's over the Journal in between,
+ * stands out plainly.
+ */
+export const moreContrast = { rule: "muted" } as const satisfies Partial<
+  Record<ColorToken, ColorToken>
+>;
+
+/**
  * One family, Figtree, shipped with the app so nothing is fetched from elsewhere. Code alone uses
  * the Device's own monospace.
  */
@@ -73,21 +82,33 @@ export const families = {
   mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
 } as const;
 
-type TypeStyle = { family: keyof typeof families; size: number; line: number; weight: number };
+/**
+ * A type style. `tracking`, in em, is set as `--tracking-<name>` beside `--type-<name>`, since the
+ * `font` shorthand cannot carry it. Figtree has no tracking of its own for small sizes, as a
+ * system face has, so the smallest styles are opened up a little to stay legible, and the titles
+ * are drawn tighter.
+ */
+type TypeStyle = {
+  family: keyof typeof families;
+  size: number;
+  line: number;
+  weight: number;
+  tracking?: number;
+};
 
 export const typography = {
-  "screen-title": { family: "sans", size: 26, line: 32, weight: 700 },
-  wordmark: { family: "sans", size: 22, line: 28, weight: 700 },
-  "column-title": { family: "sans", size: 20, line: 26, weight: 700 },
+  "screen-title": { family: "sans", size: 26, line: 32, weight: 700, tracking: -0.02 },
+  wordmark: { family: "sans", size: 22, line: 28, weight: 700, tracking: -0.02 },
+  "column-title": { family: "sans", size: 20, line: 26, weight: 700, tracking: -0.01 },
   /** An Entry's words, one step larger than the interface around them. */
   words: { family: "sans", size: 17, line: 26, weight: 400 },
   "body-phone": { family: "sans", size: 16, line: 23, weight: 400 },
   body: { family: "sans", size: 15, line: 22, weight: 400 },
   "row-title": { family: "sans", size: 15, line: 22, weight: 500 },
   button: { family: "sans", size: 15, line: 22, weight: 700 },
-  label: { family: "sans", size: 13, line: 18, weight: 700 },
+  label: { family: "sans", size: 13, line: 18, weight: 700, tracking: 0.01 },
   meta: { family: "sans", size: 13, line: 18, weight: 400 },
-  caption: { family: "sans", size: 12, line: 16, weight: 600 },
+  caption: { family: "sans", size: 12, line: 16, weight: 600, tracking: 0.01 },
   "code-block": { family: "mono", size: 14, line: 22, weight: 400 },
 } as const satisfies Record<string, TypeStyle>;
 
@@ -136,6 +157,9 @@ export function tokensCss(): string {
       `type-${name}`,
       `${style.weight} ${style.size}px/${style.line}px var(--font-${style.family})`,
     ]),
+    ...Object.entries(typography).flatMap(([name, style]): [string, string][] =>
+      "tracking" in style ? [[`tracking-${name}`, `${style.tracking}em`]] : [],
+    ),
     ...Object.entries({ ...spacing, ...radius }).map(([name, px]): [string, string] => [
       name,
       `${px}px`,
@@ -148,6 +172,9 @@ export function tokensCss(): string {
   return [
     `:root {\n  color-scheme: light dark;\n${colorDeclarations("light")}\n${fixed}\n}`,
     `@media (prefers-color-scheme: dark) {\n:root {\n${colorDeclarations("dark")}\n}\n}`,
+    `@media (prefers-contrast: more) {\n:root {\n${declarations(
+      Object.entries(moreContrast).map(([name, instead]) => [name, `var(--${instead})`]),
+    )}\n}\n}`,
     ...accents,
   ].join("\n\n");
 }

@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Edge to edge, the stylesheet padding the screen back in from the notch and the home
+         indicator; and on Android the keyboard shrinks the screen, so the composers stay above it. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <title>Praxis</title>
     <!-- With credentials, or Access refuses it: a browser fetches a manifest without them. -->
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />

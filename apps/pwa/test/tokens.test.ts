@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { ACCENTS as DOMAIN_ACCENTS } from "@praxis/domain";
-import { ACCENTS, type ColorToken, colors, type Theme } from "../src/design/tokens.ts";
+import {
+  ACCENTS,
+  type ColorToken,
+  colors,
+  moreContrast,
+  type Theme,
+} from "../src/design/tokens.ts";
 
 // Every text pairing the design system names, in light and in dark, is at least 4.5:1 (WCAG 2.2
 // AA, section 8.11). The screen's own accessibility check sees only the accent it shows, so the
@@ -71,5 +77,19 @@ test("a known pairing measures as WCAG gives it", () => {
 describe("the accents", () => {
   test("are the set the Deployment tools take", () => {
     expect([...ACCENTS]).toEqual([...DOMAIN_ACCENTS]);
+  });
+});
+
+// Asked for more contrast, a hairline is the edge of what stands above what is under it, such as
+// Attention over the Journal in between: at least 3:1, WCAG 2.2's bar for a non-text mark, on every
+// ground it is drawn on.
+const hairlineCases = (["light", "dark"] as Theme[]).flatMap((theme) =>
+  (["ground", "surface", "inset"] as const).map((ground) => [theme, ground] as const),
+);
+
+describe("a hairline, with more contrast asked for", () => {
+  test.each(hairlineCases)("in %s, on %s, is at least 3:1", (theme, ground) => {
+    const hairline = colors[moreContrast.rule][theme];
+    expect(contrast(hairline, colors[ground][theme])).toBeGreaterThanOrEqual(3);
   });
 });
