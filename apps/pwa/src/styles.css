@@ -3869,9 +3869,9 @@ a.entry-mark.held-mark {
 
   /*
    * Attention's rows sit on the ground itself here, so they take surface, as inset always sits on
-   * surface, and step to inset while hovered.
+   * surface, and step to inset while hovered. An Occurrence still to come keeps its open look.
    */
-  .attention-list .task {
+  .attention-list .task:not(.future-occurrence) {
     background: var(--surface);
   }
 

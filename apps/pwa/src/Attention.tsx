@@ -243,7 +243,13 @@ export function Attention(props: {
     if (!shown.undo) return;
     try {
       const refused = await shown.undo.run(callTool);
-      if (refused !== null) return setProblem(refused);
+      if (refused !== null) {
+        setProblem(refused);
+        // A try that did part of it says the rest on a new line, and the pressed button went with
+        // the old one: the new line takes the focus it had.
+        if (document.activeElement === document.body) queueMicrotask(focusSaid);
+        return;
+      }
       // Only what it undid goes from the status line: a change said meanwhile stays said.
       if (said() === shown) setSaid(null);
       await read();

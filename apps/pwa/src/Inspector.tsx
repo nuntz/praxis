@@ -114,7 +114,8 @@ export function Inspector(props: {
   toJournalComposer: () => void;
   /**
    * Hands over the way back to the list, every page closed, for the Attention tab's tap. It does
-   * nothing once the pages are closed, so it is safe to call after the panel has gone.
+   * nothing once the pages are closed, and the panel hands over a no-op when it is disposed, so it
+   * is safe to call after the panel has gone.
    */
   giveToList: (toList: () => void) => void;
   /** Open an Entry in the Journal, its column shown first. */
@@ -224,6 +225,9 @@ export function Inspector(props: {
     props.setPages([]);
     props.onClosed();
   });
+  // A switch of Context or time zone disposes the panel with its pages still open: the tab's tap
+  // must not then close the pages of an Attention that has gone.
+  onCleanup(() => props.giveToList(() => {}));
 
   /** Leave the page of what has left Attention, or the panel when it was the first. */
   function leave() {
