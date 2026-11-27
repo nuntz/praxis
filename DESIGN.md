@@ -302,16 +302,16 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 
 ### Hierarchy
 - **Screen title** (700, 26px/32px): a screen of its own, such as Settings.
-- **Wordmark** (700, 22px/28px, −0.02em): "Praxis" beside the mark in the top bar.
+- **Wordmark** (700, 22px/28px, −0.02em): "Praxis" beside the mark in the top bar, from 720px up.
 - **Column title** (700, 20px/26px, −0.01em): the head of each peer.
 - **Words** (400, 17px/26px): an Entry's words, the person's own, one step larger than the interface. Also the size of a phone's text fields, so they never zoom.
 - **Body on a phone** (400, 16px/23px): the base size below 720px, and the composers' text.
 - **Body** (400, 15px/22px): the interface's base on a desktop, and a Message's words.
 - **Row title** (500, 15px/22px): a Task's or a search hit's title.
 - **Button** (700, 15px/22px): every button's word.
-- **Label** (700, 13px/18px): a composer's label, a group heading in Settings, a chip, a badge.
+- **Label** (700, 13px/18px): a composer's label, a group heading in Settings, a chip, every badge but a tab's.
 - **Meta** (400, 13px/18px): a time, an author, a Task's mark ("Due today" at 700 in `muted`, "Overdue" at 700 in `warn`).
-- **Caption** (600, 12px/16px): a day's label, a tab's name.
+- **Caption** (600, 12px/16px): a day's label, a tab's name, a tab's badge.
 - **Code block** (400, 14px/22px, mono): code in an Entry's words.
 
 ### Named Rules
@@ -382,19 +382,19 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 
 ### Inputs / Fields
 - **Composer:** the accent's tint, a 1.5px accent border, `radius-lg`. Its `label` sits in the accent above the words. At rest it is one line, its label where the words will go and its send at its end. A label too long for its line is cut short with an ellipsis; the send never is, and Record keeps its icon and its word at every width. Focused, it opens to two lines at once, with no animation, and takes a 2px accent outline 2px off.
-- **Search field:** a 44px `inset` pill with a `muted` search icon. Focused, its 1.5px border turns `ink`. The browser's clear button is hidden for the screen's own.
+- **Search field:** a 44px `inset` pill with a `muted` search icon. Focused, its 1.5px border turns `ink`, and the 2px `ink` outline is drawn 2px off round the whole field, as its input draws none. The browser's clear button is hidden for the screen's own.
 - **Date field:** a `surface` field with a `rule` border and `radius-sm`, in a Task's row.
 - **Switch:** a 46×28 pill, `muted` when off and accent when on, its knob `surface`. The knob slides in 150ms only when motion is allowed.
 
 ### Navigation
-- **Top bar:** on `ground`, 52px high (60px on a phone): the mark and wordmark, then the Context switcher, then (between 720px and 1199px) the Attention button with its count, and Settings as an icon button at the far end. Search belongs to the Journal: a field in its header, or a button on a phone.
+- **Top bar:** on `ground`, 52px high (60px on a phone): the mark and wordmark, then the Context switcher, then (between 720px and 1199px) the Attention button with its count, and Settings as an icon button at the far end. On a phone it shows the mark alone, still named "Praxis", and the switcher takes the width, its name cut with an ellipsis; Settings never shrinks from its 44px circle. Search belongs to the Journal: a field in its header, or a button on a phone.
 - **Attention button:** a `surface` pill in `ink`. While Attention is open it sits on `inset` in `ink` at 700, as the current phone tab does, and says so with `aria-expanded` too.
 - **Context switcher:** a pill of the current Context's solid accent with its name at 600. It opens a `surface` list where each Context is its swatch beside its name, and the current one sits on `inset` at 600.
 - **Phone tabs:** a `surface` pill below the content, 16px in from each side, holding Attention (inbox), the Journal (book-open) and the Agent (message-circle). Each tab is 56px high with its icon over its `caption` name, and its count or unread dot at the icon's shoulder. The current tab sits on `inset` in `ink` at 700. The others are `muted`.
 - **Settings:** on a desktop, a `surface` sidebar of sections in two groups, the Context's under its accent dot and the Deployment's, with the section shown on its tint in accent. On a phone, the same groups as rows with an icon, a `muted` value and a chevron.
 
 ### Task row
-The most repeated object in Praxis. An `inset` row with `radius-sm`, 10px by 12px: a 20px circle control with a 2px `muted` border (filled with an `ink` dot once Finished), the title in `row-title`, then its marks in `meta`, then the calendar icon button at the row's end, never the word. Each state that holds is its own mark in words. Due today is bold in `muted`, Overdue bold in `warn`, and a closed Task's title turns `muted`.
+The most repeated object in Praxis. An `inset` row with `radius-sm`, 10px by 12px: a 20px circle control with a 2px `muted` border (filled with an `ink` dot once Finished), the title in `row-title`, then its marks in `meta`, then the calendar icon button at the row's end, never the word. Each state that holds is its own mark in words. Due today is bold in `muted`, Overdue bold in `warn`, and a closed Task's title turns `muted`. In Attention's one-line rows on a phone the control is a 44px target, its 20px circle drawn at the centre, and the row's open button begins where it ends.
 
 ### Links in an Entry
 A Mention is the accent on its tint, a Reference is `ink` on `inset`, both at 600 with `radius-sm`. A link to a record in the Trash is `muted` on `inset` at 400, and says so in words.

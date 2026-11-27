@@ -134,7 +134,9 @@ button.quiet {
   text-underline-offset: 3px;
 }
 
+/* A circle: in a row short of room, as the top bar is on a phone, it never gives up its width. */
 .icon-button {
+  flex-shrink: 0;
   width: 40px;
   padding: 0;
   background: var(--surface);
@@ -2353,6 +2355,12 @@ button.call-control {
   border-color: var(--ink);
 }
 
+/* The focus outline is drawn round the whole field, since its input draws none of its own. */
+.search-field:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
 .search-field:has(input:disabled) {
   opacity: 0.5;
 }
@@ -3435,11 +3443,21 @@ a.entry-mark.held-mark {
     padding: 0 var(--space-4);
   }
 
-  .wordmark {
-    gap: var(--space-2);
+  /* The mark alone, still named Praxis, so the Context switcher has the row's width. */
+  .wordmark-word {
+    /* As .visually-hidden, which the word cannot carry since it is shown from 720px up. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
-  /* A touch target is at least 44px on a phone. A Task's control is reached through its label. */
+  /*
+   * A touch target is at least 44px on a phone. A Task's control is reached through its label,
+   * except in Attention's rows, where the control itself is the 44px (below).
+   */
   .context,
   .icon-button,
   button,
@@ -3706,8 +3724,7 @@ a.entry-mark.held-mark {
     min-width: 18px;
     height: 18px;
     padding: 0 5px;
-    font-size: 11px;
-    line-height: 18px;
+    font: var(--type-caption);
   }
 
   .tabs .unread-mark {
@@ -3758,6 +3775,47 @@ a.entry-mark.held-mark {
   .task.attention-row,
   button.attention-row-open {
     min-height: 48px;
+  }
+
+  /*
+   * A Task's control is a 44px target, its 20px circle drawn at the centre, where it sat before,
+   * and the row's open button begins where it ends. The checkbox itself is the 44px, not only its
+   * label: a phone's browser moves a tap on a bare label to the nearest control, the open button.
+   */
+  .task.attention-row {
+    gap: 0;
+    padding-left: 0;
+  }
+
+  .attention-row-control {
+    justify-content: center;
+    width: 44px;
+  }
+
+  .attention-row-control input[type="checkbox"],
+  .attention-row-control input[type="checkbox"]:checked {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    background: none;
+    /* Its ring 2px off the circle drawn inside it, not off the whole target. */
+    outline-offset: -10px;
+  }
+
+  .attention-row-control input[type="checkbox"]::after {
+    content: "";
+    position: absolute;
+    /* 12px in from each side of the 44px: the 20px circle, its border inside it. */
+    inset: 12px;
+    box-sizing: border-box;
+    border: 2px solid var(--muted);
+    border-radius: 50%;
+  }
+
+  .attention-row-control input[type="checkbox"]:checked::after {
+    border-color: var(--ink);
+    background: radial-gradient(var(--ink) 0 4px, transparent 5px);
   }
 
   .inspector-head {

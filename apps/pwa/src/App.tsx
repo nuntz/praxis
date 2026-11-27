@@ -491,7 +491,7 @@ export function App() {
           fallback={
             <h1 class="wordmark">
               <Mark />
-              Praxis
+              <span class="wordmark-word">Praxis</span>
             </h1>
           }
         >
