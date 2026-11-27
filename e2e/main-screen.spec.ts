@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import {
   closeSettings,
   contextOfOwn,
+  enterSearch,
   expect,
   makeContext,
   onPhone,
@@ -367,4 +368,52 @@ test("light and dark follow the Device, with no switch", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator("body")).toHaveCSS("background-color", GROUND.dark);
   await expect(page.getByRole("button", { name: /dark|light|theme/i })).toHaveCount(0);
+});
+
+/** What a Journal with no Entries says, naming its Context. */
+const nothingRecorded = (page: Page, name: string) =>
+  column(page, "Journal").getByText(`Nothing recorded in ${name} yet.`, { exact: true });
+
+test("in a Context with nothing in it, the Journal and the Conversation each say so, naming it", async ({
+  page,
+}, testInfo) => {
+  const context = await contextOfOwn(page, testInfo, "Empty");
+  await page.goto("/");
+
+  await showTab(page, testInfo, "Journal");
+  const journal = column(page, "Journal");
+  await expect(nothingRecorded(page, context.name)).toBeVisible();
+
+  await showTab(page, testInfo, "Agent");
+  await expect(
+    column(page, "Conversation").getByText(`Nothing said to the Agent in ${context.name} yet.`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  // A search that finds nothing says so, and not that the Journal holds nothing.
+  await showTab(page, testInfo, "Journal");
+  const field = await enterSearch(page);
+  await field.fill("nowhere");
+  await expect(journal.getByText("Nothing found for “nowhere”")).toBeVisible();
+  await expect(nothingRecorded(page, context.name)).toHaveCount(0);
+  // The search ended, the Journal says it again.
+  await page.keyboard.press("Escape");
+  await expect(nothingRecorded(page, context.name)).toBeVisible();
+});
+
+test("once an Entry is recorded in a Context with nothing in it, the Journal no longer says so", async ({
+  page,
+}, testInfo) => {
+  const context = await contextOfOwn(page, testInfo, "First");
+  await page.goto("/");
+  await showTab(page, testInfo, "Journal");
+  const journal = column(page, "Journal");
+  await expect(nothingRecorded(page, context.name)).toBeVisible();
+
+  const composer = journal.getByRole("textbox", { name: `Record an Entry in ${context.name}` });
+  await composer.fill("The first thing written here");
+  await journal.getByRole("button", { name: "Record", exact: true }).click();
+  await expect(journal.getByTestId("entry")).toHaveCount(1);
+  await expect(nothingRecorded(page, context.name)).toHaveCount(0);
 });

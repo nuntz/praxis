@@ -602,6 +602,7 @@ Three peers, none hosting the others: **Attention**, the **Journal** and the **C
 - A change the Agent makes shows in the other two columns as it happens, patched from its Effects.
 - **The newest is where the person types.** The Journal and the Conversation keep time order, oldest first, and open at their newest, beside their composer. They stay there as more arrives. Scrolled away from it, a column stays where the person is, and a pill above its composer, "Jump to latest" with a count of what arrived, takes them back. The person's own send always brings what they sent into view.
 - **Days.** Both are parted into days, "Today", "Yesterday", then the weekday and the date, by the Context's time zone, the zone their times are shown in.
+- **Empty.** A Journal with no Entries says "Nothing recorded in *the Context's name* yet.", and a Conversation with no Messages, cleared ones included, "Nothing said to the Agent in *the Context's name* yet.", each in one line centred in the column. With no network the Conversation shows only that it needs one (section 8.8), and a search that finds nothing says so in its own words (section 8.4). Attention with nothing in it says "Nothing is open to act on."
 
 ### 8.2 Composers
 

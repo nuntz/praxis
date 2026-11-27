@@ -198,6 +198,7 @@ test("the Offline Copy is read with no network, as last fetched, in any Context,
     offlineConversation.getByText(/^No network: the Conversation needs one\./),
   ).toBeVisible();
   await expect(offlineConversation.getByTestId("message")).toHaveCount(0);
+  await expect(offlineConversation.getByText(/^Nothing said to the Agent/)).toHaveCount(0);
 
   const attention = await openAttention(page, testInfo);
   await expect(attention.getByRole("checkbox", { name: task, exact: true })).toBeVisible();

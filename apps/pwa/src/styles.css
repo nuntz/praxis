@@ -900,6 +900,14 @@ input[type="checkbox"].switch:disabled {
   font: var(--type-meta);
 }
 
+/* A Journal or a Conversation with nothing in it says so, centred in the column (section 8.1). */
+.peer-empty {
+  align-self: stretch;
+  margin: auto 0;
+  color: var(--muted);
+  text-align: center;
+}
+
 .peer-body {
   display: flex;
   flex: 1;
@@ -907,8 +915,18 @@ input[type="checkbox"].switch:disabled {
   align-items: flex-start;
   gap: var(--space-3);
   min-height: 0;
-  padding: var(--space-1) var(--space-5) var(--space-5);
+  /* Its hairline's 1px comes out of the space above what it holds, so nothing moves as it shows. */
+  padding: calc(var(--space-1) - 1px) var(--space-5) var(--space-5);
+  border-top: 1px solid transparent;
   overflow-y: auto;
+}
+
+/*
+ * Scrolled away from its top, what the column holds is cut under its header, or under what stands
+ * under the header, such as the search's chips: the cut has an edge, the width of the column.
+ */
+.peer-body[data-scrolled] {
+  border-top-color: var(--rule);
 }
 
 .peer-foot {

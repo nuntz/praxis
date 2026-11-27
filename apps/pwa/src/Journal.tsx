@@ -18,6 +18,7 @@ import { createStore, reconcile, unwrap } from "solid-js/store";
 import { authorName } from "./authors.ts";
 import { Composer } from "./Composer.tsx";
 import { dayAndTimeIn, partIntoDays } from "./days.tsx";
+import { PeerBody } from "./design/Peer.tsx";
 import { EntryActions } from "./EntryActions.tsx";
 import { EntryPage } from "./EntryPage.tsx";
 import { followNewest } from "./follow-newest.tsx";
@@ -84,6 +85,9 @@ export function Journal(props: {
   const [followingUp, setFollowingUp] = createSignal<EntryNamed | null>(null);
   // Whether the Entries shown are the Offline Copy's, as no network let them be read.
   const [fromCopy, setFromCopy] = createSignal(false);
+  // Whether the newest page has been read from Praxis, so a Journal with nothing in it can say so,
+  // and one not yet read does not.
+  const [newestRead, setNewestRead] = createSignal(false);
 
   async function loadPage(cursor?: string) {
     try {
@@ -96,8 +100,10 @@ export function Journal(props: {
           const page = result.value.items.filter((read) => !shown.some((e) => e.id === read.id));
           return [...page.toReversed(), ...shown];
         });
-      if (cursor === undefined) show();
-      else column.keepPlace(show);
+      if (cursor === undefined) {
+        show();
+        setNewestRead(true);
+      } else column.keepPlace(show);
       setEarlierCursor(result.value.next_cursor);
     } catch (error) {
       // With no network the Journal is the Offline Copy's, as last fetched (section 8.8): the
@@ -179,6 +185,7 @@ export function Journal(props: {
     setEntries([]);
     setEarlierCursor(null);
     setFromCopy(false);
+    setNewestRead(false);
     await loadPage();
     // Read from Praxis again, the Journal is no longer the copy's.
     if (wasFromCopy && !fromCopy()) readingCopy(contextId, false);
@@ -331,7 +338,7 @@ export function Journal(props: {
   return (
     <>
       <search.Field />
-      <div class="peer-body" ref={column.scroller}>
+      <PeerBody ref={column.scroller}>
         <search.Found />
         <Show when={!searching() && earlierCursor()}>
           {(cursor) => (
@@ -342,6 +349,10 @@ export function Journal(props: {
         </Show>
         <Show when={!searching() && fromCopy()}>
           <p class="peer-note">Older Entries need the network.</p>
+        </Show>
+        {/* Read from Praxis and holding nothing, it says so; the Offline Copy's may be short of it. */}
+        <Show when={!searching() && newestRead() && !fromCopy() && withUnsent().length === 0}>
+          <p class="peer-empty">Nothing recorded in {props.contextName ?? "this Context"} yet.</p>
         </Show>
         <ol class="entry-list" aria-label="Entries" hidden={searching()} ref={column.content}>
           <For each={withUnsent()}>
@@ -384,7 +395,7 @@ export function Journal(props: {
             )}
           </For>
         </ol>
-      </div>
+      </PeerBody>
       <div class="peer-foot">
         <column.JumpToLatest />
         <Show when={told()}>

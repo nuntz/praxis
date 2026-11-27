@@ -211,4 +211,7 @@ test("the person saves a Run's transcript, then clears the Conversation from the
   await closeSettings(page);
   await toConversation();
   await expect(messages).toHaveCount(0);
+  await expect(
+    conversation.getByText(`Nothing said to the Agent in Cleared ${tag} yet.`, { exact: true }),
+  ).toBeVisible();
 });

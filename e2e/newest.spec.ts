@@ -28,6 +28,15 @@ async function topOf(locator: Locator): Promise<number> {
   return box.y;
 }
 
+/** The `rule` hairline, in the light the journeys run in. */
+const RULE = "rgb(213, 217, 224)";
+
+/** Scroll a column to its very top as the person does, with the wheel over what it holds. */
+async function scrollToTop(page: Page, within: Locator) {
+  await within.hover();
+  await page.mouse.wheel(0, -100_000);
+}
+
 /** Scroll a column as the person does, until this is in view. */
 async function scrollTo(page: Page, locator: Locator) {
   await locator.scrollIntoViewIfNeeded();
@@ -55,9 +64,11 @@ test("the Journal opens at its newest Entry, stays there as Entries arrive, and 
   const entries = journal.getByTestId("entry");
   await expect(entries).toHaveCount(12);
 
-  // It opens at its newest, the oldest out of view above.
+  // It opens at its newest, the oldest out of view above, cut under the header at an edge.
   await expect(entries.last()).toBeInViewport();
   await expect(entries.first()).not.toBeInViewport();
+  const cut = journal.locator(".peer-body");
+  await expect(cut).toHaveCSS("border-top-color", RULE);
 
   // At the newest, an Entry the Agent records comes into view.
   const ask = (words: string) =>
@@ -89,6 +100,10 @@ test("the Journal opens at its newest Entry, stays there as Entries arrive, and 
   await composer.fill(mine);
   await journal.getByRole("button", { name: "Record" }).click();
   await expect(entries.filter({ hasText: mine })).toBeInViewport();
+
+  // Scrolled to the very top, nothing is cut, and there is no edge.
+  await scrollToTop(page, entries.first());
+  await expect(cut).not.toHaveCSS("border-top-color", RULE);
 });
 
 test("Show earlier adds older Entries above and keeps the Entry in view where it was", async ({
@@ -144,9 +159,10 @@ test("the Conversation opens at its newest Message, keeps its place scrolled up,
   await expect(messages).toHaveCount(8);
   await expect(messages.last()).toContainText(`Answer 4 ${tag}`);
 
-  // It opens at its newest, the oldest out of view above.
+  // It opens at its newest, the oldest out of view above, cut under the header at an edge.
   await expect(messages.last()).toBeInViewport();
   await expect(messages.first()).not.toBeInViewport();
+  await expect(conversation.locator(".peer-body")).toHaveCSS("border-top-color", RULE);
 
   // Scrolled up, what arrives leaves the column where it was, and the pill says so.
   await scrollTo(page, messages.first());

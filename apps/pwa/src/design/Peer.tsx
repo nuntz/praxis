@@ -1,4 +1,4 @@
-import type { JSX } from "solid-js";
+import { createSignal, type JSX, onCleanup } from "solid-js";
 
 /** The three peers, which are also a phone's three tabs. */
 export type PeerId = "attention" | "journal" | "conversation";
@@ -52,5 +52,35 @@ export function Peer(props: {
       </header>
       {props.children}
     </section>
+  );
+}
+
+/**
+ * What a peer holds, scrolling under its header and whatever stands under it, such as the search's
+ * chips. Scrolled away from its top, what it holds is cut at its top edge, which then has a hairline;
+ * at the top it has none.
+ */
+export function PeerBody(props: {
+  class?: string;
+  ref?: (element: HTMLDivElement) => void;
+  children?: JSX.Element;
+}) {
+  const [scrolled, setScrolled] = createSignal(false);
+  return (
+    <div
+      class={props.class ? `peer-body ${props.class}` : "peer-body"}
+      data-scrolled={scrolled() ? "" : undefined}
+      ref={(element) => {
+        props.ref?.(element);
+        const heard = () => setScrolled(element.scrollTop > 0);
+        element.addEventListener("scroll", heard, { passive: true });
+        // Shown again, or changed in size, it may be at another place with no scroll heard.
+        const observer = new ResizeObserver(heard);
+        observer.observe(element);
+        onCleanup(() => observer.disconnect());
+      }}
+    >
+      {props.children}
+    </div>
   );
 }

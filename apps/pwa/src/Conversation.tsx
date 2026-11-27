@@ -18,7 +18,7 @@ import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show }
 import { createStore, reconcile } from "solid-js/store";
 import { DeviceCall } from "./call.ts";
 import { partIntoDays } from "./days.tsx";
-import { Peer } from "./design/Peer.tsx";
+import { Peer, PeerBody } from "./design/Peer.tsx";
 import { download } from "./Export.tsx";
 import { followNewest } from "./follow-newest.tsx";
 import { HeldChangeItem, useHeldChanges } from "./HeldChanges.tsx";
@@ -399,13 +399,27 @@ export function Conversation(props: {
       <Show when={call()}>
         {(going) => <CallBar contextName={props.contextName} since={going().since} />}
       </Show>
-      <div class="peer-body" ref={column.scroller}>
+      <PeerBody ref={column.scroller}>
         <Show when={online() && earlierCursor()}>
           {(cursor) => (
             <button type="button" class="quiet" onClick={() => loadPage(cursor())}>
               Show earlier Messages
             </button>
           )}
+        </Show>
+        {/* Read and holding nothing, it says so; one that cannot be opened is not known to be empty. */}
+        <Show
+          when={
+            online() &&
+            agent() !== null &&
+            agent() !== "unavailable" &&
+            messages.length === 0 &&
+            writing() === null
+          }
+        >
+          <p class="peer-empty">
+            Nothing said to the Agent in {props.contextName ?? "this Context"} yet.
+          </p>
         </Show>
         {/* With no network nothing of the Conversation is shown, an unread Brief included. */}
         <ol class="message-list" aria-label="Messages" hidden={!online()} ref={column.content}>
@@ -450,7 +464,7 @@ export function Conversation(props: {
             )}
           </Show>
         </ol>
-      </div>
+      </PeerBody>
       <div class="peer-foot">
         <column.JumpToLatest />
         {/* With no network the notice below says what a call that could not be made would. */}

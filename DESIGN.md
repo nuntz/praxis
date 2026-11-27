@@ -327,9 +327,9 @@ The main screen is three peers on the ground, none hosting the others (SPEC sect
 - **In between (720px to 1199px):** the Journal and the Conversation (up to 360px, never wider than the Journal) side by side. Attention is a 350px panel opened over them from the top bar's button, bordered in `rule`, with a Close icon button in its header. While it is open the two under it are inert, and a press on them closes it.
 - **Phone (below 720px):** one peer at a time, edge to edge on the ground, with three tabs in a pill at the bottom. The side gutter is `space-4` (16px), and the base text is 16px.
 
-A panel's header, content and composer share one inset, `space-5` (20px), so their left edges line up. Inside a panel, sections are `space-4` apart, Task rows `space-1`, and controls `space-2` from their neighbours. Settings is a screen of its own, its column of groups no wider than 720px. Pages pushed inside Attention (a Task's or Project's page) cover the whole column, header and all.
+A panel's header, content and composer share one inset, `space-5` (20px), so their left edges line up. While a column's content is scrolled away from its top, the header has an edge: a `rule` hairline the width of the column where what scrolls is cut, under the header, or under what stands beneath it, such as the search's chips. At the top it has none. It is a border, never a shadow, a blur or a gradient. Inside a panel, sections are `space-4` apart, Task rows `space-1`, and controls `space-2` from their neighbours. Settings is a screen of its own, its column of groups no wider than 720px. Pages pushed inside Attention (a Task's or Project's page) cover the whole column, header and all.
 
-The Journal and the Conversation keep time order, oldest first, and open at their newest, just above the composer. A day is a `caption` label in `muted` with a `rule` hairline running to the column's edge.
+The Journal and the Conversation keep time order, oldest first, and open at their newest, just above the composer. A day is a `caption` label in `muted` with a `rule` hairline running to the column's edge. With nothing in it, each says so in one line in `muted`, centred in the column.
 
 **The Newest Beside the Composer Rule.** Where the person types is the bottom of the column, and the newest is just above it. Never invert a column or put a composer at the top.
 
