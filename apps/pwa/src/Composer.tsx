@@ -9,6 +9,7 @@ import {
 import Check from "lucide-solid/icons/check";
 import { createEffect, createSignal, onCleanup, Show, untrack } from "solid-js";
 import { keepDraft, type Pick, takeCaret, takeDraft, takeShared, withShared } from "./draft.ts";
+import { growWithWords } from "./grow-with-words.ts";
 import { ComposerKey, JOURNAL_COMPOSER } from "./keys.tsx";
 import { latestRead } from "./latest-read.ts";
 import { type Aim, putTasksMadeIn, takeAim } from "./next-task.ts";
@@ -283,7 +284,10 @@ export function Composer(props: {
         </Show>
         <div class="composer-row">
           <textarea
-            ref={field}
+            ref={(element) => {
+              field = element;
+              growWithWords(element, () => [words(), props.followingUp, aim()]);
+            }}
             id={JOURNAL_COMPOSER}
             rows={2}
             aria-keyshortcuts="r"

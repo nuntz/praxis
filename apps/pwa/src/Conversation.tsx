@@ -21,6 +21,7 @@ import { partIntoDays } from "./days.tsx";
 import { Peer, PeerBody } from "./design/Peer.tsx";
 import { download } from "./Export.tsx";
 import { followNewest } from "./follow-newest.tsx";
+import { growWithWords } from "./grow-with-words.ts";
 import { HeldChangeItem, useHeldChanges } from "./HeldChanges.tsx";
 import { recordAnchor } from "./Journal.tsx";
 import { CONVERSATION_COMPOSER, ComposerKey } from "./keys.tsx";
@@ -1053,6 +1054,7 @@ function MessageComposer(props: {
         </label>
         <div class="composer-row">
           <textarea
+            ref={(element) => growWithWords(element, words)}
             id={CONVERSATION_COMPOSER}
             rows={2}
             aria-keyshortcuts="m"

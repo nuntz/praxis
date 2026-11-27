@@ -361,6 +361,59 @@ test("at rest each composer is one line, its label where the words will go, and 
   }
 });
 
+test("each composer grows with its words past two lines, up to 40% of its column, then scrolls within itself", async ({
+  page,
+}, testInfo) => {
+  const { name } = await sharedContext(page);
+  await page.goto("/");
+  for (const [tab, title, label, send] of [
+    ["Journal", "Journal", `Record an Entry in ${name}`, "Record"],
+    ["Agent", "Conversation", `Message the Agent in ${name}`, "Send"],
+  ] as const) {
+    await showTab(page, testInfo, tab);
+    const shown = column(page, title);
+    const field = shown.getByRole("textbox", { name: label, exact: true });
+    const frame = shown
+      .locator("form")
+      .filter({ has: page.getByRole("textbox", { name: label, exact: true }) });
+    const heightOf = async (part: typeof field) => {
+      const box = await part.boundingBox();
+      if (!box) throw new Error(`${title}'s composer is shown`);
+      return box.height;
+    };
+    await field.click();
+    await expect(field).toBeFocused();
+    const twoLines = await heightOf(field);
+    const opened = await heightOf(frame);
+    const lines = (count: number) =>
+      Array.from({ length: count }, (_, at) => `Line ${at + 1}`).join("\n");
+
+    // Past its two lines it grows by a line for each line more.
+    await field.fill(lines(3));
+    await expect.poll(() => heightOf(field)).toBe((twoLines * 3) / 2);
+    await field.fill(lines(4));
+    await expect.poll(() => heightOf(field)).toBe(twoLines * 2);
+
+    // Up to 40% of its column, within a line of it, and then the words scroll within it, the send
+    // still in view beside them.
+    await field.fill(lines(60));
+    const ceiling = (await heightOf(shown)) * 0.4;
+    await expect.poll(() => heightOf(frame)).toBeGreaterThan(ceiling - twoLines / 2);
+    expect(await heightOf(frame)).toBeLessThanOrEqual(ceiling);
+    expect(await field.evaluate((words) => words.scrollHeight > words.clientHeight)).toBe(true);
+    await expect(shown.getByRole("button", { name: send, exact: true })).toBeInViewport();
+
+    // Fewer words, it shrinks again, never below its two lines while it has the focus.
+    await field.fill(lines(3));
+    await expect.poll(() => heightOf(field)).toBe((twoLines * 3) / 2);
+    await field.fill("Back to one");
+    await expect.poll(() => heightOf(frame)).toBe(opened);
+    await field.fill("");
+    await expect(field).toBeFocused();
+    expect(await heightOf(frame)).toBe(opened);
+  }
+});
+
 test("light and dark follow the Device, with no switch", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");

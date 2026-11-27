@@ -28,6 +28,13 @@ async function topOf(locator: Locator): Promise<number> {
   return box.y;
 }
 
+/** Where something ends on the screen, read once it is shown. */
+async function bottomOf(locator: Locator): Promise<number> {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error("Not shown, so it has no place to read");
+  return box.y + box.height;
+}
+
 /** The `rule` hairline, in the light the journeys run in. */
 const RULE = "rgb(213, 217, 224)";
 
@@ -106,6 +113,69 @@ test("the Journal opens at its newest Entry, stays there as Entries arrive, and 
   await expect(cut).not.toHaveCSS("border-top-color", RULE);
 });
 
+test("the newest Entry stays just above the composer as its words grow, and so does Jump to latest", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const context = await makeContext(page, {
+    name: `Growing ${tag}`,
+    time_zone: "UTC",
+    accent: "teal",
+  });
+  for (let at = 1; at <= 8; at++) {
+    await callContextTool(page, context.id, "record_entry", {
+      words: tall(`Entry ${at} ${tag}`, 3),
+    });
+  }
+  await lastShown(page, context.id);
+  await page.goto("/");
+  const { journal, composer } = await openJournal(page, testInfo);
+  const entries = journal.getByTestId("entry");
+  await expect(entries).toHaveCount(8);
+  const frame = journal.getByTestId("composer");
+  const words = (count: number) =>
+    Array.from({ length: count }, (_, at) => `Growing line ${at + 1}`).join("\n");
+
+  // At its newest, the newest Entry stays in view above the composer as the composer grows.
+  await composer.click();
+  const before = await topOf(frame);
+  await composer.fill(words(40));
+  await expect.poll(() => topOf(frame)).toBeLessThan(before - 100);
+  await expect(entries.last()).toBeInViewport();
+  expect(await bottomOf(entries.last())).toBeLessThanOrEqual(await topOf(frame));
+
+  // Scrolled a little way up from the newest, the composer growing leaves the column where it was.
+  await composer.fill(words(3));
+  const lower = await topOf(frame);
+  const body = journal.locator(".peer-body");
+  await body.evaluate((scroller) => {
+    scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight - 60;
+  });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  const scrolledTo = await body.evaluate((scroller) => scroller.scrollTop);
+  await composer.fill(words(6));
+  await expect.poll(() => topOf(frame)).toBeLessThan(lower - 50);
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  expect(await body.evaluate((scroller) => scroller.scrollTop)).toBe(scrolledTo);
+  await composer.fill(words(40));
+
+  // Scrolled away, the pill back to the newest stands above the composer grown.
+  await scrollTo(page, entries.first());
+  const later = `The Agent's ${tag}`;
+  await callContextTool(page, context.id, "send_message", { words: `Record: ${later}` });
+  const pill = journal.getByRole("button", { name: "1 new · Jump to latest", exact: true });
+  await expect(pill).toBeVisible();
+  expect(await bottomOf(pill)).toBeLessThanOrEqual(await topOf(frame));
+
+  // Recorded by its button, which then has nothing to send, the composer folds back to its one
+  // line, and what it recorded is in view above it.
+  await journal.getByRole("button", { name: "Record" }).click();
+  await expect(composer).toHaveValue("");
+  await expect(frame).toHaveAttribute("data-folded");
+  await expect.poll(() => topOf(frame)).toBeGreaterThan(before);
+  await expect(entries.filter({ hasText: "Growing line 1" })).toBeInViewport();
+});
+
 test("Show earlier adds older Entries above and keeps the Entry in view where it was", async ({
   page,
 }, testInfo) => {
@@ -176,10 +246,28 @@ test("the Conversation opens at its newest Message, keeps its place scrolled up,
 
   // The person's own Message, sent while scrolled up, is in view once sent, and the pill goes.
   const mine = `Sent by hand ${tag}`;
-  await conversation
-    .getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true })
-    .fill(mine);
-  await conversation.getByRole("button", { name: "Send", exact: true }).click();
+  const field = conversation.getByRole("textbox", {
+    name: `Message the Agent in ${name}`,
+    exact: true,
+  });
+  await field.fill(mine);
+  const send = conversation.getByRole("button", { name: "Send", exact: true });
+  await send.click();
   await expect(messages.filter({ hasText: mine })).toBeInViewport();
   await expect(pill).toHaveCount(0);
+
+  // As its words grow, the newest Message stays just above the composer, which folds back to its
+  // one line once they are sent by its button.
+  const frame = field.locator("xpath=ancestor::form");
+  await field.click();
+  const opened = await topOf(frame);
+  const grown = Array.from({ length: 40 }, (_, at) => `Growing line ${at + 1}`).join("\n");
+  await field.fill(grown);
+  await expect.poll(() => topOf(frame)).toBeLessThan(opened - 100);
+  await expect(messages.last()).toBeInViewport();
+  expect(await bottomOf(messages.last())).toBeLessThanOrEqual(await topOf(frame));
+  await send.click();
+  await expect(field).toHaveValue("");
+  await expect(frame).toHaveAttribute("data-folded");
+  await expect(messages.filter({ hasText: "Growing line 1" })).toBeInViewport();
 });
