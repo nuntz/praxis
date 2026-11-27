@@ -5,7 +5,8 @@ import {
   type StandingNotice,
 } from "@praxis/domain";
 import Info from "lucide-solid/icons/info";
-import { createSignal, createUniqueId, For, type JSX } from "solid-js";
+import { createUniqueId, For, type JSX } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import { deviceTimeZone } from "./ContextSettings.tsx";
 import { latestRead } from "./latest-read.ts";
 import { CapLink, SettingsLink } from "./SettingsLink.tsx";
@@ -15,8 +16,27 @@ import { type CallTool, unreachableMessage } from "./tools.ts";
  * The standing Notices (section 8.3), as `list_notices` last gave them in the current Context:
  * Praxis telling the person about its own condition until its cause is gone. Attention shows them
  * above the Held Changes, and nothing else does (section 8.6). They are not counted.
+ * Each read is reconciled into them, a Notice matched by `noticeKey`, so one a read leaves as it
+ * was keeps its card: drawn again, its status would be heard again each time.
  */
-const [notices, setNotices] = createSignal<StandingNotice[]>([]);
+const [notices, setNotices] = createStore<{ items: (StandingNotice & { id: string })[] }>({
+  items: [],
+});
+
+/**
+ * What tells one standing Notice from another: its kind, with its clock for a Brief or Review that
+ * could not run, and its Context's name for a stuck Context.
+ */
+function noticeKey(notice: StandingNotice): string {
+  switch (notice.kind) {
+    case "clock_failed":
+      return `${notice.kind}-${notice.clock}`;
+    case "context_stuck":
+      return `${notice.kind}-${notice.context}`;
+    default:
+      return notice.kind;
+  }
+}
 
 /** The current Context's tools, while a screen of it follows the Notices. */
 let calling: CallTool | null = null;
@@ -31,7 +51,9 @@ export const { read: readNotices } = latestRead(async (current) => {
   if (!callTool) return;
   try {
     const result = await callTool("list_notices", {});
-    if (current() && result.ok) setNotices(result.value.items);
+    if (!current() || !result.ok) return;
+    const items = result.value.items.map((notice) => ({ ...notice, id: noticeKey(notice) }));
+    setNotices("items", reconcile(items, { key: "id" }));
   } catch (error) {
     unreachableMessage(error);
   }
@@ -57,7 +79,7 @@ export function followNotices(callTool: CallTool): () => void {
  * The card is a status named by its title, so the title is heard before the words.
  */
 export function StandingNotices() {
-  return <For each={notices()}>{(notice) => <StandingNoticeCard notice={notice} />}</For>;
+  return <For each={notices.items}>{(notice) => <StandingNoticeCard notice={notice} />}</For>;
 }
 
 function StandingNoticeCard(props: { notice: StandingNotice }) {

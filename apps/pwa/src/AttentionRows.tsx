@@ -6,7 +6,7 @@ import Repeat from "lucide-solid/icons/repeat";
 import UserRound from "lucide-solid/icons/user-round";
 import { createUniqueId, type JSX, Show } from "solid-js";
 import { todayIn } from "./days.tsx";
-import { createFinishing, DueMark, TaskMarks } from "./TaskItem.tsx";
+import { createFinishing, DueMark, type OnFinished, TaskMarks } from "./TaskItem.tsx";
 
 /**
  * A row of Attention (section 8.3): one line for its title, two when it is long, the one mark that
@@ -68,21 +68,18 @@ export function TaskRow(props: {
   openKey: string;
   onOpen: () => void;
   onTask: (task: Task) => void;
+  onFinished?: OnFinished;
   onProblem: (message: string) => void;
 }) {
   const marks = createUniqueId();
   const finishing = createFinishing({
     task: () => props.task,
     onTask: props.onTask,
+    onFinished: props.onFinished,
     onProblem: props.onProblem,
   });
   const lead = () => taskLead(props.task, props.timeZone, props.place);
   const open = () => (props.task.state.is === "open" ? props.task.state : null);
-
-  async function toggle(box: HTMLInputElement) {
-    await finishing.setFinished(box.checked);
-    box.checked = finishing.shownFinished();
-  }
 
   return (
     <li class="task attention-row" classList={{ closed: finishing.closed() }}>
@@ -92,7 +89,7 @@ export function TaskRow(props: {
           aria-label={props.task.title}
           checked={finishing.shownFinished()}
           disabled={finishing.sending() || finishing.dropped()}
-          onChange={(event) => void toggle(event.currentTarget)}
+          onChange={(event) => void finishing.toggle(event.currentTarget)}
         />
       </label>
       <button

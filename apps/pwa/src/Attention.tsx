@@ -1,4 +1,10 @@
-import { type Attention as AttentionView, type CameUp, dayIn, type Task } from "@praxis/domain";
+import {
+  type Attention as AttentionView,
+  type CameUp,
+  dayIn,
+  nextDueDate,
+  type Task,
+} from "@praxis/domain";
 import type { LucideIcon } from "lucide-solid";
 import Calendar from "lucide-solid/icons/calendar";
 import Circle from "lucide-solid/icons/circle";
@@ -7,19 +13,21 @@ import Folder from "lucide-solid/icons/folder";
 import Hand from "lucide-solid/icons/hand";
 import Sparkles from "lucide-solid/icons/sparkles";
 import UserRound from "lucide-solid/icons/user-round";
-import { createEffect, createSignal, For, type JSX, Show } from "solid-js";
+import { createEffect, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import { WeeksAhead } from "./Ahead.tsx";
 import { ProjectRow, shortDay, TaskRow } from "./AttentionRows.tsx";
-import { followAttentionView } from "./attention-read.ts";
+import { followAttentionView, keyedBy } from "./attention-read.ts";
 import { todayIn } from "./days.tsx";
 import { PeerBody } from "./design/Peer.tsx";
 import { SectionTitle } from "./design/SectionTitle.tsx";
 import { HeldChangeItem, heldAnchor, useHeldChanges } from "./HeldChanges.tsx";
-import { Inspector, type Page, type Said } from "./Inspector.tsx";
+import { Inspector, type Page, refusal, type Said } from "./Inspector.tsx";
 import { StandingNotices } from "./Notices.tsx";
 import { contextCopy, readingCopy } from "./offline-copy.ts";
+import type { Finish } from "./TaskItem.tsx";
 import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { RefusedWrites, refusedIn } from "./Unsent.tsx";
+import { beingSent, discardUnsent, onSent, unsentFinishOf } from "./unsent.ts";
 
 /**
  * What the Attention column holds: the standing Notices, the Held Changes left for the
@@ -38,9 +46,17 @@ export function Attention(props: {
   const callTool = useCallTool();
   const heldChanges = useHeldChanges();
   // A Task finished Unsent leaves Attention at once, before the server has heard (section 8.8).
-  const { view, problem, setProblem, read } = followAttentionView({
+  const { view, answered, problem, setProblem, read } = followAttentionView({
     tool: "view_attention",
     without: withoutUnsentFinishes,
+    keyed: (shown) => ({
+      ...shown,
+      due: shown.due.map((item) =>
+        keyedBy(item, item.kind === "task" ? `task-${item.task.id}` : `project-${item.project.id}`),
+      ),
+      newly_actionable: shown.newly_actionable.map((item) => keyedBy(item, item.task.id)),
+      projects: shown.projects.map((item) => keyedBy(item, item.project.id)),
+    }),
     // With no network, Attention is shown as the Offline Copy last fetched it (section 8.8).
     offline: () => contextCopy(contextId)?.attention ?? null,
     onShown: (offline) => readingCopy(contextId, offline),
@@ -87,8 +103,8 @@ export function Attention(props: {
 
   /**
    * The page shut: the focus goes back to the row it was opened from, or to what the status line
-   * offers when that row has left. A change made on the page is read first, since reading it
-   * draws the rows afresh and would take the focus from one given it before.
+   * offers when that row has left. It is given again once a change made on the page is read,
+   * since the read can move the row, or take it away, with the focus on it.
    */
   function closed() {
     const key = openedFrom;
@@ -105,6 +121,79 @@ export function Attention(props: {
     });
   }
 
+  /**
+   * What a finish from a row says: Finished, with Reopen, or for a Task with a Recurrence whose
+   * finish has reached the server, the next Occurrence's Due Date, since reopening the one
+   * finished would leave two open (section 3.5). A finish still Unsent is undone by Reopen.
+   */
+  function finishSaid({ task, finished }: Finish): Said {
+    const text = `Finished “${task.title}”.`;
+    if (finished !== null && task.recurrence !== null && task.due_date !== null) {
+      const closedOn =
+        finished.state.is === "finished"
+          ? dayIn(Date.parse(finished.state.at), props.timeZone)
+          : todayIn(props.timeZone);
+      const next = nextDueDate(task.recurrence, task.due_date, closedOn);
+      return { text: `${text} Next due ${shortDay(next, todayIn(props.timeZone))}.` };
+    }
+    return {
+      text,
+      returnsTo: `task-${task.id}`,
+      undo: {
+        label: "Reopen",
+        run: async (call) => {
+          const unsent = unsentFinishOf(task.id);
+          if (unsent === null) return refusal(call("reopen_task", { id: task.id }));
+          if (beingSent() === unsent.id) {
+            return "Its finish is on its way to Praxis: Reopen it once it is in.";
+          }
+          discardUnsent(unsent.id);
+          return null;
+        },
+      },
+    };
+  }
+
+  /**
+   * A Task finished from its row, here or in the weeks ahead, is said at the top, and the focus
+   * goes to the line's Reopen, or to the line where it has none, unless the person has moved on
+   * from the round control meanwhile.
+   */
+  function finishedFromRow(finish: Finish, control: HTMLElement) {
+    sayFinish(finish);
+    const at = document.activeElement;
+    if (at === control || at === document.body || at === list || !control.isConnected) {
+      queueMicrotask(focusSaid);
+    }
+  }
+
+  // The finish the status line says, so that one sent later can say what it became.
+  let saidFinish: { said: Said; finish: Finish } | null = null;
+  function sayFinish(finish: Finish) {
+    const shown = finishSaid(finish);
+    saidFinish = { said: shown, finish };
+    setSaid(shown);
+  }
+
+  // A recurring Task's finish, said while Unsent, has made its next Occurrence once it is in: the
+  // line says so in place of Reopen, and keeps the focus it had.
+  onCleanup(
+    onSent((sent) => {
+      const shown = saidFinish;
+      if (sent.kind !== "finish" || sent.context !== contextId || shown === null) return;
+      if (said() !== shown.said || shown.finish.task.id !== sent.task.id) return;
+      if (shown.finish.task.recurrence === null) return;
+      const focused = list?.querySelector(".moved")?.contains(document.activeElement) ?? false;
+      sayFinish({ ...shown.finish, finished: sent.task });
+      if (focused) queueMicrotask(focusSaid);
+    }),
+  );
+
+  function focusSaid() {
+    const line = list?.querySelector<HTMLElement>(".moved");
+    (line?.querySelector<HTMLElement>("button") ?? line)?.focus();
+  }
+
   async function undo(shown: Said) {
     if (!shown.undo) return;
     try {
@@ -113,6 +202,12 @@ export function Attention(props: {
       // Only what it undid goes from the status line: a change said meanwhile stays said.
       if (said() === shown) setSaid(null);
       await read();
+      // The line had the focus, and it is gone: the row it brought back has it, or the column.
+      const at = document.activeElement;
+      if (at !== document.body && at !== list) return;
+      const row =
+        shown.returnsTo && list?.querySelector<HTMLElement>(`[data-open-key="${shown.returnsTo}"]`);
+      (row || list)?.focus();
     } catch (error) {
       setProblem(unreachableMessage(error));
     }
@@ -126,6 +221,7 @@ export function Attention(props: {
       openKey={`task-${task.id}`}
       onOpen={() => open({ kind: "task", id: task.id, held: task }, `task-${task.id}`)}
       onTask={() => void read()}
+      onFinished={finishedFromRow}
       onProblem={setProblem}
     />
   );
@@ -146,7 +242,7 @@ export function Attention(props: {
         </Show>
         <Show when={said()}>
           {(shown) => (
-            <p class="moved" role="status">
+            <p class="moved" role="status" tabIndex={-1}>
               {shown().text}
               <Show when={shown().undo}>
                 {(how) => (
@@ -191,7 +287,11 @@ export function Attention(props: {
                 }
                 after={
                   <Show when={aheadOpen()}>
-                    <WeeksAhead id="weeks-ahead" timeZone={props.timeZone} />
+                    <WeeksAhead
+                      id="weeks-ahead"
+                      timeZone={props.timeZone}
+                      onFinished={finishedFromRow}
+                    />
                   </Show>
                 }
               >
@@ -266,7 +366,7 @@ export function Attention(props: {
           projectName={(id) =>
             view()?.projects.find((item) => item.project.id === id)?.project.name
           }
-          viewRead={view}
+          viewRead={answered}
           onChanged={() => void read()}
           onSaid={setSaid}
           onClosed={closed}

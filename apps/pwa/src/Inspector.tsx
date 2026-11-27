@@ -78,6 +78,8 @@ export type Said = {
   text: string;
   /** Undoes the change: null once it is undone, or why it was refused. */
   undo?: { label: string; run: (callTool: CallTool) => Promise<string | null> };
+  /** The row an undo brings back, by its `data-open-key`, which the focus then goes to. */
+  returnsTo?: string;
 };
 
 const CHOICE_TITLES = {
@@ -653,9 +655,8 @@ export function Inspector(props: {
   );
 }
 
-/** A write sent from the status line, whose refusal is thrown to be said there. */
 /** A write sent from the status line: null once it is made, or why it was refused. */
-async function refusal(
+export async function refusal(
   answer: Promise<{ ok: boolean; error?: { message: string } }>,
 ): Promise<string | null> {
   const result = await answer;
@@ -886,11 +887,6 @@ function TaskPage(props: {
     return `${waiting.length} Tasks and Projects`;
   };
 
-  async function toggle(box: HTMLInputElement) {
-    await finishing.setFinished(box.checked);
-    box.checked = finishing.shownFinished();
-  }
-
   return (
     <>
       <div class="inspector-title-row">
@@ -900,7 +896,7 @@ function TaskPage(props: {
             aria-label={props.task.title}
             checked={finishing.shownFinished()}
             disabled={finishing.sending() || finishing.dropped()}
-            onChange={(event) => void toggle(event.currentTarget)}
+            onChange={(event) => void finishing.toggle(event.currentTarget)}
           />
         </label>
         <TitleField value={props.task.title} label="Title" onCommit={props.onRename} />

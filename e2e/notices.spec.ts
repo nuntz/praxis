@@ -189,3 +189,29 @@ test("a Brief that failed says it is tried again in Attention exactly when waiti
     }
   }
 });
+
+test("the standing Notices read again as the tab comes into view keep their cards, an unchanged one as it was and a changed one with its new words", async ({
+  page,
+}, testInfo) => {
+  const since = new Date().toISOString();
+  const refused: StandingNotice = { kind: "key_refused", since };
+  await noticesAre(page, [refused, { kind: "nearing_cap", spent: 17, cap: 20 }]);
+  await page.goto("/");
+  const shown = await attention(page, testInfo);
+  const notices = shown.getByTestId("standing-notice");
+  await expect(notices).toHaveCount(2);
+  await expect(notices.nth(1)).toContainText("$17.00");
+  // Each card as drawn, marked so the same element can be told from one drawn again.
+  await notices.evaluateAll((cards) => {
+    for (const card of cards) card.setAttribute("data-drawn", "first");
+  });
+
+  await page.unroute(/\/list_notices$/);
+  await noticesAre(page, [refused, { kind: "nearing_cap", spent: 18, cap: 20 }]);
+  const read = page.waitForResponse(/\/list_notices$/);
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await read;
+  await expect(notices.nth(1)).toContainText("$18.00");
+  await expect(notices).toHaveCount(2);
+  for (const at of [0, 1]) await expect(notices.nth(at)).toHaveAttribute("data-drawn", "first");
+});

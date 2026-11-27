@@ -106,7 +106,13 @@ function TaskFound(props: { hit: Extract<SearchHit, { kind: "task" }>; actions: 
   // Where the answer to the write the round control sent goes, given as it is pressed.
   let answered = (_task: Task) => {};
   const finishing = createFinishing({
-    task: () => ({ id: hit.id, title: hit.summary, state: hit.state }),
+    task: () => ({
+      id: hit.id,
+      title: hit.summary,
+      state: hit.state,
+      recurrence: hit.recurrence,
+      due_date: hit.due_date,
+    }),
     onTask: (task) => answered(task),
     onProblem: props.actions.onProblem,
   });
