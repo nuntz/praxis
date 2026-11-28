@@ -13,7 +13,12 @@ import { followRecord } from "./follow-record.ts";
 import { latestRead } from "./latest-read.ts";
 import { clearCopy, copyProblem, offlineCopy, startCopy } from "./offline-copy.ts";
 import { SettingsLink } from "./SettingsLink.tsx";
-import { type SectionChanges, SettingsSection, sectionChanges } from "./SettingsSection.tsx";
+import {
+  listedCount,
+  type SectionChanges,
+  SettingsSection,
+  sectionChanges,
+} from "./SettingsSection.tsx";
 import { callDeploymentTool, unreachableMessage } from "./tools.ts";
 import { unsentKeptQuestion } from "./Unsent.tsx";
 import { discardUnsentWrites, unsent } from "./unsent.ts";
@@ -392,4 +397,10 @@ function seenAt(seen: string): string {
     timeStyle: "short",
     timeZone: deviceTimeZone(),
   }).format(new Date(seen));
+}
+
+/** How many Devices there are, as the phone's list of sections shows it, or null unread. */
+export async function devicesListed(): Promise<string | null> {
+  const result = await callDeploymentTool("list_devices", {});
+  return result.ok ? listedCount(result.value.items.length) : null;
 }

@@ -1,4 +1,4 @@
-import { type Entry, STANDING_CEILING, standingSize } from "@praxis/domain";
+import { type Entry, STANDING_CEILING, standingSize, type ToolResult } from "@praxis/domain";
 import { imageLoadingIn } from "@praxis/domain/markdown";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Problem } from "./design/SettingRows.tsx";
@@ -6,11 +6,42 @@ import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { contextCopy, readFromCopy } from "./offline-copy.ts";
 import { online } from "./online.ts";
-import { SettingsSection, sectionChanges } from "./SettingsSection.tsx";
-import { Unreachable, unreachableMessage, useCallTool, useContextId } from "./tools.ts";
+import { listedCount, SettingsSection, sectionChanges } from "./SettingsSection.tsx";
+import {
+  type CallTool,
+  Unreachable,
+  unreachableMessage,
+  useCallTool,
+  useContextId,
+} from "./tools.ts";
 import { Words } from "./Words.tsx";
 
 const characters = (count: number) => count.toLocaleString();
+
+/**
+ * The Context's Standing Entries, every page of them: the list is the full one, which the ceiling
+ * keeps short. The first refusal answers for the whole read.
+ */
+async function readStanding(callTool: CallTool): Promise<ToolResult<Entry[]>> {
+  const read: Entry[] = [];
+  let cursor: string | null | undefined;
+  do {
+    const result = await callTool("list_entries", {
+      standing: true,
+      ...(cursor ? { cursor } : {}),
+    });
+    if (!result.ok) return result;
+    read.push(...result.value.items);
+    cursor = result.value.next_cursor;
+  } while (cursor);
+  return { ok: true, value: read };
+}
+
+/** How many Entries stand, as the phone's list of sections shows it, or null unread. */
+export async function standingListed(callTool: CallTool): Promise<string | null> {
+  const result = await readStanding(callTool);
+  return result.ok ? listedCount(result.value.length) : null;
+}
 
 /**
  * The current Context's Standing Entries (section 8.6): the full list, newest first, with how much
@@ -32,26 +63,16 @@ export function Standing(props: { timeZone: string }) {
   const size = () => (entries() ?? []).reduce((sum, entry) => sum + standingSize(entry.words), 0);
 
   // A read overtaken by a later one is dropped, so the list shows the last the Context said.
-  // Every page is read: the list is the full one, which the ceiling keeps short.
   const { read } = latestRead(async (current) => {
     try {
-      const read: Entry[] = [];
-      let cursor: string | null | undefined;
-      do {
-        const result = await callTool("list_entries", {
-          standing: true,
-          ...(cursor ? { cursor } : {}),
-        });
-        if (!current()) return;
-        if (!result.ok) {
-          setProblem(result.error.message);
-          return;
-        }
-        read.push(...result.value.items);
-        cursor = result.value.next_cursor;
-      } while (cursor);
+      const result = await readStanding(callTool);
+      if (!current()) return;
+      if (!result.ok) {
+        setProblem(result.error.message);
+        return;
+      }
       setProblem(null);
-      setEntries(read);
+      setEntries(result.value);
     } catch (error) {
       if (!current()) return;
       // With no network the list is the Offline Copy's, as last fetched (section 8.8).

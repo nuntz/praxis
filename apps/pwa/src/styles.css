@@ -618,6 +618,12 @@ button.on-a-call {
   width: 9rem;
 }
 
+/* What a row titled by a name holds now, on its right, as "Spent this month" holds its spend. */
+.settings-row-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .settings-row-control :is(input:not(.switch), select) {
   background: var(--inset);
 }

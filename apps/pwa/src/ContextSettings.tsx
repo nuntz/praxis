@@ -355,3 +355,29 @@ export function weekdayName(day: Weekday, width: "long" | "short"): string {
     monday + weekdays.indexOf(day) * 24 * 60 * 60 * 1000,
   );
 }
+
+/** The Context's time zone by the place it is named for, as the phone's list of sections shows it. */
+export function generalListed(settings: Settings): string {
+  const zone = settings.time_zone;
+  return (zone.split("/").at(-1) ?? zone).replaceAll("_", " ");
+}
+
+/**
+ * When the Brief and the Review come, as in "7:00 AM · Sun", or that neither does, as the phone's
+ * list of sections shows it.
+ */
+export function briefAndReviewListed(settings: Settings): string {
+  const brief = settings.brief_time === null ? [] : [timeOfDay(settings.brief_time)];
+  const review = settings.review_time === null ? [] : [weekdayName(settings.review_day, "short")];
+  return [...brief, ...review].join(" · ") || "Off";
+}
+
+/** A time of day, "HH:MM", as the Device's language writes it. */
+function timeOfDay(time: string): string {
+  const [hours = 0, minutes = 0] = time.split(":").map(Number);
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  }).format(Date.UTC(1970, 0, 1, hours, minutes));
+}

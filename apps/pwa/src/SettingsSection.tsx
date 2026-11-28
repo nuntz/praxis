@@ -97,3 +97,8 @@ export function sectionChanges() {
 }
 
 export type SectionChanges = ReturnType<typeof sectionChanges>;
+
+/** A count as the phone's list of sections shows it: only above zero (section 8.6). */
+export function listedCount(held: number): string {
+  return held > 0 ? String(held) : "";
+}

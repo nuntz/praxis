@@ -10,7 +10,12 @@ import { Problem } from "./design/SettingRows.tsx";
 import { deviceTimeZone } from "./device.ts";
 import { MakeExport } from "./Export.tsx";
 import { followRecord } from "./follow-record.ts";
-import { type SectionChanges, SettingsSection, sectionChanges } from "./SettingsSection.tsx";
+import {
+  listedCount,
+  type SectionChanges,
+  SettingsSection,
+  sectionChanges,
+} from "./SettingsSection.tsx";
 import { TimeZonePicker } from "./TimeZonePicker.tsx";
 import { DOWNLOADED } from "./Trash.tsx";
 import { callDeploymentTool } from "./tools.ts";
@@ -291,4 +296,9 @@ export function NewContext(props: {
       <Problem message={problemAt("new-context")} />
     </form>
   );
+}
+
+/** How many Contexts are not retired, as the phone's list of sections shows it. */
+export function contextsListed(contexts: ContextListing[]): string {
+  return listedCount(contexts.filter((context) => !context.retired).length);
 }

@@ -15,7 +15,8 @@ import { type CallTool, unreachableMessage } from "./tools.ts";
 /**
  * The standing Notices (section 8.3), as `list_notices` last gave them in the current Context:
  * Praxis telling the person about its own condition until its cause is gone. Attention shows them
- * above the Held Changes, and nothing else does (section 8.6). They are not counted.
+ * above the Held Changes, and nothing else does (section 8.6), though the section of Settings one
+ * leads to may say in its own words what to do about it (`standingNotice`). They are not counted.
  * Each read is reconciled into them, a Notice matched by `noticeKey`, so one a read leaves as it
  * was keeps its card: drawn again, its status would be heard again each time.
  */
@@ -36,6 +37,16 @@ function noticeKey(notice: StandingNotice): string {
     default:
       return notice.kind;
   }
+}
+
+/** The standing Notice of `kind`, as last read, where there is one. */
+export function standingNotice<K extends StandingNotice["kind"]>(
+  kind: K,
+): Extract<StandingNotice, { kind: K }> | undefined {
+  return notices.items.find(
+    (notice): notice is Extract<StandingNotice, { kind: K }> & { id: string } =>
+      notice.kind === kind,
+  );
 }
 
 /** The current Context's tools, while a screen of it follows the Notices. */

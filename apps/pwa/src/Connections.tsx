@@ -8,7 +8,12 @@ import { createEffect, createSignal, createUniqueId, For, on, Show } from "solid
 import { Problem, SwitchInput } from "./design/SettingRows.tsx";
 import { followRecord } from "./follow-record.ts";
 import { latestRead } from "./latest-read.ts";
-import { type SectionChanges, SettingsSection, sectionChanges } from "./SettingsSection.tsx";
+import {
+  listedCount,
+  type SectionChanges,
+  SettingsSection,
+  sectionChanges,
+} from "./SettingsSection.tsx";
 import { callDeploymentTool, unreachableMessage } from "./tools.ts";
 
 /** A Deployment tool that changes one Connection, and returns it as it now is. */
@@ -233,4 +238,10 @@ function NewConnection(props: {
       <Problem message={problemAt("new-connection")} />
     </form>
   );
+}
+
+/** How many Connections there are, as the phone's list of sections shows it, or null unread. */
+export async function connectionsListed(): Promise<string | null> {
+  const result = await callDeploymentTool("list_connections", {});
+  return result.ok ? listedCount(result.value.items.length) : null;
 }

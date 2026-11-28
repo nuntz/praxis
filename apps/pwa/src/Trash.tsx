@@ -465,3 +465,15 @@ function WentWith(props: { records: RecordNamed[] }) {
     </For>
   );
 }
+
+/**
+ * What the Trash holds, as the phone's list of sections shows it: how many items its first page
+ * holds, with "+" past it, or that it is empty; null unread.
+ */
+export async function trashListed(callTool: CallTool): Promise<string | null> {
+  const result = await callTool("list_trash", {});
+  if (!result.ok) return null;
+  const { items, next_cursor } = result.value;
+  if (items.length === 0) return "Empty";
+  return next_cursor === null ? String(items.length) : `${items.length}+`;
+}

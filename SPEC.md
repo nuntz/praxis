@@ -725,8 +725,8 @@ Its sections are in two groups, the current Context's and the Deployment's:
 | Everything in Praxis | **Contexts** | Each with its accent colour. |
 | | **Connections** | Each with its Context, its address and whether it is limited to reading. |
 | | **Devices** | Section 8.10. |
-| | **Spend** | The spend cap and the month's spend against it. |
-| | **Backups and Export** | When the last Backup was made, and making an Export. |
+| | **Spend** | The spend cap, its field holding the cap it has, and the month's spend against it. |
+| | **Backups and Export** | When the last Backup was made, and making an Export. While no Backup has been made for three days, it opens by saying since when, and that an Export keeps a copy now. |
 
 - On a desktop the sections are listed beside the one shown, and Settings opens on General. On a phone the list is a screen of its own, and each section opens from it; each row says what its section holds now, a count only above zero.
 - Opening a section, from the sidebar or from the phone's list, puts the focus on its heading. On a phone, going back to the list, by its Settings link or the browser's Back, puts the focus on the row of the section that was left, as Back returns the focus to what opened a page for Attention's pages and an Entry's page.
