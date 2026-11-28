@@ -340,16 +340,13 @@ button.quiet {
 }
 
 /*
- * On a phone the list hangs from the top bar's edge, not from the switcher, which may stand to the
- * right of Settings' way back: so it is never wider than the screen leaves it.
+ * On a phone in Settings the list hangs from the top bar's edge, not from the switcher, which
+ * stands to the right of the way back: from there its own width keeps it on the screen. On the
+ * main screen it hangs from the switcher, clear of a Call's button under the bar's right.
  */
 @media (width < 720px) {
-  .switcher {
+  .top-bar:has(.settings-back) > .switcher {
     position: static;
-  }
-
-  .context-list {
-    max-width: 100%;
   }
 }
 
