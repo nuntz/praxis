@@ -8,8 +8,10 @@ import {
   effectLines,
   readWords,
 } from "./change-words.ts";
+import { Problem } from "./design/SettingRows.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
+import { SettingsSection } from "./SettingsSection.tsx";
 import { callDeploymentTool, needsNetwork, useCallTool, useContextId } from "./tools.ts";
 
 /** Who the list is narrowed to: every caller, or one, a Connection by its id. */
@@ -63,6 +65,7 @@ export function Changes(props: { timeZone: string }) {
   const [connections, setConnections] = createSignal<{ id: string; name: string }[]>([]);
   /** Whether the lists have been read once, as narrowed now. */
   const [loaded, setLoaded] = createSignal(false);
+  // What the last read met: the lists stay as last read, and the problem is said under them.
   const [problem, setProblem] = createSignal<string | null>(null);
   const timeFormat = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
@@ -192,14 +195,7 @@ export function Changes(props: { timeZone: string }) {
   }
 
   return (
-    <section id="changes" class="settings" aria-labelledby="changes-heading">
-      <h2 id="changes-heading" class="column-heading">
-        Changes
-      </h2>
-      <p class="settings-note">
-        What changed in this Context in the last 90 days and who changed it, newest first, with what
-        its Connections read.
-      </p>
+    <SettingsSection note="What changed in this Context in the last 90 days and who changed it, newest first, with what its Connections read.">
       <label class="changes-by">
         Made by
         <select
@@ -224,7 +220,7 @@ export function Changes(props: { timeZone: string }) {
           when={lines().length > 0}
           fallback={<p class="settings-note">Nothing changed here in the last 90 days.</p>}
         >
-          <ol class="change-lines" aria-label="Changes and reads">
+          <ol class="settings-box change-lines" aria-label="Changes and reads">
             <For each={lines()}>
               {(line) =>
                 line.kind === "change" ? (
@@ -242,14 +238,8 @@ export function Changes(props: { timeZone: string }) {
           </button>
         </Show>
       </Show>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
-    </section>
+      <Problem message={problem()} />
+    </SettingsSection>
   );
 }
 

@@ -71,6 +71,11 @@ test("on a phone, the top bar shows the mark alone, still named Praxis, and Sett
         getComputedStyle(span).textOverflow === "ellipsis" && span.scrollWidth > span.clientWidth,
     ),
   ).toBe(true);
+
+  // At the narrowest phone, the name is cut further and the chevron beside it keeps its 16px.
+  await page.setViewportSize({ width: 320, height: 640 });
+  const chevron = bar.getByRole("button", { name: `Context: ${name}`, exact: true }).locator("svg");
+  await expect.poll(async () => (await boxOf(chevron)).width).toBeCloseTo(16, 0);
 });
 
 test("from 720px up, the top bar shows the mark and the word Praxis", async ({

@@ -42,6 +42,7 @@ import {
   DIGEST_CHANGES,
   dropRuntimeTables,
   HELD_NAMED,
+  holdsRuntimeTables,
 } from "./agent.ts";
 import { arrivalTime, startTimer } from "./arrival.ts";
 import {
@@ -137,6 +138,7 @@ import {
   runById,
   runRecord,
   runsNotEnded,
+  shownAfter,
   spentInMonth,
 } from "./run-rows.ts";
 import { askSearch, type MeaningAnswer, type SearchAsked, search } from "./search-rows.ts";
@@ -873,43 +875,56 @@ export function contextObject(
     /**
      * `clear_conversation`, by the person's hand from the Context's settings (section 5.8): all of
      * the runtime's record is dropped at once, and the next thing to need the Agent opens it
-     * afresh, which also mends a Conversation the runtime could not open under this release. The
-     * Journal, the change log and the Run records stay as they were, but for the Runs' handles on
-     * the Conversation. It is refused while a Run is going, since the runtime is working in the
-     * record it would drop. It changes no record and leaves no Effect; a repeated key answers as
-     * the first call did.
+     * afresh. It is refused when the Conversation shows a Message that came after `up_to`, the
+     * newest the screen had read when Clear was tapped, so a clear never drops what the person was
+     * not shown, and while a Run is going, since the runtime is working in the record it would
+     * drop. A Conversation the runtime cannot open under this release shows nothing, and is dropped
+     * whole whatever `up_to` says: that is how it is mended. The Journal, the change log and the
+     * Run records stay as they were, but for the Runs' handles on the Conversation. It changes no
+     * record and leaves no Effect; a repeated key answers as the first call did.
      */
     private async clearConversation(request: ToolRequest): Promise<ToolResult<unknown>> {
       const admitted = admit(request);
       if (!admitted.ok) return admitted;
-      const { key } = admitted.value.input as ToolInput<"clear_conversation">;
+      const { key, up_to } = admitted.value.input as ToolInput<"clear_conversation">;
+      const sql = this.ctx.storage.sql;
+      // Never opened, it holds nothing to open; once it could not be, it never can by this release.
+      const unopenable =
+        holdsRuntimeTables(sql) && this.hasAgent() && (await this.conversation()) === "unavailable";
       // A Brief or a Review the clock is starting is going too, once it has started.
       await this.#clocking;
-      // From here to the drop nothing awaits: no Run can start in the record being dropped, and the
-      // key is read as the drop finds it.
-      const sql = this.ctx.storage.sql;
+      // From here nothing awaits: no Run can start, and no Message come, between what is read and
+      // the drop, and the key is read as the drop finds it.
       const keyed = {
         caller: request.caller,
         key,
         tool: "clear_conversation",
         at: request.arrivedAt,
       };
-      const repeated = repeatedKey(sql, keyed);
-      if (repeated) return repeated;
-      if (runsNotEnded(sql).length > 0) {
-        return refusal(
-          "A Run is going in this Conversation, so nothing was cleared: try again once it has ended.",
-          [],
-        );
-      }
       const result: ToolResult<ToolOutput["clear_conversation"]> = success({
         conversation: "cleared",
       });
-      this.ctx.storage.transactionSync(() => {
+      const answered = this.ctx.storage.transactionSync((): ToolResult<unknown> => {
+        const repeated = repeatedKey(sql, keyed);
+        if (repeated) return repeated;
+        if (runsNotEnded(sql).length > 0) {
+          return refusal(
+            "A Run is going in this Conversation, so nothing was cleared: try again once it has ended.",
+            [],
+          );
+        }
+        if (!unopenable && shownAfter(sql, Date.parse(up_to))) {
+          return refusal(
+            "A Message came after the newest one you had seen, so nothing was cleared: look at it, then clear again.",
+            [],
+          );
+        }
         dropRuntimeTables(sql);
         forgetConversation(sql);
         if (key !== undefined) rememberKey(sql, { ...keyed, key, result });
+        return result;
       });
+      if (answered !== result) return answered;
       // The Agent held the runtime opened on the tables dropped: the next to need it opens anew.
       if (typeof this.#agent === "object") this.#agent = undefined;
       this.#agentWake = { active: false };

@@ -15,6 +15,11 @@ export function thisDevice(): string | null {
   return store(DEVICE_ID, made) ? made : null;
 }
 
+/** The time zone this Device is in, as its browser names it. */
+export function deviceTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
 /** Whether this browser can receive a Notification by Web Push at all. */
 export function canNotify(): boolean {
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;

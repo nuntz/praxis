@@ -226,7 +226,7 @@ describe("save_run_transcript", () => {
     answer();
     await context.runsEnded();
 
-    value(await context.call(hand, "clear_conversation", {}));
+    value(await context.call(hand, "clear_conversation", { up_to: "2026-11-15T09:00:00.000Z" }));
     const cleared = await save(going?.id);
     expect(cleared).toMatchObject({ ok: false, error: { code: "refused" } });
     expect(cleared.ok ? "" : cleared.error.message).toMatch(/cleared/);

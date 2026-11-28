@@ -89,6 +89,19 @@ export function dropRuntimeTables(sql: SqlStorage): void {
   for (const { name } of tables) sql.exec(`DROP TABLE IF EXISTS "${name}"`);
 }
 
+/** Whether the runtime has made its tables in the Context's database: the Conversation was opened. */
+export function holdsRuntimeTables(sql: SqlStorage): boolean {
+  return (
+    sql
+      .exec(
+        `SELECT 1 FROM sqlite_master WHERE type = 'table' AND substr(name, 1, ?) = ? LIMIT 1`,
+        RUNTIME_TABLES.length,
+        RUNTIME_TABLES,
+      )
+      .toArray().length > 0
+  );
+}
+
 /**
  * The kind of record the runtime keeps a Message from the person as, in its transcript. Its data
  * holds what the screen shows. (The runtime calls its records entries; they are never Entries.)

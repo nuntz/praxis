@@ -9,6 +9,7 @@ import {
   makeContext,
   onPhone,
   openSettings,
+  showSection,
   test,
 } from "./fixtures.ts";
 
@@ -80,6 +81,100 @@ test("Brief and Review shows each time with its switch, and the Notification swi
 
   // No on/off setting is a checkbox.
   await expect(settings.getByRole("checkbox")).toHaveCount(0);
+});
+
+/**
+ * Where a switch's knob lies across its pill, from the pill's left edge, as drawn once it has
+ * finished moving: its `::after`, placed by `left` and moved by its transform.
+ */
+async function knobAcross(toggle: Locator) {
+  return toggle.evaluate((pill) => {
+    const knob = getComputedStyle(pill, "::after");
+    const moved = knob.transform === "none" ? 0 : new DOMMatrix(knob.transform).m41;
+    const start = Number.parseFloat(knob.left) + moved;
+    return { start, end: start + Number.parseFloat(knob.width), pill: pill.clientWidth };
+  });
+}
+
+test("a switch's knob lies inside its pill, on and off", async ({ page }, testInfo) => {
+  await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  const settings = await openSettings(page, "Brief and Review");
+  const toggle = settings.getByRole("switch", { name: "Daily Brief" });
+
+  for (const on of [true, false]) {
+    if (on) await expect(toggle).toBeChecked();
+    else await expect(toggle).not.toBeChecked();
+    // Inside the pill with room to spare each side, the knob at the end its state puts it.
+    await expect
+      .poll(async () => {
+        const { start, end, pill } = await knobAcross(toggle);
+        if (start < 2 || end > pill - 2) return `outside its pill: ${start} to ${end} in ${pill}`;
+        return (on ? pill - end : start) <= 4 ? "inside, at its end" : "not at its end";
+      })
+      .toBe("inside, at its end");
+    const sent = page.waitForResponse(/\/tools\/set_brief_time$/);
+    await turn(page, toggle, "tap", testInfo);
+    await sent;
+  }
+});
+
+test("on a phone, a section's groups sit on the 16px side gutter and its fields are 44px high", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "the side gutter and the 44px Rule are the phone's");
+  await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  const settings = await openSettings(page, "Brief and Review");
+  const width = page.viewportSize()?.width ?? 0;
+
+  for (const name of ["Brief, each day", "Review, each week", "Notifications"]) {
+    const group = await settings.getByRole("group", { name, exact: true }).boundingBox();
+    expect(group?.x, name).toBeCloseTo(16, 0);
+    expect((group?.x ?? 0) + (group?.width ?? 0), name).toBeCloseTo(width - 16, 0);
+  }
+  const fields = settings.locator("input:not(.switch), select");
+  expect(await fields.count()).toBeGreaterThan(0);
+  for (const field of await fields.all()) {
+    expect((await field.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test("on a desktop, the section shown is on inset in ink in the sidebar, under a Column title, its fields edged at 3:1", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    onPhone(testInfo),
+    "the sidebar and the top bar's title beside a section are a desktop's",
+  );
+  await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  const settings = await openSettings(page, "Brief and Review");
+
+  // A selected state never takes the accent (the One Accent Rule): inset, in ink, its icon too.
+  const shown = page
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("link", { name: "Brief and Review", exact: true });
+  await expect(shown).toHaveAttribute("aria-current", "page");
+  await expect(shown).toHaveCSS("background-color", "rgb(244, 245, 248)");
+  await expect(shown).toHaveCSS("color", "rgb(26, 29, 35)");
+  await expect(shown.locator("svg").first()).toHaveCSS("color", "rgb(26, 29, 35)");
+
+  // Under the top bar's "Settings", at Screen title, the section's own heading is a step down.
+  await expect(page.getByRole("banner").getByRole("heading", { name: "Settings" })).toHaveCSS(
+    "font-size",
+    "26px",
+  );
+  await expect(settings.getByRole("heading", { name: "Brief and Review" })).toHaveCSS(
+    "font-size",
+    "20px",
+  );
+
+  // An empty field's edge is a 1px ring in `edge`, 3:1 on surface where `rule` is not.
+  const time = settings
+    .getByRole("group", { name: "Brief, each day", exact: true })
+    .getByLabel("Time", { exact: true });
+  await expect(time).toHaveCSS("box-shadow", "rgb(134, 141, 154) 0px 0px 0px 1px inset");
 });
 
 test("each switch in Brief and Review turns with Space and with a tap", async ({
@@ -175,10 +270,11 @@ test("on a phone the list of sections shows each one's current value, where it i
   await expect(row("Standing Entries")).toHaveAccessibleDescription("1");
   await expect(row("Trash")).toHaveAccessibleDescription("1");
   await expect(row("Spend")).toHaveAccessibleDescription(/^\$[\d,]+\.\d\d of \$[\d,]+\.\d\d$/);
-  await expect(row("Contexts")).toHaveAccessibleDescription(/^\d+$/);
-  // Every journey's Connections and Devices are the Deployment's, so only their count is known.
-  await expect(row("Connections")).toHaveAccessibleDescription(/^\d+$/);
-  await expect(row("Devices")).toHaveAccessibleDescription(/^\d+$/);
+  await expect(row("Contexts")).toHaveAccessibleDescription(/^[1-9]\d*$/);
+  // Every journey's Connections and Devices are the Deployment's, so only their count is known: a
+  // count above zero, or nothing at none.
+  await expect(row("Connections")).toHaveAccessibleDescription(/^([1-9]\d*)?$/);
+  await expect(row("Devices")).toHaveAccessibleDescription(/^([1-9]\d*)?$/);
   // The day of the last Backup on the Device, as the Deployment last answered, or that none was
   // made.
   const { made_at } = await callDeploymentTool(page, "get_last_backup", {});
@@ -201,6 +297,14 @@ test("on a phone the list of sections shows each one's current value, where it i
   await callContextTool(page, id, "empty_trash", { up_to: thrown.deleted_at });
   await page.reload();
   await expect(row("Trash")).toHaveAccessibleDescription("Empty");
+
+  // With none standing, Standing Entries shows nothing, as Connections does at none: read again
+  // as the list shows again, in place of the count it showed.
+  await expect(row("Standing Entries")).toHaveAccessibleDescription("1");
+  await callContextTool(page, id, "unmark_standing", { id: standing.record.id });
+  await row("Changes").click();
+  await page.getByRole("banner").getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(row("Standing Entries")).toHaveAccessibleDescription("");
 
   // With the Brief switched off, the Review's day is all there is to show.
   await callContextTool(page, id, "set_brief_time", { time: null });
@@ -246,6 +350,7 @@ test("a Connection's Reading only is a switch, in the new Connection's form too"
   await contextOfOwn(page, testInfo, "Rows");
   await page.goto("/");
   const connections = await openSettings(page, "Connections");
+  await connections.getByRole("button", { name: "New Connection…", exact: true }).click();
   const form = connections.getByRole("form", { name: "New Connection" });
 
   const readingOnly = form.getByRole("switch", { name: "Reading only", exact: true });
@@ -256,4 +361,239 @@ test("a Connection's Reading only is a switch, in the new Connection's form too"
   await turn(page, readingOnly, "tap", testInfo);
   await expect(readingOnly).not.toBeChecked();
   await expect(connections.getByRole("checkbox")).toHaveCount(0);
+});
+
+/** This browser's id as a Device, kept in its storage once the screen has loaded. */
+async function thisDevice(page: Page): Promise<string> {
+  const id = await page.evaluate(() => localStorage.getItem("praxis.device"));
+  if (id === null) throw new Error("This browser has no Device id");
+  return id;
+}
+
+test("a Context's and a Connection's act lies right of its words, More beside it", async ({
+  page,
+}, testInfo) => {
+  const context = await contextOfOwn(page, testInfo, "Rows");
+  const name = `Agent ${crypto.randomUUID().slice(0, 8)}`;
+  await callDeploymentTool(page, "create_connection", {
+    name,
+    context_id: context.id,
+    reading_only: false,
+  });
+  await page.goto("/");
+
+  // A Context shows no act of its own: More is its act.
+  const contexts = await openSettings(page, "Contexts");
+  const contextRow = contexts
+    .getByTestId("context-row")
+    .filter({ has: page.getByText(context.name, { exact: true }) });
+  await expect(contextRow.getByText("Teal · Current", { exact: true })).toBeVisible();
+  await besideItsWords(
+    contextRow.getByText(context.name, { exact: true }),
+    contextRow.getByRole("button", { name: `More for ${context.name}`, exact: true }),
+  );
+
+  // A Connection's is its Reading only switch.
+  const connections = await showSection(page, "Connections");
+  const connectionRow = connections
+    .getByTestId("connection-row")
+    .filter({ has: page.getByText(name, { exact: true }) });
+  await expect(connectionRow.getByText(`in ${context.name}`, { exact: true })).toBeVisible();
+  await besideItsWords(
+    connectionRow.getByText(name, { exact: true }),
+    connectionRow.getByRole("switch", { name: "Reading only", exact: true }),
+  );
+  await besideItsWords(
+    connectionRow.getByText(name, { exact: true }),
+    connectionRow.getByRole("button", { name: `More for ${name}`, exact: true }),
+  );
+});
+
+test("a Device's Remove lies right of its words, it is renamed behind More, and removed in one tap, said in its row's place", async ({
+  page,
+}, testInfo) => {
+  await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  const devices = await openSettings(page, "Devices");
+  // Listed once something is switched on here.
+  const switched = page.waitForResponse(/\/tools\/set_device_offline_copy$/);
+  await devices.getByRole("switch", { name: "Offline Copy on this Device", exact: true }).click();
+  expect((await (await switched).json()).ok).toBe(true);
+
+  const every = devices.getByRole("list", { name: "Every Device", exact: true });
+  const row = every.getByTestId("device-row").filter({ hasText: "This Device" });
+  await expect(row).toContainText(/^.+This Device · Offline Copy · Last seen \S/);
+  const here = await thisDevice(page);
+  const { items } = await callDeploymentTool(page, "list_devices", {});
+  const named = (items as { id: string; name: string }[]).find((device) => device.id === here);
+  if (!named) throw new Error("This Device is listed");
+  await besideItsWords(
+    row.getByText(named.name, { exact: true }),
+    row.getByRole("button", { name: `Remove ${named.name}`, exact: true }),
+  );
+
+  // Renamed behind More, in its title's place.
+  const name = `Desk ${crypto.randomUUID().slice(0, 8)}`;
+  await row.getByRole("button", { name: `More for ${named.name}`, exact: true }).click();
+  await page
+    .getByRole("menu", { name: `More for ${named.name}`, exact: true })
+    .getByRole("menuitem", { name: "Rename", exact: true })
+    .click();
+  const field = row.getByRole("textbox", { name: `Name of ${named.name}`, exact: true });
+  await expect(field).toBeFocused();
+  await field.fill(name);
+  await row.getByRole("button", { name: "Rename", exact: true }).click();
+  await expect(row.getByText(name, { exact: true })).toBeVisible();
+  await expect(row.getByRole("button", { name: `More for ${name}`, exact: true })).toBeFocused();
+
+  // Removed in one tap: a line says so in its row's place, and takes the focus.
+  const removed = page.waitForResponse(/\/tools\/remove_device$/);
+  await row.getByRole("button", { name: `Remove ${name}`, exact: true }).click();
+  expect((await (await removed).json()).ok).toBe(true);
+  const said = every.getByRole("status");
+  await expect(said).toHaveText(
+    `${name} is removed. It is listed again when Notifications or an Offline Copy is switched on there.`,
+  );
+  await expect(said).toBeFocused();
+  await expect(row).toHaveCount(0);
+  await expect(
+    devices.getByRole("switch", { name: "Offline Copy on this Device", exact: true }),
+  ).not.toBeChecked();
+  const after = await callDeploymentTool(page, "list_devices", {});
+  expect(after.items.map((device: { id: string }) => device.id)).not.toContain(here);
+
+  // It goes at the person's next act, and the Device is listed again, as switched on anew.
+  const again = page.waitForResponse(/\/tools\/set_device_offline_copy$/);
+  await devices.getByRole("switch", { name: "Offline Copy on this Device", exact: true }).click();
+  await again;
+  await expect(said).toHaveCount(0);
+  await expect(row).toHaveCount(1);
+});
+
+/**
+ * What in this section spills past the screen's right edge, or scrolls sideways, as
+ * `e2e/phone-width.spec.ts` finds for a column.
+ */
+async function spills(page: Page, section: Locator) {
+  const width = page.viewportSize()?.width;
+  if (!width) throw new Error("The phone has a width");
+  return section.evaluate((region, width) => {
+    const named = (element: Element) =>
+      `${element.tagName.toLowerCase()} "${(element.textContent ?? "").trim().slice(0, 40)}"`;
+    const found: string[] = [];
+    if (document.documentElement.scrollWidth > width) {
+      found.push(`the page, ${document.documentElement.scrollWidth}px wide in ${width}px`);
+    }
+    for (const element of [region, ...region.querySelectorAll("*")]) {
+      const box = element.getBoundingClientRect();
+      if (box.width <= 1 && box.height <= 1) continue;
+      if (box.right > width + 0.5) found.push(`${named(element)} ends at ${box.right}px`);
+      // A field scrolls its own words, by design.
+      if (element instanceof HTMLInputElement) continue;
+      if (element.scrollWidth > element.clientWidth + 1 && element.clientWidth > 0) {
+        found.push(`${named(element)} scrolls sideways`);
+      }
+    }
+    return found;
+  }, width);
+}
+
+test("at 320px, Contexts and Connections scroll nowhere sideways, with long names, one with no break in it, and their forms open", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "The narrowest width is a phone's");
+  const tag = crypto.randomUUID().slice(0, 8);
+  const long = await makeContext(page, {
+    name: `Everything about the house on the hill, the garden and the barn ${tag}`,
+    time_zone: "UTC",
+    accent: "rust",
+  });
+  const unbroken = await makeContext(page, {
+    name: `Unbroken${"x".repeat(60)}${tag}`,
+    time_zone: "UTC",
+    accent: "plum",
+  });
+  const connection = `An agent with a long name that reads the whole Journal every morning ${tag}`;
+  await callDeploymentTool(page, "create_connection", {
+    name: connection,
+    context_id: unbroken.id,
+    reading_only: true,
+  });
+  await lastShown(page, long.id);
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/");
+
+  const contexts = await openSettings(page, "Contexts");
+  await expect(contexts.getByText(unbroken.name, { exact: true })).toBeVisible();
+  expect(await spills(page, contexts)).toEqual([]);
+  // Its name's field in its title's place.
+  const unbrokenRow = contexts
+    .getByTestId("context-row")
+    .filter({ has: page.getByText(unbroken.name, { exact: true }) });
+  await unbrokenRow.getByRole("button", { name: `More for ${unbroken.name}` }).click();
+  await page
+    .getByRole("menu", { name: `More for ${unbroken.name}` })
+    .getByRole("menuitem", { name: "Rename", exact: true })
+    .click();
+  await expect(contexts.getByRole("textbox", { name: `Name of ${unbroken.name}` })).toBeFocused();
+  expect(await spills(page, contexts)).toEqual([]);
+  await page.keyboard.press("Escape");
+  await contexts.getByRole("button", { name: "New Context…", exact: true }).click();
+  await expect(contexts.getByRole("form", { name: "New Context" })).toBeVisible();
+  expect(await spills(page, contexts)).toEqual([]);
+
+  const connections = await showSection(page, "Connections");
+  const row = connections
+    .getByTestId("connection-row")
+    .filter({ has: page.getByText(connection, { exact: true }) });
+  await expect(row.getByText(`in ${unbroken.name} · Reading only`)).toBeVisible();
+  expect(await spills(page, connections)).toEqual([]);
+  // The form's Context is picked from every Context's name, the longest included.
+  await connections.getByRole("button", { name: "New Connection…", exact: true }).click();
+  await expect(connections.getByRole("form", { name: "New Connection" })).toBeVisible();
+  expect(await spills(page, connections)).toEqual([]);
+
+  // The top bar's list of Contexts breaks a name with no break in it, rather than run off the page.
+  await page
+    .getByRole("banner")
+    .getByRole("button", { name: /^Context: / })
+    .click();
+  const choices = page.getByRole("banner").getByRole("list", { name: "Contexts" });
+  await expect(choices.getByRole("button", { name: unbroken.name, exact: true })).toBeVisible();
+  expect(await spills(page, choices)).toEqual([]);
+});
+
+test("Contexts and Connections show their one solid button only while a form is open, and Conversation and search none", async ({
+  page,
+}, testInfo) => {
+  await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  /** The solid buttons shown: those with words on a fill, as only the primary is. */
+  const solid = (section: Locator) =>
+    section
+      .locator("button:visible")
+      .evaluateAll((buttons) =>
+        buttons
+          .filter(
+            (button) =>
+              (button.textContent ?? "").trim() !== "" &&
+              getComputedStyle(button).backgroundColor !== "rgba(0, 0, 0, 0)",
+          )
+          .map((button) => (button.textContent ?? "").trim()),
+      );
+
+  const contexts = await openSettings(page, "Contexts");
+  expect(await solid(contexts)).toEqual([]);
+  await contexts.getByRole("button", { name: "New Context…", exact: true }).click();
+  expect(await solid(contexts)).toEqual(["Make the Context"]);
+
+  const connections = await showSection(page, "Connections");
+  expect(await solid(connections)).toEqual([]);
+  await connections.getByRole("button", { name: "New Connection…", exact: true }).click();
+  expect(await solid(connections)).toEqual(["Make the Connection"]);
+
+  const search = await showSection(page, "Conversation and search");
+  await expect(search.getByRole("button", { name: "Rebuild from the Journal" })).toBeVisible();
+  await expect(search.getByRole("button", { name: "Clear the Conversation" })).toBeVisible();
+  expect(await solid(search)).toEqual([]);
 });

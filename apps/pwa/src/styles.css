@@ -304,6 +304,11 @@ button.quiet {
   white-space: nowrap;
 }
 
+/* The chevron keeps its size while the name beside it is cut short. */
+.context > svg {
+  flex: none;
+}
+
 .context-list {
   position: absolute;
   z-index: 2;
@@ -322,6 +327,7 @@ button.quiet {
   list-style: none;
 }
 
+/* A name with no break in it is broken anywhere, rather than run the list off the screen. */
 .context-choice {
   justify-content: flex-start;
   width: 100%;
@@ -330,6 +336,18 @@ button.quiet {
   color: var(--ink);
   font: var(--type-body);
   text-align: left;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * On a phone in Settings the list hangs from the top bar's edge, not from the switcher, which
+ * stands to the right of the way back: from there its own width keeps it on the screen. On the
+ * main screen it hangs from the switcher, clear of a Call's button under the bar's right.
+ */
+@media (width < 720px) {
+  .top-bar:has(.settings-back) > .switcher {
+    position: static;
+  }
 }
 
 .context-choice[aria-current="true"] {
@@ -492,14 +510,15 @@ button.on-a-call {
   color: var(--muted);
 }
 
+/* A selected state never takes the accent: on inset in ink at 700, as the current phone tab is. */
 .settings-section-link[aria-current="page"] {
-  background: var(--accent-tint);
-  color: var(--accent);
+  background: var(--inset);
+  color: var(--ink);
   font-weight: 700;
 }
 
 .settings-section-link[aria-current="page"] .settings-section-icon {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .settings-section-name {
@@ -538,11 +557,6 @@ button.on-a-call {
   background: none;
 }
 
-.settings-shown > .settings > .column-heading {
-  font: var(--type-screen-title);
-  letter-spacing: var(--tracking-screen-title);
-}
-
 .settings-rows {
   width: 100%;
   min-width: 0;
@@ -559,12 +573,25 @@ button.on-a-call {
   letter-spacing: var(--tracking-label);
 }
 
-.settings-box,
-.settings-shown :is(.context-rows, .connection-rows, .trash-items, .standing-items, .change-lines) {
-  gap: 0;
+/* A group's box: its rows, or what it lists, each item a row of it. */
+.settings-box {
+  width: 100%;
   border-radius: var(--radius-md);
   background: var(--surface);
   overflow: hidden;
+}
+
+:is(ul, ol).settings-box {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each row of a group's box: a setting, or an item of what it lists. */
+.settings-box > * {
+  padding: 14px 18px;
 }
 
 .settings-row {
@@ -573,18 +600,15 @@ button.on-a-call {
   align-items: center;
   gap: var(--space-2) var(--space-4);
   min-height: 60px;
-  padding: 14px 18px;
 }
 
-.settings-shown :is(.context-row, .connection-row, .trash-item, .standing-item, .change-line) {
-  padding: 14px 18px;
-}
-
-.settings-row + .settings-row,
-.settings-shown
-  :is(.context-row, .connection-row, .trash-item, .standing-item, .change-line)
-  + :is(.context-row, .connection-row, .trash-item, .standing-item, .change-line) {
+.settings-box > * + * {
   border-top: 1px solid var(--rule);
+}
+
+/* What a list says with nothing in it, in its box's place. */
+.settings-none {
+  padding: 0 var(--space-1);
 }
 
 .settings-row-words {
@@ -617,8 +641,13 @@ button.on-a-call {
   width: 9rem;
 }
 
+/* What a row titled by a name holds now, on its right, as "Spent this month" holds its spend. */
+.settings-row-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .settings-row-control :is(input:not(.switch), select) {
-  border-color: var(--inset);
   background: var(--inset);
 }
 
@@ -693,33 +722,134 @@ input[type="checkbox"].switch:disabled {
   font: inherit;
 }
 
-.context-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/*
+ * A field in Settings is edged by a 1px inset ring in `edge`, as a field on an Entry's page is by
+ * its ring, so an empty one still shows where it is: 3:1 on surface and inset, where `rule` is not.
+ * Its border stays, transparent, for the colours a Device forces.
+ */
+.settings :is(input:not(.switch), select) {
+  border-color: transparent;
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px var(--edge);
 }
 
-.context-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
+/*
+ * A Context, a Connection or a Device in its list: a row of the group, its name as the title, a
+ * name with no break in it broken anywhere rather than pushing the row's acts out of its box. Its
+ * words give way to its acts sooner than a setting's do, since its act and More sit beside them.
+ */
+.record-row > .settings-row-words {
+  flex-basis: 5rem;
 }
 
-.context-rename {
+.record-title {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.retired {
+.record-name,
+.record-row .settings-row-note {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.record-why {
+  display: block;
+}
+
+/* What an act said where its row stood, as a Device removed or an item of the Trash restored. */
+.settings-said-row > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Its name's field in place of its title, and Rename and Cancel after it, wrapping under it. */
+.record-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.record-rename input {
+  flex: 1 1 10rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.record-rename-acts {
+  display: flex;
+  gap: var(--space-3);
+}
+
+/* A Connection's whole address, in mono, broken anywhere, with its Copy after it. */
+.record-address {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-3);
+  min-width: 0;
+}
+
+.record-address-text {
+  min-width: 0;
+  font: var(--type-meta);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.record-copied {
   color: var(--muted);
-  font: var(--type-label);
-  letter-spacing: var(--tracking-label);
+  font: var(--type-meta);
+}
+
+/* A switch's words on its left, as a Connection's Reading only has. */
+.record-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 40px;
+}
+
+/* A Context's accents in place under its row: round swatches, the one it has ringed in `ink`. */
+.accent-choice {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+button.accent-swatch {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  background: var(--accent);
+}
+
+button.accent-swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--ink);
+}
+
+@media (width < 720px) {
+  button.accent-swatch {
+    width: 44px;
+    min-height: 44px;
+  }
 }
 
 /* Deleting a retired Context: under its row, across the full width. */
@@ -736,8 +866,7 @@ input[type="checkbox"].switch:disabled {
   gap: var(--space-1);
 }
 
-.delete-context-actions,
-.clear-conversation-actions {
+.delete-context-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -748,40 +877,12 @@ input[type="checkbox"].switch:disabled {
 }
 
 .settings-note {
+  max-width: 65ch;
   margin: 0;
   color: var(--muted);
 }
 
-/* A Connection's row, as a Context's is, with the address to paste across the full width. */
-.connection-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.connection-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-}
-
 /* An item in the Trash: what was deleted, what went with it, when it goes, and what to do with it. */
-.trash-items,
-.standing-items {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
 .trash-item,
 .standing-item {
   display: flex;
@@ -824,19 +925,15 @@ input[type="checkbox"].switch:disabled {
   min-width: 0;
 }
 
-.trash-marked,
-.trash-emptying,
-.trash-said > p {
+/* What a marked act will do when its section is left, beside its Keep it (ADR 0027, ADR 0028). */
+.marked {
   margin: 0;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.trash-marked {
-  font-weight: 600;
-}
-
 /* Said to be disabled while a restore is out, so it keeps the focus, and dimmed as one is. */
-.trash-items button[aria-disabled="true"] {
+.trash-item button[aria-disabled="true"] {
   opacity: 0.5;
   cursor: default;
 }
@@ -861,16 +958,6 @@ input[type="checkbox"].switch:disabled {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-}
-
-.change-lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 .change-line {
@@ -903,39 +990,20 @@ input[type="checkbox"].switch:disabled {
   color: var(--muted);
 }
 
-.connection-context {
-  color: var(--muted);
-}
-
-.connection-address {
-  flex-basis: 100%;
-  display: flex;
-}
-
-.connection-address input {
-  flex-grow: 1;
-  min-width: 0;
-  font-family: var(--font-mono);
-}
-
-/* Its words on the left, its switch on the right. */
-.connection-reading-only {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 40px;
-}
-
 /* The fields side by side where they fit, the button after them. */
-.new-context {
+.new-context,
+.new-record-fields {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .new-context h3,
-.new-context .problem {
+.new-context .problem,
+.new-record-fields {
   flex-basis: 100%;
   margin: 0;
 }
@@ -945,9 +1013,35 @@ input[type="checkbox"].switch:disabled {
   letter-spacing: var(--tracking-label);
 }
 
-/* A form that makes something, such as a new Context, is a box of its own. */
-.settings-shown .new-context {
+/* No field wider than its column, nor the label round it. */
+.new-context :is(label, input, select),
+.new-context-zone {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.new-record-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+/*
+ * A form opened on demand in Settings, such as a new Context: under a heading of its own, as a
+ * group's, its fields in a box of their own.
+ */
+.settings-shown .new-record {
   width: 100%;
+  gap: var(--space-2);
+}
+
+.settings-shown .new-record h3 {
+  padding: 0 var(--space-1);
+  color: var(--muted);
+}
+
+.settings-shown .new-record-fields {
   padding: 14px 18px;
   border-radius: var(--radius-md);
   background: var(--surface);
@@ -965,7 +1059,8 @@ input[type="checkbox"].switch:disabled {
   margin: 0;
 }
 
-.new-context label {
+.new-context label,
+.new-context-zone {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -2920,19 +3015,73 @@ button.chip.set .chip-end {
   padding: 10px var(--space-3);
 }
 
+/*
+ * A time zone picked from a list: its field, and under it, once typed in, a `surface` box of the
+ * zones that hold what was typed, each with its offset at its end, highlighted on `inset`. It
+ * opens in the flow, under its field, since its row's box clips what would be drawn over it.
+ */
+.zone-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: min(20rem, 100%);
+}
+
+.zone-picker input {
+  width: 100%;
+}
+
+.zone-name {
+  min-width: 0;
+}
+
+.zone-picker .link-picker {
+  max-height: 16rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.zone-picker .link-picker [role="option"] {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.zone-picker .link-picker .highlighted {
+  background: var(--inset);
+}
+
+.zone-offset {
+  flex-shrink: 0;
+  color: var(--muted);
+  font: var(--type-meta);
+  font-variant-numeric: tabular-nums;
+}
+
 .entry-list[hidden] {
   display: none;
 }
 
+/* A count, and what an act in Settings did (`.settings-said`), told apart from a section's note. */
 .search-count,
 .search-words-only,
-.setting-note {
+.settings-said {
   color: var(--muted);
   font: var(--type-meta);
 }
 
-.setting-note:empty {
+.settings-said:empty {
   display: none;
+}
+
+/*
+ * Under a group's box: what went wrong with a change made in it, and what an act in it did, as
+ * a rebuild of the search index says what it rebuilds from.
+ */
+.settings-rows > .problem,
+.settings-rows > .settings-said {
+  padding: var(--space-2) var(--space-1) 0;
 }
 
 /* What is found, grouped by kind, each group under its heading, the groups apart as sections are. */
@@ -4084,8 +4233,9 @@ a.entry-mark.held-mark {
     height: 24px;
   }
 
+  /* The knob's travel across the wider pill: its width, less the knob and 3px either side. */
   input[type="checkbox"].switch:checked::after {
-    left: 23px;
+    transform: translateX(20px);
   }
 
   .settings-shown {
@@ -4094,8 +4244,20 @@ a.entry-mark.held-mark {
     overflow-y: visible;
   }
 
+  /* On the 16px side gutter, as the list of sections is: the margin of `.settings` alone. */
   .settings-shown > .settings {
     width: auto;
+    padding-inline: 0;
+  }
+
+  .settings :is(input, select) {
+    min-height: 44px;
+  }
+
+  /* The top bar's title is hidden in a section on a phone, so the section's heading takes its size. */
+  .settings-shown > .settings > .column-heading {
+    font: var(--type-screen-title);
+    letter-spacing: var(--tracking-screen-title);
   }
 
   .first-context {

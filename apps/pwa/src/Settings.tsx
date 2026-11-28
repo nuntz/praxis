@@ -1,4 +1,4 @@
-import type { ContextListing, Settings as ContextSettings, Entry } from "@praxis/domain";
+import type { ContextListing, Settings as ContextSettings } from "@praxis/domain";
 import type { LucideIcon } from "lucide-solid";
 import Archive from "lucide-solid/icons/archive";
 import ArrowLeft from "lucide-solid/icons/arrow-left";
@@ -14,24 +14,22 @@ import ChangesIcon from "lucide-solid/icons/rotate-ccw-clock";
 import Smartphone from "lucide-solid/icons/smartphone";
 import Sunrise from "lucide-solid/icons/sunrise";
 import TrashIcon from "lucide-solid/icons/trash";
-import { createEffect, createUniqueId, For, type JSX, Show } from "solid-js";
+import { createEffect, createUniqueId, For, type JSX, on, Show } from "solid-js";
 import { createStore } from "solid-js/store";
-import { BackupSettings } from "./Backups.tsx";
+import { BackupsAndExport, backupsListed } from "./Backups.tsx";
 import { Changes } from "./Changes.tsx";
-import { Connections } from "./Connections.tsx";
+import { Connections, connectionsListed } from "./Connections.tsx";
 import {
   BriefAndReview,
+  briefAndReviewListed,
   ConversationAndSearch,
-  deviceTimeZone,
   GeneralSettings,
-  weekdayName,
+  generalListed,
 } from "./ContextSettings.tsx";
-import { Contexts } from "./Contexts.tsx";
-import { Devices } from "./Devices.tsx";
-import { ExportSettings } from "./Export.tsx";
+import { Contexts, contextsListed } from "./Contexts.tsx";
+import { Devices, devicesListed } from "./Devices.tsx";
 import { latestRead } from "./latest-read.ts";
 import { onPhone } from "./media.ts";
-import { money } from "./Notices.tsx";
 import {
   followed,
   leaveSettings,
@@ -40,10 +38,11 @@ import {
   type Section,
   sectionAddress,
 } from "./place.ts";
-import { SpendSettings, spend } from "./Spend.tsx";
-import { Standing } from "./Standing.tsx";
-import { Trash } from "./Trash.tsx";
-import { type CallTool, callDeploymentTool, useCallTool } from "./tools.ts";
+import { SettingsSection, ShownSection } from "./SettingsSection.tsx";
+import { SpendSettings, spendListed } from "./Spend.tsx";
+import { Standing, standingListed } from "./Standing.tsx";
+import { Trash, trashListed } from "./Trash.tsx";
+import { type CallTool, useCallTool } from "./tools.ts";
 
 type SettingsProps = {
   section: Section | null;
@@ -56,7 +55,10 @@ type SettingsProps = {
   onContextChanged: (changed: ContextListing) => void;
   onContextMade: (made: ContextListing) => void;
   onContextDeleted: (id: string) => void;
-  /** Says a problem on the screen, for a section that has left it, as the Trash's removals do. */
+  /**
+   * Says a problem on the screen, for a section that has left it, as what the Trash, Contexts,
+   * Connections and Conversation and search marked does when it cannot be sent (ADR 0028).
+   */
   onProblem: (message: string) => void;
 };
 
@@ -69,9 +71,13 @@ type SectionShown = {
   icon: LucideIcon;
   /** The current Context's section, or the Deployment's. */
   ofContext: boolean;
-  /** What it holds now, as the phone's list of sections shows it, where the screen knows it. */
+  /**
+   * What it holds now, as the phone's list of sections shows it, where the screen knows it: a
+   * count only above zero (`listedCount`), or a state such as "Off". Each section's own module
+   * gives it.
+   */
   value?: (props: SettingsProps) => string | null;
-  /** What it holds now, where only a read of its own tells: a value of its own, or none. */
+  /** What it holds now, where only a read of its own tells: as `value` does, or null unread. */
   read?: (callTool: CallTool) => Promise<string | null>;
   /** The section itself. */
   panel: (from: ShownFrom) => JSX.Element;
@@ -80,7 +86,7 @@ type SectionShown = {
 /** A section that needs the Context's settings, which says it needs the network while unread. */
 function withSettings(from: ShownFrom, panel: (settings: () => ContextSettings) => JSX.Element) {
   return (
-    <Show when={from.props.settings} fallback={from.needsNetwork()}>
+    <Show when={from.props.settings} fallback={<SettingsSection note={from.needsNetwork()} />}>
       {(read) => panel(read)}
     </Show>
   );
@@ -92,7 +98,7 @@ const SHOWN: Record<Section, SectionShown> = {
     name: "General",
     icon: Globe,
     ofContext: true,
-    value: (props) => props.settings && zoneCity(props.settings.time_zone),
+    value: (props) => props.settings && generalListed(props.settings),
     panel: (from) =>
       withSettings(from, (settings) => (
         <GeneralSettings settings={settings()} onChanged={from.props.onSettingsChanged} />
@@ -102,7 +108,7 @@ const SHOWN: Record<Section, SectionShown> = {
     name: "Brief and Review",
     icon: Sunrise,
     ofContext: true,
-    value: (props) => props.settings && briefAndReview(props.settings),
+    value: (props) => props.settings && briefAndReviewListed(props.settings),
     panel: (from) =>
       withSettings(from, (settings) => (
         <BriefAndReview settings={settings()} onChanged={from.props.onSettingsChanged} />
@@ -112,32 +118,14 @@ const SHOWN: Record<Section, SectionShown> = {
     name: "Standing Entries",
     icon: Pin,
     ofContext: true,
-    async read(callTool) {
-      const read: Entry[] = [];
-      let cursor: string | null | undefined;
-      do {
-        const result = await callTool("list_entries", {
-          standing: true,
-          ...(cursor ? { cursor } : {}),
-        });
-        if (!result.ok) return null;
-        read.push(...result.value.items);
-        cursor = result.value.next_cursor;
-      } while (cursor);
-      return read.length === 0 ? "None" : String(read.length);
-    },
+    read: standingListed,
     panel: (from) => (
       <Show
         when={from.props.settings}
         fallback={
           // With no network the Standing Entries are the Offline Copy's.
           <Show when={from.props.offlineZone}>
-            {(zone) => (
-              <>
-                {from.needsNetwork()}
-                <Standing timeZone={zone()} />
-              </>
-            )}
+            {(zone) => <Standing timeZone={zone()} note={from.needsNetwork()} />}
           </Show>
         }
       >
@@ -155,13 +143,7 @@ const SHOWN: Record<Section, SectionShown> = {
     name: "Trash",
     icon: TrashIcon,
     ofContext: true,
-    async read(callTool) {
-      const result = await callTool("list_trash", {});
-      if (!result.ok) return null;
-      const { items, next_cursor } = result.value;
-      if (items.length === 0) return "Empty";
-      return next_cursor === null ? String(items.length) : `${items.length}+`;
-    },
+    read: trashListed,
     panel: (from) =>
       withSettings(from, (settings) => (
         <Trash timeZone={settings().time_zone} onProblem={from.props.onProblem} />
@@ -172,19 +154,25 @@ const SHOWN: Record<Section, SectionShown> = {
     icon: MessageCircle,
     ofContext: true,
     panel: (from) =>
-      withSettings(from, () => <ConversationAndSearch contextName={from.props.contextName} />),
+      withSettings(from, () => (
+        <ConversationAndSearch
+          contextName={from.props.contextName}
+          onProblem={from.props.onProblem}
+        />
+      )),
   },
   contexts: {
     name: "Contexts",
     icon: Layers,
     ofContext: false,
-    value: (props) => String(props.contexts.filter((context) => !context.retired).length),
+    value: (props) => contextsListed(props.contexts),
     panel: ({ props }) => (
       <Contexts
         contexts={props.contexts}
         onChanged={props.onContextChanged}
         onMade={props.onContextMade}
         onDeleted={props.onContextDeleted}
+        onProblem={props.onProblem}
       />
     ),
   },
@@ -192,51 +180,29 @@ const SHOWN: Record<Section, SectionShown> = {
     name: "Connections",
     icon: Plug,
     ofContext: false,
-    async read() {
-      const result = await callDeploymentTool("list_connections", {});
-      return result.ok ? String(result.value.items.length) : null;
-    },
-    panel: ({ props }) => <Connections contexts={props.contexts} />,
+    read: connectionsListed,
+    panel: ({ props }) => <Connections contexts={props.contexts} onProblem={props.onProblem} />,
   },
   devices: {
     name: "Devices",
     icon: Smartphone,
     ofContext: false,
-    async read() {
-      const result = await callDeploymentTool("list_devices", {});
-      return result.ok ? String(result.value.items.length) : null;
-    },
+    read: devicesListed,
     panel: () => <Devices />,
   },
   spend: {
     name: "Spend",
     icon: Gauge,
     ofContext: false,
-    value: () => {
-      const spent = spend();
-      return spent && `${money.format(spent.spent)} of ${money.format(spent.cap)}`;
-    },
+    value: spendListed,
     panel: () => <SpendSettings />,
   },
   backups: {
     name: "Backups and Export",
     icon: Archive,
     ofContext: false,
-    async read() {
-      const result = await callDeploymentTool("get_last_backup", {});
-      if (!result.ok) return null;
-      const made = result.value.made_at;
-      return made === null ? "None" : backupDay.format(new Date(made));
-    },
-    panel: () => (
-      <section class="settings" aria-labelledby="backups-and-export-heading">
-        <h2 id="backups-and-export-heading" class="column-heading">
-          Backups and Export
-        </h2>
-        <BackupSettings />
-        <ExportSettings />
-      </section>
-    ),
+    read: backupsListed,
+    panel: () => <BackupsAndExport />,
   },
 };
 
@@ -304,6 +270,21 @@ export function SettingsScreen(props: SettingsProps) {
     if (onPhone() && shown() === null) void listed.read();
   });
 
+  // Opening a section puts the focus on its heading; on a phone, going back to the list puts it on
+  // the row of the section left (section 8.6). Settings opened afresh leaves the focus alone.
+  const links: Partial<Record<Section, HTMLAnchorElement>> = {};
+  let heading: HTMLHeadingElement | undefined;
+  createEffect(
+    on(
+      shown,
+      (now, was) => {
+        if (now !== null) heading?.focus();
+        else if (was) links[was]?.focus();
+      },
+      { defer: true },
+    ),
+  );
+
   function SectionLink(link: { section: Section }) {
     const { name, icon: SectionIcon, value: known } = SHOWN[link.section];
     const valueId = createUniqueId();
@@ -314,6 +295,9 @@ export function SettingsScreen(props: SettingsProps) {
     return (
       <li>
         <a
+          ref={(element) => {
+            links[link.section] = element;
+          }}
           href={sectionAddress(link.section)}
           class="settings-section-link"
           aria-current={shown() === link.section ? "page" : undefined}
@@ -339,9 +323,7 @@ export function SettingsScreen(props: SettingsProps) {
   const from: ShownFrom = {
     props,
     needsNetwork: () => (
-      <Show when={props.offlineZone}>
-        <p class="settings-note">This Context's settings and its Trash need the network.</p>
-      </Show>
+      <Show when={props.offlineZone}>This Context's settings and its Trash need the network.</Show>
     ),
   };
 
@@ -367,7 +349,21 @@ export function SettingsScreen(props: SettingsProps) {
         </nav>
       </Show>
       <Show when={shown()} keyed>
-        {(section) => <div class="settings-shown">{SHOWN[section].panel(from)}</div>}
+        {(section) => (
+          <div class="settings-shown">
+            <ShownSection.Provider
+              value={{
+                section,
+                name: SHOWN[section].name,
+                heading: (drawn) => {
+                  heading = drawn;
+                },
+              }}
+            >
+              {SHOWN[section].panel(from)}
+            </ShownSection.Provider>
+          </div>
+        )}
       </Show>
     </div>
   );
@@ -385,7 +381,7 @@ function readListed(callTool: CallTool) {
       SECTIONS.map(async (section) => {
         try {
           const value = await SHOWN[section].read?.(callTool);
-          if (current() && value) setValues(section, value);
+          if (current() && value !== null && value !== undefined) setValues(section, value);
         } catch {
           // Not reached: what was read before stays, if anything was.
         }
@@ -393,33 +389,4 @@ function readListed(callTool: CallTool) {
     ),
   );
   return { values, read };
-}
-
-/** The day of a Backup, on this Device, as in "Nov 21". */
-const backupDay = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  timeZone: deviceTimeZone(),
-});
-
-/** A time zone by the place it is named for, as in "Paris" for Europe/Paris. */
-function zoneCity(zone: string): string {
-  return (zone.split("/").at(-1) ?? zone).replaceAll("_", " ");
-}
-
-/** When the Brief and the Review come, as in "7:00 AM · Sun", or that neither does. */
-function briefAndReview(settings: ContextSettings): string {
-  const brief = settings.brief_time === null ? [] : [timeOfDay(settings.brief_time)];
-  const review = settings.review_time === null ? [] : [weekdayName(settings.review_day, "short")];
-  return [...brief, ...review].join(" · ") || "Off";
-}
-
-/** A time of day, "HH:MM", as the Device's language writes it. */
-function timeOfDay(time: string): string {
-  const [hours = 0, minutes = 0] = time.split(":").map(Number);
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "UTC",
-  }).format(Date.UTC(1970, 0, 1, hours, minutes));
 }

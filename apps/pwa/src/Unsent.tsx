@@ -1,8 +1,8 @@
 import Pencil from "lucide-solid/icons/pencil";
 import Trash from "lucide-solid/icons/trash";
 import { createSignal, For, Show } from "solid-js";
-import { deviceTimeZone } from "./ContextSettings.tsx";
 import { SectionTitle } from "./design/SectionTitle.tsx";
+import { deviceTimeZone } from "./device.ts";
 import { EntryActions } from "./EntryActions.tsx";
 import { clearCopy, clearing, copyFetchedAt } from "./offline-copy.ts";
 import { online } from "./online.ts";

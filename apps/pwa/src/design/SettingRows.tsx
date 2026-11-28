@@ -1,37 +1,103 @@
-import { createUniqueId, type JSX, Show, splitProps } from "solid-js";
+import { createUniqueId, For, type JSX, Match, Show, Switch, splitProps } from "solid-js";
 
 /**
  * A group of settings, as the design system's Settings pattern draws it: a heading in `muted`,
- * then a `surface` box of rows parted by hairlines. It is a group, named by its heading; one that
- * is a part of its section on its own, as Backups and Export are of theirs, is a region instead,
- * with what it says under its box, such as a problem.
+ * then a `surface` box of rows parted by hairlines, and under it what went wrong with a change
+ * made in it, said once as an alert. It is a group, named by its heading; one that is a part of
+ * its section on its own, as Backups and Export are of theirs, is a region instead. One that lists
+ * something, as Contexts does, is a list named by its heading, one row for each item, and says in
+ * one line in its box's place that it holds none.
  */
-export function SettingsGroup(props: {
+export function SettingsGroup<T>(props: {
   heading: string;
-  children: JSX.Element;
+  children?: JSX.Element;
   /** A part of its section on its own: a region, by this id, rather than a group. */
   region?: string;
-  /** Under the box, in a region. */
+  /**
+   * What it lists: each item, the row drawn for it, an `<li>`, and what it says with none. Where a
+   * line said in a row's place stands among the items (`SaidRow`), `none` says whether it holds
+   * none all the same, as the Trash does once its last item is restored.
+   */
+  list?: {
+    each: readonly T[];
+    row: (item: T) => JSX.Element;
+    empty: JSX.Element;
+    none?: boolean;
+  };
+  /** What went wrong with a change made in it, under the box. */
+  problem?: string | null | undefined;
+  /** Under the box, after the problem. */
   below?: JSX.Element;
 }) {
+  const headingId = createUniqueId();
   return (
-    <Show
-      when={props.region}
+    <Switch
       fallback={
         <fieldset class="settings-rows">
           <legend class="settings-rows-heading">{props.heading}</legend>
           <div class="settings-box">{props.children}</div>
+          <Problem message={props.problem} />
+          {props.below}
         </fieldset>
       }
     >
-      {(id) => (
-        <section id={id()} class="settings-group" aria-labelledby={`${id()}-heading`}>
-          <h3 id={`${id()}-heading`} class="settings-rows-heading">
-            {props.heading}
-          </h3>
-          <div class="settings-box">{props.children}</div>
-          {props.below}
-        </section>
+      <Match when={props.list}>
+        {(list) => (
+          <div class="settings-rows">
+            <h3 id={headingId} class="settings-rows-heading">
+              {props.heading}
+            </h3>
+            <Show when={list().each.length > 0}>
+              <ul class="settings-box" aria-labelledby={headingId}>
+                <For each={list().each}>{(item) => list().row(item)}</For>
+              </ul>
+            </Show>
+            <Show when={list().none ?? list().each.length === 0}>
+              <p class="settings-note settings-none">{list().empty}</p>
+            </Show>
+            <Problem message={props.problem} />
+            {props.below}
+          </div>
+        )}
+      </Match>
+      <Match when={props.region}>
+        {(id) => (
+          <section id={id()} class="settings-group" aria-labelledby={`${id()}-heading`}>
+            <h3 id={`${id()}-heading`} class="settings-rows-heading">
+              {props.heading}
+            </h3>
+            <div class="settings-box">{props.children}</div>
+            <Problem message={props.problem} />
+            {props.below}
+          </section>
+        )}
+      </Match>
+    </Switch>
+  );
+}
+
+/**
+ * What an act said in its row's place in a list, as a Device removed or an item of the Trash
+ * restored: a status, which takes the focus (`id`) and stays until the person's next act.
+ */
+export function SaidRow(props: { id: string; said: string }) {
+  return (
+    <li class="settings-said-row">
+      <p id={props.id} role="status" tabindex="-1">
+        {props.said}
+      </p>
+    </li>
+  );
+}
+
+/** What went wrong, said where it happened as an alert, or nothing. */
+export function Problem(props: { message: string | null | undefined }) {
+  return (
+    <Show when={props.message}>
+      {(message) => (
+        <p class="problem" role="alert">
+          {message()}
+        </p>
       )}
     </Show>
   );

@@ -88,6 +88,19 @@ const hairlineCases = (["light", "dark"] as Theme[]).flatMap((theme) =>
   (["ground", "surface", "inset"] as const).map((ground) => [theme, ground] as const),
 );
 
+// An empty field shows nothing but its edge, so the edge is the mark that says a field is there:
+// at least 3:1, WCAG 2.2's bar for a non-text mark, against the surface round it and the inset
+// ground inside it (section 8.11).
+const fieldEdgeCases = (["light", "dark"] as Theme[]).flatMap((theme) =>
+  (["surface", "inset"] as const).map((ground) => [theme, ground] as const),
+);
+
+describe("a field's edge", () => {
+  test.each(fieldEdgeCases)("in %s, against %s, is at least 3:1", (theme, ground) => {
+    expect(contrast(colors.edge[theme], colors[ground][theme])).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe("a hairline, with more contrast asked for", () => {
   test.each(hairlineCases)("in %s, on %s, is at least 3:1", (theme, ground) => {
     const hairline = colors[moreContrast.rule][theme];

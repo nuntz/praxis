@@ -163,7 +163,11 @@ export async function closeSettings(page: Page) {
 export async function switchTo(page: Page, name: string) {
   const switcher = page.getByRole("banner").getByRole("button", { name: /^Context: / });
   await switcher.click();
-  await page.getByRole("list", { name: "Contexts" }).getByRole("button", { name }).click();
+  await page
+    .getByRole("banner")
+    .getByRole("list", { name: "Contexts" })
+    .getByRole("button", { name })
+    .click();
   await expect(switcher).toHaveAccessibleName(`Context: ${name}`);
 }
 

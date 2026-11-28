@@ -165,6 +165,34 @@ export function forgetConversation(sql: SqlStorage): void {
   sql.exec(`UPDATE runs SET submission = NULL, from_record = NULL, told_through = NULL`);
 }
 
+/**
+ * Whether the Conversation shows a Message that came after `upTo`, by the Runs of the one kept
+ * now (a Run of one since cleared has no handle on it): a Message from the person as it was sent,
+ * which the first Run answering it is dated by, a Run trying it again coming later; or a Brief or
+ * a Review as it was taken, once it left a Message no newer one of its kind replaced.
+ */
+export function shownAfter(sql: SqlStorage, upTo: number): boolean {
+  const sent = sql
+    .exec(
+      `SELECT 1 FROM runs
+       WHERE message IS NOT NULL AND submission IS NOT NULL AND started_by = 'message'
+       GROUP BY message HAVING min(at) > ? LIMIT 1`,
+      upTo,
+    )
+    .toArray();
+  if (sent.length > 0) return true;
+  return (
+    sql
+      .exec(
+        `SELECT 1 FROM runs
+         WHERE submission IS NOT NULL AND started_by != 'message' AND raised = 1 AND replaced = 0
+           AND at > ? LIMIT 1`,
+        upTo,
+      )
+      .toArray().length > 0
+  );
+}
+
 /** Every Run that has not ended, oldest first: after a restart, each is waited on again. */
 export function runsNotEnded(sql: SqlStorage): RunRow[] {
   return sql.exec<RunRow>(`SELECT * FROM runs WHERE ended IS NULL ORDER BY seq`).toArray();

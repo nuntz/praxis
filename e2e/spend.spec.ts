@@ -22,12 +22,19 @@ const money = (amount: number) =>
 test("the person sets the monthly cap in settings, and sees the month's spend against it", async ({
   page,
 }) => {
+  // The spend is read as the screen opens.
+  const opened = page.waitForResponse(/\/get_spend$/);
   await page.goto("/");
   const spend = await openSettings(page, "Spend");
+  const field = spend.getByLabel("Monthly cap, US dollars", { exact: true });
+  // The field holds the cap as it was read, as its value and not a hint.
+  const first = ((await (await opened).json()) as { value: Spend }).value;
+  await expect(field).toHaveValue(String(first.cap));
+  await expect(field).not.toHaveAttribute("placeholder", /./);
 
   // Always far past anything the other journeys spend, so none of them reaches it.
   const cap = 1000 + Math.floor(Math.random() * 1000) + 0.25;
-  await spend.getByLabel("Monthly cap, US dollars", { exact: true }).fill(String(cap));
+  await field.fill(String(cap));
   // The screen reads the spend again once the cap is set. Another journey may set the shared cap
   // in between, so the screen is held to what that read answered.
   let setAnswered = false;
@@ -40,9 +47,55 @@ test("the person sets the monthly cap in settings, and sees the month's spend ag
   expect(await (await set).json()).toMatchObject({ ok: true, value: { record: { cap } } });
   const shown = ((await (await read).json()) as { value: Spend }).value;
 
+  // The section says what the cap now is, from what the set answered.
+  await expect(spend.getByRole("status")).toHaveText(`The cap is now ${money(cap)}.`);
+  // The month's row is titled by a name, its value on its right.
+  await expect(spend.getByText("Spent this month", { exact: true })).toBeVisible();
   await expect(spend.getByTestId("spend-against-cap")).toHaveText(
-    `${money(shown.spent)} spent this month of a ${money(shown.cap)} cap.`,
+    `${money(shown.spent)} of ${money(shown.cap)}`,
   );
+  // Typing again lets what was said go.
+  await field.fill(String(cap + 1));
+  await expect(spend.getByText(/^The cap is now /)).toHaveCount(0);
+});
+
+test("Set cap with nothing changed sends nothing, and a cap that is not an amount is said at its field", async ({
+  page,
+}) => {
+  let sent = 0;
+  await page.route(/\/set_spend_cap$/, async (route) => {
+    sent += 1;
+    await route.continue();
+  });
+  await page.goto("/");
+  const spend = await openSettings(page, "Spend");
+  const field = spend.getByLabel("Monthly cap, US dollars", { exact: true });
+  const setCap = spend.getByRole("button", { name: "Set cap" });
+  await expect(field).not.toHaveValue("");
+  const current = await field.inputValue();
+
+  await setCap.click();
+  await expect(field).not.toHaveAttribute("aria-invalid", "true");
+  await expect(spend.getByRole("alert")).toHaveCount(0);
+
+  await field.fill("forty");
+  await setCap.click();
+  await expect(spend.getByRole("alert")).toHaveText("Type an amount in US dollars, such as 40.");
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  // Nor is a number written another way an amount in dollars.
+  for (const typed of ["0x10", "1e3"]) {
+    await field.fill(typed);
+    await setCap.click();
+    await expect(spend.getByRole("alert")).toHaveText("Type an amount in US dollars, such as 40.");
+  }
+  expect(sent).toBe(0);
+
+  // The cap typed again as it stands takes back what was said, and sends nothing.
+  await field.fill(current);
+  await setCap.click();
+  await expect(spend.getByRole("alert")).toHaveCount(0);
+  await expect(field).not.toHaveAttribute("aria-invalid", "true");
+  expect(sent).toBe(0);
 });
 
 test("at the cap, the Conversation's composer gives way to a Notice that opens the cap in settings, as Attention's Notice of it does", async ({
