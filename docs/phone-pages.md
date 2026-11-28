@@ -34,11 +34,11 @@ Record each run below, replacing the last one: the date, the commit deployed, th
 
 ## The last run
 
-2026-11-27, Safari only: the Call bar's layout (its 12px over the column's edge, and its dot beside the title's first line), built from the checkout before it was committed, on 01f9e07.
+2026-11-28, Safari only: the branch that put the Trash, Versions, Held Changes and Changes in the glossary's words, and drew the Held Change mark in ink (#206 to #209), built at 940d9af.
 
 | Case | Result |
 |---|---|
-| The screen draws | Pass, through the real-phone loop on the journeys' Worker with six Messages and the browser's voice fake served beside the heartbeat, counting the Conversation's Messages: each load drew all 25 within half a second, and none went `FROZEN` while shown. |
+| The screen draws | Pass, through the real-phone loop on the journeys' Worker, its Agent scripted to leave two Held Changes, with an Entry edited twice and an Entry, a Task and a Project in the Trash, counting Attention's rows: each of four loads drew both within half a second, and none went `FROZEN` while shown. |
 | An Entry's words, Adding a Task, A Task's title, A composer's words, A Task's dates | Not run: no page with text fields changed. |
 
-Beyond the table, each passed: a Call started from the Agent's tab, the Messages scrolled under the bar were cut a step below its foot, never against it, the dot stood beside "On a Call in", Mute said "Muted" in the bar, and End Call ended it.
+Beyond the table, each passed: the Held Change mark on an Entry in ink and underlined, in light and in dark, and its tap bringing the Held Change into view with the focus; each Held Change, in Attention and under the Agent's Message, comparing the words and saying who asked, and a make and a cancel each saying what the tap did; an Entry's Versions comparing the words and saying who changed them; the Trash listing every item, an Entry's Tasks gone with it, a restore and a removal each saying what it did, and the removal made once the Trash was left; and Changes in the glossary's words, an Entry's Tasks grouped under its deletion. A Connection's reads in Changes were not seen: no Connection read anything.
