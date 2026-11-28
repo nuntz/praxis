@@ -131,6 +131,15 @@ export function followNewest(options: {
     },
     toNewest,
     /**
+     * Something older is brought into view, as a hit opened from search is: the column lets go of
+     * its newest, which would scroll it back as the column changes size, and takes hold again only
+     * as it does when the person scrolls there.
+     */
+    letGo() {
+      setAtNewest(false);
+      if (scroller) left = scroller.scrollTop;
+    },
+    /**
      * Add older items above, keeping what is in view where it was: the distance to the end stays
      * the same, as nothing below changed.
      */

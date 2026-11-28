@@ -261,10 +261,12 @@ export function Journal(props: {
     // Opened here, an older Entry stays in the Offline Copy, readable with no network.
     const opened = entries.find((shown) => shown.id === entry);
     if (opened) noteOpened(contextId, structuredClone(unwrap(opened)));
+    // Held to its newest, the column would scroll back there as the Entries show again.
+    column.letGo();
     requestAnimationFrame(() => {
       const shown = document.getElementById(anchor);
       shown?.scrollIntoView({ block: "center" });
-      shown?.focus();
+      shown?.focus({ preventScroll: true });
     });
   }
 
