@@ -28,7 +28,7 @@ Read at review. The mechanical rules are checks already: Biome, the guards in `l
 
 ## The Agent's runtime
 
-- A hook into the Agent's runtime answers a failure with a decision it returns, such as `{ decline: true }`, and never throws: a throw is logged and skipped, and the runtime's own default runs in its place, as its own summarizer would for compaction (`docs/pi-durable.md`).
+- A hook into the Agent's runtime answers a failure with a decision it returns, such as `{ kind: "decline" }`, and never throws: a throw is logged and skipped, and the runtime's own default runs in its place, as its own summarizer would for compaction (`docs/pi-durable.md`).
 
 ## Browser journeys
 

@@ -834,12 +834,12 @@ export class ContextAgent {
     compaction: { readonly messages: readonly ModelMessage[] },
     api: HookApi,
     within: Context,
-  ): Promise<{ summary: string } | { decline: true }> {
+  ): Promise<{ kind: "summary"; summary: string } | { kind: "decline" }> {
     try {
       return await this.#writeSummary(compaction.messages, api, within);
     } catch {
       console.error(JSON.stringify({ agent: "summary_not_written" }));
-      return { decline: true };
+      return { kind: "decline" };
     }
   }
 
@@ -847,10 +847,10 @@ export class ContextAgent {
     messages: readonly ModelMessage[],
     api: HookApi,
     within: Context,
-  ): Promise<{ summary: string } | { decline: true }> {
+  ): Promise<{ kind: "summary"; summary: string } | { kind: "decline" }> {
     const { models, provider, id } = this.#model;
     const model = models.getModel(provider, id);
-    if (!model) return { decline: true };
+    if (!model) return { kind: "decline" };
     const answer = await models.completeSimple(
       model,
       { messages: summaryRequest(withoutBearings(messages), messages.at(-1)?.timestamp ?? 0) },
@@ -863,10 +863,10 @@ export class ContextAgent {
     const words = textOf(answer);
     if (answer.stopReason !== "stop" || words === "") {
       console.error(JSON.stringify({ agent: "summary_not_written", stop: answer.stopReason }));
-      return { decline: true };
+      return { kind: "decline" };
     }
     const held = heldPresented(heldWaiting(this.#host.sql, HELD_NAMED));
-    return { summary: `${words}\n\n${held}` };
+    return { kind: "summary", summary: `${words}\n\n${held}` };
   }
 
   /** Report whether the key was refused. One that fails is made good by the next Run's. */
