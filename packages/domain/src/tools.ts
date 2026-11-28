@@ -645,8 +645,8 @@ export const tools = {
     kind: "write",
     destructive: true,
     description:
-      "Remove everything in the Trash for good, as remove_for_good does for one item. It cannot be undone.",
-    input: writeInput({}),
+      "Remove everything in the Trash deleted at or before up_to for good, as remove_for_good does for one item. It cannot be undone. up_to is the deleted_at of the newest item the person was shown, as list_trash gives it: anything deleted after it stays in the Trash, so emptying never removes what the person did not see.",
+    input: writeInput({ up_to: z.iso.datetime() }),
     offered: toHandOnly,
   },
   list_trash: {

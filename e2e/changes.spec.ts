@@ -57,7 +57,7 @@ test("the person sees what changed and who changed it, with a Connection's reads
   await expect(lines.nth(0)).toContainText(agentName);
   await expect(lines.nth(0)).toContainText(`Entry made ${theirs}`);
   await expect(lines.nth(1)).toContainText(agentName);
-  await expect(lines.nth(1)).toContainText("Read with list_entries: 1 record");
+  await expect(lines.nth(1)).toContainText("Listed Entries: 1 record");
   await expect(lines.nth(2)).toContainText("You");
   await expect(lines.nth(2)).toContainText(`Entry made ${mine}`);
   // What the agent read holds none of what it was given.
@@ -95,4 +95,40 @@ test("the person sees what changed and who changed it, with a Connection's reads
   await held.release();
   await expect(list.getByTestId("change").filter({ hasText: during })).toHaveCount(1);
   await expect(list.getByTestId("change")).toHaveCount(5);
+});
+
+test("the person sees what a delete and a restore did in words, with what a rule did folded", async ({
+  page,
+}, testInfo) => {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const { id } = await makeContext(page, {
+    name: `Changes folded ${testInfo.project.name} ${tag}`,
+    time_zone: "UTC",
+    accent: "teal",
+  });
+  await lastShown(page, id);
+  const words = `Plan the move ${tag}`;
+  const titles = [`Book the van ${tag}`, `Pack the books ${tag}`];
+  const { record } = await callContextTool(page, id, "record_entry", {
+    words,
+    tasks: titles.map((title) => ({ title })),
+  });
+  await callContextTool(page, id, "delete_entry", { id: record.id });
+  await callContextTool(page, id, "restore", { id: record.id });
+  await page.goto("/");
+
+  const changes = await openSettings(page, "Changes");
+  const list = changes.getByRole("list", { name: "Changes and reads" });
+  const lines = list.getByTestId("change");
+  await expect(lines).toHaveCount(3);
+  const [restored, deleted] = [lines.nth(0), lines.nth(1)];
+  await expect(restored).toContainText(`Entry restored from the Trash ${words}`);
+  await expect(restored).toContainText("and 2 Tasks restored from the Trash by a rule");
+  await expect(deleted).toContainText(`Entry sent to the Trash ${words}`);
+
+  // What the rule did is one line, which opens in place to list each Task it sent.
+  const fold = deleted.getByText("and 2 Tasks sent to the Trash by a rule");
+  for (const title of titles) await expect(deleted.getByText(title)).toBeHidden();
+  await fold.click();
+  for (const title of titles) await expect(deleted.getByText(title)).toBeVisible();
 });

@@ -159,7 +159,9 @@ test("on a phone the list of sections shows each one's current value, where it i
   const standing = await callContextTool(page, id, "record_entry", { words: "Kept in mind" });
   await callContextTool(page, id, "mark_standing", { id: standing.record.id });
   const trashed = await callContextTool(page, id, "record_entry", { words: "Thrown away" });
-  await callContextTool(page, id, "delete_entry", { id: trashed.record.id });
+  const { record: thrown } = await callContextTool(page, id, "delete_entry", {
+    id: trashed.record.id,
+  });
   await lastShown(page, id);
   await page.goto("/settings");
   const sections = page.getByRole("navigation", { name: "Settings sections" });
@@ -196,7 +198,7 @@ test("on a phone the list of sections shows each one's current value, where it i
   await expect(row("Conversation and search")).toHaveAccessibleDescription("");
 
   // Emptied, the Trash says so.
-  await callContextTool(page, id, "empty_trash", {});
+  await callContextTool(page, id, "empty_trash", { up_to: thrown.deleted_at });
   await page.reload();
   await expect(row("Trash")).toHaveAccessibleDescription("Empty");
 

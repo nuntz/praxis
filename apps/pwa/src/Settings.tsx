@@ -56,6 +56,8 @@ type SettingsProps = {
   onContextChanged: (changed: ContextListing) => void;
   onContextMade: (made: ContextListing) => void;
   onContextDeleted: (id: string) => void;
+  /** Says a problem on the screen, for a section that has left it, as the Trash's removals do. */
+  onProblem: (message: string) => void;
 };
 
 /** What a section is shown from: Settings' own props, and what needs the network saying so. */
@@ -160,7 +162,10 @@ const SHOWN: Record<Section, SectionShown> = {
       if (items.length === 0) return "Empty";
       return next_cursor === null ? String(items.length) : `${items.length}+`;
     },
-    panel: (from) => withSettings(from, (settings) => <Trash timeZone={settings().time_zone} />),
+    panel: (from) =>
+      withSettings(from, (settings) => (
+        <Trash timeZone={settings().time_zone} onProblem={from.props.onProblem} />
+      )),
   },
   "conversation-and-search": {
     name: "Conversation and search",

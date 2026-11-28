@@ -30,7 +30,7 @@ const directTests: Record<string, { namedAt: NamedAt[]; files: Record<string, st
       "inline-task.test.ts": "parsing an Inline Task",
       "typed-link.test.ts": "what the person types to link something",
       "follow-edit.test.ts": "following an anchor through a change to the words",
-      "compare-words.test.ts": "comparing a Version against the current words",
+      "compare-words.test.ts": "comparing the words now with those a tap brings",
       "markdown.test.ts":
         "what the Markdown renderer lets through: the set, the addresses and when an image loads",
     },
@@ -44,6 +44,7 @@ const directTests: Record<string, { namedAt: NamedAt[]; files: Record<string, st
       "search-groups.test.ts": "how what a search found is grouped by kind",
       "typing-pause.test.ts": "how search waits for a pause in typing",
       "short-day.test.ts": "how a day is said short",
+      "change-words.test.ts": "how Changes says what happened",
     },
   },
 };

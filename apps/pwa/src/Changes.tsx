@@ -1,29 +1,16 @@
+import { type Change, type ConnectionCall, isConnection, type ToolInput } from "@praxis/domain";
+import { ChevronRight } from "lucide-solid";
+import { createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import {
-  type Caller,
-  type Change,
-  type ConnectionCall,
-  type Effect,
-  type EffectKind,
-  isConnection,
-  type ToolInput,
-} from "@praxis/domain";
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+  callerName,
+  changeCaller,
+  type EffectLine,
+  effectLines,
+  readWords,
+} from "./change-words.ts";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { callDeploymentTool, needsNetwork, useCallTool, useContextId } from "./tools.ts";
-
-/** What each kind of thing an Effect names is called, in the glossary's words. */
-const KIND: Record<EffectKind, string> = {
-  entry: "Entry",
-  task: "Task",
-  project: "Project",
-  person: "Person",
-  context: "Context",
-  held_change: "Held Change",
-  connection: "Connection",
-  device: "Device",
-  spend_cap: "Spend cap",
-};
 
 /** Who the list is narrowed to: every caller, or one, a Connection by its id. */
 type Narrowed = NonNullable<ToolInput<"list_changes">["caller"]> | null;
@@ -32,21 +19,6 @@ type Narrowed = NonNullable<ToolInput<"list_changes">["caller"]> | null;
 type Line = { kind: "change"; change: Change } | { kind: "read"; call: ConnectionCall };
 
 const atOf = (line: Line) => (line.kind === "change" ? line.change.at : line.call.at);
-
-/** A caller as the screen names them. */
-function callerName(caller: Caller): string {
-  switch (caller.kind) {
-    case "hand":
-      return "You";
-    case "agent":
-      return "The Agent";
-    case "clock":
-      return "The clock";
-    case "connection":
-    case "read_only_connection":
-      return caller.name;
-  }
-}
 
 /** Whether a change was made by the caller the list is narrowed to. */
 function madeBy(change: Change, narrowed: Narrowed): boolean {
@@ -281,46 +253,71 @@ export function Changes(props: { timeZone: string }) {
   );
 }
 
-/** One change: who made it and when, and each of its Effects, a rule's marked as one. */
+/**
+ * One change: who made it and when, and what happened, in words: each Effect the call made a line
+ * of its own, and a rule's of one kind and what folded into one.
+ */
 function ChangeLine(props: { change: Change; time: Intl.DateTimeFormat }) {
   return (
     <li class="change-line" data-testid="change">
       <p class="change-meta">
-        {callerName(props.change.caller)}, {props.time.format(new Date(props.change.at))}
+        {changeCaller(props.change.caller, props.change.tool)},{" "}
+        {props.time.format(new Date(props.change.at))}
       </p>
       <ul class="change-effects">
-        <For each={props.change.effects}>{(effect) => <EffectLine effect={effect} />}</For>
+        <For each={effectLines(props.change.tool, props.change.effects)}>
+          {(line) => <EffectItem line={line} />}
+        </For>
       </ul>
     </li>
   );
 }
 
-function EffectLine(props: { effect: Effect }) {
+/**
+ * One line of a change's Effects. A rule's folded opens in place to list each by its summary,
+ * unless none has one, as what was removed for good has not.
+ */
+function EffectItem(props: { line: EffectLine }) {
+  const folded = () => (props.line.kind === "folded" ? props.line : null);
   return (
     <li>
-      <span class="change-kind">
-        {KIND[props.effect.kind]} {props.effect.what}
-        {props.effect.by === "rule" ? " by a rule" : ""}
-      </span>{" "}
-      {props.effect.summary}
+      <Switch>
+        <Match when={props.line.kind === "one" && props.line}>
+          {(line) => (
+            <>
+              <span class="change-kind">{line().words}</span> {line().summary}
+            </>
+          )}
+        </Match>
+        <Match when={folded()?.summaries.every((summary) => summary === "") && folded()}>
+          {(line) => <span class="change-kind">{line().words}</span>}
+        </Match>
+        <Match when={folded()}>
+          {(line) => (
+            <details class="change-rule">
+              <summary>
+                <ChevronRight class="change-rule-chevron" size={14} aria-hidden="true" />
+                <span class="change-kind">{line().words}</span>
+              </summary>
+              <ul>
+                <For each={line().summaries}>{(summary) => <li>{summary}</li>}</For>
+              </ul>
+            </details>
+          )}
+        </Match>
+      </Switch>
     </li>
   );
 }
 
-/** One read by a Connection: which tool, what it answered and how many records came back. */
+/** One read by a Connection: what it did, and how many records came back or what it was answered. */
 function ReadLine(props: { call: ConnectionCall; time: Intl.DateTimeFormat }) {
-  const answered = () =>
-    props.call.result === "ok"
-      ? `${props.call.records} ${props.call.records === 1 ? "record" : "records"}`
-      : `answered ${props.call.result}`;
   return (
     <li class="change-line" data-testid="connection-read">
       <p class="change-meta">
         {callerName(props.call.caller)}, {props.time.format(new Date(props.call.at))}
       </p>
-      <p class="change-read">
-        Read with <code>{props.call.tool}</code>: {answered()}
-      </p>
+      <p class="change-read">{readWords(props.call)}</p>
     </li>
   );
 }

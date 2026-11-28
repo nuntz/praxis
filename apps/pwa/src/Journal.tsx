@@ -742,7 +742,8 @@ function EntryItem(props: {
       <Show when={showingVersions() && props.entry.edited}>
         <Versions
           entry={props.entry}
-          formatTime={props.formatWhen}
+          formatWhen={props.formatWhen}
+          formatTime={props.formatTime}
           onEntry={props.onEntry}
           onProblem={props.onProblem}
         />

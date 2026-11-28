@@ -18,9 +18,9 @@ import type { Handlers } from "../registry.ts";
 import { readTask } from "../task-rows.ts";
 import {
   deleted,
-  everyItem,
   type ItemRow,
   itemHolding,
+  itemsDeletedBy,
   itemsFrom,
   leaveProject,
   removeForGood,
@@ -135,8 +135,9 @@ export const trashTools: Pick<
     return removal(sql, [item], today);
   },
 
-  empty_trash({ today, sql }) {
-    return removal(sql, everyItem(sql), today);
+  empty_trash({ input, today, sql }) {
+    // Only what was deleted by the newest item the person was shown: a delete after it stays.
+    return removal(sql, itemsDeletedBy(sql, Date.parse(input.up_to)), today);
   },
 
   list_trash({ input, sql }) {

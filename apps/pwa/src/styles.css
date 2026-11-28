@@ -46,6 +46,12 @@ p {
   margin: 0;
 }
 
+/* A link is in ink, visited, hovered or focused, never the browser's blue or violet, which no token
+   names; nor does it take the accent (the One Accent Rule). */
+a {
+  color: var(--ink);
+}
+
 :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
@@ -795,11 +801,59 @@ input[type="checkbox"].switch:disabled {
   letter-spacing: var(--tracking-label);
 }
 
-.trash-actions,
 .standing-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/*
+ * Restore follows what was deleted, and Remove for good is apart from it: under the row's other
+ * words on a phone, at the row's end on a desktop.
+ */
+.trash-words {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.trash-removal {
+  display: flex;
+  min-width: 0;
+}
+
+.trash-marked,
+.trash-emptying,
+.trash-said > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.trash-marked {
+  font-weight: 600;
+}
+
+/* Said to be disabled while a restore is out, so it keeps the focus, and dimmed as one is. */
+.trash-items button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (width >= 720px) {
+  .trash-item {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .trash-removal {
+    flex: 0 1 auto;
+    max-width: 40%;
+    text-align: end;
+  }
 }
 
 /* The Changes: each change or read, who made it and when, newest first. */
@@ -837,6 +891,7 @@ input[type="checkbox"].switch:disabled {
   padding: 0;
   list-style: none;
   overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
 .change-read {
@@ -2351,6 +2406,36 @@ button.call-control {
   overflow-wrap: anywhere;
 }
 
+/* A rule's Effects folded into one line, with a muted chevron turned once open, as a Run's fold. */
+.change-rule summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 24px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.change-rule summary::-webkit-details-marker {
+  display: none;
+}
+
+.change-rule-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.change-rule[open] > summary > .change-rule-chevron {
+  transform: rotate(90deg);
+}
+
+/* Each it folds is a plain line by its summary, indented, with no bullets. */
+.change-rule ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  list-style: none;
+}
+
 /* A Run's fold: a meta line with a muted chevron, turned once open, and no browser marker. */
 .run-calls summary {
   display: inline-flex;
@@ -3607,7 +3692,7 @@ button.entry-page-add-button {
   position: absolute;
 }
 
-/* A Version compared against the current words, as typed: what is gone struck, what came underlined. */
+/* An Entry's Versions, newest first, each headed by whose change replaced its words. */
 
 .versions {
   padding: var(--space-2) var(--space-3);
@@ -3631,25 +3716,65 @@ button.entry-page-add-button {
   gap: var(--space-1);
 }
 
-.version-meta {
+.version-heading {
+  margin: 0;
+  color: var(--muted);
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+/*
+ * What is said in meta, muted: that a Version's words are the current ones, that the Versions need
+ * the network, what a restore did, and a Held Change's line once it has gone.
+ */
+.version-now,
+.versions-note,
+.version-restored,
+.held-change-said {
+  margin: 0;
   color: var(--muted);
   font: var(--type-meta);
 }
 
-.version-words {
+/* Said to be disabled while a restore or a tap is out, so it keeps the focus, and dimmed as one is. */
+.versions button[aria-disabled="true"],
+.held-change button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/*
+ * The words now compared with those a tap brings, as typed: what goes struck and muted, what comes
+ * by weight on the accent's tint, never underlined, which is a quiet button's mark. A space stands
+ * between what goes and what comes after it.
+ */
+
+.comparison {
   max-width: 620px;
+  margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.version-words del {
+.comparison del {
   color: var(--muted);
 }
 
-.version-words ins {
+.comparison ins {
+  border-radius: 4px;
+  background: var(--accent-tint);
+  color: var(--ink);
   font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
+}
+
+.comparison del + ins {
+  margin-inline-start: 0.3em;
+}
+
+.comparison-fold {
+  font: var(--type-meta);
+  font-weight: 600;
 }
 
 /* A Held Change: on the accent's tint, where the person decides, its words as typed and never
@@ -3685,6 +3810,21 @@ button.entry-page-add-button {
   overflow-wrap: anywhere;
 }
 
+/* Inside the card, a box of its own, so what comes keeps the tint apart from the card's. */
+.held-change .comparison {
+  align-self: stretch;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.held-change-asked,
+.held-change-note {
+  margin: 0;
+  color: var(--ink);
+  font: var(--type-meta);
+}
+
 .held-change-tasks {
   margin: 0;
   padding-left: var(--space-4);
@@ -3701,9 +3841,13 @@ button.entry-page-add-button {
   margin-top: var(--space-2);
 }
 
+/* The way to an Entry's Held Change: in ink and underlined, as a quiet button is. */
 a.entry-mark.held-mark {
+  color: var(--ink);
   font: var(--type-meta);
   font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /*
@@ -4178,8 +4322,9 @@ a.entry-mark.held-mark {
     letter-spacing: var(--tracking-caption);
   }
 
-  /* On a phone a Run's fold is opened with a thumb. */
-  .run-calls summary {
+  /* On a phone a Run's fold, and a rule's Effects folded, are opened with a thumb. */
+  .run-calls summary,
+  .change-rule summary {
     min-height: 44px;
   }
 

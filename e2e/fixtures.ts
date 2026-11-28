@@ -335,6 +335,36 @@ export async function holdNext(page: Page, address: RegExp) {
 }
 
 /**
+ * Hold the next call at one address before it reaches the server, as `holdNext()` holds its
+ * answer: for a journey that looks at the screen while a write is out, whose change the live
+ * channel would otherwise bring before the answer, as a Held Change's tap is.
+ */
+export async function holdCall(page: Page, address: RegExp) {
+  let send!: () => void;
+  const sent = new Promise<void>((resolve) => {
+    send = resolve;
+  });
+  let asked!: () => void;
+  const wasAsked = new Promise<void>((resolve) => {
+    asked = resolve;
+  });
+  await page.route(
+    address,
+    async (route) => {
+      asked();
+      await sent;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  return {
+    asked: () => wasAsked,
+    /** Let the held call go to the server. */
+    send,
+  };
+}
+
+/**
  * Stand in for the browser's launch queue, as the installed PWA has it: a launch the manifest's
  * launch handler sends to a window already open is given to the screen there, with the address it
  * was launched at, and the launch that opened the window is given too, as Chromium gives it.

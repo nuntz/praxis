@@ -1,12 +1,15 @@
+import type { Page } from "@playwright/test";
 import {
   callContextTool,
   closeSettings,
+  contextOfOwn,
   entryAction,
   expect,
   lastShown,
   makeContext,
   openJournal,
   openSettings,
+  showSection,
   test,
 } from "./fixtures.ts";
 
@@ -57,7 +60,7 @@ test("the person deletes an Entry, sees it and its Task in the Trash, and restor
   await expect(item).toHaveCount(1);
   await expect(item).toContainText(`Entry ${words}`);
   await expect(item).toContainText(`With it: Task ${title}`);
-  await expect(item.getByText(/^Removed for good on /)).toBeVisible();
+  await expect(item.getByText(/^Deleted .+ · Stays until .+ 20\d\d$/)).toBeVisible();
   await expect(trash.getByText(/^Praxis cannot reach a file you downloaded/)).toBeVisible();
   // What the Agent quoted stays in the Conversation until the person clears it (section 3.8).
   await expect(
@@ -70,6 +73,9 @@ test("the person deletes an Entry, sees it and its Task in the Trash, and restor
   const restoring = page.waitForResponse(/\/tools\/restore$/);
   await item.getByRole("button", { name: "Restore", exact: true }).click();
   expect((await (await restoring).json()).ok).toBe(true);
+  await expect(trash.getByRole("status")).toHaveText(
+    `“${words}” and 1 Task are back in the Journal.`,
+  );
   await expect(trash.getByText("The Trash is empty.")).toBeVisible();
 
   // Back together: the Entry with its Task, and the link to it no longer deleted.
@@ -142,4 +148,196 @@ test("an Entry deleted in the Journal is said with Restore, which has the focus 
   // Deleted again, the journey ends on the line saying so, as the accessibility check sees it.
   await (await entryAction(shown, "Delete", testInfo)).click();
   await expect(restore).toBeFocused();
+});
+
+/** Record an Entry with these words and send it to the Trash, by call. */
+async function trashed(page: Page, id: string, words: string, titles: string[] = []) {
+  const { record } = await callContextTool(page, id, "record_entry", {
+    words,
+    tasks: titles.map((title) => ({ title })),
+  });
+  return (await callContextTool(page, id, "delete_entry", { id: record.id })).record;
+}
+
+/** The record ids in the Context's Trash, newest delete first, by call. */
+async function inTheTrash(page: Page, id: string): Promise<string[]> {
+  const { items } = await callContextTool(page, id, "list_trash", {});
+  return items.map((item: { record: { id: string } }) => item.record.id);
+}
+
+test("Restore by keyboard says what came back where it stood, and the focus goes to it", async ({
+  page,
+}, testInfo) => {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const { id } = await contextOfOwn(page, testInfo, "Restoring");
+  const [older, newer] = [`Repaint the hallway ${tag}`, `Fix the gate ${tag}`];
+  await trashed(page, id, older, [`Buy paint ${tag}`, `Sand the walls ${tag}`]);
+  await trashed(page, id, newer);
+
+  await page.goto("/");
+  const trash = await openSettings(page, "Trash");
+  const item = trash.getByTestId("trash-item").filter({ hasText: older });
+  const restore = item.getByRole("button", { name: "Restore", exact: true });
+  // Each act is told apart by what it acts on, and none is ever disabled.
+  await expect(restore).toHaveAccessibleDescription(`Entry ${older}`);
+  await expect(item.getByRole("button", { name: "Remove for good" })).toHaveAccessibleDescription(
+    `Entry ${older}`,
+  );
+
+  await restore.focus();
+  const restoring = page.waitForResponse(/\/tools\/restore$/);
+  await page.keyboard.press("Enter");
+  expect((await (await restoring).json()).ok).toBe(true);
+  const said = trash.getByRole("status");
+  await expect(said).toHaveText(`“${older}” and 2 Tasks are back in the Journal.`);
+  await expect(said).toBeFocused();
+  await expect(item).toHaveCount(0);
+  await expect(trash.getByTestId("trash-item")).toHaveCount(1);
+  await expect(trash.locator("button:disabled")).toHaveCount(0);
+});
+
+test("Remove for good waits until the Trash is left, and Keep it takes it back", async ({
+  page,
+}, testInfo) => {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const { id } = await contextOfOwn(page, testInfo, "Removing");
+  const [kept, removed] = [`Kept after all ${tag}`, `Gone for good ${tag}`];
+  const keptItem = await trashed(page, id, kept);
+  const removedItem = await trashed(page, id, removed);
+  const sent: string[] = [];
+  page.on("request", (request) => {
+    if (/\/tools\/(remove_for_good|empty_trash)$/.test(request.url())) sent.push(request.url());
+  });
+
+  await page.goto("/");
+  const trash = await openSettings(page, "Trash");
+  const row = (words: string) => trash.getByTestId("trash-item").filter({ hasText: words });
+
+  // Marked, it stays, says so, and the focus goes to the way back.
+  await row(kept).getByRole("button", { name: "Remove for good" }).click();
+  await expect(row(kept)).toContainText("Removed for good when you leave the Trash");
+  const keep = row(kept).getByRole("button", { name: "Keep it", exact: true });
+  await expect(keep).toBeFocused();
+  await keep.click();
+  await expect(row(kept).getByRole("button", { name: "Remove for good" })).toBeFocused();
+  await expect(row(kept)).not.toContainText("Removed for good when you leave the Trash");
+
+  await row(removed).getByRole("button", { name: "Remove for good" }).click();
+  await expect(row(removed).getByRole("button", { name: "Keep it", exact: true })).toBeFocused();
+  expect(sent).toEqual([]);
+  expect(await inTheTrash(page, id)).toEqual([removedItem.record.id, keptItem.record.id]);
+
+  // Another section opened, the one marked is sent, and the one kept stays.
+  const removing = page.waitForResponse(/\/tools\/remove_for_good$/);
+  await showSection(page, "General");
+  expect((await (await removing).json()).ok).toBe(true);
+  expect(sent).toHaveLength(1);
+  expect(await inTheTrash(page, id)).toEqual([keptItem.record.id]);
+
+  // Marked again, the journey ends on the mark, as the accessibility check sees it.
+  const again = await showSection(page, "Trash");
+  await expect(again.getByTestId("trash-item")).toHaveCount(1);
+  await row(kept).getByRole("button", { name: "Remove for good" }).click();
+  await expect(row(kept).getByRole("button", { name: "Keep it", exact: true })).toBeFocused();
+});
+
+test("Empty the Trash empties it as shown when the Trash is left, keeps what was deleted after, and removes nothing with no network", async ({
+  page,
+}, testInfo) => {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const { id } = await contextOfOwn(page, testInfo, "Emptying");
+  await trashed(page, id, `First ${tag}`);
+  await trashed(page, id, `Second ${tag}`);
+
+  await page.goto("/");
+  const trash = await openSettings(page, "Trash");
+  const items = trash.getByTestId("trash-item");
+  await expect(items).toHaveCount(2);
+  await trash.getByRole("button", { name: "Empty the Trash" }).click();
+  await expect(trash.getByRole("button", { name: "Keep them", exact: true })).toBeFocused();
+  await expect(items.filter({ hasText: "Removed for good when you leave the Trash" })).toHaveCount(
+    2,
+  );
+
+  // Deleted after, on another Device, it shows unmarked, and stays.
+  const later = await trashed(page, id, `Deleted after ${tag}`);
+  const laterRow = items.filter({ hasText: `Deleted after ${tag}` });
+  // Marked by itself meanwhile, it has its own Keep it, which takes the focus and the mark back.
+  await laterRow.getByRole("button", { name: "Remove for good" }).click();
+  const keepLater = laterRow.getByRole("button", { name: "Keep it", exact: true });
+  await expect(keepLater).toBeFocused();
+  await keepLater.click();
+  await expect(laterRow.getByRole("button", { name: "Remove for good" })).toBeFocused();
+
+  const emptying = page.waitForResponse(/\/tools\/empty_trash$/);
+  await closeSettings(page);
+  const emptied = await (await emptying).json();
+  expect(emptied).toMatchObject({ ok: true, value: { record: { items: 2 } } });
+  expect(await inTheTrash(page, id)).toEqual([later.record.id]);
+
+  // With no network, leaving removes nothing, and the screen says so.
+  const again = await openSettings(page, "Trash");
+  await again.getByRole("button", { name: "Remove for good" }).click();
+  await page.context().setOffline(true);
+  await closeSettings(page);
+  await expect(page.getByRole("alert")).toHaveText(
+    "Praxis could not be reached: nothing was removed for good.",
+  );
+  await page.context().setOffline(false);
+  expect(await inTheTrash(page, id)).toEqual([later.record.id]);
+});
+
+test("Show earlier reaches past the newest 50, and Empty the Trash empties what was never read, after Keep them takes it back once", async ({
+  page,
+}, testInfo) => {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const { id } = await contextOfOwn(page, testInfo, "Paging");
+  // The oldest first, then 50 more, each its own item.
+  await trashed(page, id, `Oldest ${tag}`);
+  for (let batch = 0; batch < 5; batch++) {
+    await Promise.all(
+      Array.from({ length: 10 }, (_, n) => trashed(page, id, `Item ${batch * 10 + n} ${tag}`)),
+    );
+  }
+
+  await page.goto("/");
+  const trash = await openSettings(page, "Trash");
+  const items = trash.getByTestId("trash-item");
+  await expect(items).toHaveCount(50);
+  await expect(items.filter({ hasText: `Oldest ${tag}` })).toHaveCount(0);
+  const earlier = trash.getByRole("button", { name: "Show earlier", exact: true });
+  await earlier.click();
+  await expect(items).toHaveCount(51);
+  await expect(items.last()).toContainText(`Oldest ${tag}`);
+  await expect(earlier).toHaveCount(0);
+
+  // Emptying, then Keep them, takes every mark back, and the focus goes back to Empty the Trash.
+  const empty = trash.getByRole("button", { name: "Empty the Trash", exact: true });
+  await empty.click();
+  const keepThem = trash.getByRole("button", { name: "Keep them", exact: true });
+  await expect(keepThem).toBeFocused();
+  await expect(keepThem).toHaveAccessibleDescription(
+    "Everything in the Trash now is removed for good when you leave the Trash.",
+  );
+  await keepThem.click();
+  await expect(empty).toBeFocused();
+  await expect(items.filter({ hasText: "Removed for good when you leave the Trash" })).toHaveCount(
+    0,
+  );
+
+  // Emptied as the Trash is left, it takes the oldest too.
+  await empty.click();
+  const emptying = page.waitForResponse(/\/tools\/empty_trash$/);
+  await showSection(page, "General");
+  expect(await (await emptying).json()).toMatchObject({
+    ok: true,
+    value: { record: { items: 51 } },
+  });
+  expect(await inTheTrash(page, id)).toEqual([]);
+
+  // One more deleted and emptied, the journey ends on the Trash marked to be emptied.
+  await trashed(page, id, `Last ${tag}`);
+  const again = await showSection(page, "Trash");
+  await again.getByRole("button", { name: "Empty the Trash", exact: true }).click();
+  await expect(again.getByRole("button", { name: "Keep them", exact: true })).toBeFocused();
 });

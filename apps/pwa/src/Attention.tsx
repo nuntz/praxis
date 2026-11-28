@@ -309,10 +309,10 @@ export function Attention(props: {
             </p>
           )}
         </Show>
-        <Section id="held-changes" title="Held Changes" icon={Hand} items={heldChanges.all()}>
+        <Section id="held-changes" title="Held Changes" icon={Hand} items={heldChanges.shown()}>
           {(held) => (
             <li>
-              <HeldChangeItem held={held} anchor={heldAnchor(held.id)} />
+              <HeldChangeItem held={held} timeZone={props.timeZone} anchor={heldAnchor(held.id)} />
             </li>
           )}
         </Section>
