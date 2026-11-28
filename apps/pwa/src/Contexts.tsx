@@ -379,7 +379,8 @@ function DeleteContext(props: {
         no Trash for it and no way back. An Export keeps a copy.
       </p>
       <div>
-        <MakeExport changes={props.changes} at={at} />
+        {/* Quiet beside the form's one solid button, Delete for good (section 8.6). */}
+        <MakeExport changes={props.changes} at={at} quiet />
       </div>
       <p class="settings-note">
         {DOWNLOADED} Its files in Backups go as those Backups age out, within 30 days.

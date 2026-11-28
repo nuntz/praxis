@@ -113,6 +113,9 @@ export function TimeZonePicker(props: {
       putAway();
       return;
     }
+    // While something is typed, Enter is the picker's: with nothing chosen it chooses nothing,
+    // rather than send the form with the zone it held.
+    if (event.key === "Enter" && (open() || typed() !== null)) event.preventDefault();
     if (!open()) {
       if (event.key !== "ArrowDown") return;
       event.preventDefault();

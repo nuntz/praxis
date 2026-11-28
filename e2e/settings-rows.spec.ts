@@ -552,6 +552,15 @@ test("at 320px, Contexts and Connections scroll nowhere sideways, with long name
   await connections.getByRole("button", { name: "New Connection…", exact: true }).click();
   await expect(connections.getByRole("form", { name: "New Connection" })).toBeVisible();
   expect(await spills(page, connections)).toEqual([]);
+
+  // The top bar's list of Contexts breaks a name with no break in it, rather than run off the page.
+  await page
+    .getByRole("banner")
+    .getByRole("button", { name: /^Context: / })
+    .click();
+  const choices = page.getByRole("banner").getByRole("list", { name: "Contexts" });
+  await expect(choices.getByRole("button", { name: unbroken.name, exact: true })).toBeVisible();
+  expect(await spills(page, choices)).toEqual([]);
 });
 
 test("Contexts and Connections show their one solid button only while a form is open, and Conversation and search none", async ({

@@ -261,7 +261,7 @@ const NONE_READ = new Date(0).toISOString();
  * Conversation and search, in Settings: the rare, heavy actions on the current Context, clearing
  * its Conversation and rebuilding its search index (section 8.6). Clearing cannot be put back, so
  * Clear only marks it, and the Conversation is cleared as the section is left (ADR 0028), unless a
- * Message came after the newest the screen had read when Clear was tapped: then nothing is, and
+ * Message came after the newest the screen had read as the section opened: then nothing is, and
  * the screen's notice says so.
  */
 export function ConversationAndSearch(props: {
@@ -272,7 +272,7 @@ export function ConversationAndSearch(props: {
   const callTool = useCallTool();
   const { change, sending, problemAt } = sectionChanges();
   const newest = newestMessage();
-  // Marked by the time of the newest Message read as Clear was tapped: one at most.
+  // Marked by the time of the newest Message read as the section opened: one at most.
   const clearing = marksSentOnLeaving<string>({
     sends: (marked) =>
       [...marked].map((upTo) => () => callTool("clear_conversation", { up_to: upTo })),
@@ -309,7 +309,7 @@ export function ConversationAndSearch(props: {
       <SettingsGroup heading="Conversation">
         <SettingRow
           title={<span id={everyMessage}>Every Message</span>}
-          description="Clearing drops every Message, and what the Agent quoted of records since removed for good with them, unless one comes after you tap Clear: then nothing is cleared, so you see it first. The Journal, its changes and the Run records stay as they are. It cannot be undone."
+          description="Clearing drops every Message, and what the Agent quoted of records since removed for good with them, unless one has come since you opened this section: then nothing is cleared, so you see it first. The Journal, its changes and the Run records stay as they are. It cannot be undone."
           control={() => (
             <Show
               when={!clearing.any()}
@@ -370,29 +370,27 @@ export function ConversationAndSearch(props: {
 /**
  * The time of the newest Message the screen has read in the Conversation, as `clear_conversation`
  * takes it, so the Device's clock plays no part: a Message from the person when it was sent, a
- * Brief or a Review when it was taken. Read as the section opens and followed down the live
- * channel; null with none read. A Conversation that cannot be opened shows none, and is cleared
- * all the same, which is how it is mended (section 11): up to before any Message (`NONE_READ`).
+ * Brief or a Review when it was taken. Settings takes the main screen's place, so what the person
+ * was shown is what was there as the section opened: it is read then, never followed down the live
+ * channel, and a Message that comes while the section is open makes a Clear refused, so the person
+ * sees it first. Read again on rejoining only while none was read. Null with none read, or once the
+ * Conversation is cleared. A Conversation that cannot be opened shows none, and is cleared all the
+ * same, which is how it is mended (section 11): up to before any Message (`NONE_READ`).
  */
 function newestMessage() {
   const callTool = useCallTool();
   const live = useLive();
   const [at, setAt] = createSignal<string | null>(null);
-  const take = (messages: Message[]) => {
-    const times = messages.flatMap((message) =>
-      message.from === "person" ? [message.at] : message.clock ? [message.clock.taken] : [],
-    );
-    const now = at();
-    const latest = [...times, ...(now === null ? [] : [now])].sort().at(-1);
-    setAt(latest ?? null);
-  };
   const newestPage = latestRead(async (current) => {
     try {
       const page = await callTool("list_messages", {});
       if (!current() || !page.ok) return;
       // One that cannot be opened shows none, and is cleared whole (section 11).
-      setAt(page.value.agent === "unavailable" ? NONE_READ : null);
-      take(page.value.items);
+      if (page.value.agent === "unavailable") return setAt(NONE_READ);
+      const times = page.value.items.flatMap((message: Message) =>
+        message.from === "person" ? [message.at] : message.clock ? [message.clock.taken] : [],
+      );
+      setAt(times.sort().at(-1) ?? null);
     } catch {
       // Unread, there is nothing to clear up to.
     }
@@ -403,9 +401,10 @@ function newestMessage() {
   });
   onCleanup(
     live.listen({
-      message: (message) => take([message]),
-      cleared: () => newestPage.read(),
-      rejoined: () => newestPage.read(),
+      cleared: () => setAt(null),
+      rejoined: () => {
+        if (at() === null) void newestPage.read();
+      },
     }),
   );
   return { at };

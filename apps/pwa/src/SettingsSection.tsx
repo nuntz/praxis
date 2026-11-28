@@ -93,6 +93,10 @@ export function sectionChanges() {
     },
     /** Say a problem at `at` that no tool answered, such as a field that holds no amount. */
     say: (at: string, message: string) => setProblem({ at, message }),
+    /** Take back what was said at `at`, as a field that now holds what it should. */
+    unsay: (at: string) => {
+      if (problem()?.at === at) setProblem(null);
+    },
   };
 }
 

@@ -63,13 +63,16 @@ export function spendListed(): string | null {
 /** What the cap's field says of what was typed in it that is not an amount. */
 const NOT_AN_AMOUNT = "Type an amount in US dollars, such as 40.";
 
+/** An amount as typed in the cap's field: whole dollars, with up to two places of cents. */
+const AN_AMOUNT = /^\d+(\.\d{1,2})?$/;
+
 /**
  * The spend cap in the Deployment's settings (section 8.6): the month's spend against it, and the
  * cap set here, by the person's hand, its field holding the cap as last read. Raising it takes
  * effect at once.
  */
 export function SpendSettings() {
-  const { change, sending, problemAt, say } = sectionChanges();
+  const { change, sending, problemAt, say, unsay } = sectionChanges();
   // What the last cap set did, said until the person types in its field again.
   const [said, setSaid] = createSignal<string | null>(null);
   let field!: HTMLInputElement;
@@ -83,11 +86,13 @@ export function SpendSettings() {
 
   async function save() {
     const typed = field.value.trim();
-    const dollars = Number(typed);
-    if (typed === "" || !Number.isFinite(dollars) || dollars <= 0) {
+    // Dollars, and cents if any: not the other forms a number takes, such as 0x10 or 1e3.
+    const dollars = AN_AMOUNT.test(typed) ? Number(typed) : Number.NaN;
+    if (!(dollars > 0)) {
       say("cap", NOT_AN_AMOUNT);
       return;
     }
+    unsay("cap");
     if (dollars === spend()?.cap) return;
     // The field shows the cap again once the spend is read after it.
     const set = await cap.send(async () => {

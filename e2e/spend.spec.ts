@@ -72,6 +72,7 @@ test("Set cap with nothing changed sends nothing, and a cap that is not an amoun
   const field = spend.getByLabel("Monthly cap, US dollars", { exact: true });
   const setCap = spend.getByRole("button", { name: "Set cap" });
   await expect(field).not.toHaveValue("");
+  const current = await field.inputValue();
 
   await setCap.click();
   await expect(field).not.toHaveAttribute("aria-invalid", "true");
@@ -81,6 +82,19 @@ test("Set cap with nothing changed sends nothing, and a cap that is not an amoun
   await setCap.click();
   await expect(spend.getByRole("alert")).toHaveText("Type an amount in US dollars, such as 40.");
   await expect(field).toHaveAttribute("aria-invalid", "true");
+  // Nor is a number written another way an amount in dollars.
+  for (const typed of ["0x10", "1e3"]) {
+    await field.fill(typed);
+    await setCap.click();
+    await expect(spend.getByRole("alert")).toHaveText("Type an amount in US dollars, such as 40.");
+  }
+  expect(sent).toBe(0);
+
+  // The cap typed again as it stands takes back what was said, and sends nothing.
+  await field.fill(current);
+  await setCap.click();
+  await expect(spend.getByRole("alert")).toHaveCount(0);
+  await expect(field).not.toHaveAttribute("aria-invalid", "true");
   expect(sent).toBe(0);
 });
 

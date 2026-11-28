@@ -36,6 +36,8 @@ export async function backupsListed(): Promise<string | null> {
  */
 export function BackupsAndExport() {
   const overdue = () => standingNotice("no_backup");
+  // Made once: a call in a prop is read again at each use, which would make a queue each time.
+  const changes = sectionChanges();
   return (
     <SettingsSection
       note={
@@ -53,7 +55,7 @@ export function BackupsAndExport() {
       }
     >
       <BackupSettings />
-      <ExportSettings changes={sectionChanges()} />
+      <ExportSettings changes={changes} />
     </SettingsSection>
   );
 }

@@ -327,6 +327,7 @@ button.quiet {
   list-style: none;
 }
 
+/* A name with no break in it is broken anywhere, rather than run the list off the screen. */
 .context-choice {
   justify-content: flex-start;
   width: 100%;
@@ -335,6 +336,21 @@ button.quiet {
   color: var(--ink);
   font: var(--type-body);
   text-align: left;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * On a phone the list hangs from the top bar's edge, not from the switcher, which may stand to the
+ * right of Settings' way back: so it is never wider than the screen leaves it.
+ */
+@media (width < 720px) {
+  .switcher {
+    position: static;
+  }
+
+  .context-list {
+    max-width: 100%;
+  }
 }
 
 .context-choice[aria-current="true"] {

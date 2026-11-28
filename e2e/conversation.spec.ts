@@ -234,7 +234,7 @@ test("the person saves a Run's transcript, then clears the Conversation from the
   ).toBeVisible();
 });
 
-test("a Clear sent as the section is left, once a Message came after the newest the screen had read, clears nothing and says so", async ({
+test("a Clear sent as the section is left, once a Message came while the section was open, clears nothing and says so", async ({
   page,
 }, testInfo) => {
   const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
@@ -249,9 +249,10 @@ test("a Clear sent as the section is left, once a Message came after the newest 
   const settings = await openSettings(page, "Conversation and search");
   const clear = settings.getByRole("button", { name: "Clear the Conversation", exact: true });
   await expect(clear).toBeEnabled();
-  await clear.click();
 
-  // A Message from another Device, after the tap, answered before the section is left.
+  // A Message from another Device while the section is open, answered and heard over the live
+  // channel before Clear is tapped: Settings stands in the Conversation's place, so it was not
+  // shown, and Clear is up to what the section read as it opened.
   await callContextTool(page, context.id, "send_message", { words: `Say: Since ${tag}` });
   await expect
     .poll(async () => {
@@ -259,6 +260,7 @@ test("a Clear sent as the section is left, once a Message came after the newest 
       return items.filter((run: { ended: string | null }) => run.ended !== null).length;
     })
     .toBe(2);
+  await clear.click();
   const cleared = page.waitForResponse(/\/tools\/clear_conversation$/);
   await closeSettings(page);
 

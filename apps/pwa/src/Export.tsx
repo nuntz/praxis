@@ -37,7 +37,7 @@ export function ExportSettings(props: { changes: SectionChanges }) {
  * changes, which say at `at` what stood in the way if it could not. Offered in the settings, and
  * before a Context is deleted.
  */
-export function MakeExport(props: { changes: SectionChanges; at: string }) {
+export function MakeExport(props: { changes: SectionChanges; at: string; quiet?: boolean }) {
   const [making, setMaking] = createSignal(false);
 
   async function make() {
@@ -49,7 +49,12 @@ export function MakeExport(props: { changes: SectionChanges; at: string }) {
   }
 
   return (
-    <button type="button" disabled={props.changes.sending()} onClick={() => void make()}>
+    <button
+      type="button"
+      classList={{ quiet: props.quiet === true }}
+      disabled={props.changes.sending()}
+      onClick={() => void make()}
+    >
       {making() ? "Making the Export…" : "Make an Export"}
     </button>
   );

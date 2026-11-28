@@ -59,6 +59,30 @@ test("the person makes an Export in settings and keeps a zip of the whole Deploy
   expect(context.entries).toEqual([expect.objectContaining({ words })]);
 });
 
+test("an Export that cannot be made is said under its group, and its button is held while it is out", async ({
+  page,
+}) => {
+  let answer: () => void = () => {};
+  await page.route(/\/tools\/make_export$/, async (route) => {
+    await new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    await route.abort();
+  });
+  await page.goto("/");
+  const section = (await openSettings(page, "Backups and Export")).getByRole("region", {
+    name: "Export",
+  });
+  // "Make an Export", or "Making the Export…" while it is out.
+  const make = section.getByRole("button", { name: /^Mak(e|ing)/ });
+  await make.click();
+  await expect(make).toBeDisabled();
+  answer();
+
+  await expect(section.getByRole("alert")).toHaveCount(1);
+  await expect(make).toBeEnabled();
+});
+
 test("the Deployment's settings say when the last Backup was made", async ({ page }) => {
   // wrangler dev fires the daily trigger when asked (--test-scheduled, playwright.config.ts).
   expect((await page.request.get("/__scheduled?cron=0+3+*+*+*")).ok()).toBe(true);

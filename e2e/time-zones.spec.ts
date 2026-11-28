@@ -133,6 +133,17 @@ test("a new Context's time zone is picked from the same list, starting at this D
   await expect(field).toHaveValue(deviceZone(testInfo));
 
   await form.getByLabel("Name", { exact: true }).fill(name);
+  // Enter on a zone that matches none chooses nothing, and makes nothing in the zone it held.
+  let made = 0;
+  await page.route(/\/create_context$/, async (route) => {
+    made += 1;
+    await route.continue();
+  });
+  await field.fill("Pariss");
+  await expect(form.getByText("No time zone is named so.", { exact: true })).toBeVisible();
+  await field.press("Enter");
+  await expect(form).toBeVisible();
+  expect(made).toBe(0);
   await field.fill("tokyo");
   await form.getByRole("option", { name: /^Asia\/Tokyo/ }).click();
   await expect(field).toHaveValue(PICKED);
