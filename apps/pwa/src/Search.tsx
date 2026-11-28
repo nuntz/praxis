@@ -365,7 +365,18 @@ export function createSearch(props: {
             <label class="visually-hidden" for="journal-search-words">
               Search this Context
             </label>
-            <div class="search-field">
+            {/* A press anywhere on the pill puts the caret in its input, as on the input itself. */}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: the pill is no control of its own: a press on it is a press on its input, which the keyboard and a screen reader reach directly. */}
+            <div
+              class="search-field"
+              onMouseDown={(event) => {
+                const on = event.target as Element;
+                if (on === field || on.closest("button") || !field || field.disabled) return;
+                event.preventDefault();
+                field.focus();
+                setEntered(true);
+              }}
+            >
               <SearchIcon class="search-field-icon" size={18} aria-hidden="true" />
               <input
                 ref={field}

@@ -4012,6 +4012,25 @@ a.entry-mark.held-mark {
     overflow-x: auto;
   }
 
+  .search-note {
+    margin-inline: var(--space-4);
+  }
+
+  /* Its clear button, a picker's field and each picker's choice, the composer's too, are 44px. */
+  button.search-clear {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .choice-field {
+    min-height: 44px;
+  }
+
+  .link-picker [role="option"] {
+    min-height: 44px;
+    padding-block: 12px;
+  }
+
   /* A set chip's words are cut past 60% of the row, so the chips after it still show. */
   .chip-holder {
     position: static;
@@ -4038,6 +4057,25 @@ a.entry-mark.held-mark {
   .search-hit-body,
   .search-task-link {
     min-height: 44px;
+  }
+
+  /*
+   * What is found sits on the ground here, so a Project, Person or Task found is a surface row, as
+   * inset always sits on surface, and an Entry found a surface card, as the Journal's are.
+   */
+  .search-hit-body {
+    background: var(--surface);
+  }
+
+  .search-group-entry .search-hits,
+  .search-group-meaning .search-hits {
+    gap: var(--space-2);
+  }
+
+  .search-entry .search-hit-body {
+    border-top: none;
+    border-radius: var(--radius-md);
+    background: var(--surface);
   }
 
   .peer-foot {
