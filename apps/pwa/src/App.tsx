@@ -648,6 +648,7 @@ export function App() {
                           onContextChanged={showChangedContext}
                           onContextMade={addContext}
                           onContextDeleted={dropContext}
+                          onProblem={setProblem}
                         />
                       </Show>
                       <main class="peers" hidden={inSettings()}>

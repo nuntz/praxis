@@ -722,7 +722,9 @@ describe("empty_trash", () => {
     value(await context.call(hand, "delete_entry", { id: entry.id }));
     value(await context.call(hand, "delete_person", { id: ali.id }));
 
-    const result = value(await context.call(hand, "empty_trash", {}));
+    const [newest] = value(await context.call(hand, "list_trash", {})).items;
+
+    const result = value(await context.call(hand, "empty_trash", { up_to: newest?.deleted_at }));
 
     expect(result.record).toEqual({ items: 2 });
     expect(result.effects.map(({ id, what, by }) => [id, what, by])).toEqual([
@@ -731,11 +733,45 @@ describe("empty_trash", () => {
       [ali.id, "deleted", "call"],
     ]);
     expect(value(await context.call(hand, "list_trash", {})).items).toEqual([]);
-    expect(value(await context.call(hand, "empty_trash", {}))).toEqual({
+    expect(
+      value(await context.call(hand, "empty_trash", { up_to: "2026-12-01T00:00:00.000Z" })),
+    ).toEqual({
       record: { items: 0 },
       effects: [],
       changed: false,
     });
+  });
+
+  test("removes an item deleted at up_to exactly, and keeps one deleted after it, which the screen never showed", async () => {
+    const context = newContext("2026-11-15T09:00:00.000Z");
+    const shown = await anEntry(context, marked("Shown"));
+    value(await context.call(hand, "delete_entry", { id: shown.id }));
+    context.advance(1);
+    const later = await anEntry(context, marked("Deleted after"));
+    value(await context.call(hand, "delete_entry", { id: later.id }));
+
+    const result = value(
+      await context.call(hand, "empty_trash", { up_to: "2026-11-15T09:00:00.000Z" }),
+    );
+
+    expect(result.record).toEqual({ items: 1 });
+    expect(result.effects.map(({ id }) => id)).toEqual([shown.id]);
+    const left = value(await context.call(hand, "list_trash", {})).items;
+    expect(left.map((item) => [item.record.id, item.deleted_at])).toEqual([
+      [later.id, "2026-11-15T09:00:00.001Z"],
+    ]);
+  });
+
+  test("is refused without up_to, and removes nothing", async () => {
+    const context = newContext();
+    const entry = await anEntry(context, marked("Kept"));
+    value(await context.call(hand, "delete_entry", { id: entry.id }));
+
+    expect(await context.call(hand, "empty_trash", {})).toMatchObject({
+      ok: false,
+      error: { code: "invalid_input" },
+    });
+    expect(value(await context.call(hand, "list_trash", {})).items).toHaveLength(1);
   });
 });
 
@@ -781,7 +817,12 @@ describe("what a removal for good leaves", () => {
       }),
     );
     value(await context.call(hand, "delete_entry", { id: entry.id, key: "deleted" }));
-    value(await context.call(hand, "empty_trash", { key: "emptied" }));
+    value(
+      await context.call(hand, "empty_trash", {
+        up_to: "2026-11-15T09:00:00.000Z",
+        key: "emptied",
+      }),
+    );
 
     // The object wakes 30 days on, and the oracle finds none of their words in any table.
     context.advance(30 * DAY);

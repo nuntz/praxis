@@ -795,11 +795,59 @@ input[type="checkbox"].switch:disabled {
   letter-spacing: var(--tracking-label);
 }
 
-.trash-actions,
 .standing-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/*
+ * Restore follows what was deleted, and Remove for good is apart from it: under the row's other
+ * words on a phone, at the row's end on a desktop.
+ */
+.trash-words {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.trash-removal {
+  display: flex;
+  min-width: 0;
+}
+
+.trash-marked,
+.trash-emptying,
+.trash-said > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.trash-marked {
+  font-weight: 600;
+}
+
+/* Said to be disabled while a restore is out, so it keeps the focus, and dimmed as one is. */
+.trash-items button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (width >= 720px) {
+  .trash-item {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .trash-removal {
+    flex: 0 1 auto;
+    max-width: 40%;
+    text-align: end;
+  }
 }
 
 /* The Changes: each change or read, who made it and when, newest first. */

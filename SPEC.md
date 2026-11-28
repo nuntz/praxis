@@ -171,7 +171,7 @@ ADR 0002, 0012.
 
 ### 3.8 Deleting and the Trash
 
-ADR 0014. Glossary: Trash.
+ADRs 0014 and 0027. Glossary: Trash.
 
 A delete sends to the Trash the record and only what cannot exist without it. It is never refused for what hangs off the record.
 
@@ -189,7 +189,7 @@ A delete sends to the Trash the record and only what cannot exist without it. It
 - A record that comes back is an Effect `made`, the one asked for by the call and the rest by rule. A Task that comes back holds no link to a record in the Trash now: the link is taken as that record's delete would have taken it, and kept dormant with it. A wait on something that reached an end meanwhile is released.
 - `restore` and `remove_for_good` take the id of any record in the item.
 - A trashed record is left out of every view, list and search. It cannot be changed or linked to. The only calls on it are restore and, by the person's hand, removal for good.
-- **Removal for good** happens 30 days after the delete, or when the person empties the Trash. It takes the record, everything deleted with it, all its Versions and every dormant link to it, and leaves no marker. A Follow-up of it becomes an ordinary Entry, and a Task once Delegated to a Person removed keeps no trace of it. A Task deleted on its own goes with its Origin Entry's removal, since no Task is left without one. Its summaries in the change log are blanked. It leaves both search indexes.
+- **Removal for good** happens 30 days after the delete, or when the person removes an item or empties the Trash. On the screen either waits until the person leaves the Trash (ADR 0027): the tap marks what would go and sends nothing, the item says it will be removed for good when the person leaves, and Keep it, or Keep them for the whole Trash, takes the mark off. The removals are sent when the Trash section closes, by another section of Settings, closing Settings or switching Context, never when the app is hidden or killed. The mark is the screen's alone: until they are sent the item is in the Trash for every caller, and the Agent may restore it. A removal that cannot be sent removes nothing, and the screen says so; one whose item has left the Trash meanwhile is skipped, and nothing is said. `empty_trash` takes `up_to`, the `deleted_at` of the newest item the screen showed, read a page at a time or not, and removes every item deleted at or before it: an item deleted after it stays, so emptying never removes what the person was not shown. Removal at 30 days waits for nothing. It takes the record, everything deleted with it, all its Versions and every dormant link to it, and leaves no marker. A Follow-up of it becomes an ordinary Entry, and a Task once Delegated to a Person removed keeps no trace of it. A Task deleted on its own goes with its Origin Entry's removal, since no Task is left without one. Its summaries in the change log are blanked. It leaves both search indexes.
 - A removal's Effects are each record removed, `deleted` with an empty summary, and each record not in the Trash that lost a link to one, `changed` by rule. Removal at 30 days is the Context's alarm, not a call, so it goes in no change log; a reader learns of it by reading.
 - A record removed for good is gone from everything Praxis holds within 30 days of its removal, not at once, because a Backup lives 30 days (section 10). What the Agent quoted of it stays in the Conversation until the person clears that Conversation (section 5.8): the Conversation is the record of what the Agent heard, said and called, dropped whole and never edited. The screens for emptying the Trash and deleting a Context say that Praxis cannot reach a file the person downloaded, and the Trash's says that the Conversation keeps what the Agent quoted until it is cleared.
 
@@ -373,7 +373,7 @@ Every **read** is offered to all five callers, except where noted:
 | `create_person`, `rename_person`, `delete_person` | A Person is made, renamed or sent to the Trash | yes | yes | yes |
 | `restore` | An item comes back from the Trash | yes | yes | no |
 | `remove_for_good` | One item in the Trash is removed for good | yes | no | no |
-| `empty_trash` | Everything in the Trash is removed for good | yes | no | no |
+| `empty_trash` | Everything in the Trash deleted up to `up_to` is removed for good | yes | no | no |
 | `make_held_change` | A Held Change is made by the person's tap | yes | no | no |
 | `cancel_held_change` | A Held Change is cancelled | yes | yes | no |
 | `set_brief_time`, `set_review_time` | A Context's Brief or Review time is set or switched off | yes | yes | no |
@@ -719,7 +719,7 @@ Its sections are in two groups, the current Context's and the Deployment's:
 | | **Brief and Review** | The Brief's time, the Review's day and time, each with its switch, and the Notification switch. |
 | | **Standing Entries** | The full list for the Context. |
 | | **Changes** | The Context's list of changes, newest first, filtered by caller, with a Connection's reads listed alongside: each change's caller, time and Effects, each read's Connection, tool, time and how many records came back or the code it was answered with. It reaches back by hand, never further than both lists have been read, and a change made while it is shown comes over the live channel. A Connection's reads are as of the last read, since the live channel carries none. There is no activity screen beyond this. |
-| | **Trash** | Each item, what went with it and when it will be removed. Restore, remove one for good, empty. |
+| | **Trash** | Each item, newest delete first, with Show earlier while there are more: what was deleted, its Restore, what went with it, and "Deleted 28 Nov · Stays until 28 Dec 2026", with Remove for good apart from Restore, under the row's words on a phone and at its end on a desktop. Restore is quiet, as the Journal's is. Remove for good and Empty the Trash wait until the Trash is left (section 3.8). A restore is said where its item stood, as "“Repaint the hallway…” and 2 Tasks are back in the Journal.", which takes the focus and goes at the person's next act; marking one moves the focus to its Keep it, emptying to Keep them. A press while a restore is out does nothing, and no control is disabled, so the focus stays where it was; a refusal is said, with the focus on what was pressed. Each Restore and Remove for good is described by its record's line. |
 | | **Conversation and search** | Clear the Conversation, rebuild the search index. |
 | Everything in Praxis | **Contexts** | Each with its accent colour. |
 | | **Connections** | Each with its Context, its address and whether it is limited to reading. |

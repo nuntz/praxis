@@ -442,10 +442,10 @@ export function nextExpiry(sql: SqlStorage): number | null {
   return at === null ? null : removedForGoodAt(at);
 }
 
-/** Every item in the Trash, oldest first. */
-export function everyItem(sql: SqlStorage): string[] {
+/** Every item in the Trash deleted at or before `upTo`, oldest first. */
+export function itemsDeletedBy(sql: SqlStorage, upTo: number): string[] {
   return sql
-    .exec<{ id: string }>(`SELECT id FROM trash_items ORDER BY seq`)
+    .exec<{ id: string }>(`SELECT id FROM trash_items WHERE at <= ? ORDER BY seq`, upTo)
     .toArray()
     .map((row) => row.id);
 }

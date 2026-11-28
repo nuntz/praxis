@@ -77,6 +77,11 @@ export function isObjectTool(name: string): name is ObjectToolName {
   return OBJECT_TOOLS.includes(name);
 }
 
+/** A call let in to a tool `dispatch` runs, with its tool and its input narrowed together. */
+function isDispatched(admitted: Admitted): admitted is Exclude<Admitted, { tool: ObjectToolName }> {
+  return !isObjectTool(admitted.tool);
+}
+
 export type Handlers = {
   [N in Exclude<ToolName, ObjectToolName>]: (call: ToolCall<N>) => ToolResult<ToolOutput[N]>;
 };
@@ -124,9 +129,11 @@ export function dispatch(
 ): ToolResult<unknown> {
   const admitted = admit(request);
   if (!admitted.ok) return admitted;
-  const { tool, input } = admitted.value;
-  if (isObjectTool(tool)) throw new Error(`${tool} is run by the Context's object, not dispatched`);
-  return runTool(tool, input, handlers, storage, request);
+  const call = admitted.value;
+  if (!isDispatched(call)) {
+    throw new Error(`${call.tool} is run by the Context's object, not dispatched`);
+  }
+  return runTool(call.tool, call.input, handlers, storage, request);
 }
 
 function runTool<N extends Exclude<ToolName, ObjectToolName>>(
