@@ -977,7 +977,8 @@ input[type="checkbox"].switch:disabled {
   margin: 0;
 }
 
-.new-context label {
+.new-context label,
+.new-context-zone {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -2930,6 +2931,50 @@ button.chip.set .chip-end {
 
 .inspector .link-picker [role="option"] {
   padding: 10px var(--space-3);
+}
+
+/*
+ * A time zone picked from a list: its field, and under it, once typed in, a `surface` box of the
+ * zones that hold what was typed, each with its offset at its end, highlighted on `inset`. It
+ * opens in the flow, under its field, since its row's box clips what would be drawn over it.
+ */
+.zone-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: min(20rem, 100%);
+}
+
+.zone-picker input {
+  width: 100%;
+}
+
+.zone-name {
+  min-width: 0;
+}
+
+.zone-picker .link-picker {
+  max-height: 16rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.zone-picker .link-picker [role="option"] {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.zone-picker .link-picker .highlighted {
+  background: var(--inset);
+}
+
+.zone-offset {
+  flex-shrink: 0;
+  color: var(--muted);
+  font: var(--type-meta);
+  font-variant-numeric: tabular-nums;
 }
 
 .entry-list[hidden] {

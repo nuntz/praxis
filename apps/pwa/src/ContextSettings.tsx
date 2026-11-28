@@ -2,6 +2,7 @@ import { FIRST_TIMES, namedZone, type Settings, type Weekday, weekdays } from "@
 import { createSignal, For, Show } from "solid-js";
 import { SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import { SettlingField } from "./SettlingField.tsx";
+import { TimeZonePicker } from "./TimeZonePicker.tsx";
 import { unreachableMessage, useCallTool } from "./tools.ts";
 
 /** The time zone this Device is in, as its browser names it. */
@@ -57,9 +58,9 @@ function settingsChange(onChanged: (settings: Settings) => void) {
 }
 
 /**
- * General, in Settings: the current Context's time zone (section 8.6). Travel changes nothing by
- * itself: when this Device is in another time zone, both are shown here with one tap to switch,
- * and nowhere else is it raised.
+ * General, in Settings: the current Context's time zone, picked from the list of zones (section
+ * 8.6). Travel changes nothing by itself: when this Device is in another time zone, both are shown
+ * here with one tap to switch, and nowhere else is it raised.
  */
 export function GeneralSettings(props: {
   settings: Settings;
@@ -71,6 +72,9 @@ export function GeneralSettings(props: {
   const differs = () => namedZone(props.settings.time_zone) !== device;
 
   const useDeviceZone = () => change(() => callTool("set_time_zone", { time_zone: device }));
+  // A zone picked from the list holds nothing, so the field keeps the focus it was picked from.
+  const pickZone = (zone: string) =>
+    change(() => callTool("set_time_zone", { time_zone: zone }), { holds: false });
 
   return (
     <section id="general" class="settings" aria-labelledby="general-heading">
@@ -83,7 +87,16 @@ export function GeneralSettings(props: {
       <SettingsGroup heading="Time zone">
         <SettingRow
           title="This Context"
-          control={() => <span data-testid="time-zone">{props.settings.time_zone}</span>}
+          labels
+          control={(ids) => (
+            <TimeZonePicker
+              id={ids.id}
+              describedBy={ids.describedBy}
+              value={props.settings.time_zone}
+              disabled={sending()}
+              onPick={pickZone}
+            />
+          )}
         />
         <Show when={differs()}>
           <SettingRow

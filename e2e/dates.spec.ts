@@ -186,11 +186,15 @@ test("a Context's settings show the Device's other time zone beside its own, wit
   const settings = await openSettings(page, "General");
   await expect(settings).toContainText("Abroad");
   await expect(settings.getByTestId("device-time-zone")).toHaveText(device);
-  await expect(settings.getByTestId("time-zone")).not.toHaveText(device);
+  await expect(
+    settings.getByRole("combobox", { name: "This Context", exact: true }),
+  ).not.toHaveValue(device);
 
   await settings.getByRole("button", { name: `Use ${device}` }).click();
 
-  await expect(settings.getByTestId("time-zone")).toHaveText(device);
+  await expect(settings.getByRole("combobox", { name: "This Context", exact: true })).toHaveValue(
+    device,
+  );
   await expect(settings.getByTestId("device-time-zone")).toHaveCount(0);
   await expect(settings.getByRole("button", { name: /^Use / })).toHaveCount(0);
 });

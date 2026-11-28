@@ -5,10 +5,11 @@ import {
   type DeploymentToolInput,
   type DeploymentToolName,
 } from "@praxis/domain";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, createUniqueId, For, Show } from "solid-js";
 import { deviceTimeZone } from "./ContextSettings.tsx";
 import { MakeExport } from "./Export.tsx";
 import { followRecord } from "./follow-record.ts";
+import { TimeZonePicker } from "./TimeZonePicker.tsx";
 import { DOWNLOADED } from "./Trash.tsx";
 import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
 
@@ -259,12 +260,15 @@ function DeleteContext(props: {
 }
 
 /**
- * Make a Context with its name, its time zone, which starts as this Device's, and its accent.
+ * Make a Context with its name, its time zone, picked from the list and starting as this Device's,
+ * and its accent.
  * It is also how the first Context is made, in a Deployment that has none yet.
  */
 export function NewContext(props: { heading: string; onMade: (context: ContextListing) => void }) {
   const [problem, setProblem] = createSignal<string | null>(null);
   const [sending, setSending] = createSignal(false);
+  const [zone, setZone] = createSignal(deviceTimeZone());
+  const zoneId = createUniqueId();
 
   async function make(event: SubmitEvent) {
     event.preventDefault();
@@ -275,7 +279,7 @@ export function NewContext(props: { heading: string; onMade: (context: ContextLi
       "create_context",
       {
         name: String(fields.get("name") ?? ""),
-        time_zone: String(fields.get("time_zone") ?? ""),
+        time_zone: zone(),
         accent: String(fields.get("accent") ?? "") as Accent,
       },
       setProblem,
@@ -283,6 +287,7 @@ export function NewContext(props: { heading: string; onMade: (context: ContextLi
     setSending(false);
     if (!made) return;
     form.reset();
+    setZone(deviceTimeZone());
     props.onMade(made);
   }
 
@@ -293,10 +298,11 @@ export function NewContext(props: { heading: string; onMade: (context: ContextLi
         Name
         <input name="name" type="text" required />
       </label>
-      <label>
-        Time zone
-        <input name="time_zone" type="text" value={deviceTimeZone()} required />
-      </label>
+      {/* Not a label round the field: it would name the field by the zones listed under it. */}
+      <div class="new-context-zone">
+        <label for={zoneId}>Time zone</label>
+        <TimeZonePicker id={zoneId} value={zone()} onPick={setZone} />
+      </div>
       <label>
         Accent
         <select name="accent">

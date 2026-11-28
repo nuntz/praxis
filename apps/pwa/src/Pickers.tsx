@@ -115,15 +115,16 @@ function named(typed: string): { named?: string } {
 
 /**
  * The keys that move through a picker's choices and pick one, from the field that has the focus:
- * the arrows move the highlight and Enter picks it. True when the key was the picker's.
+ * the arrows move the highlight and Enter picks it. True when the key was the picker's. A record
+ * is picked so, and a time zone too.
  */
-export function choiceKeys(
+export function choiceKeys<Picked>(
   event: KeyboardEvent,
   list: {
-    choices: Choice[];
+    choices: Picked[];
     highlight: number;
     setHighlight: (at: number) => void;
-    choose: (choice: Choice) => void;
+    choose: (choice: Picked) => void;
   },
 ): boolean {
   const last = list.choices.length - 1;

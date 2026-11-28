@@ -195,13 +195,17 @@ test("switching Context in Settings' top bar shows that Context's sections", asy
   });
   await page.goto("/settings/general");
   const general = section(page, "General");
-  await expect(general.getByTestId("time-zone")).toHaveText("UTC");
+  await expect(general.getByRole("combobox", { name: "This Context", exact: true })).toHaveValue(
+    "UTC",
+  );
   await expect(general).toContainText(first.name);
 
   await switchTo(page, second.name);
 
   await expect(page).toHaveURL("/settings/general");
-  await expect(general.getByTestId("time-zone")).toHaveText("Asia/Tokyo");
+  await expect(general.getByRole("combobox", { name: "This Context", exact: true })).toHaveValue(
+    "Asia/Tokyo",
+  );
   await expect(general).toContainText(second.name);
   await expect(general).not.toContainText(first.name);
 });
