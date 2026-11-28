@@ -243,7 +243,7 @@ export function DueMark(props: { due: Day; overdue: boolean; timeZone: string })
 /**
  * Each send of a Task's dates from the Journal is numbered, and an answer is placed only if no
  * later send's answer for that Task is placed already: one from before it would show the Task
- * without the later day (#162). The count is the Journal's, not an editor's: dates closed and
+ * without the later day. The count is the Journal's, not an editor's: dates closed and
  * opened again are a new editor, and an answer to the first still lands.
  */
 let dateSends = 0;

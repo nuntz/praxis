@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { root } from "./released.ts";
 
-// Nothing on the screen is a size container. With Attention's rows made one (#179), iOS Safari
+// Nothing on the screen is a size container. With Attention's rows made one, iOS Safari
 // locked up for good as each row's mark gave way to its title, laid out again at every try, and
 // the screen showed Attention's heading and nothing under it (#187). No browser the journeys run
 // in locks up, so this guard is what keeps a size container from coming back: an element's share

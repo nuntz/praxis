@@ -14,9 +14,9 @@ import {
 
 // Rules of DESIGN.md held by measuring the screen as rendered: the 44px Rule and the Round Controls
 // Rule in the phone's top bar and Attention, the focus outline on the search field, the type
-// scale on a tab's badge (#174), the Tracking Rule, the hairlines asked for with more contrast, the
+// scale on a tab's badge, the Tracking Rule, the hairlines asked for with more contrast, the
 // 16px a field under a finger takes so the page never zooms, Attention's rows, their marks, their
-// grounds and what a page draws in which colour (#179), and an Entry's hairline, corners, head and
+// grounds and what a page draws in which colour, and an Entry's hairline, corners, head and
 // toolbar (#186).
 
 /** Ink, the focus outline's colour, in light. */

@@ -169,7 +169,7 @@ test("the person sees an Entry's words rendered as Markdown, and edits them as t
   expect(widths.table[0]).toBeGreaterThan(widths.table[1] as number);
   expect(widths.words[0]).toBe(widths.words[1]);
 
-  // Each block is parted from the one before it by space-3, and so is each block in a quote (#183).
+  // Each block is parted from the one before it by space-3, and so is each block in a quote.
   const gaps = await shown.evaluate((words) =>
     [...words.querySelectorAll(":scope > * + *, :scope > blockquote > * + *")].map(
       (block) =>

@@ -16,7 +16,7 @@ export const SETTLES_MS = 700;
  *
  * A pick still settling as the field goes, with its page, is sent once the page has gone, for the
  * record the page's `onSettle` names: by then the page's record may read as stale, and the screen
- * may show another (#162).
+ * may show another.
  */
 export function SettlingField(props: {
   type: "date" | "time";
@@ -94,7 +94,7 @@ export function SettlingField(props: {
         showEmpty();
         clearTimeout(settling);
         // A part of a day erased empties the field's value as emptying it all does, but it is a
-        // day half there, not none: nothing is picked until it is whole or empty (#162).
+        // day half there, not none: nothing is picked until it is whole or empty.
         if (field.value === "" && field.validity.badInput) {
           picked = null;
           return;
