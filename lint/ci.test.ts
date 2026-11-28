@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // `bun run ci` and the GitHub workflow each list the checks CI runs, one for a local run and one
-// for a push. This holds the two to the same checks, so a check added to one runs in both.
+// for a push. This holds the two to the same checks, so a check added to one runs in both. The
+// pre-commit hook runs `bun run check:quick`, the checks of `ci` that take seconds, so a guard such
+// as the direct-test guard speaks at the commit rather than at the end of the build; this holds
+// each of its checks to being one `ci` runs too.
 
 const repo = join(import.meta.dir, "..");
 
@@ -20,10 +23,10 @@ function checkOf(command: string): string {
   return command.replace(/^bunx /, "").split(/\s+/)[0] ?? command;
 }
 
-/** The checks the `ci` script runs, in order. */
-function localChecks(packageJson: string): string[] {
-  const ci: string = JSON.parse(packageJson).scripts.ci;
-  return ci.split("&&").map((command) => checkOf(command.trim()));
+/** The checks a script runs, in order: `ci` by default. */
+function localChecks(packageJson: string, script = "ci"): string[] {
+  const commands: string = JSON.parse(packageJson).scripts[script];
+  return commands.split("&&").map((command) => checkOf(command.trim()));
 }
 
 /** The text of one job of the workflow, from its name to the next job's. */
@@ -69,6 +72,15 @@ describe("the CI guard", () => {
     const workflow = workflowChecks(readFileSync(join(repo, ".github/workflows/ci.yml"), "utf8"));
 
     expect(drift(local, workflow)).toEqual([]);
+  });
+
+  test("each check the pre-commit hook runs is one bun run ci runs", () => {
+    const packageJson = readFileSync(join(repo, "package.json"), "utf8");
+    const ci = localChecks(packageJson);
+
+    expect(localChecks(packageJson, "check:quick").filter((check) => !ci.includes(check))).toEqual(
+      [],
+    );
   });
 
   test("fails a check in one and not the other, whatever its flags, and leaves the setup and the deploy out", () => {

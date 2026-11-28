@@ -57,6 +57,113 @@ test("the person searches the Journal, sees the excerpt as typed, opens the Entr
   await expect(hit).toHaveCount(0);
 });
 
+/** Two frames on, by when the column has heard of every change of size the Entries shown made. */
+function nextFrames(): Promise<void> {
+  return new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())));
+}
+
+test("an Entry or a Task opened from search, older than the screen holds, is brought into view with the focus on it", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}${crypto.randomUUID().replaceAll("-", "")}`;
+  const context = await contextOfOwn(page, testInfo, "Found older");
+  const call = (tool: string, input: unknown) => callContextTool(page, context.id, tool, input);
+  const older = `The shed's hinge squeaks ${tag}`;
+  const title = `Oil the hinge ${tag}`;
+  await call("record_entry", { words: older, tasks: [{ title }] });
+  // Enough newer Entries that the older one sits well above what the column shows.
+  for (let at = 0; at < 16; at += 1) {
+    await call("record_entry", {
+      words: `Later note ${at}, a few lines long so that each one takes room in the column.\n\nA second paragraph.\n\nAnd a third.`,
+    });
+  }
+
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const entry = journal.getByTestId("entry").filter({ hasText: older });
+  const hit = journal.getByTestId("search-hit");
+
+  const search = await enterSearch(page);
+  await search.fill(`squeaks ${tag}`);
+  await expect(hit).toHaveCount(1);
+  await hit.getByRole("link").click();
+  await expect(search).toHaveValue("");
+  await expect(entry).toBeFocused();
+  await expect(entry).toBeInViewport();
+  // Still in view once the column has heard the Entries shown again, its hold on its newest let go.
+  await page.evaluate(nextFrames);
+  await expect(entry).toBeInViewport();
+
+  // Scrolled back to the newest, the column holds it again: an Entry arriving comes into view.
+  await journal.getByTestId("entry").last().scrollIntoViewIfNeeded();
+  await expect(entry).not.toBeInViewport();
+  const newest = `Arrived after ${tag}`;
+  await call("record_entry", { words: newest });
+  await expect(journal.getByTestId("entry").filter({ hasText: newest })).toBeInViewport();
+
+  // A Task found opens on its Entry, in view too, pressed by the keyboard.
+  await enterSearch(page);
+  await search.fill(`Oil ${tag}`);
+  const task = entry
+    .getByRole("list", { name: "Tasks" })
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("checkbox", { name: title }) });
+  const link = hit.getByRole("link", { name: new RegExp(`^Task, ${title} `) });
+  await expect(link).toBeVisible();
+  await link.focus();
+  await page.keyboard.press("Enter");
+  await expect(search).toHaveValue("");
+  await expect(task).toBeFocused();
+  await expect(task).toBeInViewport();
+  await page.evaluate(nextFrames);
+  await expect(task).toBeInViewport();
+});
+
+test("an excerpt, a name in a chip and a picker take their own direction, so Arabic is laid out right to left", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}${crypto.randomUUID().replaceAll("-", "")}`;
+  const context = await contextOfOwn(page, testInfo, "Direction");
+  const call = (tool: string, input: unknown) => callContextTool(page, context.id, tool, input);
+  const arabic = `اشتريت مصباحًا جديدًا للحديقة ${tag}.`;
+  const name = `حديقة المنزل ${tag}`;
+  await call("record_entry", { words: arabic });
+  await call("create_project", { name });
+
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const search = await enterSearch(page);
+  await search.fill(tag);
+  const direction = (of: import("@playwright/test").Locator) =>
+    of.evaluate((element) => getComputedStyle(element).direction);
+  const entries = journal.getByRole("region", { name: /^Entries / });
+  const excerpt = entries.getByTestId("search-excerpt").filter({ hasText: "مصباح" });
+  await expect(excerpt).toHaveText(arabic);
+  expect(await direction(excerpt)).toBe("rtl");
+  const project = journal
+    .getByRole("region", { name: /^Projects / })
+    .getByTestId("search-excerpt")
+    .filter({ hasText: "حديقة المنزل" });
+  expect(await direction(project)).toBe("rtl");
+  // Words of the screen's own keep its direction.
+  const status = journal.getByRole("region", { name: "Found" }).getByRole("status");
+  await expect(status).toHaveText("Found 2");
+  expect(await direction(status)).toBe("ltr");
+
+  // Set from its picker, the Project's chip says its name right to left, and the picker did too.
+  await search.fill("");
+  const chips = journal.getByRole("group", { name: "Narrow the search" });
+  await chips.getByRole("button", { name: "Project", exact: true }).click();
+  const picker = journal.getByRole("dialog", { name: "Project" });
+  await picker.getByRole("combobox", { name: "Find a Project" }).fill(tag);
+  const choice = picker.getByRole("option", { name });
+  await expect(choice).toBeVisible();
+  expect(await direction(choice.locator(".choice-name"))).toBe("rtl");
+  await page.keyboard.press("Enter");
+  const chip = chips.getByRole("button", { name: `Project: ${name}, remove` });
+  expect(await direction(chip.locator(".chip-words"))).toBe("rtl");
+});
+
 test("the person finds an Entry by what it means, though it shares no word with the search", async ({
   page,
 }, testInfo) => {
@@ -352,7 +459,8 @@ test("a Task found says where it stands as Attention does, is finished and reope
     [titles.finished, "Finished"],
     [titles.recurring, "Due Jan 5, 2099 · Recurring"],
     [titles.waiting, `Waiting on ${titles.open}`],
-    [titles.delegated, "Delegated to Alice Moreau since \\w+ \\d+, \\d{4}"],
+    // Delegated today, its day is said without this year's number, as Attention says it.
+    [titles.delegated, "Delegated to Alice Moreau since \\w+ \\d+"],
     [titles.deferred, "Deferred until Jan 10, 2099"],
     [titles.overdue, "Due Jan 10, 2025, Overdue"],
     [titles.dropped, "Dropped"],

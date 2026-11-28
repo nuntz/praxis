@@ -1,0 +1,9 @@
+#!/bin/sh
+# The checks of `bun run ci` that take seconds, before each commit: Biome, the typecheck, the
+# guards in lint/, the tickets, and the domain's and the PWA's direct tests. `bun install` points
+# git here (the root package's `prepare`). The Worker's tests and the journeys stay with `ci`.
+if [ ! -d node_modules ]; then
+  echo "pre-commit: no node_modules in $(pwd); run bun install first, as a new worktree has none." >&2
+  exit 1
+fi
+exec bun run check:quick

@@ -935,6 +935,7 @@ input[type="checkbox"].switch:disabled {
   min-height: 0;
 }
 
+/* A column clips what overflows it rather than scrolling it, so no popover can scroll it sideways. */
 .peer {
   display: flex;
   flex-direction: column;
@@ -942,7 +943,7 @@ input[type="checkbox"].switch:disabled {
   min-height: 0;
   border-radius: var(--radius-lg);
   background: var(--surface);
-  overflow: hidden;
+  overflow: clip;
 }
 
 .peer.attention {
@@ -2523,13 +2524,10 @@ button.call-control {
 
   .journal-search .search-row {
     position: absolute;
-    top: calc(var(--space-5) + 1px);
+    /* Its 44px centred on the title's 40px line. */
+    top: calc(var(--space-5) - 2px);
     right: var(--space-5);
     width: min(260px, calc(100% - 150px));
-  }
-
-  .journal-search .search-field {
-    height: 38px;
   }
 
   .journal-search .search-field input {
@@ -2626,6 +2624,11 @@ button.search-clear {
   text-align: center;
 }
 
+/* The `/` that reaches the field, said only while the field does not have the focus. */
+.search-field:focus-within .search-key {
+  display: none;
+}
+
 /* What the empty field searches, and offline why it cannot be used, under the chips. */
 .search-note {
   margin: 10px var(--space-1) 0;
@@ -2639,8 +2642,9 @@ button.search-clear {
 
 /*
  * The chips under the field, in one row that wraps. A chip not set is a surface pill with a
- * hairline and a chevron; once set it is ink with surface words and an x (section 8.4). Its picker
- * opens under it, as a menu does.
+ * hairline and a chevron; once set it is ink with surface words and an x (section 8.4). Each is one
+ * line, what it holds cut with an ellipsis, and its icons never shrink. Its picker opens under it,
+ * as a menu does, from the chip's end where it would run past the column's.
  */
 .search-chips {
   display: flex;
@@ -2655,11 +2659,15 @@ button.search-clear {
 
 .chip-holder {
   position: relative;
+  flex: none;
+  max-width: 100%;
 }
 
 button.chip {
   gap: 6px;
-  min-height: 32px;
+  max-width: 100%;
+  height: 32px;
+  min-height: 0;
   padding: 0 10px;
   border: 1px solid var(--rule);
   background: var(--surface);
@@ -2671,6 +2679,22 @@ button.chip {
 
 button.chip .chip-end {
   color: var(--muted);
+}
+
+button.chip .chip-icon,
+button.chip .chip-end {
+  flex: none;
+}
+
+.chip-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.chip.set .chip-words {
+  max-width: 240px;
 }
 
 button.chip.set {
@@ -2696,6 +2720,16 @@ button.chip.set .chip-end {
   border: 1px solid var(--rule);
   border-radius: var(--radius-md);
   background: var(--surface);
+}
+
+.chip-picker.from-end {
+  right: 0;
+  left: auto;
+}
+
+/* A chip's picker highlights its choice on inset, as hovered; the composer's keep the tint. */
+.chip-picker .link-picker .highlighted {
+  background: var(--inset);
 }
 
 .chip-choices {
@@ -2828,13 +2862,45 @@ button.chip.set .chip-end {
   margin: 0;
 }
 
+/*
+ * The status, then Nothing found's offers, which follow it outside it. One grid holds both, the
+ * status's lines on its rows through a subgrid, so each offer is drawn on the row after what it lifts
+ * (`grid-row`, set in Search.tsx).
+ */
+.search-said {
+  display: grid;
+  grid-template-rows: repeat(var(--said-rows, 1), auto);
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.search-status {
+  display: grid;
+  grid-row: 1 / -1;
+  grid-column: 1;
+  grid-template-rows: subgrid;
+  justify-items: start;
+}
+
+.search-status > p {
+  margin: 0;
+}
+
+/* In the status's one column, on a row of the status's own left empty for it. */
+.search-said > .search-lift {
+  grid-column: 1;
+}
+
 /* Nothing found: the words named, then for each chip set what it keeps out and its offer. */
 .search-nothing {
+  padding: var(--space-5) 0;
+}
+
+/* What is shown while a newer search is out, for the words before. */
+.search-shown {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-5) 0;
+  gap: var(--space-3);
 }
 
 .search-nothing-title {
@@ -2846,17 +2912,6 @@ button.chip.set .chip-end {
 .search-nothing-kept {
   color: var(--muted);
   font: var(--type-meta);
-}
-
-button.search-lift {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--rule);
-  background: var(--surface);
-  color: var(--ink);
-  font: var(--type-label);
-  letter-spacing: var(--tracking-label);
-  font-size: 14px;
 }
 
 .search-group {
@@ -3051,6 +3106,14 @@ button.search-hit-body {
   font: var(--type-meta);
 }
 
+/*
+ * Dimmed while a newer search is out, as it is for the words before: its words muted and what
+ * matched unmarked, so they still read at 4.5:1, which an opacity would not.
+ */
+.search-shown.stale .search-excerpt {
+  color: var(--muted);
+}
+
 /* What matched, on match alone: in an Entry's words and in a title alike (section 8.11). */
 .search-excerpt mark {
   padding: 0 2px;
@@ -3058,6 +3121,11 @@ button.search-hit-body {
   background: var(--match);
   color: var(--ink);
   font-weight: 600;
+}
+
+.search-shown.stale .search-excerpt mark {
+  background: none;
+  color: inherit;
 }
 
 /*
@@ -3980,11 +4048,37 @@ a.entry-mark.held-mark {
     overflow-x: auto;
   }
 
-  .chip-holder {
-    position: static;
+  .search-note {
+    margin-inline: var(--space-4);
   }
 
-  .chip-picker {
+  /* Its clear button, a picker's field and each picker's choice, the composer's too, are 44px. */
+  button.search-clear {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .choice-field {
+    min-height: 44px;
+  }
+
+  .link-picker [role="option"] {
+    min-height: 44px;
+    padding-block: 12px;
+  }
+
+  /* A set chip's words are cut past 60% of the row, so the chips after it still show. */
+  .chip-holder {
+    position: static;
+    max-width: 60%;
+  }
+
+  button.chip.set .chip-words {
+    max-width: none;
+  }
+
+  .chip-picker,
+  .chip-picker.from-end {
     top: 100%;
     right: var(--space-4);
     left: var(--space-4);
@@ -3992,14 +4086,32 @@ a.entry-mark.held-mark {
 
   /* A chip, a hit and a Task found's link are each a touch target of 44px, as its tick is. */
   button.chip {
-    flex: none;
-    min-height: 44px;
+    height: 44px;
     padding: 0 var(--space-3);
   }
 
   .search-hit-body,
   .search-task-link {
     min-height: 44px;
+  }
+
+  /*
+   * What is found sits on the ground here, so a Project, Person or Task found is a surface row, as
+   * inset always sits on surface, and an Entry found a surface card, as the Journal's are.
+   */
+  .search-hit-body {
+    background: var(--surface);
+  }
+
+  .search-group-entry .search-hits,
+  .search-group-meaning .search-hits {
+    gap: var(--space-2);
+  }
+
+  .search-entry .search-hit-body {
+    border-top: none;
+    border-radius: var(--radius-md);
+    background: var(--surface);
   }
 
   .peer-foot {

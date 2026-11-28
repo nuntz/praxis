@@ -285,3 +285,89 @@ test("the time chip reckons its days in the Context's zone, a range of days held
   await anyTime.click();
   await expect(picker.getByLabel("From", { exact: true })).toBeVisible();
 });
+
+test("chips holding long names stay one line, their pickers stay inside the Journal, and on a phone the row scrolls sideways", async ({
+  page,
+}, testInfo) => {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const context = await contextOfOwn(page, testInfo, "Long names");
+  const call = (tool: string, input: unknown) => callContextTool(page, context.id, tool, input);
+  const projectName = `Planning application for the rear extension and loft conversion at 14 Northwind Gardens (resubmission after the council's second refusal) ${tag}`;
+  const personName = `Maximiliane Alexandra von Hohenzollern-Sigmaringen-Wittelsbach ${tag}`;
+  await call("create_project", { name: projectName });
+  await call("create_person", { name: personName });
+
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const field = await enterSearch(page);
+  const chips = journal.getByRole("group", { name: "Narrow the search" });
+  const high = onPhone(testInfo) ? 44 : 32;
+  const box = async (of: Locator) => {
+    const measured = await of.boundingBox();
+    if (measured === null) throw new Error("Not laid out");
+    return measured;
+  };
+  // Opened, a picker is within the Journal, which has not scrolled sideways to show it.
+  const insideTheJournal = async (picker: Locator) => {
+    const column = await box(journal);
+    const drawn = await box(picker);
+    expect(drawn.x).toBeGreaterThanOrEqual(column.x);
+    expect(drawn.x + drawn.width).toBeLessThanOrEqual(column.x + column.width);
+    expect(await journal.evaluate((element) => element.scrollLeft)).toBe(0);
+  };
+
+  for (const [chip, name] of [
+    ["Person", personName],
+    ["Project", projectName],
+  ] as const) {
+    await chips.getByRole("button", { name: chip, exact: true }).click();
+    const picker = journal.getByRole("dialog", { name: chip });
+    const finder = picker.getByRole("combobox", { name: `Find a ${chip}` });
+    await expect(finder).toBeFocused();
+    await expect(finder).toHaveAttribute("placeholder", `Find a ${chip}`);
+    await finder.fill(tag);
+    const choice = picker.getByRole("option", { name });
+    await expect(choice).toHaveAttribute("aria-selected", "true");
+    // Its highlighted choice sits on inset, as the field does.
+    await expect(choice).toHaveCSS(
+      "background-color",
+      await page
+        .locator(".search-field")
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+    );
+    await insideTheJournal(picker);
+    await page.keyboard.press("Enter");
+    await expect(picker).toHaveCount(0);
+
+    // Set, it is one line, says the whole of what it holds to a screen reader, and cuts the rest.
+    const set = chips.getByRole("button", { name: `${chip}: ${name}, remove`, exact: true });
+    expect((await box(set)).height).toBe(high);
+    const words = set.locator(".chip-words");
+    expect(await words.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    if (!onPhone(testInfo)) {
+      await expect(set).toHaveAttribute("title", `${chip}: ${name}`);
+      expect((await box(words)).width).toBeLessThanOrEqual(240);
+    }
+  }
+  await expect(field).toHaveAttribute("placeholder", "Search within this Project");
+
+  // The chips not set are one line too, and the Author picker stays inside the Journal.
+  for (const chip of ["Any time", "Author"]) {
+    expect((await box(chips.getByRole("button", { name: chip, exact: true }))).height).toBe(high);
+  }
+  await chips.getByRole("button", { name: "Author", exact: true }).click();
+  const authors = journal.getByRole("dialog", { name: "Author" });
+  await expect(authors.getByRole("button", { name: "You" })).toBeFocused();
+  await insideTheJournal(authors);
+  await page.keyboard.press("Escape");
+  await expect(authors).toHaveCount(0);
+
+  // On a phone the row is wider than the screen, and scrolls sideways.
+  if (onPhone(testInfo)) {
+    const scrolled = await chips.evaluate((row) => {
+      row.scrollLeft = 100;
+      return row.scrollLeft;
+    });
+    expect(scrolled).toBeGreaterThan(0);
+  }
+});

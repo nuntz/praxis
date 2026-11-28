@@ -376,8 +376,8 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **Focus:** a 2px `ink` outline, 2px off, on everything.
 
 ### Chips
-- **Style:** a 32px pill, `surface` with a `rule` border, `label` type at 600 in `ink`, with its end (a chevron or ×) in `muted`.
-- **State:** once set, it turns solid `ink` with `surface` text. It never takes the accent. Its picker is a `surface` box with `radius-md` and a `rule` border, whose choices sit on `inset` when hovered or focused.
+- **Style:** a 32px pill (44px on a phone), `surface` with a `rule` border, `label` type at 600 in `ink`, with its end (a chevron or ×) in `muted`. A chip is one line: what it holds is cut with an ellipsis past 240px, or on a phone past 60% of its row, and its icon and its end never shrink.
+- **State:** once set, it turns solid `ink` with `surface` text. It never takes the accent. Its picker is a `surface` box with `radius-md` and a `rule` border, whose choices sit on `inset` when hovered, focused or highlighted. It opens inside its column, from the chip's end where it would run past the column's, and is never wider than the column.
 
 ### Cards / Containers
 - **Panel:** `surface` on `ground`, `radius-lg`, with a 20px inset and a `column-title` head.
@@ -388,7 +388,7 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 
 ### Inputs / Fields
 - **Composer:** the accent's tint, a 1.5px accent border, `radius-lg`. Its `label` sits in the accent above the words. At rest it is one line, its label where the words will go and its send at its end. A label too long for its line is cut short with an ellipsis; the send never is, and Record keeps its icon and its word at every width. Focused, it opens to two lines at once, with no animation, and takes a 2px accent outline 2px off. As the words run past two lines it grows with them, a line at a time and with no animation, up to 40% of its column's height, and then scrolls within itself. On a phone that is 40% of the column as shown, above the on-screen keyboard, so the composer never covers the column.
-- **Search field:** a 44px `inset` pill with a `muted` search icon. Focused, its 1.5px border turns `ink`, and the 2px `ink` outline is drawn 2px off round the whole field, as its input draws none. The browser's clear button is hidden for the screen's own.
+- **Search field:** a 44px `inset` pill with a `muted` search icon. Focused, its 1.5px border turns `ink`, and the 2px `ink` outline is drawn 2px off round the whole field, as its input draws none. The browser's clear button is hidden for the screen's own. While a newer search is out, what is shown for the one before is dimmed and busy, its words `muted` and what matched unmarked, never by an opacity that would take them under 4.5:1, and after 300ms with no answer the status says "Searching…" in `meta` `muted`.
 - **Date field:** a `surface` field with a `rule` border and `radius-sm`, in a Task's row. With no day in it, its placeholder ("dd/mm/yyyy", or the locale's) is `muted` until it is typed in.
 - **Switch:** a 46×28 pill, `muted` when off and accent when on, its knob `surface`. The knob slides in 150ms on `ease-out` only when motion is allowed.
 
@@ -424,6 +424,7 @@ The one motion is a page going one level deeper, beside a press fading back as i
 - **Do** say every state in words, beside any colour it takes.
 - **Do** keep text fields at 16px or larger at any width wherever a finger can reach them, a touch screen beside a trackpad too, so the page does not zoom when one is tapped.
 - **Do** put every `:hover` look behind `(hover: hover) and (pointer: fine)`, so a tap on a touch screen leaves nothing hovered.
+- **Do** let text the person typed take its own direction (`dir="auto"`), so a sentence in Arabic reads right to left and ends at its left: in search, an excerpt, a hit's title or name, and a name in a chip or a picker. The screen's own words keep the screen's direction.
 
 ### Don't:
 - **Don't** use the accent on anything but where the person is about to write or decide (The One Accent Rule). A secondary button is quiet, in `ink`.

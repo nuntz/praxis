@@ -153,7 +153,7 @@ function AuthorPicker(props: PickerProps<"author">) {
               type="button"
               onClick={() => props.onPick({ kind: "connection", name: connection.name })}
             >
-              {connection.name}
+              <span dir="auto">{connection.name}</span>
               <Show when={connection.ended}>
                 <span class="choice-detail"> · Ended</span>
               </Show>
@@ -194,6 +194,7 @@ function RecordPicker(
     <ChoicePicker
       label={`${kind}s`}
       fieldLabel={`Find a ${kind}`}
+      placeholder={`Find a ${kind}`}
       none={`No ${kind} is named so.`}
       offer={(typed) =>
         props.kind === "project"

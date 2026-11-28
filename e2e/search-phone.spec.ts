@@ -35,6 +35,7 @@ async function longJournal(page: Page, testInfo: TestInfo) {
     tasks: [{ title: "Order felt for the shed roof" }],
   });
   const roofing = await callContextTool(page, context.id, "create_project", { name: ROOFING });
+  await callContextTool(page, context.id, "create_project", { name: "Shed foundations" });
   await callContextTool(page, context.id, "move_task", {
     id: (record.tasks as { id: string }[])[0]?.id,
     project_id: roofing.record.id,
@@ -59,6 +60,20 @@ async function heightOf(shown: Locator): Promise<number> {
   return box.height;
 }
 
+/** The colour something is drawn on. */
+function backgroundOf(shown: Locator): Promise<string> {
+  return shown.evaluate((element) => getComputedStyle(element).backgroundColor);
+}
+
+/** Pressed at the left end of its pill, by the search icon, the field takes the caret. */
+async function pressFieldEnd(page: Page, field: Locator) {
+  // The input's parent is the pill drawn round it.
+  const pill = field.locator("..");
+  const box = await pill.boundingBox();
+  if (!box) throw new Error("The field's pill is shown");
+  await page.mouse.click(box.x + 6, box.y + box.height / 2);
+}
+
 /** Each of these at least a touch target's 44px tall. */
 async function expectTappable(shown: Locator) {
   for (const each of await shown.all()) {
@@ -77,6 +92,12 @@ test("on a phone, search is a screen of its own whose back arrow returns to the 
   const open = journal.getByRole("button", { name: "Open the search", exact: true });
   await expect(composer).toBeVisible();
   await expect(back).toHaveCount(0);
+  // The composer's own `#` picker offers its choices as touch targets too.
+  await composer.fill("#Battens");
+  const offered = journal.getByRole("listbox", { name: "Tasks and Projects" }).getByRole("option");
+  await expect(offered.first()).toBeVisible();
+  await expectTappable(offered);
+  await composer.fill("");
   // Until it is opened, the search is a button beside the Journal's title, and its field is hidden.
   await expect(open).toBeVisible();
   await expect(field).toBeHidden();
@@ -91,6 +112,8 @@ test("on a phone, search is a screen of its own whose back arrow returns to the 
   const earlier = journal.getByTestId("entry").filter({ hasText: "Note 5 on" });
   await earlier.scrollIntoViewIfNeeded();
   const left = await earlier.boundingBox();
+  // An Entry is a surface card, which what is found is drawn on too.
+  const card = await backgroundOf(earlier);
 
   // Opening the search gives it the screen, the caret in its field: the back arrow beside the field,
   // the tab bar kept, and neither the Journal's title nor its composer.
@@ -103,8 +126,23 @@ test("on a phone, search is a screen of its own whose back arrow returns to the 
   await expect(journal.getByTestId("entry")).toHaveCount(17);
   await expect(earlier).toBeHidden();
 
+  // Empty, the field says what it searches, at the chips' inset from the screen's edge.
+  const note = journal.getByText(/^Searches the Entries, Tasks, Projects and Persons of /);
+  await expect(note).toBeVisible();
+  const [noteBox, firstChip] = [
+    await note.boundingBox(),
+    await chips.getByRole("button").first().boundingBox(),
+  ];
+  if (!noteBox || !firstChip) throw new Error("Both are shown");
+  expect(noteBox.x).toBe(firstChip.x);
+
+  // A press anywhere on the field's pill puts the caret in it, by its icon too.
+  await back.focus();
+  await pressFieldEnd(page, field);
+  await expect(field).toBeFocused();
+
   await field.fill("shed");
-  await expect(found.getByTestId("search-hit")).toHaveCount(18);
+  await expect(found.getByTestId("search-hit")).toHaveCount(19);
   await expect(composer).toBeHidden();
   await expect(tabs).toBeVisible();
 
@@ -125,6 +163,25 @@ test("on a phone, search is a screen of its own whose back arrow returns to the 
   await expectTappable(found.getByRole("button"));
   await expectTappable(found.getByRole("link"));
   expect(await heightOf(back)).toBeGreaterThanOrEqual(44);
+  await expectTappable(journal.getByRole("button", { name: "Clear the words" }));
+
+  // What is found sits on surface, as the Journal's Entries do: an Entry a card, apart from the next.
+  const entries = found.getByRole("region", { name: /^Entries / }).getByTestId("search-hit");
+  const tasksFound = found.getByRole("region", { name: /^Tasks / }).getByTestId("search-hit");
+  const projectsFound = found.getByRole("region", { name: /^Projects / }).getByTestId("search-hit");
+  for (const hit of [entries.first(), tasksFound.first(), projectsFound.first()]) {
+    expect(await backgroundOf(hit.locator(".search-hit-body").first())).toBe(card);
+  }
+  await expect(entries.first().locator(".search-hit-body")).toHaveCSS(
+    "border-radius",
+    await earlier.evaluate((element) => getComputedStyle(element).borderRadius),
+  );
+  const [firstEntry, secondEntry] = [
+    await entries.nth(0).boundingBox(),
+    await entries.nth(1).boundingBox(),
+  ];
+  if (!firstEntry || !secondEntry) throw new Error("Both are shown");
+  expect(secondEntry.y - (firstEntry.y + firstEntry.height)).toBe(8);
 
   // Back ends the search, words and chips both, and the Journal is as it was left, the focus on
   // the button the search was opened from.
@@ -145,10 +202,12 @@ test("on a phone, search is a screen of its own whose back arrow returns to the 
   await field.fill("felt");
   await expect(found.getByTestId("search-hit")).toHaveCount(2);
   await chips.getByRole("button", { name: "Project", exact: true }).click();
-  await journal
-    .getByRole("dialog", { name: "Project" })
-    .getByRole("option", { name: new RegExp(`^${ROOFING}`) })
-    .click();
+  // A picker's field and each of its choices are touch targets.
+  const picker = journal.getByRole("dialog", { name: "Project" });
+  await expectTappable(picker.getByRole("combobox", { name: "Find a Project" }));
+  await expect(picker.getByRole("option").first()).toBeVisible();
+  await expectTappable(picker.getByRole("option"));
+  await picker.getByRole("option", { name: new RegExp(`^${ROOFING}`) }).click();
   await expect(chips.getByRole("button", { name: `Project: ${ROOFING}, remove` })).toBeVisible();
   await expect(found.getByTestId("search-hit")).toHaveCount(2);
   const row = await chips.evaluate((shown) => {
@@ -180,6 +239,13 @@ test("on a desktop, search stays in the Journal column with the composer below w
 }, testInfo) => {
   test.skip(onPhone(testInfo), "A desktop keeps search in the Journal column.");
   const { journal, composer, field, chips, found } = await longJournal(page, testInfo);
+  // A press anywhere on the field's pill puts the caret in it.
+  await pressFieldEnd(page, field);
+  await expect(field).toBeFocused();
+  // The field is 44px high, as on a phone.
+  expect(await heightOf(field.locator(".."))).toBe(44);
+  await journal.getByRole("heading", { name: "Journal", exact: true }).click();
+  await expect(field).not.toBeFocused();
   // Its field is a pill in the Journal's header, beside its title, and its chips wait until the
   // search is in use.
   const heading = journal.getByRole("heading", { name: "Journal", exact: true });
