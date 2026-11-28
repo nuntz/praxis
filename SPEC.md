@@ -728,7 +728,9 @@ Its sections are in two groups, the current Context's and the Deployment's:
 | | **Spend** | The spend cap and the month's spend against it. |
 | | **Backups and Export** | When the last Backup was made, and making an Export. |
 
-- On a desktop the sections are listed beside the one shown, and Settings opens on General. On a phone the list is a screen of its own, and each section opens from it.
+- On a desktop the sections are listed beside the one shown, and Settings opens on General. On a phone the list is a screen of its own, and each section opens from it; each row says what its section holds now, a count only above zero.
+- Opening a section, from the sidebar or from the phone's list, puts the focus on its heading. On a phone, going back to the list, by its Settings link or the browser's Back, puts the focus on the row of the section that was left, as Back returns the focus to what opened a page for Attention's pages and an Entry's page.
+- Each section opens with one note of a sentence or two saying what it is for. A change that is refused or cannot reach Praxis is said once, under the group it came from; a read that fails is said in place of what it could not read.
 - A switch is a switch, not a checkbox.
 - A standing Notice shows in Attention only, and leads to the section that deals with it, where there is one: the cap to Spend, no good Backup to Backups and Export.
 - **The first Context**: a Deployment with no Context shows only the form that makes one, with `create_context`, the tool the setup wizard uses too.

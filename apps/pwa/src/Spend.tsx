@@ -4,7 +4,8 @@ import { SettingRow, SettingsGroup } from "./design/SettingRows.tsx";
 import { latestRead } from "./latest-read.ts";
 import { capWords, money, readNotices } from "./Notices.tsx";
 import { CAP_FIELD } from "./SettingsLink.tsx";
-import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
+import { SettingsSection, sectionChanges } from "./SettingsSection.tsx";
+import { callDeploymentTool, unreachableMessage } from "./tools.ts";
 
 /**
  * The Deployment's spend this month against its cap (section 5.7), as last read. It is the whole
@@ -57,33 +58,23 @@ export function CapNotice() {
  * cap set here, by the person's hand. Raising it takes effect at once.
  */
 export function SpendSettings() {
-  const [problem, setProblem] = createSignal<string | null>(null);
   const [cap, setCap] = createSignal("");
-  const [saving, setSaving] = createSignal(false);
+  const { change, sending, problemAt, say } = sectionChanges();
 
   async function save() {
     const dollars = Number(cap());
     if (cap().trim() === "" || !Number.isFinite(dollars)) {
-      setProblem("A spend cap is an amount of US dollars.");
+      say("cap", "A spend cap is an amount of US dollars.");
       return;
     }
-    setSaving(true);
-    try {
-      const set = await writeToDeployment("set_spend_cap", { cap: dollars }, setProblem);
-      if (set) {
-        setCap("");
-        await Promise.all([readSpend(), readNotices()]);
-      }
-    } finally {
-      setSaving(false);
-    }
+    const set = await change("cap", () => callDeploymentTool("set_spend_cap", { cap: dollars }));
+    if (set === null) return;
+    setCap("");
+    await Promise.all([readSpend(), readNotices()]);
   }
 
   return (
-    <section id="spend" class="settings" aria-labelledby="spend-heading">
-      <h2 id="spend-heading" class="column-heading">
-        Spend
-      </h2>
+    <SettingsSection note="At the cap the Agent starts no new Run; the Journal and Connections keep working. Set a spend limit with your model's provider too: it is the hard backstop.">
       <SettingsGroup heading="This month">
         <SettingRow
           title={
@@ -98,7 +89,7 @@ export function SpendSettings() {
           }
         />
       </SettingsGroup>
-      <SettingsGroup heading="The cap">
+      <SettingsGroup heading="The cap" problem={problemAt("cap")}>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -124,7 +115,7 @@ export function SpendSettings() {
                   placeholder={spend() ? String(spend()?.cap) : ""}
                   onInput={(event) => setCap(event.currentTarget.value)}
                 />
-                <button type="submit" disabled={saving()}>
+                <button type="submit" disabled={sending()}>
                   Set cap
                 </button>
               </>
@@ -132,17 +123,6 @@ export function SpendSettings() {
           />
         </form>
       </SettingsGroup>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
-      <p class="settings-note">
-        At the cap the Agent starts no new Run; the Journal and Connections keep working. Set a
-        spend limit with your model's provider too: it is the hard backstop.
-      </p>
-    </section>
+    </SettingsSection>
   );
 }

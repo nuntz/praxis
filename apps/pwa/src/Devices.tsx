@@ -1,14 +1,9 @@
-import type {
-  DeploymentToolInput,
-  DeploymentToolOutput,
-  Device,
-  PushSubscription,
-} from "@praxis/domain";
+import { type Device, failure, type PushSubscription } from "@praxis/domain";
 import { createSignal, For, onMount, Show } from "solid-js";
-import { deviceTimeZone } from "./ContextSettings.tsx";
-import { SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
+import { Problem, SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import {
   canNotify,
+  deviceTimeZone,
   NotificationsRefused,
   subscribeHere,
   thisDevice,
@@ -17,7 +12,9 @@ import {
 import { followRecord } from "./follow-record.ts";
 import { latestRead } from "./latest-read.ts";
 import { clearCopy, copyProblem, offlineCopy, startCopy } from "./offline-copy.ts";
-import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
+import { SettingsLink } from "./SettingsLink.tsx";
+import { type SectionChanges, SettingsSection, sectionChanges } from "./SettingsSection.tsx";
+import { callDeploymentTool, unreachableMessage } from "./tools.ts";
 import { unsentKeptQuestion } from "./Unsent.tsx";
 import { discardUnsentWrites, unsent } from "./unsent.ts";
 
@@ -32,8 +29,10 @@ export function Devices() {
   const [devices, setDevices] = createSignal<Device[]>([]);
   const [pushKey, setPushKey] = createSignal<string | null>(null);
   const [read, setRead] = createSignal(false);
+  // What the last read met, said in place of what it could not read.
   const [problem, setProblem] = createSignal<string | null>(null);
-  const [sending, setSending] = createSignal(false);
+  const changes = sectionChanges();
+  const { change, sending, problemAt } = changes;
   const here = thisDevice();
   const hereListed = () => devices().find((device) => device.id === here);
   // What clears the copy here, waiting for the person to say what becomes of the Unsent writes.
@@ -44,6 +43,7 @@ export function Devices() {
       const result = await callDeploymentTool("list_devices", {});
       if (!current()) return;
       if (!result.ok) return setProblem(result.error.message);
+      setProblem(null);
       setDevices(result.value.items);
       setPushKey(result.value.push_key);
       setRead(true);
@@ -73,54 +73,29 @@ export function Devices() {
    */
   async function switchOnHere(key: string): Promise<boolean> {
     if (here === null) return false;
-    setSending(true);
-    try {
-      const subscription = await subscribeHere(key);
-      const switched = await writeToDeployment(
-        "set_device_notifications",
-        {
-          id: here,
-          on: true,
-          // A browser's subscription carries its endpoint and both keys.
-          subscription: subscription as PushSubscription,
-          user_agent: navigator.userAgent,
-        },
-        setProblem,
-      );
-      if (switched === null) return false;
-      show(here, switched);
-      return true;
-    } catch (error) {
-      if (error instanceof NotificationsRefused) setProblem(error.message);
-      else setProblem("This browser could not subscribe to Notifications. Try again shortly.");
-      return false;
-    } finally {
-      setSending(false);
-    }
-  }
-
-  /**
-   * Call a Device write for whether it went through, saying what went wrong otherwise. Its record
-   * is null once the Device has left the list, so the record alone cannot say.
-   */
-  async function write<
-    N extends "remove_device" | "set_device_notifications" | "set_device_offline_copy",
-  >(tool: N, input: DeploymentToolInput<N>): Promise<DeploymentToolOutput[N] | null> {
-    setSending(true);
-    try {
-      const result = await callDeploymentTool(tool, input);
-      if (!result.ok) {
-        setProblem(result.error.message);
-        return null;
+    const switched = await change("this-device", async () => {
+      let subscription: PushSubscriptionJSON;
+      try {
+        subscription = await subscribeHere(key);
+      } catch (error) {
+        return failure(
+          "refused",
+          error instanceof NotificationsRefused
+            ? error.message
+            : "This browser could not subscribe to Notifications. Try again shortly.",
+        );
       }
-      setProblem(null);
-      return result.value;
-    } catch (error) {
-      setProblem(unreachableMessage(error));
-      return null;
-    } finally {
-      setSending(false);
-    }
+      return callDeploymentTool("set_device_notifications", {
+        id: here,
+        on: true,
+        // A browser's subscription carries its endpoint and both keys.
+        subscription: subscription as PushSubscription,
+        user_agent: navigator.userAgent,
+      });
+    });
+    if (switched === null) return false;
+    show(here, switched.record);
+    return true;
   }
 
   /**
@@ -151,7 +126,12 @@ export function Devices() {
   /** Remove a Device, from any Device; this one also gives up its push subscription and its copy. */
   function remove(device: Device) {
     const removing = async () => {
-      if ((await write("remove_device", { id: device.id })) === null) return false;
+      const at = device.id === here ? "this-device" : "devices";
+      if (
+        (await change(at, () => callDeploymentTool("remove_device", { id: device.id }))) === null
+      ) {
+        return false;
+      }
       show(device.id, null);
       if (device.id === here) await unsubscribeHere().catch(() => {});
       return true;
@@ -166,15 +146,15 @@ export function Devices() {
    */
   async function switchCopyOnHere(): Promise<boolean> {
     if (here === null) return false;
-    setSending(true);
-    const switched = await writeToDeployment(
-      "set_device_offline_copy",
-      { id: here, on: true, user_agent: navigator.userAgent },
-      setProblem,
+    const switched = await change("this-device", () =>
+      callDeploymentTool("set_device_offline_copy", {
+        id: here,
+        on: true,
+        user_agent: navigator.userAgent,
+      }),
     );
-    setSending(false);
     if (switched === null) return false;
-    show(here, switched);
+    show(here, switched.record);
     await startCopy();
     return true;
   }
@@ -182,7 +162,9 @@ export function Devices() {
   function switchCopyOffHere() {
     if (here === null) return;
     clearingCopy(async () => {
-      const off = await write("set_device_offline_copy", { id: here, on: false });
+      const off = await change("this-device", () =>
+        callDeploymentTool("set_device_offline_copy", { id: here, on: false }),
+      );
       if (off === null) return false;
       show(here, off.record);
       return true;
@@ -192,7 +174,9 @@ export function Devices() {
   /** Switch Notifications off here, and give up the push subscription. Says whether they are off. */
   async function switchOffHere(): Promise<boolean> {
     if (here === null) return false;
-    const off = await write("set_device_notifications", { id: here, on: false });
+    const off = await change("this-device", () =>
+      callDeploymentTool("set_device_notifications", { id: here, on: false }),
+    );
     if (off === null) return false;
     show(here, off.record);
     await unsubscribeHere().catch(() => {});
@@ -200,110 +184,91 @@ export function Devices() {
   }
 
   return (
-    <section id="devices" class="settings" aria-labelledby="devices-heading">
-      <h2 id="devices-heading" class="column-heading">
-        Devices
-      </h2>
-      <p class="settings-note">
-        A Device is listed while Notifications or an Offline Copy is switched on there. With
-        Notifications it is told when the Agent leaves a Brief or a Review, in a Context whose
-        Notifications are on, and of nothing else.
-      </p>
-      <p class="settings-note">
-        An Offline Copy keeps, for every Context, Attention, the open Tasks and Projects, the
-        Persons, the Standing Entries and the last 30 days of Entries in this browser's storage,
-        unencrypted, to read with no network. It holds no Conversation and no image.
-      </p>
-      <Show when={read()}>
-        <SettingsGroup heading="This Device">
-          <ThisDevice
-            listed={hereListed()}
-            pushKey={pushKey()}
-            sending={sending()}
-            onSwitchOn={(key) => switchOnHere(key)}
-            onSwitchOff={() => switchOffHere()}
-          />
-          <SettingRow
-            title="Offline Copy on this Device"
-            description="Kept in this browser, to read with no network"
-            labels
-            control={(ids) => (
-              <SwitchInput
-                id={ids.id}
-                aria-describedby={ids.describedBy}
-                checked={hereListed()?.offline_copy ?? false}
-                disabled={sending() || here === null || asking() !== null}
-                onTurn={(on) => {
-                  if (on) return switchCopyOnHere();
-                  // Nothing is switched off until the person says what becomes of the Unsent
-                  // writes, if there are any, and the copy is cleared once it is.
-                  switchCopyOffHere();
-                  return false;
-                }}
-              />
-            )}
-          />
-        </SettingsGroup>
-      </Show>
-      <Show when={asking()}>
-        <fieldset class="clearing-copy" aria-labelledby="clearing-copy-question">
-          <p id="clearing-copy-question">
-            Switching off clears the Offline Copy from this browser.{" "}
-            {unsentKeptQuestion(unsent().length)}
+    <SettingsSection note="A Device is listed while Notifications or an Offline Copy is switched on there. With Notifications it is told when the Agent leaves a Brief or a Review, in a Context whose Notifications are on, and of nothing else.">
+      <Show when={!problem()} fallback={<Problem message={problem()} />}>
+        <Show when={read()}>
+          <SettingsGroup
+            heading="This Device"
+            problem={problemAt("this-device") ?? copyProblem()}
+            below={
+              <Show when={asking()}>
+                <fieldset class="clearing-copy" aria-labelledby="clearing-copy-question">
+                  <p id="clearing-copy-question">
+                    Switching off clears the Offline Copy from this browser.{" "}
+                    {unsentKeptQuestion(unsent().length)}
+                  </p>
+                  <div class="held-change-actions">
+                    <button type="button" onClick={() => void answered(false)}>
+                      Keep Unsent writes
+                    </button>
+                    <button type="button" class="quiet" onClick={() => void answered(true)}>
+                      Discard them too
+                    </button>
+                    <button type="button" class="quiet" onClick={() => setAsking(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </fieldset>
+              </Show>
+            }
+          >
+            <ThisDevice
+              listed={hereListed()}
+              pushKey={pushKey()}
+              sending={sending()}
+              onSwitchOn={(key) => switchOnHere(key)}
+              onSwitchOff={() => switchOffHere()}
+            />
+            <SettingRow
+              title="Offline Copy on this Device"
+              description="Every Context's Attention, open Tasks and Projects, Persons, Standing Entries and last 30 days of Entries, kept unencrypted in this browser. No Conversation and no image."
+              labels
+              control={(ids) => (
+                <SwitchInput
+                  id={ids.id}
+                  aria-describedby={ids.describedBy}
+                  checked={hereListed()?.offline_copy ?? false}
+                  disabled={sending() || here === null || asking() !== null}
+                  onTurn={(on) => {
+                    if (on) return switchCopyOnHere();
+                    // Nothing is switched off until the person says what becomes of the Unsent
+                    // writes, if there are any, and the copy is cleared once it is.
+                    switchCopyOffHere();
+                    return false;
+                  }}
+                />
+              )}
+            />
+          </SettingsGroup>
+        </Show>
+        <Show
+          when={devices().length > 0}
+          fallback={
+            <p class="settings-note">No Device has Notifications or an Offline Copy switched on.</p>
+          }
+        >
+          <ul class="connection-rows" aria-label="Devices">
+            <For each={devices()}>
+              {(device) => (
+                <DeviceRow
+                  device={device}
+                  here={device.id === here}
+                  changes={changes}
+                  onRenamed={(renamed) => show(device.id, renamed)}
+                  onRemove={() => remove(device)}
+                />
+              )}
+            </For>
+          </ul>
+          {/* #214 puts the Devices in a group's box, and this under it. */}
+          <Problem message={problemAt("devices")} />
+          <p class="settings-note">
+            Removing a Device switches off everything on it. It stays signed in: the sign-in is
+            Cloudflare Access's, and ends there.
           </p>
-          <div class="held-change-actions">
-            <button type="button" onClick={() => void answered(false)}>
-              Keep Unsent writes
-            </button>
-            <button type="button" class="quiet" onClick={() => void answered(true)}>
-              Discard them too
-            </button>
-            <button type="button" class="quiet" onClick={() => setAsking(null)}>
-              Cancel
-            </button>
-          </div>
-        </fieldset>
+        </Show>
       </Show>
-      <Show when={copyProblem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
-      <Show
-        when={devices().length > 0}
-        fallback={
-          <p class="settings-note">No Device has Notifications or an Offline Copy switched on.</p>
-        }
-      >
-        <ul class="connection-rows" aria-label="Devices">
-          <For each={devices()}>
-            {(device) => (
-              <DeviceRow
-                device={device}
-                here={device.id === here}
-                sending={sending()}
-                onRenamed={(renamed) => show(device.id, renamed)}
-                onRemove={() => remove(device)}
-                onProblem={setProblem}
-              />
-            )}
-          </For>
-        </ul>
-        <p class="settings-note">
-          Removing a Device switches off everything on it. It stays signed in: the sign-in is
-          Cloudflare Access's, and ends there.
-        </p>
-      </Show>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -338,7 +303,12 @@ function ThisDevice(props: {
         {(key) => (
           <SettingRow
             title={title}
-            description="Told when the Agent leaves a Brief or a Review"
+            description={
+              <>
+                Told when the Agent leaves a Brief or a Review, in a Context whose Notifications are
+                on <SettingsLink section="brief-and-review">in Brief and Review</SettingsLink>
+              </>
+            }
             labels
             control={(ids) => (
               <SwitchInput
@@ -359,12 +329,11 @@ function ThisDevice(props: {
 function DeviceRow(props: {
   device: Device;
   here: boolean;
-  sending: boolean;
+  changes: SectionChanges;
   onRenamed: (device: Device) => void;
   onRemove: () => void;
-  onProblem: (message: string | null) => void;
 }) {
-  const [sending, setSending] = createSignal(false);
+  const sending = () => props.changes.sending();
   let nameField!: HTMLInputElement;
   const name = followRecord(
     () => nameField,
@@ -373,15 +342,12 @@ function DeviceRow(props: {
 
   async function rename(event: SubmitEvent) {
     event.preventDefault();
-    setSending(true);
+    const input = { id: props.device.id, name: nameField.value };
     await name.send(async () => {
-      const renamed = await writeToDeployment(
-        "rename_device",
-        { id: props.device.id, name: nameField.value },
-        props.onProblem,
+      const renamed = await props.changes.change("devices", () =>
+        callDeploymentTool("rename_device", input),
       );
-      setSending(false);
-      if (renamed) props.onRenamed(renamed);
+      if (renamed) props.onRenamed(renamed.record);
     });
   }
 
@@ -395,7 +361,7 @@ function DeviceRow(props: {
           onInput={name.typed}
           required
         />
-        <button type="submit" class="quiet" disabled={sending() || props.sending}>
+        <button type="submit" class="quiet" disabled={sending()}>
           Rename
         </button>
       </form>
@@ -406,12 +372,7 @@ function DeviceRow(props: {
       <span class="connection-context">
         Last seen <time datetime={props.device.seen}>{seenAt(props.device.seen)}</time>
       </span>
-      <button
-        type="button"
-        class="quiet"
-        disabled={sending() || props.sending}
-        onClick={props.onRemove}
-      >
+      <button type="button" class="quiet" disabled={sending()} onClick={props.onRemove}>
         Remove {props.device.name}
       </button>
     </li>

@@ -1,7 +1,7 @@
 import type { LastBackup } from "@praxis/domain";
 import { createSignal, onMount, Show } from "solid-js";
-import { deviceTimeZone } from "./ContextSettings.tsx";
 import { SettingRow, SettingsGroup } from "./design/SettingRows.tsx";
+import { deviceTimeZone } from "./device.ts";
 import { callDeploymentTool, unreachableMessage } from "./tools.ts";
 
 const madeFormat = new Intl.DateTimeFormat(undefined, {
@@ -37,23 +37,21 @@ export function BackupSettings() {
   });
 
   return (
-    <SettingsGroup
-      heading="Backups"
-      region="backups"
-      below={
-        <Show when={problem()}>
-          {(message) => (
-            <p class="problem" role="alert">
-              {message()}
-            </p>
-          )}
-        </Show>
-      }
-    >
+    <SettingsGroup heading="Backups" region="last-backup">
       <SettingRow
         title={
-          <Show when={last()} fallback="Reading the last Backup…">
-            {(read) => <span data-testid="last-backup">{lastBackupWords(read())}</span>}
+          // A read that fails is said in place of what it could not read.
+          <Show
+            when={!problem()}
+            fallback={
+              <span class="problem" role="alert">
+                {problem()}
+              </span>
+            }
+          >
+            <Show when={last()} fallback="Reading the last Backup…">
+              {(read) => <span data-testid="last-backup">{lastBackupWords(read())}</span>}
+            </Show>
           </Show>
         }
         description="Praxis makes one each day by itself, the same file as an Export, and keeps each for 30 days in the Deployment's R2 bucket, on your own Cloudflare account. There is no switch."

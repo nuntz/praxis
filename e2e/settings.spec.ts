@@ -6,6 +6,7 @@ import {
   makeContext,
   onPhone,
   openJournal,
+  openSettings,
   screenKept,
   switchTo,
   test,
@@ -182,6 +183,94 @@ test("Back or Escape from Settings returns to the main screen as it was left: it
   await expect(
     conversation.getByRole("textbox", { name: `Message the Agent in ${name}`, exact: true }),
   ).toHaveValue("Half a question");
+});
+
+test("opening a section puts the focus on its heading, and on a phone going back to the list puts it on the row that was left, by keyboard and by tap", async ({
+  page,
+}, testInfo) => {
+  await contextOfOwn(page, testInfo, "Kept");
+  await page.goto("/settings");
+  const link = (name: string) => sections(page).getByRole("link", { name, exact: true });
+  const heading = (name: string) =>
+    section(page, name).getByRole("heading", { level: 2, name, exact: true });
+  const toList = page.getByRole("banner").getByRole("link", { name: "Settings", exact: true });
+
+  // By tap, or a click where there is a pointer.
+  if (onPhone(testInfo)) await link("Spend").tap();
+  else await link("Spend").click();
+  await expect(heading("Spend")).toBeFocused();
+
+  if (onPhone(testInfo)) {
+    await toList.tap();
+    await expect(link("Spend")).toBeFocused();
+  }
+
+  // By keyboard.
+  await link("Devices").focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL("/settings/devices");
+  await expect(heading("Devices")).toBeFocused();
+
+  if (onPhone(testInfo)) {
+    await toList.focus();
+    await page.keyboard.press("Enter");
+    await expect(link("Devices")).toBeFocused();
+    // The browser's Back, from a section opened from the list.
+    await link("Contexts").focus();
+    await page.keyboard.press("Enter");
+    await expect(heading("Contexts")).toBeFocused();
+    await page.goBack();
+    await expect(page).toHaveURL("/settings");
+    await expect(link("Contexts")).toBeFocused();
+  } else {
+    // On a desktop the browser's Back opens the section before, and its heading takes the focus.
+    await page.goBack();
+    await expect(page).toHaveURL("/settings/spend");
+    await expect(heading("Spend")).toBeFocused();
+  }
+});
+
+test("a change that cannot be made is said once, under the box of the group it came from, and goes once one is", async ({
+  page,
+}, testInfo) => {
+  await contextOfOwn(page, testInfo, "Kept");
+  await page.goto("/");
+  const settings = await openSettings(page, "Brief and Review");
+  const brief = settings.getByRole("group", { name: "Brief, each day", exact: true });
+  const dailyBrief = brief.getByRole("switch", { name: "Daily Brief" });
+  await expect(dailyBrief).toBeChecked();
+
+  await page.context().setOffline(true);
+  await dailyBrief.click();
+  await expect(brief.getByRole("alert")).toHaveText(
+    "Praxis could not be reached: this needs the network.",
+  );
+  await expect(settings.getByRole("alert")).toHaveCount(1);
+  // The switch is put back as it was: nothing changed.
+  await expect(dailyBrief).toBeChecked();
+
+  await page.context().setOffline(false);
+  const turned = page.waitForResponse(/\/tools\/set_brief_time$/);
+  await dailyBrief.click();
+  expect((await (await turned).json()).ok).toBe(true);
+  await expect(dailyBrief).not.toBeChecked();
+  await expect(settings.getByRole("alert")).toHaveCount(0);
+});
+
+test("Brief and Review's Notifications lead to Devices, which opens with its heading focused", async ({
+  page,
+}, testInfo) => {
+  await contextOfOwn(page, testInfo, "Kept");
+  await page.goto("/");
+  const settings = await openSettings(page, "Brief and Review");
+  await settings
+    .getByRole("group", { name: "Notifications", exact: true })
+    .getByRole("link", { name: "in Devices", exact: true })
+    .click();
+  await expect(page).toHaveURL("/settings/devices");
+  await expect(
+    section(page, "Devices").getByRole("heading", { level: 2, name: "Devices", exact: true }),
+  ).toBeFocused();
 });
 
 test("switching Context in Settings' top bar shows that Context's sections", async ({

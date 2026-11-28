@@ -2981,15 +2981,25 @@ button.chip.set .chip-end {
   display: none;
 }
 
+/* A count, and what an act in Settings did (`.settings-said`), told apart from a section's note. */
 .search-count,
 .search-words-only,
-.setting-note {
+.settings-said {
   color: var(--muted);
   font: var(--type-meta);
 }
 
-.setting-note:empty {
+.settings-said:empty {
   display: none;
+}
+
+/*
+ * Under a group's box: what went wrong with a change made in it, and what an act in it did, as
+ * a rebuild of the search index says what it rebuilds from.
+ */
+.settings-rows > .problem,
+.settings-rows > .settings-said {
+  padding: var(--space-2) var(--space-1) 0;
 }
 
 /* What is found, grouped by kind, each group under its heading, the groups apart as sections are. */

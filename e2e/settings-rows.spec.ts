@@ -269,10 +269,11 @@ test("on a phone the list of sections shows each one's current value, where it i
   await expect(row("Standing Entries")).toHaveAccessibleDescription("1");
   await expect(row("Trash")).toHaveAccessibleDescription("1");
   await expect(row("Spend")).toHaveAccessibleDescription(/^\$[\d,]+\.\d\d of \$[\d,]+\.\d\d$/);
-  await expect(row("Contexts")).toHaveAccessibleDescription(/^\d+$/);
-  // Every journey's Connections and Devices are the Deployment's, so only their count is known.
-  await expect(row("Connections")).toHaveAccessibleDescription(/^\d+$/);
-  await expect(row("Devices")).toHaveAccessibleDescription(/^\d+$/);
+  await expect(row("Contexts")).toHaveAccessibleDescription(/^[1-9]\d*$/);
+  // Every journey's Connections and Devices are the Deployment's, so only their count is known: a
+  // count above zero, or nothing at none.
+  await expect(row("Connections")).toHaveAccessibleDescription(/^([1-9]\d*)?$/);
+  await expect(row("Devices")).toHaveAccessibleDescription(/^([1-9]\d*)?$/);
   // The day of the last Backup on the Device, as the Deployment last answered, or that none was
   // made.
   const { made_at } = await callDeploymentTool(page, "get_last_backup", {});
@@ -295,6 +296,14 @@ test("on a phone the list of sections shows each one's current value, where it i
   await callContextTool(page, id, "empty_trash", { up_to: thrown.deleted_at });
   await page.reload();
   await expect(row("Trash")).toHaveAccessibleDescription("Empty");
+
+  // With none standing, Standing Entries shows nothing, as Connections does at none: read again
+  // as the list shows again, in place of the count it showed.
+  await expect(row("Standing Entries")).toHaveAccessibleDescription("1");
+  await callContextTool(page, id, "unmark_standing", { id: standing.record.id });
+  await row("Changes").click();
+  await page.getByRole("banner").getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(row("Standing Entries")).toHaveAccessibleDescription("");
 
   // With the Brief switched off, the Review's day is all there is to show.
   await callContextTool(page, id, "set_brief_time", { time: null });

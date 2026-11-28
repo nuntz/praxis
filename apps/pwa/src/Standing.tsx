@@ -1,10 +1,12 @@
 import { type Entry, STANDING_CEILING, standingSize } from "@praxis/domain";
 import { imageLoadingIn } from "@praxis/domain/markdown";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { Problem } from "./design/SettingRows.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { contextCopy, readFromCopy } from "./offline-copy.ts";
 import { online } from "./online.ts";
+import { SettingsSection, sectionChanges } from "./SettingsSection.tsx";
 import { Unreachable, unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { Words } from "./Words.tsx";
 
@@ -20,8 +22,9 @@ export function Standing(props: { timeZone: string }) {
   const contextId = useContextId();
   const live = useLive();
   const [entries, setEntries] = createSignal<Entry[] | null>(null);
+  // What the last read met, said in place of the list it could not read.
   const [problem, setProblem] = createSignal<string | null>(null);
-  const [sending, setSending] = createSignal(false);
+  const { change, sending, problemAt } = sectionChanges();
   const dateFormat = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeZone: props.timeZone,
@@ -66,74 +69,56 @@ export function Standing(props: { timeZone: string }) {
   onCleanup(live.listen({ changed: () => read(), readAfresh: () => read() }));
 
   async function unmark(id: string) {
-    setSending(true);
-    try {
-      const result = await callTool("unmark_standing", { id });
-      if (!result.ok) return setProblem(result.error.message);
-      setProblem(null);
+    if ((await change("standing", () => callTool("unmark_standing", { id }))) !== null) {
       await read();
-    } catch (error) {
-      setProblem(unreachableMessage(error));
-    } finally {
-      setSending(false);
     }
   }
 
   return (
-    <section id="standing" class="settings" aria-labelledby="standing-heading">
-      <h2 id="standing-heading" class="column-heading">
-        Standing Entries
-      </h2>
-      <p class="settings-note">
-        The Agent is given these at the start of every Run here, and keeps honouring them. When two
-        disagree, the newer wins. Mark an Entry standing from the Journal.
-      </p>
-      <Show when={entries()}>
-        {(listed) => (
-          <Show
-            when={listed().length > 0}
-            fallback={<p class="settings-note">No Entry is standing.</p>}
-          >
-            <p class="settings-note" data-testid="standing-size">
-              {characters(size())} of {characters(STANDING_CEILING)} characters
-            </p>
-            <ul class="standing-items" aria-label="Standing Entries">
-              <For each={listed()}>
-                {(entry) => (
-                  <li class="standing-item" data-testid="standing-entry">
-                    <time class="standing-day" datetime={entry.at}>
-                      {dateFormat.format(new Date(entry.at))}
-                    </time>
-                    <Words
-                      words={entry.words}
-                      images={
-                        online() && !readFromCopy(contextId) ? imageLoadingIn(entry) : "never"
-                      }
-                    />
-                    <div class="standing-actions">
-                      <button
-                        type="button"
-                        class="quiet"
-                        disabled={sending()}
-                        onClick={() => void unmark(entry.id)}
-                      >
-                        Unmark
-                      </button>
-                    </div>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </Show>
-        )}
+    <SettingsSection note="The Agent is given these at the start of every Run here and keeps honouring them, the newer where two disagree. Mark an Entry standing from the Journal.">
+      <Show when={!problem()} fallback={<Problem message={problem()} />}>
+        <Show when={entries()}>
+          {(listed) => (
+            <Show
+              when={listed().length > 0}
+              fallback={<p class="settings-note">No Entry is standing.</p>}
+            >
+              <p class="settings-note" data-testid="standing-size">
+                {characters(size())} of {characters(STANDING_CEILING)} characters
+              </p>
+              <ul class="standing-items" aria-label="Standing Entries">
+                <For each={listed()}>
+                  {(entry) => (
+                    <li class="standing-item" data-testid="standing-entry">
+                      <time class="standing-day" datetime={entry.at}>
+                        {dateFormat.format(new Date(entry.at))}
+                      </time>
+                      <Words
+                        words={entry.words}
+                        images={
+                          online() && !readFromCopy(contextId) ? imageLoadingIn(entry) : "never"
+                        }
+                      />
+                      <div class="standing-actions">
+                        <button
+                          type="button"
+                          class="quiet"
+                          disabled={sending()}
+                          onClick={() => void unmark(entry.id)}
+                        >
+                          Unmark
+                        </button>
+                      </div>
+                    </li>
+                  )}
+                </For>
+              </ul>
+              {/* #214 puts the list in a group's box, and this under it. */}
+              <Problem message={problemAt("standing")} />
+            </Show>
+          )}
+        </Show>
       </Show>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
-    </section>
+    </SettingsSection>
   );
 }

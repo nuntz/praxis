@@ -7,7 +7,7 @@ import {
 import Info from "lucide-solid/icons/info";
 import { createUniqueId, For, type JSX } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
-import { deviceTimeZone } from "./ContextSettings.tsx";
+import { deviceTimeZone } from "./device.ts";
 import { latestRead } from "./latest-read.ts";
 import { CapLink, SettingsLink } from "./SettingsLink.tsx";
 import { type CallTool, unreachableMessage } from "./tools.ts";

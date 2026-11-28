@@ -5,10 +5,11 @@ import type {
   DeploymentToolName,
 } from "@praxis/domain";
 import { createEffect, createSignal, createUniqueId, For, on, Show } from "solid-js";
-import { SwitchInput } from "./design/SettingRows.tsx";
+import { Problem, SwitchInput } from "./design/SettingRows.tsx";
 import { followRecord } from "./follow-record.ts";
 import { latestRead } from "./latest-read.ts";
-import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
+import { type SectionChanges, SettingsSection, sectionChanges } from "./SettingsSection.tsx";
+import { callDeploymentTool, unreachableMessage } from "./tools.ts";
 
 /** A Deployment tool that changes one Connection, and returns it as it now is. */
 type ConnectionChange = Extract<
@@ -29,7 +30,9 @@ function fullAddress(connection: Connection): string {
  */
 export function Connections(props: { contexts: ContextListing[] }) {
   const [connections, setConnections] = createSignal<Connection[]>([]);
+  // What the last read met, said in place of the list it could not read.
   const [problem, setProblem] = createSignal<string | null>(null);
+  const changes = sectionChanges();
   const shown = () => props.contexts.filter((context) => !context.retired);
   const contextName = (id: string) =>
     props.contexts.find((context) => context.id === id)?.name ?? "";
@@ -42,6 +45,7 @@ export function Connections(props: { contexts: ContextListing[] }) {
       const result = await callDeploymentTool("list_connections", {});
       if (!current()) return;
       if (!result.ok) return setProblem(result.error.message);
+      setProblem(null);
       setConnections(result.value.items);
     } catch (error) {
       if (!current()) return;
@@ -71,52 +75,42 @@ export function Connections(props: { contexts: ContextListing[] }) {
   }
 
   return (
-    <section id="connections" class="settings" aria-labelledby="connections-heading">
-      <h2 id="connections-heading" class="column-heading">
-        Connections
-      </h2>
-      <p class="settings-note">
-        An outside agent, such as Claude or ChatGPT, works in one Context through a Connection.
-        Paste its address into the agent, and sign in there as yourself.
-      </p>
-      <Show
-        when={connections().length > 0}
-        fallback={<p class="settings-note">No outside agent is connected.</p>}
-      >
-        <ul class="connection-rows" aria-label="Connections">
-          <For each={connections()}>
-            {(connection) => (
-              <ConnectionRow
-                connection={connection}
-                contextName={contextName(connection.context_id)}
-                onChanged={show}
-                onProblem={setProblem}
-              />
-            )}
-          </For>
-        </ul>
+    <SettingsSection note="An outside agent, such as Claude or ChatGPT, works in one Context through a Connection. Paste its address into the agent, and sign in there as yourself.">
+      <Show when={!problem()} fallback={<Problem message={problem()} />}>
+        <Show
+          when={connections().length > 0}
+          fallback={<p class="settings-note">No outside agent is connected.</p>}
+        >
+          <ul class="connection-rows" aria-label="Connections">
+            <For each={connections()}>
+              {(connection) => (
+                <ConnectionRow
+                  connection={connection}
+                  contextName={contextName(connection.context_id)}
+                  changes={changes}
+                  onChanged={show}
+                />
+              )}
+            </For>
+          </ul>
+        </Show>
       </Show>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
+      {/* #214 puts the Connections in a group's box, and this under it. */}
+      <Problem message={changes.problemAt("connections")} />
       <Show when={shown().length > 0}>
-        <NewConnection contexts={shown()} onMade={made} />
+        <NewConnection contexts={shown()} changes={changes} onMade={made} />
       </Show>
-    </section>
+    </SettingsSection>
   );
 }
 
 function ConnectionRow(props: {
   connection: Connection;
   contextName: string;
+  changes: SectionChanges;
   onChanged: (connection: Connection) => void;
-  onProblem: (message: string | null) => void;
 }) {
-  const [sending, setSending] = createSignal(false);
+  const sending = () => props.changes.sending();
   const readingOnly = createUniqueId();
   let nameField!: HTMLInputElement;
   const name = followRecord(
@@ -125,11 +119,12 @@ function ConnectionRow(props: {
   );
 
   async function send<N extends ConnectionChange>(tool: N, input: DeploymentToolInput<N>) {
-    setSending(true);
-    const changed = (await writeToDeployment(tool, input, props.onProblem)) as Connection | null;
-    setSending(false);
-    if (changed) props.onChanged(changed);
-    return changed;
+    const changed = await props.changes.change("connections", () =>
+      callDeploymentTool(tool, input),
+    );
+    const connection = (changed as { record: Connection } | null)?.record ?? null;
+    if (connection) props.onChanged(connection);
+    return connection;
   }
 
   async function rename(event: SubmitEvent) {
@@ -190,30 +185,27 @@ function ConnectionRow(props: {
 /** Make a Connection with its name, its Context, which never changes, and whether it reads only. */
 function NewConnection(props: {
   contexts: ContextListing[];
+  changes: SectionChanges;
   onMade: (connection: Connection) => void;
 }) {
-  const [problem, setProblem] = createSignal<string | null>(null);
-  const [sending, setSending] = createSignal(false);
+  const { change, sending, problemAt } = props.changes;
   const readingOnly = createUniqueId();
 
   async function make(event: SubmitEvent) {
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
     const fields = new FormData(form);
-    setSending(true);
-    const made = await writeToDeployment(
-      "create_connection",
-      {
-        name: String(fields.get("name") ?? ""),
-        context_id: String(fields.get("context_id") ?? ""),
-        reading_only: fields.get("reading_only") !== null,
-      },
-      setProblem,
+    const input = {
+      name: String(fields.get("name") ?? ""),
+      context_id: String(fields.get("context_id") ?? ""),
+      reading_only: fields.get("reading_only") !== null,
+    };
+    const made = await change("new-connection", () =>
+      callDeploymentTool("create_connection", input),
     );
-    setSending(false);
-    if (!made) return;
+    if (made === null) return;
     form.reset();
-    props.onMade(made);
+    props.onMade(made.record);
   }
 
   return (
@@ -238,13 +230,7 @@ function NewConnection(props: {
       <button type="submit" disabled={sending()}>
         Make the Connection
       </button>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
+      <Problem message={problemAt("new-connection")} />
     </form>
   );
 }

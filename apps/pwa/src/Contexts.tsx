@@ -6,12 +6,14 @@ import {
   type DeploymentToolName,
 } from "@praxis/domain";
 import { createSignal, createUniqueId, For, Show } from "solid-js";
-import { deviceTimeZone } from "./ContextSettings.tsx";
+import { Problem } from "./design/SettingRows.tsx";
+import { deviceTimeZone } from "./device.ts";
 import { MakeExport } from "./Export.tsx";
 import { followRecord } from "./follow-record.ts";
+import { type SectionChanges, SettingsSection, sectionChanges } from "./SettingsSection.tsx";
 import { TimeZonePicker } from "./TimeZonePicker.tsx";
 import { DOWNLOADED } from "./Trash.tsx";
-import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
+import { callDeploymentTool } from "./tools.ts";
 
 /** An accent as the person reads it. */
 function accentName(accent: Accent): string {
@@ -39,44 +41,36 @@ export function Contexts(props: {
   onMade: (context: ContextListing) => void;
   onDeleted: (id: string) => void;
 }) {
-  const [problem, setProblem] = createSignal<string | null>(null);
+  const changes = sectionChanges();
 
   return (
-    <section id="contexts" class="settings" aria-labelledby="contexts-heading">
-      <h2 id="contexts-heading" class="column-heading">
-        Contexts
-      </h2>
+    <SettingsSection note="Each Context keeps a Journal, a Conversation and settings of its own. Retiring one hides it and ends its Connections, and deletes nothing.">
       <ul class="context-rows">
         <For each={props.contexts}>
           {(context) => (
             <ContextRow
               context={context}
+              changes={changes}
               onChanged={props.onChanged}
               onDeleted={props.onDeleted}
-              onProblem={setProblem}
             />
           )}
         </For>
       </ul>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
-      <NewContext heading="New Context" onMade={props.onMade} />
-    </section>
+      {/* #214 puts the Contexts in a group's box, and this under it. */}
+      <Problem message={changes.problemAt("contexts")} />
+      <NewContext heading="New Context" changes={changes} onMade={props.onMade} />
+    </SettingsSection>
   );
 }
 
 function ContextRow(props: {
   context: ContextListing;
+  changes: SectionChanges;
   onChanged: (context: ContextListing) => void;
   onDeleted: (id: string) => void;
-  onProblem: (message: string | null) => void;
 }) {
-  const [sending, setSending] = createSignal(false);
+  const sending = () => props.changes.sending();
   const [deleting, setDeleting] = createSignal(false);
   let nameField!: HTMLInputElement;
   const name = followRecord(
@@ -85,15 +79,10 @@ function ContextRow(props: {
   );
 
   async function send<N extends ContextChange>(tool: N, input: DeploymentToolInput<N>) {
-    setSending(true);
-    const changed = (await writeToDeployment(
-      tool,
-      input,
-      props.onProblem,
-    )) as ContextListing | null;
-    setSending(false);
-    if (changed) props.onChanged(changed);
-    return changed;
+    const changed = await props.changes.change("contexts", () => callDeploymentTool(tool, input));
+    const context = (changed as { record: ContextListing } | null)?.record ?? null;
+    if (context) props.onChanged(context);
+    return context;
   }
 
   async function rename(event: SubmitEvent) {
@@ -170,6 +159,7 @@ function ContextRow(props: {
         <Show when={deleting()}>
           <DeleteContext
             context={props.context}
+            changes={props.changes}
             onDeleted={props.onDeleted}
             onKept={() => setDeleting(false)}
           />
@@ -186,31 +176,22 @@ function ContextRow(props: {
  */
 function DeleteContext(props: {
   context: ContextListing;
+  changes: SectionChanges;
   onDeleted: (id: string) => void;
   onKept: () => void;
 }) {
   const [typed, setTyped] = createSignal("");
-  const [problem, setProblem] = createSignal<string | null>(null);
-  const [sending, setSending] = createSignal(false);
+  const sending = () => props.changes.sending();
+  // What went wrong here, the Export offered or the delete, is said in this form.
+  const at = `delete ${props.context.id}`;
 
   async function remove(event: SubmitEvent) {
     event.preventDefault();
-    setSending(true);
-    try {
-      const result = await callDeploymentTool("delete_context", {
-        id: props.context.id,
-        name: typed(),
-      });
-      if (!result.ok) {
-        setProblem(result.error.message);
-        return;
-      }
-      props.onDeleted(props.context.id);
-    } catch (error) {
-      setProblem(unreachableMessage(error));
-    } finally {
-      setSending(false);
-    }
+    const name = typed();
+    const deleted = await props.changes.change(at, () =>
+      callDeploymentTool("delete_context", { id: props.context.id, name }),
+    );
+    if (deleted !== null) props.onDeleted(props.context.id);
   }
 
   return (
@@ -225,7 +206,7 @@ function DeleteContext(props: {
         no Trash for it and no way back. An Export keeps a copy.
       </p>
       <div>
-        <MakeExport />
+        <MakeExport changes={props.changes} at={at} />
       </div>
       <p class="settings-note">
         {DOWNLOADED} Its files in Backups go as those Backups age out, within 30 days.
@@ -248,13 +229,7 @@ function DeleteContext(props: {
           Keep it
         </button>
       </div>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
+      <Problem message={props.changes.problemAt(at)} />
     </form>
   );
 }
@@ -262,11 +237,15 @@ function DeleteContext(props: {
 /**
  * Make a Context with its name, its time zone, picked from the list and starting as this Device's,
  * and its accent.
- * It is also how the first Context is made, in a Deployment that has none yet.
+ * It is also how the first Context is made, in a Deployment that has none yet, where it sends
+ * through changes of its own; in Settings, through its section's.
  */
-export function NewContext(props: { heading: string; onMade: (context: ContextListing) => void }) {
-  const [problem, setProblem] = createSignal<string | null>(null);
-  const [sending, setSending] = createSignal(false);
+export function NewContext(props: {
+  heading: string;
+  changes?: SectionChanges;
+  onMade: (context: ContextListing) => void;
+}) {
+  const { change, sending, problemAt } = props.changes ?? sectionChanges();
   const [zone, setZone] = createSignal(deviceTimeZone());
   const zoneId = createUniqueId();
 
@@ -274,21 +253,16 @@ export function NewContext(props: { heading: string; onMade: (context: ContextLi
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
     const fields = new FormData(form);
-    setSending(true);
-    const made = await writeToDeployment(
-      "create_context",
-      {
-        name: String(fields.get("name") ?? ""),
-        time_zone: zone(),
-        accent: String(fields.get("accent") ?? "") as Accent,
-      },
-      setProblem,
-    );
-    setSending(false);
-    if (!made) return;
+    const input = {
+      name: String(fields.get("name") ?? ""),
+      time_zone: zone(),
+      accent: String(fields.get("accent") ?? "") as Accent,
+    };
+    const made = await change("new-context", () => callDeploymentTool("create_context", input));
+    if (made === null) return;
     form.reset();
     setZone(deviceTimeZone());
-    props.onMade(made);
+    props.onMade(made.record);
   }
 
   return (
@@ -314,13 +288,7 @@ export function NewContext(props: { heading: string; onMade: (context: ContextLi
       <button type="submit" disabled={sending()}>
         Make the Context
       </button>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
+      <Problem message={problemAt("new-context")} />
     </form>
   );
 }

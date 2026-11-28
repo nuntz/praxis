@@ -14,7 +14,7 @@ import ChangesIcon from "lucide-solid/icons/rotate-ccw-clock";
 import Smartphone from "lucide-solid/icons/smartphone";
 import Sunrise from "lucide-solid/icons/sunrise";
 import TrashIcon from "lucide-solid/icons/trash";
-import { createEffect, createUniqueId, For, type JSX, Show } from "solid-js";
+import { createEffect, createUniqueId, For, type JSX, on, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { BackupSettings } from "./Backups.tsx";
 import { Changes } from "./Changes.tsx";
@@ -22,12 +22,12 @@ import { Connections } from "./Connections.tsx";
 import {
   BriefAndReview,
   ConversationAndSearch,
-  deviceTimeZone,
   GeneralSettings,
   weekdayName,
 } from "./ContextSettings.tsx";
 import { Contexts } from "./Contexts.tsx";
 import { Devices } from "./Devices.tsx";
+import { deviceTimeZone } from "./device.ts";
 import { ExportSettings } from "./Export.tsx";
 import { latestRead } from "./latest-read.ts";
 import { onPhone } from "./media.ts";
@@ -40,6 +40,7 @@ import {
   type Section,
   sectionAddress,
 } from "./place.ts";
+import { SettingsSection, ShownSection, sectionChanges } from "./SettingsSection.tsx";
 import { SpendSettings, spend } from "./Spend.tsx";
 import { Standing } from "./Standing.tsx";
 import { Trash } from "./Trash.tsx";
@@ -69,9 +70,12 @@ type SectionShown = {
   icon: LucideIcon;
   /** The current Context's section, or the Deployment's. */
   ofContext: boolean;
-  /** What it holds now, as the phone's list of sections shows it, where the screen knows it. */
+  /**
+   * What it holds now, as the phone's list of sections shows it, where the screen knows it: a
+   * count only above zero (`count`), or a state such as "Off".
+   */
   value?: (props: SettingsProps) => string | null;
-  /** What it holds now, where only a read of its own tells: a value of its own, or none. */
+  /** What it holds now, where only a read of its own tells: as `value` does, or null unread. */
   read?: (callTool: CallTool) => Promise<string | null>;
   /** The section itself. */
   panel: (from: ShownFrom) => JSX.Element;
@@ -80,7 +84,7 @@ type SectionShown = {
 /** A section that needs the Context's settings, which says it needs the network while unread. */
 function withSettings(from: ShownFrom, panel: (settings: () => ContextSettings) => JSX.Element) {
   return (
-    <Show when={from.props.settings} fallback={from.needsNetwork()}>
+    <Show when={from.props.settings} fallback={<SettingsSection note={from.needsNetwork()} />}>
       {(read) => panel(read)}
     </Show>
   );
@@ -124,7 +128,7 @@ const SHOWN: Record<Section, SectionShown> = {
         read.push(...result.value.items);
         cursor = result.value.next_cursor;
       } while (cursor);
-      return read.length === 0 ? "None" : String(read.length);
+      return count(read.length);
     },
     panel: (from) => (
       <Show
@@ -134,7 +138,7 @@ const SHOWN: Record<Section, SectionShown> = {
           <Show when={from.props.offlineZone}>
             {(zone) => (
               <>
-                {from.needsNetwork()}
+                <p class="settings-note">{from.needsNetwork()}</p>
                 <Standing timeZone={zone()} />
               </>
             )}
@@ -178,7 +182,7 @@ const SHOWN: Record<Section, SectionShown> = {
     name: "Contexts",
     icon: Layers,
     ofContext: false,
-    value: (props) => String(props.contexts.filter((context) => !context.retired).length),
+    value: (props) => count(props.contexts.filter((context) => !context.retired).length),
     panel: ({ props }) => (
       <Contexts
         contexts={props.contexts}
@@ -194,7 +198,7 @@ const SHOWN: Record<Section, SectionShown> = {
     ofContext: false,
     async read() {
       const result = await callDeploymentTool("list_connections", {});
-      return result.ok ? String(result.value.items.length) : null;
+      return result.ok ? count(result.value.items.length) : null;
     },
     panel: ({ props }) => <Connections contexts={props.contexts} />,
   },
@@ -204,7 +208,7 @@ const SHOWN: Record<Section, SectionShown> = {
     ofContext: false,
     async read() {
       const result = await callDeploymentTool("list_devices", {});
-      return result.ok ? String(result.value.items.length) : null;
+      return result.ok ? count(result.value.items.length) : null;
     },
     panel: () => <Devices />,
   },
@@ -229,13 +233,10 @@ const SHOWN: Record<Section, SectionShown> = {
       return made === null ? "None" : backupDay.format(new Date(made));
     },
     panel: () => (
-      <section class="settings" aria-labelledby="backups-and-export-heading">
-        <h2 id="backups-and-export-heading" class="column-heading">
-          Backups and Export
-        </h2>
+      <SettingsSection note="Praxis backs up the whole Deployment by itself each day. An Export is the same file, made when you ask, for you to keep.">
         <BackupSettings />
-        <ExportSettings />
-      </section>
+        <ExportSettings changes={sectionChanges()} />
+      </SettingsSection>
     ),
   },
 };
@@ -304,6 +305,21 @@ export function SettingsScreen(props: SettingsProps) {
     if (onPhone() && shown() === null) void listed.read();
   });
 
+  // Opening a section puts the focus on its heading; on a phone, going back to the list puts it on
+  // the row of the section left (section 8.6). Settings opened afresh leaves the focus alone.
+  const links: Partial<Record<Section, HTMLAnchorElement>> = {};
+  let heading: HTMLHeadingElement | undefined;
+  createEffect(
+    on(
+      shown,
+      (now, was) => {
+        if (now !== null) heading?.focus();
+        else if (was) links[was]?.focus();
+      },
+      { defer: true },
+    ),
+  );
+
   function SectionLink(link: { section: Section }) {
     const { name, icon: SectionIcon, value: known } = SHOWN[link.section];
     const valueId = createUniqueId();
@@ -314,6 +330,9 @@ export function SettingsScreen(props: SettingsProps) {
     return (
       <li>
         <a
+          ref={(element) => {
+            links[link.section] = element;
+          }}
           href={sectionAddress(link.section)}
           class="settings-section-link"
           aria-current={shown() === link.section ? "page" : undefined}
@@ -339,9 +358,7 @@ export function SettingsScreen(props: SettingsProps) {
   const from: ShownFrom = {
     props,
     needsNetwork: () => (
-      <Show when={props.offlineZone}>
-        <p class="settings-note">This Context's settings and its Trash need the network.</p>
-      </Show>
+      <Show when={props.offlineZone}>This Context's settings and its Trash need the network.</Show>
     ),
   };
 
@@ -367,7 +384,21 @@ export function SettingsScreen(props: SettingsProps) {
         </nav>
       </Show>
       <Show when={shown()} keyed>
-        {(section) => <div class="settings-shown">{SHOWN[section].panel(from)}</div>}
+        {(section) => (
+          <div class="settings-shown">
+            <ShownSection.Provider
+              value={{
+                section,
+                name: SHOWN[section].name,
+                heading: (drawn) => {
+                  heading = drawn;
+                },
+              }}
+            >
+              {SHOWN[section].panel(from)}
+            </ShownSection.Provider>
+          </div>
+        )}
       </Show>
     </div>
   );
@@ -385,7 +416,7 @@ function readListed(callTool: CallTool) {
       SECTIONS.map(async (section) => {
         try {
           const value = await SHOWN[section].read?.(callTool);
-          if (current() && value) setValues(section, value);
+          if (current() && value !== null && value !== undefined) setValues(section, value);
         } catch {
           // Not reached: what was read before stays, if anything was.
         }
@@ -393,6 +424,11 @@ function readListed(callTool: CallTool) {
     ),
   );
   return { values, read };
+}
+
+/** A count as the phone's list of sections shows it: only above zero. */
+function count(held: number): string {
+  return held > 0 ? String(held) : "";
 }
 
 /** The day of a Backup, on this Device, as in "Nov 21". */

@@ -1,7 +1,8 @@
 import { type ContextListing, exportZip, exportZipName } from "@praxis/domain";
 import { createSignal, Show } from "solid-js";
 import { SettingRow, SettingsGroup } from "./design/SettingRows.tsx";
-import { callDeploymentTool, unreachableMessage, writeToDeployment } from "./tools.ts";
+import type { SectionChanges } from "./SettingsSection.tsx";
+import { callDeploymentTool, writeToDeployment } from "./tools.ts";
 
 /** Hand the person a file to keep, as the browser saves a download. */
 export function download(blob: Blob, name: string): void {
@@ -19,59 +20,38 @@ export function download(blob: Blob, name: string): void {
  * Making an Export, in the Deployment's settings (section 8.6): the whole Deployment, every
  * Context in it, as a zip of Praxis's own JSON files the person keeps. Only their hand makes one.
  */
-export function ExportSettings() {
+export function ExportSettings(props: { changes: SectionChanges }) {
   return (
-    <SettingsGroup heading="Export" region="export">
+    <SettingsGroup heading="Export" region="export" problem={props.changes.problemAt("export")}>
       <SettingRow
         title="The whole Deployment, as a zip"
         description="Every Context in it, retired ones too: the Journal with its Versions, the Trash and the Run records. Never a Conversation or a key. It is not encrypted, and once downloaded it is yours: Praxis cannot reach it."
-        control={() => <MakeExport />}
+        control={() => <MakeExport changes={props.changes} at="export" />}
       />
     </SettingsGroup>
   );
 }
 
 /**
- * The button that makes an Export and hands it to the person as a download, with what stood in
- * the way if it could not. Offered in the settings, and before a Context is deleted.
+ * The button that makes an Export and hands it to the person as a download, through its section's
+ * changes, which say at `at` what stood in the way if it could not. Offered in the settings, and
+ * before a Context is deleted.
  */
-export function MakeExport() {
-  const [problem, setProblem] = createSignal<string | null>(null);
+export function MakeExport(props: { changes: SectionChanges; at: string }) {
   const [making, setMaking] = createSignal(false);
 
   async function make() {
     setMaking(true);
-    try {
-      const result = await callDeploymentTool("make_export", {});
-      if (!result.ok) {
-        setProblem(result.error.message);
-        return;
-      }
-      setProblem(null);
-      download(
-        new Blob([exportZip(result.value)], { type: "application/zip" }),
-        exportZipName(result.value),
-      );
-    } catch (error) {
-      setProblem(unreachableMessage(error));
-    } finally {
-      setMaking(false);
-    }
+    const made = await props.changes.change(props.at, () => callDeploymentTool("make_export", {}));
+    setMaking(false);
+    if (made === null) return;
+    download(new Blob([exportZip(made)], { type: "application/zip" }), exportZipName(made));
   }
 
   return (
-    <>
-      <button type="button" disabled={making()} onClick={() => void make()}>
-        {making() ? "Making the Export…" : "Make an Export"}
-      </button>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
-    </>
+    <button type="button" disabled={props.changes.sending()} onClick={() => void make()}>
+      {making() ? "Making the Export…" : "Make an Export"}
+    </button>
   );
 }
 

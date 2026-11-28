@@ -1,60 +1,39 @@
-import { FIRST_TIMES, namedZone, type Settings, type Weekday, weekdays } from "@praxis/domain";
+import {
+  FIRST_TIMES,
+  namedZone,
+  type Settings,
+  type ToolResult,
+  type Weekday,
+  weekdays,
+} from "@praxis/domain";
 import { createSignal, For, Show } from "solid-js";
 import { SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
+import { deviceTimeZone } from "./device.ts";
+import { SettingsLink } from "./SettingsLink.tsx";
+import { SettingsSection, sectionChanges } from "./SettingsSection.tsx";
 import { SettlingField } from "./SettlingField.tsx";
 import { TimeZonePicker } from "./TimeZonePicker.tsx";
-import { unreachableMessage, useCallTool } from "./tools.ts";
-
-/** The time zone this Device is in, as its browser names it. */
-export function deviceTimeZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
-}
+import { useCallTool } from "./tools.ts";
 
 /**
- * A change to the current Context's settings as it is sent: whether one is out, what was refused,
- * and a way to send one, showing the settings as it answered. Every tool that changes them answers
- * as `set_time_zone` does.
+ * A change to the current Context's settings as it is sent, through the section's queue
+ * (`sectionChanges`), showing the settings as it answered. Every tool that changes them answers as
+ * `set_time_zone` does. Says whether it went through.
  */
 function settingsChange(onChanged: (settings: Settings) => void) {
   const callTool = useCallTool();
-  const [holding, setHolding] = createSignal(0);
-  const [problem, setProblem] = createSignal<string | null>(null);
-  let queued: Promise<boolean> = Promise.resolve(true);
-
-  /**
-   * A change, sent once every change before it is answered, so they land in the order they were
-   * made, and `send` reads the settings as the ones before it left them. One made by a control
-   * holds the others while it is out (`holds`). A time sent as its field is left holds nothing: the
-   * press that left it lands as meant, and its change waits behind the time's.
-   */
-  function change(send: () => ReturnType<typeof callTool<"set_time_zone">>, { holds = true } = {}) {
-    if (holds) setHolding((count) => count + 1);
-    const sent = queued
-      .then(() => sendNow(send))
-      .finally(() => {
-        if (holds) setHolding((count) => count - 1);
-      });
-    queued = sent;
-    return sent;
+  const changes = sectionChanges();
+  async function change(
+    at: string,
+    send: () => Promise<ToolResult<{ record: Settings }>>,
+    options?: { holds: boolean },
+  ) {
+    const changed = await changes.change(at, send, options);
+    if (changed === null) return false;
+    onChanged(changed.record);
+    return true;
   }
-
-  async function sendNow(send: () => ReturnType<typeof callTool<"set_time_zone">>) {
-    try {
-      const result = await send();
-      if (!result.ok) {
-        setProblem(result.error.message);
-        return false;
-      }
-      setProblem(null);
-      onChanged(result.value.record);
-      return true;
-    } catch (error) {
-      setProblem(unreachableMessage(error));
-      return false;
-    }
-  }
-  const sending = () => holding() > 0;
-  return { callTool, sending, problem, change };
+  return { callTool, sending: changes.sending, problemAt: changes.problemAt, change };
 }
 
 /**
@@ -66,25 +45,24 @@ export function GeneralSettings(props: {
   settings: Settings;
   onChanged: (settings: Settings) => void;
 }) {
-  const { callTool, sending, problem, change } = settingsChange(props.onChanged);
+  const { callTool, sending, problemAt, change } = settingsChange(props.onChanged);
   const device = deviceTimeZone();
   // Named as this browser names it, so one zone known by two names is not told apart.
   const differs = () => namedZone(props.settings.time_zone) !== device;
 
-  const useDeviceZone = () => change(() => callTool("set_time_zone", { time_zone: device }));
+  const useDeviceZone = () =>
+    change("time-zone", () => callTool("set_time_zone", { time_zone: device }));
   // A zone picked from the list holds nothing, so the field keeps the focus it was picked from.
   const pickZone = (zone: string) =>
-    change(() => callTool("set_time_zone", { time_zone: zone }), { holds: false });
+    change("time-zone", () => callTool("set_time_zone", { time_zone: zone }), { holds: false });
 
   return (
-    <section id="general" class="settings" aria-labelledby="general-heading">
-      <h2 id="general-heading" class="column-heading">
-        General
-      </h2>
-      <p class="settings-note">
-        Today, due dates and every time shown in {props.settings.name} are in its time zone.
-      </p>
-      <SettingsGroup heading="Time zone">
+    <SettingsSection
+      note={
+        <>Today, due dates and every time shown in {props.settings.name} are in its time zone.</>
+      }
+    >
+      <SettingsGroup heading="Time zone" problem={problemAt("time-zone")}>
         <SettingRow
           title="This Context"
           labels
@@ -113,8 +91,7 @@ export function GeneralSettings(props: {
           />
         </Show>
       </SettingsGroup>
-      <Problem message={problem()} />
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -126,7 +103,7 @@ export function BriefAndReview(props: {
   settings: Settings;
   onChanged: (settings: Settings) => void;
 }) {
-  const { callTool, sending, problem, change } = settingsChange(props.onChanged);
+  const { callTool, sending, problemAt, change } = settingsChange(props.onChanged);
 
   // The time each comes at, kept while it is off so switching it on brings it back.
   const [briefTime, setBriefTime] = createSignal(
@@ -139,23 +116,23 @@ export function BriefAndReview(props: {
   const reviewOn = () => props.settings.review_time !== null;
 
   const setBrief = (time: string | null, options?: { holds: boolean }) =>
-    change(() => callTool("set_brief_time", { time }), options);
+    change("brief", () => callTool("set_brief_time", { time }), options);
   const setReview = (time: string | null, options?: { holds: boolean }) =>
-    change(() => callTool("set_review_time", { time }), options);
+    change("review", () => callTool("set_review_time", { time }), options);
   /** The Review's day, with its time as the changes before it leave it, a time just sent among them. */
   const setReviewDay = (day: Weekday) =>
-    change(() => callTool("set_review_time", { day, time: props.settings.review_time }));
+    change("review", () => callTool("set_review_time", { day, time: props.settings.review_time }));
 
   return (
-    <section id="brief-and-review" class="settings" aria-labelledby="brief-and-review-heading">
-      <h2 id="brief-and-review-heading" class="column-heading">
-        Brief and Review
-      </h2>
-      <p class="settings-note">
-        The Agent looks over {props.settings.name} on its own and leaves what it finds in the
-        Conversation. Times are in {props.settings.time_zone}, this Context's time zone.
-      </p>
-      <SettingsGroup heading="Brief, each day">
+    <SettingsSection
+      note={
+        <>
+          The Agent looks over {props.settings.name} on its own and leaves what it finds in the
+          Conversation. Times are in {props.settings.time_zone}, this Context's time zone.
+        </>
+      }
+    >
+      <SettingsGroup heading="Brief, each day" problem={problemAt("brief")}>
         <SettingRow
           title="Daily Brief"
           description="What is due and what came up, each morning"
@@ -188,7 +165,7 @@ export function BriefAndReview(props: {
           )}
         />
       </SettingsGroup>
-      <SettingsGroup heading="Review, each week">
+      <SettingsGroup heading="Review, each week" problem={problemAt("review")}>
         <SettingRow
           title="Weekly Review"
           description="What went quiet, and what to look at next week"
@@ -239,10 +216,15 @@ export function BriefAndReview(props: {
       </SettingsGroup>
       {/* One switch for both, beside their times (ADR 0013). A Device is sent one only while
         Notifications are switched on there too, in Devices. */}
-      <SettingsGroup heading="Notifications">
+      <SettingsGroup heading="Notifications" problem={problemAt("notifications")}>
         <SettingRow
           title="Tell my Devices when the Brief or the Review is ready"
-          description="Each Device whose Notifications are on, in Devices"
+          description={
+            <>
+              Each Device whose Notifications are on,{" "}
+              <SettingsLink section="devices">in Devices</SettingsLink>
+            </>
+          }
           labels
           control={(ids) => (
             <SwitchInput
@@ -250,13 +232,12 @@ export function BriefAndReview(props: {
               aria-describedby={ids.describedBy}
               checked={props.settings.notifications}
               disabled={sending()}
-              onTurn={(on) => change(() => callTool("set_notifications", { on }))}
+              onTurn={(on) => change("notifications", () => callTool("set_notifications", { on }))}
             />
           )}
         />
       </SettingsGroup>
-      <Problem message={problem()} />
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -266,27 +247,18 @@ export function BriefAndReview(props: {
  */
 export function ConversationAndSearch(props: { contextName: string }) {
   const callTool = useCallTool();
-  const [sending, setSending] = createSignal(false);
-  const [problem, setProblem] = createSignal<string | null>(null);
+  const { change, sending, problemAt } = sectionChanges();
 
   // What the last rebuild of the meaning index said, until the screen is left.
   const [rebuilding, setRebuilding] = createSignal<string | null>(null);
 
   async function rebuild() {
-    setSending(true);
-    try {
-      const result = await callTool("rebuild_search_index", {});
-      if (!result.ok) return setProblem(result.error.message);
-      setProblem(null);
-      const count = result.value.entries_to_embed;
-      setRebuilding(
-        `Rebuilding from ${count} ${count === 1 ? "Entry" : "Entries"}. Search finds by words alone until it is done.`,
-      );
-    } catch (error) {
-      setProblem(unreachableMessage(error));
-    } finally {
-      setSending(false);
-    }
+    const rebuilt = await change("search", () => callTool("rebuild_search_index", {}));
+    if (rebuilt === null) return;
+    const count = rebuilt.entries_to_embed;
+    setRebuilding(
+      `Rebuilding from ${count} ${count === 1 ? "Entry" : "Entries"}. Search finds by words alone until it is done.`,
+    );
   }
 
   // Whether the person has asked to clear the Conversation and is being asked to be sure, and what
@@ -295,35 +267,30 @@ export function ConversationAndSearch(props: { contextName: string }) {
   const [cleared, setCleared] = createSignal<string | null>(null);
 
   async function clear() {
-    setSending(true);
-    try {
-      const result = await callTool("clear_conversation", {});
-      if (!result.ok) return setProblem(result.error.message);
-      setProblem(null);
-      setConfirming(false);
-      setCleared("The Conversation is cleared. The next Message starts it afresh.");
-    } catch (error) {
-      setProblem(unreachableMessage(error));
-    } finally {
-      setSending(false);
-    }
+    if ((await change("conversation", () => callTool("clear_conversation", {}))) === null) return;
+    setConfirming(false);
+    setCleared("The Conversation is cleared. The next Message starts it afresh.");
   }
 
   return (
-    <section
-      id="conversation-and-search"
-      class="settings"
-      aria-labelledby="conversation-and-search-heading"
+    <SettingsSection
+      note={
+        <>
+          The Conversation with the Agent in {props.contextName}, and the index its search finds by
+          meaning with.
+        </>
+      }
     >
-      <h2 id="conversation-and-search-heading" class="column-heading">
-        Conversation and search
-      </h2>
-      <p class="settings-note">
-        The Conversation with the Agent in {props.contextName}, and the index its search finds by
-        meaning with.
-      </p>
       {/* The Conversation's text is kept until the person clears it, all at once (section 5.8). */}
-      <SettingsGroup heading="Conversation">
+      <SettingsGroup
+        heading="Conversation"
+        problem={problemAt("conversation")}
+        below={
+          <p class="settings-said" role="status">
+            {cleared() ?? ""}
+          </p>
+        }
+      >
         <SettingRow
           title="Every Message"
           description="Clearing drops every Message, and what the Agent quoted of records since removed for good with them. The Journal, its changes and the Run records stay as they are. It cannot be undone."
@@ -355,12 +322,17 @@ export function ConversationAndSearch(props: { contextName: string }) {
           )}
         />
       </SettingsGroup>
-      <p class="setting-note" role="status">
-        {cleared() ?? ""}
-      </p>
       {/* The meaning index is derived and kept outside the Context, so it can always be thrown
         away and made again from the Journal (section 9.4). */}
-      <SettingsGroup heading="Search by meaning">
+      <SettingsGroup
+        heading="Search by meaning"
+        problem={problemAt("search")}
+        below={
+          <p class="settings-said" role="status">
+            {rebuilding() ?? ""}
+          </p>
+        }
+      >
         <SettingRow
           title="The index"
           description="Derived from the Journal, so it can always be made again from it"
@@ -371,23 +343,7 @@ export function ConversationAndSearch(props: { contextName: string }) {
           )}
         />
       </SettingsGroup>
-      <p class="setting-note" role="status">
-        {rebuilding() ?? ""}
-      </p>
-      <Problem message={problem()} />
-    </section>
-  );
-}
-
-function Problem(props: { message: string | null }) {
-  return (
-    <Show when={props.message}>
-      {(message) => (
-        <p class="problem" role="alert">
-          {message()}
-        </p>
-      )}
-    </Show>
+    </SettingsSection>
   );
 }
 

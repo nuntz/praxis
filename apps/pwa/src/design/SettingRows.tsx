@@ -2,16 +2,18 @@ import { createUniqueId, type JSX, Show, splitProps } from "solid-js";
 
 /**
  * A group of settings, as the design system's Settings pattern draws it: a heading in `muted`,
- * then a `surface` box of rows parted by hairlines. It is a group, named by its heading; one that
- * is a part of its section on its own, as Backups and Export are of theirs, is a region instead,
- * with what it says under its box, such as a problem.
+ * then a `surface` box of rows parted by hairlines, and under it what went wrong with a change
+ * made in it, said once as an alert. It is a group, named by its heading; one that is a part of
+ * its section on its own, as Backups and Export are of theirs, is a region instead.
  */
 export function SettingsGroup(props: {
   heading: string;
   children: JSX.Element;
   /** A part of its section on its own: a region, by this id, rather than a group. */
   region?: string;
-  /** Under the box, in a region. */
+  /** What went wrong with a change made in it, under the box. */
+  problem?: string | null | undefined;
+  /** Under the box, after the problem. */
   below?: JSX.Element;
 }) {
   return (
@@ -21,6 +23,8 @@ export function SettingsGroup(props: {
         <fieldset class="settings-rows">
           <legend class="settings-rows-heading">{props.heading}</legend>
           <div class="settings-box">{props.children}</div>
+          <Problem message={props.problem} />
+          {props.below}
         </fieldset>
       }
     >
@@ -30,8 +34,22 @@ export function SettingsGroup(props: {
             {props.heading}
           </h3>
           <div class="settings-box">{props.children}</div>
+          <Problem message={props.problem} />
           {props.below}
         </section>
+      )}
+    </Show>
+  );
+}
+
+/** What went wrong, said where it happened as an alert, or nothing. */
+export function Problem(props: { message: string | null | undefined }) {
+  return (
+    <Show when={props.message}>
+      {(message) => (
+        <p class="problem" role="alert">
+          {message()}
+        </p>
       )}
     </Show>
   );
