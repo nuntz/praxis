@@ -951,7 +951,7 @@ function AgentMessageItem(props: {
   const run = () => props.message.run;
   const heldChanges = useHeldChanges();
   // A Held Change the Run left waits here, where the Agent left it, until it is made, cancelled or
-  // lapses (section 8.5).
+  // lapses, and is then said to have gone until the person next acts (section 8.5).
   const leftForTap = () =>
     run()
       .calls.flatMap((call) => call.effects)
@@ -982,7 +982,9 @@ function AgentMessageItem(props: {
       <Show when={props.message.words}>
         <Words words={props.message.words} images="never" testId="words" />
       </Show>
-      <For each={leftForTap()}>{(held) => <HeldChangeItem held={held} />}</For>
+      <For each={leftForTap()}>
+        {(held) => <HeldChangeItem held={held} timeZone={props.timeZone} />}
+      </For>
       {/* Opened, it shows the Run's calls, and once it has ended, what it cost. */}
       <Show when={run().calls.length > 0 || run().cost !== null}>
         <details class="run-calls">

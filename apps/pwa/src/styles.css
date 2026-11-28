@@ -3655,7 +3655,7 @@ button.entry-page-add-button {
   position: absolute;
 }
 
-/* A Version compared against the current words, as typed: what is gone struck, what came underlined. */
+/* An Entry's Versions, newest first, each headed by whose change replaced its words. */
 
 .versions {
   padding: var(--space-2) var(--space-3);
@@ -3679,25 +3679,65 @@ button.entry-page-add-button {
   gap: var(--space-1);
 }
 
-.version-meta {
+.version-heading {
+  margin: 0;
+  color: var(--muted);
+  font: var(--type-meta);
+  font-weight: 600;
+}
+
+/*
+ * What is said in meta, muted: that a Version's words are the current ones, that the Versions need
+ * the network, what a restore did, and a Held Change's line once it has gone.
+ */
+.version-now,
+.versions-note,
+.version-restored,
+.held-change-said {
+  margin: 0;
   color: var(--muted);
   font: var(--type-meta);
 }
 
-.version-words {
+/* Said to be disabled while a restore or a tap is out, so it keeps the focus, and dimmed as one is. */
+.versions button[aria-disabled="true"],
+.held-change button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/*
+ * The words now compared with those a tap brings, as typed: what goes struck and muted, what comes
+ * by weight on the accent's tint, never underlined, which is a quiet button's mark. A space stands
+ * between what goes and what comes after it.
+ */
+
+.comparison {
   max-width: 620px;
+  margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.version-words del {
+.comparison del {
   color: var(--muted);
 }
 
-.version-words ins {
+.comparison ins {
+  border-radius: 4px;
+  background: var(--accent-tint);
+  color: var(--ink);
   font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
+}
+
+.comparison del + ins {
+  margin-inline-start: 0.3em;
+}
+
+.comparison-fold {
+  font: var(--type-meta);
+  font-weight: 600;
 }
 
 /* A Held Change: on the accent's tint, where the person decides, its words as typed and never
@@ -3731,6 +3771,21 @@ button.entry-page-add-button {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Inside the card, a box of its own, so what comes keeps the tint apart from the card's. */
+.held-change .comparison {
+  align-self: stretch;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.held-change-asked,
+.held-change-note {
+  margin: 0;
+  color: var(--ink);
+  font: var(--type-meta);
 }
 
 .held-change-tasks {

@@ -290,7 +290,7 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 - **On-accent** (`on-accent`): text and icons on a solid accent, and the icon on End Call's solid `warn`.
 
 ### Named Rules
-**The One Accent Rule.** Only the current Context's accent appears on the screen, and only where the person is about to write or decide: the switcher, both composers, the primary button, a Held Change, a Mention, badges. A secondary action, a link, a heading or a selected state never takes it.
+**The One Accent Rule.** Only the current Context's accent appears on the screen, and only where the person is about to write or decide: the switcher, both composers, the primary button, a Held Change, what a tap would bring in a comparison of words, a Mention, badges. A secondary action, a link, a heading or a selected state never takes it.
 
 **The Words Not Colour Rule.** No state is shown by colour alone. Overdue is `warn` *and* the words "Overdue since …". A Context's swatch always sits beside its name. Red means late, or a refusal the person must read, and nothing else is red.
 
@@ -382,7 +382,8 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 ### Cards / Containers
 - **Panel:** `surface` on `ground`, `radius-lg`, with a 20px inset and a `column-title` head.
 - **Entry:** from 720px up, Entries are parted by `rule` hairlines with no box, their ends square. The one hovered or focused sits on `inset` with `radius-md`, and its Task rows turn `surface` so they stay one step off it. On a phone, each Entry is a `surface` card with `radius-md` on `ground`, `space-2` apart. Its time and its marks are centred on their line, each line of them where they wrap, so on a phone the time lines up with the 44px button at the line's end. An Unsent Entry is boxed by a dashed `rule` hairline with `radius-md`, in place of the hairlines that part the others, and its time is followed by Unsent in `ink` at 600.
-- **Held Change:** the accent's tint with `radius-sm` and 12px padding: a bold title, the words as they would be, and its actions in a row.
+- **Held Change:** the accent's tint with `radius-sm` and 12px padding: a bold title, who asked and when in `meta`, the comparison of its words in a `surface` box with `radius-sm`, and its actions in a row. Made, cancelled or lapsed, a `meta` line in `muted` takes its place.
+- **Comparison:** the words now set against the words a tap brings, as typed, for a Version and a Held Change. What goes is struck in `muted`. What comes is `ink` at 600 on the accent's tint, never underlined, since an underline is a quiet button's mark, with a space between it and what went before it. Each says "removed" or "added" to a screen reader. An unchanged stretch of more than three lines folds into a quiet button in `meta`, "… 12 lines unchanged …", which opens it in place.
 - **Standing Notice:** a card on `notice` with `radius-md`, in Attention above its sections. The Lucide `info` icon sits beside a bold title of a few words ("Spend cap reached", "Brief not run"), set at the size of the words under it. The words follow in `ink`, then the underlined link to the section of Settings that deals with it, where there is one. The card is a status named by its title.
 - **A Notice in the Conversation:** a `rule`-bordered box with `radius-lg`, its words in `muted`. One sits under the person's Message whose Run failed, outside its bubble and aligned to its right edge, with Try again as a quiet button and the way to save the Run's transcript after it in `meta`. Others stand in the Conversation's foot: no key, a model with no price, a Conversation that cannot be opened, no network, the cap reached (with its link), and a Call ended.
 

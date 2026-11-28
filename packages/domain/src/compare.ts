@@ -1,20 +1,30 @@
 /**
- * One stretch of a Version compared against the current words (section 3.2): kept in both, gone
- * from the Version, or come in the current words.
+ * One stretch of a comparison of words, read toward what a tap does (sections 3.2 and 4.7): kept
+ * in both, gone from the words now, or come in the words the tap brings.
  */
 export type Compared = { kind: "kept" | "gone" | "come"; text: string };
+
+/**
+ * A comparison as it is shown: each stretch, with the whole lines of an unchanged stretch longer
+ * than `MOST_SHOWN_UNCHANGED` folded into one, which holds their text and how many they are.
+ */
+export type ComparedShown = Compared | { kind: "folded"; text: string; lines: number };
+
+/** An unchanged stretch of more whole lines than this is folded. */
+const MOST_SHOWN_UNCHANGED = 3;
 
 /** Past this many pairs of words to weigh, what lies between the shared start and end is shown whole. */
 const MOST_WEIGHED = 1_000_000;
 
 /**
- * A Version compared against the current words, word by word, with the spaces, line breaks and
- * marks between kept as typed. Read in order, what is kept and gone is the Version, and what is kept
- * and come is the current words. It is shown as typed, never rendered.
+ * The words now compared with the words a tap brings, word by word, with the spaces, line breaks
+ * and marks between kept as typed: for a Version, the current words with the Version's; for a Held
+ * Change, the words before with those after. Read in order, what is kept and gone is the words
+ * now, and what is kept and come is the words brought. It is shown as typed, never rendered.
  */
-export function compareWords(version: string, current: string): Compared[] {
-  const was = tokens(version);
-  const is = tokens(current);
+export function compareWords(now: string, brought: string): Compared[] {
+  const was = tokens(now);
+  const is = tokens(brought);
   let start = 0;
   while (start < was.length && start < is.length && was[start] === is[start]) start++;
   let end = 0;
@@ -90,4 +100,35 @@ function between(was: string[], is: string[]): Compared[] {
     }
   }
   return parts;
+}
+
+/**
+ * Fold each unchanged stretch of more than three whole lines, so a change is found in long words.
+ * What is folded is whole lines: the rest of the line a change before ends on, and the start of
+ * the line a change after begins on, stay shown beside it.
+ */
+export function foldUnchanged(parts: Compared[]): ComparedShown[] {
+  return parts.flatMap((part, at): ComparedShown[] => {
+    if (part.kind !== "kept") return [part];
+    const text = part.text;
+    // After a change, the line it ends on stays; before one, the line it begins on.
+    const start = at > 0 ? text.indexOf("\n") + 1 : 0;
+    const end = at < parts.length - 1 ? text.lastIndexOf("\n") + 1 : text.length;
+    if (start === 0 && at > 0) return [part];
+    const whole = text.slice(start, end);
+    const lines = linesIn(whole);
+    if (lines <= MOST_SHOWN_UNCHANGED) return [part];
+    const shown: ComparedShown[] = [];
+    if (start > 0) shown.push({ kind: "kept", text: text.slice(0, start) });
+    shown.push({ kind: "folded", text: whole, lines });
+    if (end < text.length) shown.push({ kind: "kept", text: text.slice(end) });
+    return shown;
+  });
+}
+
+/** How many lines a run of whole lines holds: a break that ends it starts no line of its own. */
+function linesIn(text: string): number {
+  if (text === "") return 0;
+  const breaks = text.match(/\n/g)?.length ?? 0;
+  return text.endsWith("\n") ? breaks : breaks + 1;
 }
