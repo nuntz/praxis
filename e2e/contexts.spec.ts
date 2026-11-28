@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import {
   callContextTool,
   callDeploymentTool,
@@ -71,6 +71,22 @@ test("the switcher is in the top bar at the width in between too", async ({ page
   await expect(switcher(page)).toBeVisible();
 });
 
+/** A Context's row in Settings, found by its name as its title shows it. */
+const contextRow = (contexts: Locator, name: string) =>
+  contexts
+    .getByTestId("context-row")
+    .filter({ has: contexts.page().getByText(name, { exact: true }) });
+
+/** Choose an act behind a row's More, as the person does. */
+async function behindMore(row: Locator, name: string, act: string) {
+  await row.getByRole("button", { name: `More for ${name}`, exact: true }).click();
+  await row
+    .page()
+    .getByRole("menu", { name: `More for ${name}`, exact: true })
+    .getByRole("menuitem", { name: act, exact: true })
+    .click();
+}
+
 test("the Deployment's settings list the Contexts with their accents, and make, recolour, retire and bring one back", async ({
   page,
 }) => {
@@ -79,51 +95,103 @@ test("the Deployment's settings list the Contexts with their accents, and make, 
   await lastShown(page, work.id);
   await page.goto("/");
   const contexts = await openSettings(page, "Contexts");
-  const row = (name: string) =>
-    contexts.getByTestId("context-row").filter({
-      has: page.getByRole("textbox", { name: `Name of ${name}` }),
-    });
+  const row = (name: string) => contextRow(contexts, name);
+  const side = `Side ${tag}`;
 
-  // Each Context with its accent.
-  await expect(
-    row(work.name).getByRole("combobox", { name: `Accent of ${work.name}`, exact: true }),
-  ).toHaveValue("rust");
+  // Each Context with its accent in its note, the current one said to be.
+  await expect(row(work.name).getByText("Rust · Current", { exact: true })).toBeVisible();
+
+  // The form is opened on demand, its first field focused, and its button the section's one solid
+  // button only while it is open.
+  const form = contexts.getByRole("form", { name: "New Context" });
+  await expect(form).toHaveCount(0);
+  await expect(contexts.getByRole("button", { name: "Make the Context" })).toHaveCount(0);
+  await contexts.getByRole("button", { name: "New Context…", exact: true }).click();
+  await expect(form.getByLabel("Name", { exact: true })).toBeFocused();
+  // Cancelled, it closes, the focus back on what opened it.
+  await form.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(contexts.getByRole("button", { name: "New Context…", exact: true })).toBeFocused();
 
   // A new Context, made here, in this Device's time zone, becomes the current one.
-  const form = contexts.getByRole("form", { name: "New Context" });
-  await form.getByLabel("Name", { exact: true }).fill(`Side ${tag}`);
+  await contexts.getByRole("button", { name: "New Context…", exact: true }).click();
+  await form.getByLabel("Name", { exact: true }).fill(side);
   await form.getByRole("combobox", { name: "Accent", exact: true }).selectOption("plum");
   await form.getByRole("button", { name: "Make the Context" }).click();
-  await expect(switcher(page)).toHaveAccessibleName(`Context: Side ${tag}`);
-  await expect(
-    row(`Side ${tag}`).getByRole("combobox", { name: `Accent of Side ${tag}`, exact: true }),
-  ).toHaveValue("plum");
+  await expect(switcher(page)).toHaveAccessibleName(`Context: ${side}`);
+  await expect(row(side).getByText("Plum · Current", { exact: true })).toBeVisible();
+  await expect(row(work.name).getByText("Rust", { exact: true })).toBeVisible();
+  await expect(form).toHaveCount(0);
 
-  // Another accent, shown at once in the switcher.
-  await row(`Side ${tag}`)
-    .getByRole("combobox", { name: `Accent of Side ${tag}`, exact: true })
-    .selectOption("moss");
+  // Another accent, from round swatches opened in place, the one it has said in words and
+  // pressed; shown at once in the switcher.
+  await behindMore(row(side), side, "Accent");
+  const accents = row(side).getByRole("group", { name: `Accent of ${side}`, exact: true });
+  await expect(accents.getByRole("button", { name: "Plum", exact: true })).toBeFocused();
+  await expect(accents.getByRole("button", { name: "Plum", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(accents).toHaveAccessibleDescription("Plum now");
+  await accents.getByRole("button", { name: "Moss", exact: true }).click();
   await expect(switcher(page)).toHaveCSS("background-color", MOSS);
+  await expect(accents).toHaveCount(0);
+  await expect(row(side).getByText("Moss · Current", { exact: true })).toBeVisible();
+  await expect(row(side).getByRole("button", { name: `More for ${side}` })).toBeFocused();
 
   // Retired, it leaves the switcher and the screen moves to a Context that is not; brought
   // back, it returns as it was.
-  await row(`Side ${tag}`)
-    .getByRole("button", { name: `Retire Side ${tag}` })
-    .click();
-  await expect(row(`Side ${tag}`).getByText("Retired")).toBeVisible();
-  await expect(switcher(page)).not.toHaveAccessibleName(`Context: Side ${tag}`);
+  // #215 has Retire wait until the section is left.
+  await behindMore(row(side), side, "Retire");
+  await expect(row(side).getByText("Moss · Retired", { exact: true })).toBeVisible();
+  await expect(switcher(page)).not.toHaveAccessibleName(`Context: ${side}`);
   await switcher(page).click();
-  const listed = page.getByRole("list", { name: "Contexts" });
-  await expect(listed.getByRole("button", { name: `Side ${tag}` })).toHaveCount(0);
+  const listed = page.getByRole("banner").getByRole("list", { name: "Contexts" });
+  await expect(listed.getByRole("button", { name: side })).toHaveCount(0);
   await expect(listed.getByRole("button", { name: work.name })).toBeVisible();
   await page.keyboard.press("Escape");
 
-  await row(`Side ${tag}`)
-    .getByRole("button", { name: `Bring back Side ${tag}` })
-    .click();
-  await expect(row(`Side ${tag}`).getByText("Retired")).toHaveCount(0);
-  await switchTo(page, `Side ${tag}`);
+  await behindMore(row(side), side, "Bring back");
+  await expect(row(side).getByText(/^Moss( · Current)?$/)).toBeVisible();
+  await switchTo(page, side);
   await expect(switcher(page)).toHaveCSS("background-color", MOSS);
+});
+
+test("a Context is renamed in its row, its title turned into its field with the focus in it", async ({
+  page,
+}) => {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const named = await makeContext(page, { name: `Named ${tag}`, time_zone: "UTC", accent: "teal" });
+  const renamed = `Renamed ${tag}`;
+  await page.goto("/");
+  const contexts = await openSettings(page, "Contexts");
+  const more = (name: string) =>
+    contexts.getByRole("button", { name: `More for ${name}`, exact: true });
+
+  await behindMore(contextRow(contexts, named.name), named.name, "Rename");
+  const field = contexts.getByRole("textbox", { name: `Name of ${named.name}`, exact: true });
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue(named.name);
+  await expect(contexts.getByText(named.name, { exact: true })).toHaveCount(0);
+
+  // Escape leaves the field, and Settings stays.
+  await field.fill("Never kept");
+  await field.press("Escape");
+  await expect(field).toHaveCount(0);
+  await expect(contextRow(contexts, named.name)).toBeVisible();
+  await expect(more(named.name)).toBeFocused();
+
+  await behindMore(contextRow(contexts, named.name), named.name, "Rename");
+  await field.fill(renamed);
+  const answered = page.waitForResponse("**/api/deployment/tools/rename_context");
+  await field.press("Enter");
+  expect((await (await answered).json()).ok).toBe(true);
+  await expect(contextRow(contexts, renamed)).toBeVisible();
+  await expect(more(renamed)).toBeFocused();
+  const { items } = await callDeploymentTool(page, "list_contexts", {});
+  expect(items.find((context: { id: string }) => context.id === named.id)).toMatchObject({
+    name: renamed,
+  });
 });
 
 test("a retired Context is deleted for good from the settings once its name is typed, with an Export offered first", async ({
@@ -135,11 +203,9 @@ test("a retired Context is deleted for good from the settings once its name is t
   await callDeploymentTool(page, "retire_context", { id: old.id });
   await page.goto("/");
   const contexts = await openSettings(page, "Contexts");
-  const row = contexts.getByTestId("context-row").filter({
-    has: page.getByRole("textbox", { name: `Name of ${old.name}` }),
-  });
+  const row = contextRow(contexts, old.name);
 
-  await row.getByRole("button", { name: `Delete ${old.name}…` }).click();
+  await behindMore(row, old.name, "Delete…");
   const form = row.getByRole("form", { name: `Delete ${old.name}` });
   await expect(form.getByRole("button", { name: "Make an Export" })).toBeVisible();
   await expect(form.getByText("Praxis cannot reach a file you downloaded")).toBeVisible();

@@ -224,7 +224,7 @@ export function Changes(props: { timeZone: string }) {
           when={lines().length > 0}
           fallback={<p class="settings-note">Nothing changed here in the last 90 days.</p>}
         >
-          <ol class="change-lines" aria-label="Changes and reads">
+          <ol class="settings-box change-lines" aria-label="Changes and reads">
             <For each={lines()}>
               {(line) =>
                 line.kind === "change" ? (

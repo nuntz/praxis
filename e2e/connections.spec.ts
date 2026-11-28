@@ -23,14 +23,16 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
 
 test("the person makes a Connection to one Context, and its address reaches that Context until it is ended", async ({
   page,
+  context: browser,
 }) => {
   const tag = crypto.randomUUID().slice(0, 8);
   const work = await makeContext(page, { name: `Work ${tag}`, time_zone: "UTC", accent: "teal" });
   await lastShown(page, work.id);
+  await browser.grantPermissions(["clipboard-read", "clipboard-write"]);
   const connections = page.getByRole("region", { name: "Connections" });
   const name = `Claude ${tag}`;
   const row = connections.getByTestId("connection-row").filter({
-    has: page.getByRole("textbox", { name: `Name of ${name}` }),
+    has: page.getByText(name, { exact: true }),
   });
   // The settings' first read of the Connections answers only once the new one shows, as it can
   // on a busy Deployment: what it answers was read before the Connection was made.
@@ -46,37 +48,57 @@ test("the person makes a Connection to one Context, and its address reaches that
   await page.goto("/");
   await openSettings(page, "Connections");
 
+  // The form is opened on demand, its first field focused.
   const form = connections.getByRole("form", { name: "New Connection" });
+  await expect(form).toHaveCount(0);
+  await connections.getByRole("button", { name: "New Connection…", exact: true }).click();
+  await expect(form.getByLabel("Name", { exact: true })).toBeFocused();
   await form.getByLabel("Name", { exact: true }).fill(name);
   await form
     .getByRole("combobox", { name: "Context", exact: true })
     .selectOption({ label: work.name });
   await form.getByRole("button", { name: "Make the Connection" }).click();
+  // Made, the form closes.
+  await expect(form).toHaveCount(0);
 
-  await expect(row.getByText(`in ${work.name}`)).toBeVisible();
+  await expect(row.getByText(`in ${work.name}`, { exact: true })).toBeVisible();
   await expect(row.getByRole("switch", { name: "Reading only", exact: true })).not.toBeChecked();
-  const address = await row.getByLabel(`Address of ${name}`, { exact: true }).inputValue();
-  // An address under /mcp on this Deployment, holding an opaque id that never names the Context.
-  expect(address).toMatch(new RegExp(`^${new URL(page.url()).origin}/mcp/[0-9A-Za-z_-]{20,}$`));
-  expect(address).not.toContain(work.id);
+  // An address under /mcp on this Deployment, holding an opaque id that never names the Context,
+  // shown whole, and copied by its Copy.
+  const shown = new RegExp(`^${new URL(page.url()).origin}/mcp/[0-9A-Za-z_-]{20,}$`);
+  const address = row.getByText(shown);
+  await expect(address).toBeVisible();
+  const pasted = await address.textContent();
+  if (pasted === null) throw new Error("The address is shown");
+  expect(pasted).not.toContain(work.id);
+  await row.getByRole("button", { name: `Copy the address of ${name}`, exact: true }).click();
+  await expect(row.getByRole("status")).toHaveText("Copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(pasted);
+  await expect(row.getByRole("status")).toHaveText("");
 
   // Pasted into an agent, it reaches that Context, as the Connection.
-  const agent = await connectTo(address);
+  const agent = await connectTo(pasted);
   expect(await call(agent, "get_settings")).toMatchObject({ ok: true, value: { name: work.name } });
 
-  // Limited to reading from its next call on.
+  // Limited to reading from its next call on, which its note says.
   // The switch shows on at the tap; the Connection is limited once the tool has answered.
   const switched = page.waitForResponse(/\/set_connection_reading_only$/);
   await row.getByRole("switch", { name: "Reading only", exact: true }).check();
   await switched;
   await expect(row.getByRole("switch", { name: "Reading only", exact: true })).toBeChecked();
+  await expect(row.getByText(`in ${work.name} · Reading only`, { exact: true })).toBeVisible();
   expect(await call(agent, "record_entry", { words: `Never recorded ${tag}` })).toMatchObject({
     ok: false,
     error: { code: "not_offered" },
   });
 
-  // Ended, it leaves the list, and the address is refused with what to do instead.
-  await row.getByRole("button", { name: `End ${name}` }).click();
+  // Ended from behind More, it leaves the list, and the address is refused with what to do instead.
+  // #215 has End wait until the section is left.
+  await row.getByRole("button", { name: `More for ${name}`, exact: true }).click();
+  await page
+    .getByRole("menu", { name: `More for ${name}`, exact: true })
+    .getByRole("menuitem", { name: "End", exact: true })
+    .click();
   await expect(row).toHaveCount(0);
   await expect(call(agent, "get_settings")).rejects.toThrow(/Make a new Connection in Praxis/);
 });

@@ -1,7 +1,7 @@
 import { type Entry, STANDING_CEILING, standingSize, type ToolResult } from "@praxis/domain";
 import { imageLoadingIn } from "@praxis/domain/markdown";
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { Problem } from "./design/SettingRows.tsx";
+import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { Problem, SettingsGroup } from "./design/SettingRows.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
 import { contextCopy, readFromCopy } from "./offline-copy.ts";
@@ -100,16 +100,19 @@ export function Standing(props: { timeZone: string }) {
       <Show when={!problem()} fallback={<Problem message={problem()} />}>
         <Show when={entries()}>
           {(listed) => (
-            <Show
-              when={listed().length > 0}
-              fallback={<p class="settings-note">No Entry is standing.</p>}
-            >
-              <p class="settings-note" data-testid="standing-size">
-                {characters(size())} of {characters(STANDING_CEILING)} characters
-              </p>
-              <ul class="standing-items" aria-label="Standing Entries">
-                <For each={listed()}>
-                  {(entry) => (
+            <>
+              <Show when={listed().length > 0}>
+                <p class="settings-note" data-testid="standing-size">
+                  {characters(size())} of {characters(STANDING_CEILING)} characters
+                </p>
+              </Show>
+              <SettingsGroup
+                heading="Standing Entries"
+                problem={problemAt("standing")}
+                list={{
+                  each: listed(),
+                  empty: "No Entry is standing.",
+                  row: (entry) => (
                     <li class="standing-item" data-testid="standing-entry">
                       <time class="standing-day" datetime={entry.at}>
                         {dateFormat.format(new Date(entry.at))}
@@ -131,12 +134,10 @@ export function Standing(props: { timeZone: string }) {
                         </button>
                       </div>
                     </li>
-                  )}
-                </For>
-              </ul>
-              {/* #214 puts the list in a group's box, and this under it. */}
-              <Problem message={problemAt("standing")} />
-            </Show>
+                  ),
+                }}
+              />
+            </>
           )}
         </Show>
       </Show>

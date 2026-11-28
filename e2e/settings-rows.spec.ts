@@ -9,6 +9,7 @@ import {
   makeContext,
   onPhone,
   openSettings,
+  showSection,
   test,
 } from "./fixtures.ts";
 
@@ -349,6 +350,7 @@ test("a Connection's Reading only is a switch, in the new Connection's form too"
   await contextOfOwn(page, testInfo, "Rows");
   await page.goto("/");
   const connections = await openSettings(page, "Connections");
+  await connections.getByRole("button", { name: "New Connection…", exact: true }).click();
   const form = connections.getByRole("form", { name: "New Connection" });
 
   const readingOnly = form.getByRole("switch", { name: "Reading only", exact: true });
@@ -359,4 +361,230 @@ test("a Connection's Reading only is a switch, in the new Connection's form too"
   await turn(page, readingOnly, "tap", testInfo);
   await expect(readingOnly).not.toBeChecked();
   await expect(connections.getByRole("checkbox")).toHaveCount(0);
+});
+
+/** This browser's id as a Device, kept in its storage once the screen has loaded. */
+async function thisDevice(page: Page): Promise<string> {
+  const id = await page.evaluate(() => localStorage.getItem("praxis.device"));
+  if (id === null) throw new Error("This browser has no Device id");
+  return id;
+}
+
+test("a Context's and a Connection's act lies right of its words, More beside it", async ({
+  page,
+}, testInfo) => {
+  const context = await contextOfOwn(page, testInfo, "Rows");
+  const name = `Agent ${crypto.randomUUID().slice(0, 8)}`;
+  await callDeploymentTool(page, "create_connection", {
+    name,
+    context_id: context.id,
+    reading_only: false,
+  });
+  await page.goto("/");
+
+  // A Context shows no act of its own: More is its act.
+  const contexts = await openSettings(page, "Contexts");
+  const contextRow = contexts
+    .getByTestId("context-row")
+    .filter({ has: page.getByText(context.name, { exact: true }) });
+  await expect(contextRow.getByText("Teal · Current", { exact: true })).toBeVisible();
+  await besideItsWords(
+    contextRow.getByText(context.name, { exact: true }),
+    contextRow.getByRole("button", { name: `More for ${context.name}`, exact: true }),
+  );
+
+  // A Connection's is its Reading only switch.
+  const connections = await showSection(page, "Connections");
+  const connectionRow = connections
+    .getByTestId("connection-row")
+    .filter({ has: page.getByText(name, { exact: true }) });
+  await expect(connectionRow.getByText(`in ${context.name}`, { exact: true })).toBeVisible();
+  await besideItsWords(
+    connectionRow.getByText(name, { exact: true }),
+    connectionRow.getByRole("switch", { name: "Reading only", exact: true }),
+  );
+  await besideItsWords(
+    connectionRow.getByText(name, { exact: true }),
+    connectionRow.getByRole("button", { name: `More for ${name}`, exact: true }),
+  );
+});
+
+test("a Device's Remove lies right of its words, it is renamed behind More, and removed in one tap, said in its row's place", async ({
+  page,
+}, testInfo) => {
+  await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  const devices = await openSettings(page, "Devices");
+  // Listed once something is switched on here.
+  const switched = page.waitForResponse(/\/tools\/set_device_offline_copy$/);
+  await devices.getByRole("switch", { name: "Offline Copy on this Device", exact: true }).click();
+  expect((await (await switched).json()).ok).toBe(true);
+
+  const every = devices.getByRole("list", { name: "Every Device", exact: true });
+  const row = every.getByTestId("device-row").filter({ hasText: "This Device" });
+  await expect(row).toContainText(/^.+This Device · Offline Copy · Last seen \S/);
+  const here = await thisDevice(page);
+  const { items } = await callDeploymentTool(page, "list_devices", {});
+  const named = (items as { id: string; name: string }[]).find((device) => device.id === here);
+  if (!named) throw new Error("This Device is listed");
+  await besideItsWords(
+    row.getByText(named.name, { exact: true }),
+    row.getByRole("button", { name: `Remove ${named.name}`, exact: true }),
+  );
+
+  // Renamed behind More, in its title's place.
+  const name = `Desk ${crypto.randomUUID().slice(0, 8)}`;
+  await row.getByRole("button", { name: `More for ${named.name}`, exact: true }).click();
+  await page
+    .getByRole("menu", { name: `More for ${named.name}`, exact: true })
+    .getByRole("menuitem", { name: "Rename", exact: true })
+    .click();
+  const field = row.getByRole("textbox", { name: `Name of ${named.name}`, exact: true });
+  await expect(field).toBeFocused();
+  await field.fill(name);
+  await row.getByRole("button", { name: "Rename", exact: true }).click();
+  await expect(row.getByText(name, { exact: true })).toBeVisible();
+  await expect(row.getByRole("button", { name: `More for ${name}`, exact: true })).toBeFocused();
+
+  // Removed in one tap: a line says so in its row's place, and takes the focus.
+  const removed = page.waitForResponse(/\/tools\/remove_device$/);
+  await row.getByRole("button", { name: `Remove ${name}`, exact: true }).click();
+  expect((await (await removed).json()).ok).toBe(true);
+  const said = every.getByRole("status");
+  await expect(said).toHaveText(
+    `${name} is removed. It is listed again when Notifications or an Offline Copy is switched on there.`,
+  );
+  await expect(said).toBeFocused();
+  await expect(row).toHaveCount(0);
+  await expect(
+    devices.getByRole("switch", { name: "Offline Copy on this Device", exact: true }),
+  ).not.toBeChecked();
+  const after = await callDeploymentTool(page, "list_devices", {});
+  expect(after.items.map((device: { id: string }) => device.id)).not.toContain(here);
+
+  // It goes at the person's next act, and the Device is listed again, as switched on anew.
+  const again = page.waitForResponse(/\/tools\/set_device_offline_copy$/);
+  await devices.getByRole("switch", { name: "Offline Copy on this Device", exact: true }).click();
+  await again;
+  await expect(said).toHaveCount(0);
+  await expect(row).toHaveCount(1);
+});
+
+/**
+ * What in this section spills past the screen's right edge, or scrolls sideways, as
+ * `e2e/phone-width.spec.ts` finds for a column.
+ */
+async function spills(page: Page, section: Locator) {
+  const width = page.viewportSize()?.width;
+  if (!width) throw new Error("The phone has a width");
+  return section.evaluate((region, width) => {
+    const named = (element: Element) =>
+      `${element.tagName.toLowerCase()} "${(element.textContent ?? "").trim().slice(0, 40)}"`;
+    const found: string[] = [];
+    if (document.documentElement.scrollWidth > width) {
+      found.push(`the page, ${document.documentElement.scrollWidth}px wide in ${width}px`);
+    }
+    for (const element of [region, ...region.querySelectorAll("*")]) {
+      const box = element.getBoundingClientRect();
+      if (box.width <= 1 && box.height <= 1) continue;
+      if (box.right > width + 0.5) found.push(`${named(element)} ends at ${box.right}px`);
+      // A field scrolls its own words, by design.
+      if (element instanceof HTMLInputElement) continue;
+      if (element.scrollWidth > element.clientWidth + 1 && element.clientWidth > 0) {
+        found.push(`${named(element)} scrolls sideways`);
+      }
+    }
+    return found;
+  }, width);
+}
+
+test("at 320px, Contexts and Connections scroll nowhere sideways, with long names, one with no break in it, and their forms open", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "The narrowest width is a phone's");
+  const tag = crypto.randomUUID().slice(0, 8);
+  const long = await makeContext(page, {
+    name: `Everything about the house on the hill, the garden and the barn ${tag}`,
+    time_zone: "UTC",
+    accent: "rust",
+  });
+  const unbroken = await makeContext(page, {
+    name: `Unbroken${"x".repeat(60)}${tag}`,
+    time_zone: "UTC",
+    accent: "plum",
+  });
+  const connection = `An agent with a long name that reads the whole Journal every morning ${tag}`;
+  await callDeploymentTool(page, "create_connection", {
+    name: connection,
+    context_id: unbroken.id,
+    reading_only: true,
+  });
+  await lastShown(page, long.id);
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/");
+
+  const contexts = await openSettings(page, "Contexts");
+  await expect(contexts.getByText(unbroken.name, { exact: true })).toBeVisible();
+  expect(await spills(page, contexts)).toEqual([]);
+  // Its name's field in its title's place.
+  const unbrokenRow = contexts
+    .getByTestId("context-row")
+    .filter({ has: page.getByText(unbroken.name, { exact: true }) });
+  await unbrokenRow.getByRole("button", { name: `More for ${unbroken.name}` }).click();
+  await page
+    .getByRole("menu", { name: `More for ${unbroken.name}` })
+    .getByRole("menuitem", { name: "Rename", exact: true })
+    .click();
+  await expect(contexts.getByRole("textbox", { name: `Name of ${unbroken.name}` })).toBeFocused();
+  expect(await spills(page, contexts)).toEqual([]);
+  await page.keyboard.press("Escape");
+  await contexts.getByRole("button", { name: "New Context…", exact: true }).click();
+  await expect(contexts.getByRole("form", { name: "New Context" })).toBeVisible();
+  expect(await spills(page, contexts)).toEqual([]);
+
+  const connections = await showSection(page, "Connections");
+  const row = connections
+    .getByTestId("connection-row")
+    .filter({ has: page.getByText(connection, { exact: true }) });
+  await expect(row.getByText(`in ${unbroken.name} · Reading only`)).toBeVisible();
+  expect(await spills(page, connections)).toEqual([]);
+  // The form's Context is picked from every Context's name, the longest included.
+  await connections.getByRole("button", { name: "New Connection…", exact: true }).click();
+  await expect(connections.getByRole("form", { name: "New Connection" })).toBeVisible();
+  expect(await spills(page, connections)).toEqual([]);
+});
+
+test("Contexts and Connections show their one solid button only while a form is open, and Conversation and search none", async ({
+  page,
+}, testInfo) => {
+  await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  /** The solid buttons shown: those with words on a fill, as only the primary is. */
+  const solid = (section: Locator) =>
+    section
+      .locator("button:visible")
+      .evaluateAll((buttons) =>
+        buttons
+          .filter(
+            (button) =>
+              (button.textContent ?? "").trim() !== "" &&
+              getComputedStyle(button).backgroundColor !== "rgba(0, 0, 0, 0)",
+          )
+          .map((button) => (button.textContent ?? "").trim()),
+      );
+
+  const contexts = await openSettings(page, "Contexts");
+  expect(await solid(contexts)).toEqual([]);
+  await contexts.getByRole("button", { name: "New Context…", exact: true }).click();
+  expect(await solid(contexts)).toEqual(["Make the Context"]);
+
+  const connections = await showSection(page, "Connections");
+  expect(await solid(connections)).toEqual([]);
+  await connections.getByRole("button", { name: "New Connection…", exact: true }).click();
+  expect(await solid(connections)).toEqual(["Make the Connection"]);
+
+  const search = await showSection(page, "Conversation and search");
+  await expect(search.getByRole("button", { name: "Rebuild from the Journal" })).toBeVisible();
+  // #215 makes Clear the Conversation quiet too.
+  expect(await solid(search)).not.toContain("Rebuild from the Journal");
 });

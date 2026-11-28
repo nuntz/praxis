@@ -1,5 +1,5 @@
 import { type Device, failure, type PushSubscription } from "@praxis/domain";
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createMemo, createSignal, createUniqueId, onMount, Show } from "solid-js";
 import { Problem, SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import {
   canNotify,
@@ -9,9 +9,9 @@ import {
   thisDevice,
   unsubscribeHere,
 } from "./device.ts";
-import { followRecord } from "./follow-record.ts";
 import { latestRead } from "./latest-read.ts";
 import { clearCopy, copyProblem, offlineCopy, startCopy } from "./offline-copy.ts";
+import { RecordRow } from "./RecordRow.tsx";
 import { SettingsLink } from "./SettingsLink.tsx";
 import {
   listedCount,
@@ -42,6 +42,20 @@ export function Devices() {
   const hereListed = () => devices().find((device) => device.id === here);
   // What clears the copy here, waiting for the person to say what becomes of the Unsent writes.
   const [asking, setAsking] = createSignal<(() => Promise<boolean>) | null>(null);
+  // A Device removed, said where its row stood until the person's next act.
+  const [said, setSaid] = createSignal<Said | null>(null);
+  const saidId = createUniqueId();
+  const byId = (id: string) => devices().find((device) => device.id === id);
+
+  /** The rows of Every Device: each by its id, and what a removal said where its row stood. */
+  const rows = createMemo((): (string | Said)[] => {
+    const ids = devices().map((device) => device.id);
+    const line = said();
+    if (line === null) return ids;
+    const at = line.before === null ? -1 : ids.indexOf(line.before);
+    const index = at === -1 ? ids.length : at;
+    return [...ids.slice(0, index), line, ...ids.slice(index)];
+  });
 
   const listed = latestRead(async (current) => {
     try {
@@ -77,6 +91,7 @@ export function Devices() {
    * are on.
    */
   async function switchOnHere(key: string): Promise<boolean> {
+    setSaid(null);
     if (here === null) return false;
     const switched = await change("this-device", async () => {
       let subscription: PushSubscriptionJSON;
@@ -119,6 +134,7 @@ export function Devices() {
 
   /** The person said what becomes of the Unsent writes: the copy is switched off and cleared. */
   async function answered(discard: boolean) {
+    setSaid(null);
     const switchOff = asking();
     // Only the writes the person was asked about: one made while the switch is out is kept.
     const askedAbout = unsent().map((write) => write.id);
@@ -128,8 +144,12 @@ export function Devices() {
     clearCopy();
   }
 
-  /** Remove a Device, from any Device; this one also gives up its push subscription and its copy. */
+  /**
+   * Remove a Device, from any Device; this one also gives up its push subscription and its copy.
+   * Its row is replaced by a line saying so, which takes the focus.
+   */
   function remove(device: Device) {
+    setSaid(null);
     const removing = async () => {
       const at = device.id === here ? "this-device" : "devices";
       if (
@@ -137,7 +157,15 @@ export function Devices() {
       ) {
         return false;
       }
+      // Where its row stands now, read once the removal is answered.
+      const ids = devices().map((each) => each.id);
+      const next = ids[ids.indexOf(device.id) + 1] ?? null;
       show(device.id, null);
+      setSaid({
+        said: `${device.name} is removed. It is listed again when Notifications or an Offline Copy is switched on there.`,
+        before: next,
+      });
+      document.getElementById(saidId)?.focus();
       if (device.id === here) await unsubscribeHere().catch(() => {});
       return true;
     };
@@ -145,11 +173,22 @@ export function Devices() {
     else void removing();
   }
 
+  /** Rename a Device: whether the name was kept. */
+  async function rename(id: string, name: string): Promise<boolean> {
+    const renamed = await change("devices", () =>
+      callDeploymentTool("rename_device", { id, name }),
+    );
+    if (renamed === null) return false;
+    show(id, renamed.record);
+    return true;
+  }
+
   /**
    * Switch the Offline Copy on here: it is fetched at once, and kept fresh while Praxis is open.
    * Says whether it is on.
    */
   async function switchCopyOnHere(): Promise<boolean> {
+    setSaid(null);
     if (here === null) return false;
     const switched = await change("this-device", () =>
       callDeploymentTool("set_device_offline_copy", {
@@ -165,6 +204,7 @@ export function Devices() {
   }
 
   function switchCopyOffHere() {
+    setSaid(null);
     if (here === null) return;
     clearingCopy(async () => {
       const off = await change("this-device", () =>
@@ -178,6 +218,7 @@ export function Devices() {
 
   /** Switch Notifications off here, and give up the push subscription. Says whether they are off. */
   async function switchOffHere(): Promise<boolean> {
+    setSaid(null);
     if (here === null) return false;
     const off = await change("this-device", () =>
       callDeploymentTool("set_device_notifications", { id: here, on: false }),
@@ -245,32 +286,45 @@ export function Devices() {
               )}
             />
           </SettingsGroup>
-        </Show>
-        <Show
-          when={devices().length > 0}
-          fallback={
-            <p class="settings-note">No Device has Notifications or an Offline Copy switched on.</p>
-          }
-        >
-          <ul class="connection-rows" aria-label="Devices">
-            <For each={devices()}>
-              {(device) => (
-                <DeviceRow
-                  device={device}
-                  here={device.id === here}
-                  changes={changes}
-                  onRenamed={(renamed) => show(device.id, renamed)}
-                  onRemove={() => remove(device)}
-                />
-              )}
-            </For>
-          </ul>
-          {/* #214 puts the Devices in a group's box, and this under it. */}
-          <Problem message={problemAt("devices")} />
-          <p class="settings-note">
-            Removing a Device switches off everything on it. It stays signed in: the sign-in is
-            Cloudflare Access's, and ends there.
-          </p>
+          <SettingsGroup
+            heading="Every Device"
+            problem={problemAt("devices")}
+            list={{
+              each: rows(),
+              empty: "No Device has Notifications or an Offline Copy switched on.",
+              row: (row) =>
+                typeof row === "string" ? (
+                  <Show when={byId(row)}>
+                    {(device) => (
+                      <DeviceRow
+                        device={device()}
+                        here={row === here}
+                        changes={changes}
+                        onRename={(name) => {
+                          setSaid(null);
+                          return rename(row, name);
+                        }}
+                        onRemove={() => remove(device())}
+                      />
+                    )}
+                  </Show>
+                ) : (
+                  <li class="settings-said-row">
+                    <p id={saidId} role="status" tabindex="-1">
+                      {row.said}
+                    </p>
+                  </li>
+                ),
+            }}
+            below={
+              <Show when={devices().length > 0}>
+                <p class="settings-note">
+                  Removing a Device switches off everything on it. It stays signed in: the sign-in
+                  is Cloudflare Access's, and ends there.
+                </p>
+              </Show>
+            }
+          />
         </Show>
       </Show>
     </SettingsSection>
@@ -331,56 +385,43 @@ function ThisDevice(props: {
   );
 }
 
+/** What a removal said where its Device's row stood, and the row it stood before. */
+type Said = { said: string; before: string | null };
+
 function DeviceRow(props: {
   device: Device;
   here: boolean;
   changes: SectionChanges;
-  onRenamed: (device: Device) => void;
+  onRename: (name: string) => Promise<boolean>;
   onRemove: () => void;
 }) {
   const sending = () => props.changes.sending();
-  let nameField!: HTMLInputElement;
-  const name = followRecord(
-    () => nameField,
-    () => props.device.name,
-  );
-
-  async function rename(event: SubmitEvent) {
-    event.preventDefault();
-    const input = { id: props.device.id, name: nameField.value };
-    await name.send(async () => {
-      const renamed = await props.changes.change("devices", () =>
-        callDeploymentTool("rename_device", input),
-      );
-      if (renamed) props.onRenamed(renamed.record);
-    });
-  }
-
   return (
-    <li class="connection-row" data-testid="device-row">
-      <form class="context-rename" onSubmit={(event) => void rename(event)}>
-        <input
-          ref={nameField}
-          type="text"
-          aria-label={`Name of ${props.device.name}`}
-          onInput={name.typed}
-          required
-        />
-        <button type="submit" class="quiet" disabled={sending()}>
-          Rename
+    <RecordRow
+      testId="device-row"
+      name={props.device.name}
+      note={
+        <>
+          {props.here ? "This Device · " : ""}
+          {switchedOn(props.device)} · Last seen{" "}
+          <time datetime={props.device.seen}>{seenAt(props.device.seen)}</time>
+        </>
+      }
+      act={
+        <button
+          type="button"
+          class="quiet"
+          aria-label={`Remove ${props.device.name}`}
+          disabled={sending()}
+          onClick={() => props.onRemove()}
+        >
+          Remove
         </button>
-      </form>
-      <Show when={props.here}>
-        <span class="connection-context">This Device</span>
-      </Show>
-      <span class="connection-context">{switchedOn(props.device)}</span>
-      <span class="connection-context">
-        Last seen <time datetime={props.device.seen}>{seenAt(props.device.seen)}</time>
-      </span>
-      <button type="button" class="quiet" disabled={sending()} onClick={props.onRemove}>
-        Remove {props.device.name}
-      </button>
-    </li>
+      }
+      more={[]}
+      sending={sending()}
+      onRename={props.onRename}
+    />
   );
 }
 
@@ -390,13 +431,18 @@ function switchedOn(device: Device): string {
   return device.notifications ? "Notifications" : "Offline Copy";
 }
 
-/** When a Device was last seen, in the Device's own locale. */
+/** The day a Device was last seen, in the Device's own locale, with its year if not this one's. */
 function seenAt(seen: string): string {
+  const zone = deviceTimeZone();
+  const year = (at: Date) =>
+    new Intl.DateTimeFormat("en", { year: "numeric", timeZone: zone }).format(at);
+  const at = new Date(seen);
   return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: deviceTimeZone(),
-  }).format(new Date(seen));
+    day: "numeric",
+    month: "short",
+    ...(year(at) === year(new Date()) ? {} : { year: "numeric" }),
+    timeZone: zone,
+  }).format(at);
 }
 
 /** How many Devices there are, as the phone's list of sections shows it, or null unread. */

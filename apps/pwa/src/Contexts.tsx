@@ -5,11 +5,16 @@ import {
   type DeploymentToolInput,
   type DeploymentToolName,
 } from "@praxis/domain";
-import { createSignal, createUniqueId, For, Show } from "solid-js";
-import { Problem } from "./design/SettingRows.tsx";
+import Archive from "lucide-solid/icons/archive";
+import ArchiveRestore from "lucide-solid/icons/archive-arrow-up";
+import Palette from "lucide-solid/icons/palette";
+import Trash from "lucide-solid/icons/trash";
+import { createSignal, createUniqueId, For, Match, onMount, Show, Switch } from "solid-js";
+import type { Action } from "./design/Menu.tsx";
+import { Problem, SettingsGroup } from "./design/SettingRows.tsx";
 import { deviceTimeZone } from "./device.ts";
 import { MakeExport } from "./Export.tsx";
-import { followRecord } from "./follow-record.ts";
+import { RecordRow } from "./RecordRow.tsx";
 import {
   listedCount,
   type SectionChanges,
@@ -18,7 +23,7 @@ import {
 } from "./SettingsSection.tsx";
 import { TimeZonePicker } from "./TimeZonePicker.tsx";
 import { DOWNLOADED } from "./Trash.tsx";
-import { callDeploymentTool } from "./tools.ts";
+import { callDeploymentTool, useContextId } from "./tools.ts";
 
 /** An accent as the person reads it. */
 function accentName(accent: Accent): string {
@@ -35,10 +40,14 @@ type ContextChange = Extract<
   | "bring_back_context"
 >;
 
+/** The note of the only Context not retired, which `retire_context` refuses (section 4.11). */
+const ONLY_ONE = "The only Context: make another to retire it.";
+
 /**
- * The Deployment's Contexts, in its settings (section 8.6): each with its accent, renamed, given
- * another accent, retired or brought back here, and a new one made. Retiring hides a Context and
- * deletes nothing; a retired one can then be deleted for good (section 10.4).
+ * The Deployment's Contexts, in its settings (section 8.6): each with its accent, the current one
+ * said so, renamed, given another accent, retired or brought back here, and a new one made from a
+ * form opened on demand. Retiring hides a Context and deletes nothing; a retired one can then be
+ * deleted for good (section 10.4).
  */
 export function Contexts(props: {
   contexts: ContextListing[];
@@ -47,41 +56,81 @@ export function Contexts(props: {
   onDeleted: (id: string) => void;
 }) {
   const changes = sectionChanges();
+  const current = useContextId();
+  const [making, setMaking] = createSignal(false);
+  let newButton: HTMLButtonElement | undefined;
+  const byId = (id: string) => props.contexts.find((context) => context.id === id);
+  const shown = () => props.contexts.filter((context) => !context.retired);
 
   return (
     <SettingsSection note="Each Context keeps a Journal, a Conversation and settings of its own. Retiring one hides it and ends its Connections, and deletes nothing.">
-      <ul class="context-rows">
-        <For each={props.contexts}>
-          {(context) => (
-            <ContextRow
-              context={context}
-              changes={changes}
-              onChanged={props.onChanged}
-              onDeleted={props.onDeleted}
-            />
-          )}
-        </For>
-      </ul>
-      {/* #214 puts the Contexts in a group's box, and this under it. */}
-      <Problem message={changes.problemAt("contexts")} />
-      <NewContext heading="New Context" changes={changes} onMade={props.onMade} />
+      <SettingsGroup
+        heading="Contexts"
+        problem={changes.problemAt("contexts")}
+        list={{
+          // By id, so a Context changed keeps its row, and what is open in it.
+          each: props.contexts.map((context) => context.id),
+          empty: "No Context is made yet.",
+          row: (id) => (
+            <Show when={byId(id)}>
+              {(context) => (
+                <ContextRow
+                  context={context()}
+                  current={id === current}
+                  only={!context().retired && shown().length === 1}
+                  changes={changes}
+                  onChanged={props.onChanged}
+                  onDeleted={props.onDeleted}
+                />
+              )}
+            </Show>
+          ),
+        }}
+      />
+      <Show
+        when={making()}
+        fallback={
+          <button ref={newButton} type="button" class="quiet" onClick={() => setMaking(true)}>
+            New Context…
+          </button>
+        }
+      >
+        <NewContext
+          heading="New Context"
+          changes={changes}
+          onMade={(made) => {
+            setMaking(false);
+            props.onMade(made);
+          }}
+          onCancel={() => {
+            setMaking(false);
+            newButton?.focus();
+          }}
+        />
+      </Show>
     </SettingsSection>
   );
 }
 
 function ContextRow(props: {
   context: ContextListing;
+  /** Whether it is the current Context. */
+  current: boolean;
+  /** Whether it is the only Context not retired, which cannot be retired. */
+  only: boolean;
   changes: SectionChanges;
   onChanged: (context: ContextListing) => void;
   onDeleted: (id: string) => void;
 }) {
   const sending = () => props.changes.sending();
-  const [deleting, setDeleting] = createSignal(false);
-  let nameField!: HTMLInputElement;
-  const name = followRecord(
-    () => nameField,
-    () => props.context.name,
-  );
+  // What an act behind More opened under the row.
+  const [opened, setOpened] = createSignal<"accent" | "delete" | null>(null);
+  let more: HTMLButtonElement | undefined;
+
+  function close() {
+    setOpened(null);
+    more?.focus();
+  }
 
   async function send<N extends ContextChange>(tool: N, input: DeploymentToolInput<N>) {
     const changed = await props.changes.change("contexts", () => callDeploymentTool(tool, input));
@@ -90,87 +139,149 @@ function ContextRow(props: {
     return context;
   }
 
-  async function rename(event: SubmitEvent) {
-    event.preventDefault();
-    await name.send(() => send("rename_context", { id: props.context.id, name: nameField.value }));
-  }
+  const note = () =>
+    [
+      accentName(props.context.accent),
+      props.current && "Current",
+      props.context.retired && "Retired",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+  const ending = (): Action[] => {
+    const id = props.context.id;
+    if (props.context.retired) {
+      return [
+        {
+          label: "Bring back",
+          icon: ArchiveRestore,
+          disabled: sending(),
+          onSelect: () => void send("bring_back_context", { id }),
+        },
+        {
+          label: "Delete…",
+          icon: Trash,
+          disabled: sending(),
+          onSelect: () => setOpened("delete"),
+        },
+      ];
+    }
+    if (props.only) return [];
+    // #215 has Retire wait until the section is left.
+    return [
+      {
+        label: "Retire",
+        icon: Archive,
+        disabled: sending(),
+        onSelect: () => void send("retire_context", { id }),
+      },
+    ];
+  };
 
   return (
-    <li class="context-row" data-testid="context-row">
-      <span class={`swatch accent-${props.context.accent}`} aria-hidden="true" />
-      <form class="context-rename" onSubmit={(event) => void rename(event)}>
-        <input
-          ref={nameField}
-          type="text"
-          aria-label={`Name of ${props.context.name}`}
-          onInput={name.typed}
-          required
-        />
-        <button type="submit" class="quiet" disabled={sending()}>
-          Rename
-        </button>
-      </form>
-      <label class="context-accent">
-        <span class="visually-hidden">Accent of {props.context.name}</span>
-        <select
-          disabled={sending()}
-          onChange={(event) =>
-            void send("set_context_accent", {
-              id: props.context.id,
-              accent: event.currentTarget.value as Accent,
-            })
-          }
-        >
-          <For each={ACCENTS}>
-            {(accent) => (
-              <option value={accent} selected={accent === props.context.accent}>
-                {accentName(accent)}
-              </option>
-            )}
-          </For>
-        </select>
-      </label>
-      <Show
-        when={props.context.retired}
-        fallback={
-          <button
-            type="button"
-            class="quiet"
-            disabled={sending()}
-            onClick={() => void send("retire_context", { id: props.context.id })}
-          >
-            Retire {props.context.name}
-          </button>
-        }
-      >
-        <span class="retired">Retired</span>
-        <button
-          type="button"
-          class="quiet"
-          disabled={sending()}
-          onClick={() => void send("bring_back_context", { id: props.context.id })}
-        >
-          Bring back {props.context.name}
-        </button>
-        <button
-          type="button"
-          class="quiet"
-          disabled={sending()}
-          aria-expanded={deleting()}
-          onClick={() => setDeleting((open) => !open)}
-        >
-          Delete {props.context.name}…
-        </button>
-        <Show when={deleting()}>
-          <DeleteContext
-            context={props.context}
-            changes={props.changes}
-            onDeleted={props.onDeleted}
-            onKept={() => setDeleting(false)}
-          />
-        </Show>
-      </Show>
-    </li>
+    <RecordRow
+      testId="context-row"
+      name={props.context.name}
+      accent={props.context.accent}
+      note={
+        <>
+          {note()}
+          <Show when={props.only}>
+            <span class="record-why">{ONLY_ONE}</span>
+          </Show>
+        </>
+      }
+      sending={sending()}
+      onRename={async (name) =>
+        (await send("rename_context", { id: props.context.id, name })) !== null
+      }
+      moreRef={(button) => {
+        more = button;
+      }}
+      more={[
+        {
+          label: "Accent",
+          icon: Palette,
+          disabled: sending(),
+          onSelect: () => setOpened("accent"),
+        },
+        ...ending(),
+      ]}
+      under={
+        <Switch>
+          <Match when={opened() === "accent"}>
+            <AccentChoice
+              context={props.context}
+              sending={sending()}
+              onPick={async (accent) => {
+                const changed = await send("set_context_accent", { id: props.context.id, accent });
+                if (changed) close();
+              }}
+              onDone={close}
+            />
+          </Match>
+          <Match when={opened() === "delete" && props.context.retired}>
+            <DeleteContext
+              context={props.context}
+              changes={props.changes}
+              onDeleted={props.onDeleted}
+              onKept={close}
+            />
+          </Match>
+        </Switch>
+      }
+    />
+  );
+}
+
+/**
+ * A Context's accents in place, under its row, as round swatches: the one it has ringed, and said
+ * in words too. A tap on another gives it that one; on its own, or Escape, puts them away.
+ */
+function AccentChoice(props: {
+  context: ContextListing;
+  sending: boolean;
+  onPick: (accent: Accent) => void;
+  onDone: () => void;
+}) {
+  const now = createUniqueId();
+  let fieldset!: HTMLFieldSetElement;
+  onMount(() => fieldset.querySelector<HTMLButtonElement>("[aria-pressed=true]")?.focus());
+
+  return (
+    <fieldset
+      ref={fieldset}
+      class="accent-choice"
+      aria-describedby={now}
+      on:keydown={(event: KeyboardEvent) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        props.onDone();
+      }}
+    >
+      <legend class="visually-hidden">Accent of {props.context.name}</legend>
+      <span class="accent-swatches">
+        <For each={ACCENTS}>
+          {(accent) => (
+            <button
+              type="button"
+              class={`accent-swatch accent-${accent}`}
+              aria-label={accentName(accent)}
+              title={accentName(accent)}
+              aria-pressed={accent === props.context.accent}
+              disabled={props.sending}
+              onClick={() =>
+                accent === props.context.accent ? props.onDone() : props.onPick(accent)
+              }
+            />
+          )}
+        </For>
+      </span>
+      <span id={now} class="settings-row-note">
+        {accentName(props.context.accent)} now
+      </span>
+    </fieldset>
   );
 }
 
@@ -243,16 +354,23 @@ function DeleteContext(props: {
  * Make a Context with its name, its time zone, picked from the list and starting as this Device's,
  * and its accent.
  * It is also how the first Context is made, in a Deployment that has none yet, where it sends
- * through changes of its own; in Settings, through its section's.
+ * through changes of its own and stays open; in Settings, through its section's, opened on demand
+ * under a heading of its own, the focus in its first field, and closed once made or cancelled.
  */
 export function NewContext(props: {
   heading: string;
   changes?: SectionChanges;
   onMade: (context: ContextListing) => void;
+  /** Close it unmade: given where it was opened on demand. */
+  onCancel?: () => void;
 }) {
   const { change, sending, problemAt } = props.changes ?? sectionChanges();
   const [zone, setZone] = createSignal(deviceTimeZone());
   const zoneId = createUniqueId();
+  let nameField!: HTMLInputElement;
+  onMount(() => {
+    if (props.onCancel) nameField.focus();
+  });
 
   async function make(event: SubmitEvent) {
     event.preventDefault();
@@ -271,28 +389,44 @@ export function NewContext(props: {
   }
 
   return (
-    <form class="new-context" aria-label={props.heading} onSubmit={(event) => void make(event)}>
+    <form
+      class="new-context"
+      classList={{ "new-record": props.onCancel !== undefined }}
+      aria-label={props.heading}
+      onSubmit={(event) => void make(event)}
+    >
       <h3 class="label">{props.heading}</h3>
-      <label>
-        Name
-        <input name="name" type="text" required />
-      </label>
-      {/* Not a label round the field: it would name the field by the zones listed under it. */}
-      <div class="new-context-zone">
-        <label for={zoneId}>Time zone</label>
-        <TimeZonePicker id={zoneId} value={zone()} onPick={setZone} />
+      <div class="new-record-fields">
+        <label>
+          Name
+          <input ref={nameField} name="name" type="text" required />
+        </label>
+        {/* Not a label round the field: it would name the field by the zones listed under it. */}
+        <div class="new-context-zone">
+          <label for={zoneId}>Time zone</label>
+          <TimeZonePicker id={zoneId} value={zone()} onPick={setZone} />
+        </div>
+        <label>
+          Accent
+          <select name="accent">
+            <For each={ACCENTS}>
+              {(accent) => <option value={accent}>{accentName(accent)}</option>}
+            </For>
+          </select>
+        </label>
+        <span class="new-record-acts">
+          <button type="submit" disabled={sending()}>
+            Make the Context
+          </button>
+          <Show when={props.onCancel}>
+            {(cancel) => (
+              <button type="button" class="quiet" onClick={() => cancel()()}>
+                Cancel
+              </button>
+            )}
+          </Show>
+        </span>
       </div>
-      <label>
-        Accent
-        <select name="accent">
-          <For each={ACCENTS}>
-            {(accent) => <option value={accent}>{accentName(accent)}</option>}
-          </For>
-        </select>
-      </label>
-      <button type="submit" disabled={sending()}>
-        Make the Context
-      </button>
       <Problem message={problemAt("new-context")} />
     </form>
   );

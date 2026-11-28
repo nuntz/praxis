@@ -337,7 +337,7 @@ export function ConversationAndSearch(props: { contextName: string }) {
           title="The index"
           description="Derived from the Journal, so it can always be made again from it"
           control={() => (
-            <button type="button" disabled={sending()} onClick={() => void rebuild()}>
+            <button type="button" class="quiet" disabled={sending()} onClick={() => void rebuild()}>
               Rebuild from the Journal
             </button>
           )}

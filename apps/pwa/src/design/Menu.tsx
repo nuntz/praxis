@@ -43,7 +43,13 @@ function placeMenu(
  * or on a choice, the focus back on its button, and on a tap outside it, the focus where the tap
  * leaves it.
  */
-export function Menu(props: { label: string; icon: LucideIcon; items: Action[] }) {
+export function Menu(props: {
+  label: string;
+  icon: LucideIcon;
+  items: Action[];
+  /** Its button, for what puts the focus back on it once an action chosen from it is done. */
+  buttonRef?: (button: HTMLButtonElement) => void;
+}) {
   const id = createUniqueId();
   const [shown, setShown] = createSignal(false);
   let wrapper!: HTMLDivElement;
@@ -146,7 +152,10 @@ export function Menu(props: { label: string; icon: LucideIcon; items: Action[] }
       }}
     >
       <button
-        ref={button}
+        ref={(drawn) => {
+          button = drawn;
+          props.buttonRef?.(drawn);
+        }}
         type="button"
         class="icon-button"
         aria-label={props.label}

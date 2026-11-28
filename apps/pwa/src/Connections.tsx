@@ -4,10 +4,20 @@ import type {
   DeploymentToolInput,
   DeploymentToolName,
 } from "@praxis/domain";
-import { createEffect, createSignal, createUniqueId, For, on, Show } from "solid-js";
-import { Problem, SwitchInput } from "./design/SettingRows.tsx";
-import { followRecord } from "./follow-record.ts";
+import Unplug from "lucide-solid/icons/unplug";
+import {
+  createEffect,
+  createSignal,
+  createUniqueId,
+  For,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js";
+import { Problem, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import { latestRead } from "./latest-read.ts";
+import { RecordRow } from "./RecordRow.tsx";
 import {
   listedCount,
   type SectionChanges,
@@ -38,6 +48,9 @@ export function Connections(props: { contexts: ContextListing[] }) {
   // What the last read met, said in place of the list it could not read.
   const [problem, setProblem] = createSignal<string | null>(null);
   const changes = sectionChanges();
+  const [making, setMaking] = createSignal(false);
+  let newButton: HTMLButtonElement | undefined;
+  const byId = (id: string) => connections().find((connection) => connection.id === id);
   const shown = () => props.contexts.filter((context) => !context.retired);
   const contextName = (id: string) =>
     props.contexts.find((context) => context.id === id)?.name ?? "";
@@ -82,28 +95,51 @@ export function Connections(props: { contexts: ContextListing[] }) {
   return (
     <SettingsSection note="An outside agent, such as Claude or ChatGPT, works in one Context through a Connection. Paste its address into the agent, and sign in there as yourself.">
       <Show when={!problem()} fallback={<Problem message={problem()} />}>
-        <Show
-          when={connections().length > 0}
-          fallback={<p class="settings-note">No outside agent is connected.</p>}
-        >
-          <ul class="connection-rows" aria-label="Connections">
-            <For each={connections()}>
-              {(connection) => (
-                <ConnectionRow
-                  connection={connection}
-                  contextName={contextName(connection.context_id)}
-                  changes={changes}
-                  onChanged={show}
-                />
-              )}
-            </For>
-          </ul>
-        </Show>
+        <SettingsGroup
+          heading="Connections"
+          problem={changes.problemAt("connections")}
+          list={{
+            // By id, so a Connection changed keeps its row, and what is open in it.
+            each: connections().map((connection) => connection.id),
+            empty: "No outside agent is connected.",
+            row: (id) => (
+              <Show when={byId(id)}>
+                {(connection) => (
+                  <ConnectionRow
+                    connection={connection()}
+                    contextName={contextName(connection().context_id)}
+                    changes={changes}
+                    onChanged={show}
+                  />
+                )}
+              </Show>
+            ),
+          }}
+        />
       </Show>
-      {/* #214 puts the Connections in a group's box, and this under it. */}
-      <Problem message={changes.problemAt("connections")} />
       <Show when={shown().length > 0}>
-        <NewConnection contexts={shown()} changes={changes} onMade={made} />
+        <Show
+          when={making()}
+          fallback={
+            <button ref={newButton} type="button" class="quiet" onClick={() => setMaking(true)}>
+              New Connection…
+            </button>
+          }
+        >
+          <NewConnection
+            contexts={shown()}
+            changes={changes}
+            onMade={(connection) => {
+              setMaking(false);
+              made(connection);
+              newButton?.focus();
+            }}
+            onCancel={() => {
+              setMaking(false);
+              newButton?.focus();
+            }}
+          />
+        </Show>
       </Show>
     </SettingsSection>
   );
@@ -117,11 +153,6 @@ function ConnectionRow(props: {
 }) {
   const sending = () => props.changes.sending();
   const readingOnly = createUniqueId();
-  let nameField!: HTMLInputElement;
-  const name = followRecord(
-    () => nameField,
-    () => props.connection.name,
-  );
 
   async function send<N extends ConnectionChange>(tool: N, input: DeploymentToolInput<N>) {
     const changed = await props.changes.change("connections", () =>
@@ -132,58 +163,88 @@ function ConnectionRow(props: {
     return connection;
   }
 
-  async function rename(event: SubmitEvent) {
-    event.preventDefault();
-    await name.send(() =>
-      send("rename_connection", { id: props.connection.id, name: nameField.value }),
-    );
+  const note = () =>
+    [`in ${props.contextName}`, props.connection.reading_only && "Reading only"]
+      .filter(Boolean)
+      .join(" · ");
+
+  return (
+    <RecordRow
+      testId="connection-row"
+      name={props.connection.name}
+      note={note()}
+      detail={<Address connection={props.connection} />}
+      act={
+        <span class="record-switch">
+          <label for={readingOnly}>Reading only</label>
+          <SwitchInput
+            id={readingOnly}
+            checked={props.connection.reading_only}
+            disabled={sending()}
+            onTurn={async (on) => {
+              const input = { id: props.connection.id, reading_only: on };
+              return (await send("set_connection_reading_only", input)) !== null;
+            }}
+          />
+        </span>
+      }
+      sending={sending()}
+      onRename={async (name) =>
+        (await send("rename_connection", { id: props.connection.id, name })) !== null
+      }
+      more={[
+        // #215 has End wait until the section is left.
+        {
+          label: "End",
+          icon: Unplug,
+          disabled: sending(),
+          onSelect: () => void send("end_connection", { id: props.connection.id }),
+        },
+      ]}
+    />
+  );
+}
+
+/** How long "Copied" is said once an address is copied. */
+const COPIED_FOR = 2000;
+
+/**
+ * A Connection's whole address, in mono, to paste into an outside agent, with a quiet Copy that
+ * says for a moment that it copied it.
+ */
+function Address(props: { connection: Connection }) {
+  const [said, setSaid] = createSignal("");
+  let saying: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(saying));
+
+  async function copy() {
+    clearTimeout(saying);
+    try {
+      await navigator.clipboard.writeText(fullAddress(props.connection));
+      setSaid("Copied");
+      saying = setTimeout(() => setSaid(""), COPIED_FOR);
+    } catch {
+      setSaid("Not copied: select the address to copy it.");
+    }
   }
 
   return (
-    <li class="connection-row" data-testid="connection-row">
-      <form class="context-rename" onSubmit={(event) => void rename(event)}>
-        <input
-          ref={nameField}
-          type="text"
-          aria-label={`Name of ${props.connection.name}`}
-          onInput={name.typed}
-          required
-        />
-        <button type="submit" class="quiet" disabled={sending()}>
-          Rename
-        </button>
-      </form>
-      <span class="connection-context">in {props.contextName}</span>
-      <label class="connection-address">
-        <span class="visually-hidden">Address of {props.connection.name}</span>
-        <input
-          type="text"
-          readOnly
-          value={fullAddress(props.connection)}
-          onFocus={(event) => event.currentTarget.select()}
-        />
-      </label>
-      <div class="connection-reading-only">
-        <label for={readingOnly}>Reading only</label>
-        <SwitchInput
-          id={readingOnly}
-          checked={props.connection.reading_only}
-          disabled={sending()}
-          onTurn={async (on) => {
-            const input = { id: props.connection.id, reading_only: on };
-            return (await send("set_connection_reading_only", input)) !== null;
-          }}
-        />
-      </div>
+    <span class="record-address">
+      <span class="record-address-text" translate="no">
+        {fullAddress(props.connection)}
+      </span>
       <button
         type="button"
         class="quiet"
-        disabled={sending()}
-        onClick={() => void send("end_connection", { id: props.connection.id })}
+        aria-label={`Copy the address of ${props.connection.name}`}
+        onClick={() => void copy()}
       >
-        End {props.connection.name}
+        Copy
       </button>
-    </li>
+      <span class="record-copied" role="status">
+        {said()}
+      </span>
+    </span>
   );
 }
 
@@ -192,9 +253,12 @@ function NewConnection(props: {
   contexts: ContextListing[];
   changes: SectionChanges;
   onMade: (connection: Connection) => void;
+  onCancel: () => void;
 }) {
   const { change, sending, problemAt } = props.changes;
   const readingOnly = createUniqueId();
+  let nameField!: HTMLInputElement;
+  onMount(() => nameField.focus());
 
   async function make(event: SubmitEvent) {
     event.preventDefault();
@@ -214,27 +278,38 @@ function NewConnection(props: {
   }
 
   return (
-    <form class="new-context" aria-label="New Connection" onSubmit={(event) => void make(event)}>
+    <form
+      class="new-context new-record"
+      aria-label="New Connection"
+      onSubmit={(event) => void make(event)}
+    >
       <h3 class="label">New Connection</h3>
-      <label>
-        Name
-        <input name="name" type="text" required />
-      </label>
-      <label>
-        Context
-        <select name="context_id">
-          <For each={props.contexts}>
-            {(context) => <option value={context.id}>{context.name}</option>}
-          </For>
-        </select>
-      </label>
-      <div class="connection-reading-only">
-        <label for={readingOnly}>Reading only</label>
-        <SwitchInput id={readingOnly} name="reading_only" />
+      <div class="new-record-fields">
+        <label>
+          Name
+          <input ref={nameField} name="name" type="text" required />
+        </label>
+        <label>
+          Context
+          <select name="context_id">
+            <For each={props.contexts}>
+              {(context) => <option value={context.id}>{context.name}</option>}
+            </For>
+          </select>
+        </label>
+        <span class="record-switch">
+          <label for={readingOnly}>Reading only</label>
+          <SwitchInput id={readingOnly} name="reading_only" />
+        </span>
+        <span class="new-record-acts">
+          <button type="submit" disabled={sending()}>
+            Make the Connection
+          </button>
+          <button type="button" class="quiet" onClick={() => props.onCancel()}>
+            Cancel
+          </button>
+        </span>
       </div>
-      <button type="submit" disabled={sending()}>
-        Make the Connection
-      </button>
       <Problem message={problemAt("new-connection")} />
     </form>
   );

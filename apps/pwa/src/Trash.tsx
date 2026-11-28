@@ -231,7 +231,7 @@ export function Trash(props: {
               </p>
             </Show>
             <Show when={rows().length > 0}>
-              <ul class="trash-items" aria-label="In the Trash">
+              <ul class="settings-box trash-items" aria-label="In the Trash">
                 <For each={rows()}>
                   {(row) =>
                     "said" in row ? (

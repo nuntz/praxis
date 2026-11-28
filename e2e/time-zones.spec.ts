@@ -126,6 +126,8 @@ test("a new Context's time zone is picked from the same list, starting at this D
   const name = `Tokyo ${testInfo.project.name} ${crypto.randomUUID().slice(0, 8)}`;
   await page.goto("/");
   const contexts = await openSettings(page, "Contexts");
+  const opening = contexts.getByRole("button", { name: "New Context…", exact: true });
+  await opening.click();
   const form = contexts.getByRole("form", { name: "New Context" });
   const field = form.getByRole("combobox", { name: "Time zone", exact: true });
   await expect(field).toHaveValue(deviceZone(testInfo));
@@ -139,7 +141,9 @@ test("a new Context's time zone is picked from the same list, starting at this D
   await expect(
     page.getByRole("banner").getByRole("button", { name: /^Context: / }),
   ).toHaveAccessibleName(`Context: ${name}`);
-  // Made, the form starts again at this Device's zone.
+  // Made, the form closes, and opened again it starts at this Device's zone.
+  await expect(form).toHaveCount(0);
+  await opening.click();
   await expect(field).toHaveValue(deviceZone(testInfo));
   const general = page.getByRole("region", { name: "General", exact: true });
   await page.goto("/settings/general");
