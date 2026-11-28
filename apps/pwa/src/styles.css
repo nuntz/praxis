@@ -2860,13 +2860,45 @@ button.chip.set .chip-end {
   margin: 0;
 }
 
+/*
+ * The status, then Nothing found's offers, which follow it outside it. One grid holds both, the
+ * status's lines on its rows through a subgrid, so each offer is drawn on the row after what it lifts
+ * (`grid-row`, set in Search.tsx).
+ */
+.search-said {
+  display: grid;
+  grid-template-rows: repeat(var(--said-rows, 1), auto);
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.search-status {
+  display: grid;
+  grid-row: 1 / -1;
+  grid-column: 1;
+  grid-template-rows: subgrid;
+  justify-items: start;
+}
+
+.search-status > p {
+  margin: 0;
+}
+
+/* In the status's one column, on a row of the status's own left empty for it. */
+.search-said > .search-lift {
+  grid-column: 1;
+}
+
 /* Nothing found: the words named, then for each chip set what it keeps out and its offer. */
 .search-nothing {
+  padding: var(--space-5) 0;
+}
+
+/* What is shown while a newer search is out, for the words before. */
+.search-shown {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-5) 0;
+  gap: var(--space-3);
 }
 
 .search-nothing-title {
@@ -2878,17 +2910,6 @@ button.chip.set .chip-end {
 .search-nothing-kept {
   color: var(--muted);
   font: var(--type-meta);
-}
-
-button.search-lift {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--rule);
-  background: var(--surface);
-  color: var(--ink);
-  font: var(--type-label);
-  letter-spacing: var(--tracking-label);
-  font-size: 14px;
 }
 
 .search-group {
@@ -3083,6 +3104,14 @@ button.search-hit-body {
   font: var(--type-meta);
 }
 
+/*
+ * Dimmed while a newer search is out, as it is for the words before: its words muted and what
+ * matched unmarked, so they still read at 4.5:1, which an opacity would not.
+ */
+.search-shown.stale .search-excerpt {
+  color: var(--muted);
+}
+
 /* What matched, on match alone: in an Entry's words and in a title alike (section 8.11). */
 .search-excerpt mark {
   padding: 0 2px;
@@ -3090,6 +3119,11 @@ button.search-hit-body {
   background: var(--match);
   color: var(--ink);
   font-weight: 600;
+}
+
+.search-shown.stale .search-excerpt mark {
+  background: none;
+  color: inherit;
 }
 
 /*

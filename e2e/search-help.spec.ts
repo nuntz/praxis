@@ -4,6 +4,7 @@ import {
   contextOfOwn,
   enterSearch,
   expect,
+  holdAnswers,
   onPhone,
   openJournal,
   pickTime,
@@ -177,6 +178,23 @@ test("Nothing found names the words and offers to lift each chip set, which read
   await expect(status).toContainText("Nothing found");
   await expect(status).toContainText("Nothing before today is searched.");
   await expect(found.getByRole("button")).toHaveText(["Search any time"]);
+  // The offer follows the status, outside it, so its word is not read into the status's sentence,
+  // and it is a quiet button, a touch target on a phone.
+  await expect(status.getByRole("button")).toHaveCount(0);
+  const anyTime = found.getByRole("button", { name: "Search any time" });
+  await expect(anyTime).toHaveCSS("text-decoration-line", "underline");
+  await expect(anyTime).toHaveCSS("font-weight", "600");
+  if (onPhone(testInfo)) {
+    expect((await anyTime.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  }
+  // Drawn after what it lifts.
+  const [keptBox, offerBox] = [
+    await status.getByText("Nothing before today is searched.").boundingBox(),
+    await anyTime.boundingBox(),
+  ];
+  if (!keptBox || !offerBox) throw new Error("Both are shown");
+  expect(offerBox.y).toBeGreaterThan(keptBox.y);
+  expect(offerBox.x).toBe(keptBox.x);
   await found.getByRole("button", { name: "Search any time" }).click();
   await expect(chips.getByRole("button", { name: "Any time" })).toBeVisible();
   await expect(found).toHaveCount(0);
@@ -236,6 +254,49 @@ test("Nothing found names the words and offers to lift each chip set, which read
   await toShed();
   await expect(offers).toHaveText(["Search any time", "Search every Project"]);
 });
+
+test("search says Searching… while its first answer is out, and dims what it shows while a newer one is", async ({
+  page,
+}, testInfo) => {
+  const tag = tagOf(testInfo);
+  const context = await contextOfOwn(page, testInfo, "Searching");
+  await callContextTool(page, context.id, "record_entry", { words: `Lantern wick ${tag}` });
+  const { field, found, excerpts } = await openSearch(page, testInfo);
+  const status = found.getByRole("status");
+
+  const held = await holdAnswers(page, "search");
+  await field.fill(tag);
+  await held.sent({ words: tag });
+  await expect(status).toHaveText("Searching…");
+  await expect(status.getByText("Searching…")).toHaveCSS("color", await field.evaluate(mutedOf));
+  await held.release();
+  await expect(status).toHaveText("Found 1");
+  await expect(excerpts).toHaveText([`Lantern wick ${tag}`]);
+
+  // Newer words out, what is shown is for the words before: dimmed, and busy, until the answer.
+  const shown = found.locator(".search-shown");
+  await field.fill(`wick ${tag}`);
+  await held.sent({ words: `wick ${tag}` });
+  await expect(shown).toHaveAttribute("aria-busy", "true");
+  const excerpt = shown.getByTestId("search-excerpt").first();
+  const muted = await field.evaluate(mutedOf);
+  await expect(excerpt).toHaveCSS("color", muted);
+  await held.release();
+  await expect(shown).toHaveAttribute("aria-busy", "false");
+  await expect(excerpt).not.toHaveCSS("color", muted);
+  await expect(status).toHaveText("Found 1");
+
+  // Left with newer words out past the wait, so the accessibility check sees both states.
+  await field.fill(`lantern ${tag}`);
+  await held.sent({ words: `lantern ${tag}` });
+  await expect(status).toHaveText("Searching…");
+  await expect(shown).toHaveAttribute("aria-busy", "true");
+});
+
+/** The muted colour, as the field's placeholder takes it. */
+function mutedOf(field: Element): string {
+  return getComputedStyle(field, "::placeholder").color;
+}
 
 test("offline, the search field and its chips are shown but cannot be used, and say the search needs the network", async ({
   page,

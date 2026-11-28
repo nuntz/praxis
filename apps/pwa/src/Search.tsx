@@ -30,9 +30,13 @@ import { SearchChips } from "./SearchChips.tsx";
 import { SearchGroups } from "./SearchGroups.tsx";
 import type { HitActions, JournalPlace, NarrowsTo } from "./SearchHit.tsx";
 import { needsNetwork, useCallTool } from "./tools.ts";
+import { askOnPause } from "./typing-pause.ts";
 
 /** Search runs on the server, over the whole Journal, so it needs the network (section 8.8). */
 const SEARCH_NEEDS_NETWORK = "Search needs the network.";
+
+/** How long a search asked waits for its answer before the status says it is searching. */
+const SEARCHING_AFTER = 300;
 
 /**
  * Search in the Journal column (sections 8.4 and 9.4): one field, the chips under it that narrow
@@ -81,6 +85,8 @@ export function createSearch(props: {
     setFound("hits", hits === null ? null : reconcile(hits, { key: "id" }));
   };
   const [nextCursor, setNextCursor] = createSignal<string | null>(null);
+  // What the hits shown answer, which a newer search still out has not yet replaced.
+  const [answered, setAnswered] = createSignal<Query | null>(null);
   const [wordsOnly, setWordsOnly] = createSignal<WordsOnly | null>(null);
   const [problem, setProblem] = createSignal<string | null>(null);
   // Whether the person entered the search: its field focused, or on a phone its button tapped. On a
@@ -118,7 +124,10 @@ export function createSearch(props: {
         const result = await callTool("search", { ...inputOf(asked), ...page });
         // Emptied meanwhile, the field asks nothing: its answer would show under no words.
         if (!current() || query() !== asked) return;
-        if (!result.ok) return setProblem(result.error.message);
+        if (!result.ok) {
+          settled(asked);
+          return setProblem(result.error.message);
+        }
         read.push(...result.value.items);
         cursor = result.value.next_cursor;
         first ??= result.value.words_only;
@@ -128,8 +137,12 @@ export function createSearch(props: {
       setHits(read);
       setNextCursor(cursor);
       setWordsOnly(first ?? null);
+      settled(asked);
     } catch (error) {
-      if (current() && query() === asked) setProblem(needsNetwork(error, SEARCH_NEEDS_NETWORK));
+      if (current() && query() === asked) {
+        settled(asked);
+        setProblem(needsNetwork(error, SEARCH_NEEDS_NETWORK));
+      }
     }
   });
 
@@ -141,8 +154,6 @@ export function createSearch(props: {
     if (asking()) await find(query(), hits()?.length ?? 0);
   }
 
-  // Whether words were typed, not only spaces.
-  const wordsGiven = () => hasWords({ words: words() });
   // Any chip set asks with no words, the time chip too, for everything it holds, newest first, as
   // the tool takes it (section 8.4).
   const asking = () => {
@@ -154,21 +165,57 @@ export function createSearch(props: {
   const shown = () => asking() || (onPhone() && entered());
   // Whether the search is in use, so its chips show: entered, or asking.
   const inUse = () => entered() || asking();
+  // Whether a newer search than the one shown is asked, waiting on a pause in typing or out.
+  const out = () => asking() && answered() !== query();
+  // Whether what is asked has had no answer for a while, so the status says it is searching.
+  const [slow, setSlow] = createSignal(false);
+  let slowly: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(slowly));
+  /** A search sent: unanswered for a while, the status says it is searching, as it goes on saying. */
+  function sent() {
+    if (slow()) return;
+    clearTimeout(slowly);
+    slowly = setTimeout(() => setSlow(true), SEARCHING_AFTER);
+  }
+  /** What is asked is answered, or asks nothing: what is shown is for it, and nothing is out. */
+  function settled(asked: Query | null) {
+    clearTimeout(slowly);
+    setSlow(false);
+    setAnswered(asked);
+  }
+  const searchingSaid = () => slow() && out();
+  // The words and chips of what is shown, which the count and Nothing found say.
+  const shownWords = () => answered()?.words ?? words();
+  const shownNarrowing = () => answered()?.narrowing ?? narrowing();
 
-  function ask(typed: string) {
-    setWords(typed);
+  // The words are asked once typing pauses (section 8.4); a chip, the clear button and Escape act at
+  // once, dropping words still waiting.
+  const pause = askOnPause();
+  onCleanup(pause.cancel);
+
+  /** Words typed in the field: asked once typing pauses, or cleared at once when nothing is asked. */
+  function typed(value: string) {
+    setWords(value);
     setMeaningUnfolded(false);
-    askAgain();
+    if (asking()) pause.later(askAgain);
+    else pause.now(askAgain);
+  }
+
+  function ask(value: string) {
+    setWords(value);
+    setMeaningUnfolded(false);
+    pause.now(askAgain);
   }
 
   function narrow(narrowed: Narrowing) {
     setNarrowing(narrowed);
-    askAgain();
+    pause.now(askAgain);
   }
 
   function askAgain() {
     if (!asking()) {
       answers += 1;
+      settled(null);
       setHits(null);
       setNextCursor(null);
       setWordsOnly(null);
@@ -177,6 +224,7 @@ export function createSearch(props: {
       changed();
       return;
     }
+    sent();
     void find(query(), 0);
   }
 
@@ -204,7 +252,7 @@ export function createSearch(props: {
     setWords("");
     setNarrowing(NOT_NARROWED);
     setMeaningUnfolded(false);
-    askAgain();
+    pause.now(askAgain);
   }
 
   /** A Task found, where it stands as a write from its round control left it. */
@@ -370,8 +418,10 @@ export function createSearch(props: {
             <div
               class="search-field"
               onMouseDown={(event) => {
-                const on = event.target as Element;
-                if (on === field || on.closest("button") || !field || field.disabled) return;
+                const pressed = event.target as Element;
+                if (pressed === field || pressed.closest("button") || !field || field.disabled) {
+                  return;
+                }
                 event.preventDefault();
                 field.focus();
                 setEntered(true);
@@ -391,7 +441,7 @@ export function createSearch(props: {
                 aria-describedby={describedBy()}
                 disabled={!online()}
                 value={words()}
-                onInput={(event) => ask(event.currentTarget.value)}
+                onInput={(event) => typed(event.currentTarget.value)}
                 onFocus={() => {
                   setFocused(true);
                   setEntered(true);
@@ -442,33 +492,69 @@ export function createSearch(props: {
     </>
   );
 
+  // Whether what is shown found nothing, so Nothing found says so and offers to lift each chip.
+  const nothingFound = () => !searchingSaid() && hits()?.length === 0;
+  const chipsKept = () => chipsSaid(shownNarrowing(), todayIn(props.timeZone));
+
   /**
-   * Nothing found: the words named, so a typo shows, and for each chip set what it keeps out and
-   * an offer to lift it, which reads the list again.
+   * The status: Searching… while an answer is slow, the count, or Nothing found, the words named,
+   * so a typo shows, and for each chip set what it keeps out. Its offers to lift each chip follow
+   * it, outside it, so a screen reader hears no button's word read into a sentence; each is drawn
+   * beside what it lifts, on the row after it (styles.css, `.search-said`).
    */
-  const NothingFound = () => (
-    <div class="search-nothing">
-      <p class="search-nothing-title">
-        {wordsGiven() ? `Nothing found for “${words().trim()}”` : "Nothing found"}
-      </p>
-      <For each={chipsSaid(narrowing(), todayIn(props.timeZone))}>
-        {(said) => (
-          <>
-            <p class="search-nothing-kept">{said.kept}</p>
-            <button
-              type="button"
-              class="search-lift"
-              onClick={() => {
-                narrow(lifted(narrowing(), said.chip));
-                field?.focus();
-              }}
+  const Status = () => (
+    <div class="search-status" role="status">
+      <Show when={!searchingSaid()} fallback={<p class="search-count">Searching…</p>}>
+        <Show when={hits()}>
+          {(found) => (
+            <Show
+              when={found().length > 0}
+              fallback={
+                <>
+                  <p class="search-nothing-title">
+                    {hasWords({ words: shownWords() })
+                      ? `Nothing found for “${shownWords().trim()}”`
+                      : "Nothing found"}
+                  </p>
+                  <For each={chipsKept()}>
+                    {(said, at) => (
+                      <p class="search-nothing-kept" style={{ "grid-row": String(2 + 2 * at()) }}>
+                        {said.kept}
+                      </p>
+                    )}
+                  </For>
+                </>
+              }
             >
-              {said.offer}
-            </button>
-          </>
-        )}
-      </For>
+              <p class="search-count">
+                {hasWords({ words: shownWords() })
+                  ? `Found ${found().length}${nextCursor() === null ? "" : " and more"}`
+                  : everythingSaid(shownNarrowing(), todayIn(props.timeZone))}
+              </p>
+            </Show>
+          )}
+        </Show>
+      </Show>
     </div>
+  );
+
+  /** Each chip set, offered lifted, which reads the list again. */
+  const Offers = () => (
+    <For each={chipsKept()}>
+      {(said, at) => (
+        <button
+          type="button"
+          class="quiet search-lift"
+          style={{ "grid-row": String(3 + 2 * at()) }}
+          onClick={() => {
+            narrow(lifted(narrowing(), said.chip));
+            field?.focus();
+          }}
+        >
+          {said.offer}
+        </button>
+      )}
+    </For>
   );
 
   const Found = () => (
@@ -482,17 +568,14 @@ export function createSearch(props: {
         }}
       >
         {/* There from the first words, so each count and Nothing found is announced as it comes. */}
-        <div class="search-status" role="status">
-          <Show when={hits()}>
-            {(found) => (
-              <Show when={found().length > 0} fallback={<NothingFound />}>
-                <p class="search-count">
-                  {wordsGiven()
-                    ? `Found ${found().length}${nextCursor() === null ? "" : " and more"}`
-                    : everythingSaid(narrowing(), todayIn(props.timeZone))}
-                </p>
-              </Show>
-            )}
+        <div
+          class="search-said"
+          classList={{ "search-nothing": nothingFound() }}
+          style={{ "--said-rows": String(nothingFound() ? 1 + 2 * chipsKept().length : 1) }}
+        >
+          <Status />
+          <Show when={nothingFound()}>
+            <Offers />
           </Show>
         </div>
         <Show when={hits() && wordsOnly()}>
@@ -507,10 +590,11 @@ export function createSearch(props: {
         </Show>
         <Show when={hits()}>
           {(found) => (
-            <>
+            // While a newer search is out, what is shown is for the words before, and says so.
+            <div class="search-shown" classList={{ stale: out() }} aria-busy={out()}>
               <SearchGroups
                 hits={found()}
-                words={words()}
+                words={shownWords()}
                 wordsOnly={wordsOnly()}
                 unfolded={meaningUnfolded()}
                 onToggleMeaning={() => setMeaningUnfolded((unfolded) => !unfolded)}
@@ -524,7 +608,7 @@ export function createSearch(props: {
                   </button>
                 )}
               </Show>
-            </>
+            </div>
           )}
         </Show>
       </section>
