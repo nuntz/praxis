@@ -27,6 +27,11 @@ export const colors = {
   inset: { light: "#F4F5F8", dark: "#252931" },
   /** A hairline border. */
   rule: { light: "#D5D9E0", dark: "#3A3F4A" },
+  /**
+   * The edge of a field in Settings, drawn as a 1px inset ring: what says a field is there while it
+   * is empty, so 3:1 at least against surface and inset, where a hairline is not.
+   */
+  edge: { light: "#868D9A", dark: "#6C7382" },
   /** Text on ground, surface, inset, notice and any accent tint. Also the app icon's tile. */
   ink: { light: "#1A1D23", dark: "#EEF0F4" },
   /** Secondary text on ground, surface and inset, and the border of a Task's round control. */

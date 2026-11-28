@@ -6,6 +6,7 @@ colors:
   surface: "#FFFFFF"
   inset: "#F4F5F8"
   rule: "#D5D9E0"
+  edge: "#868D9A"
   ink: "#1A1D23"
   muted: "#596070"
   warn: "#B42318"
@@ -28,6 +29,7 @@ colors:
   surface-dark: "#1B1E24"
   inset-dark: "#252931"
   rule-dark: "#3A3F4A"
+  edge-dark: "#6C7382"
   ink-dark: "#EEF0F4"
   muted-dark: "#A3AAB8"
   warn-dark: "#FF9388"
@@ -280,6 +282,7 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 - **Surface** (`surface`): a panel (Attention, the Journal, the Conversation), a card on the phone, the tab bar, a menu or picker.
 - **Inset** (`inset`): what sits inside a panel: a Task row, the search field, a Reference, the current tab, the person's own Message, code. It always sits on `surface`.
 - **Rule** (`rule`): a hairline border or divider, and the edge of a chip, a menu or a picker. When the Device asks for more contrast, it takes `muted`'s value, so every edge stands out at 3:1 or more.
+- **Edge** (`edge`): the 1px inset ring round a field in Settings, so an empty field shows where it is. Held to 3:1 on `surface` and on `inset` in both themes by `apps/pwa/test/tokens.test.ts`, where a `rule` hairline is not.
 - **Ink** (`ink`): text on every neutral, on `notice` and on any tint. Also the app icon's tile, the focus ring, a chip that is set, and the Jump to latest pill.
 - **Muted** (`muted`): secondary text (times, meta, notes, an inactive tab, a field's placeholder at full opacity on `surface` or `inset`) and the border of a Task's empty control.
 
@@ -304,9 +307,9 @@ An accent is used three ways. Solid, under `on-accent`, for the one primary butt
 **Character:** one geometric-humanist family carries the whole interface, with its weights doing the work a second family would: 700 for titles, buttons and labels, 500–600 for row titles and emphasis, 400 for reading.
 
 ### Hierarchy
-- **Screen title** (700, 26px/32px, −0.02em): a screen of its own, such as Settings.
+- **Screen title** (700, 26px/32px, −0.02em): a screen of its own, such as Settings. On a phone, where the top bar's title is hidden in a section of Settings, the section's heading too.
 - **Wordmark** (700, 22px/28px, −0.02em): "Praxis" beside the mark in the top bar, from 720px up.
-- **Column title** (700, 20px/26px, −0.01em): the head of each peer.
+- **Column title** (700, 20px/26px, −0.01em): the head of each peer, and a section's heading in Settings on a desktop, under the top bar's "Settings".
 - **Words** (400, 17px/26px): an Entry's words, the person's own, one step larger than the interface. Also the size they are edited at, on an Entry's page and in its editor.
 - **Body on a phone** (400, 16px/23px): the base size below 720px, and the composers' text.
 - **Body** (400, 15px/22px): the interface's base on a desktop, and a Message's words.
@@ -342,7 +345,7 @@ The Journal and the Conversation keep time order, oldest first, and open at thei
 
 ## Elevation & Depth
 
-Praxis is flat, by rule. Depth is told by tone: the `ground` behind, a `surface` panel on it, an `inset` row inside the panel. A `rule` hairline gives an edge where tone alone is not enough: a menu, a picker, the context list, Attention when it opens over the Journal. `box-shadow` appears only as a ring, never as a cast shadow: the `surface` ring that lifts the Call's dot off its tint, and an inset 1px or 2px ring that draws a field's edge on an Entry's page.
+Praxis is flat, by rule. Depth is told by tone: the `ground` behind, a `surface` panel on it, an `inset` row inside the panel. A `rule` hairline gives an edge where tone alone is not enough: a menu, a picker, the context list, Attention when it opens over the Journal. `box-shadow` appears only as a ring, never as a cast shadow: the `surface` ring that lifts the Call's dot off its tint, and an inset 1px or 2px ring that draws a field's edge on an Entry's page, and the 1px `edge` ring round a field in Settings.
 
 **The Flat Rule.** No drop shadows, no blur, no glow, no gradients for depth. If something must stand above what is under it, it takes `surface` and a `rule` hairline.
 
@@ -391,14 +394,15 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **Composer:** the accent's tint, a 1.5px accent border, `radius-lg`. Its `label` sits in the accent above the words. At rest it is one line, its label where the words will go and its send at its end. A label too long for its line is cut short with an ellipsis; the send never is, and Record keeps its icon and its word at every width. Focused, it opens to two lines at once, with no animation, and takes a 2px accent outline 2px off. As the words run past two lines it grows with them, a line at a time and with no animation, up to 40% of its column's height, and then scrolls within itself. On a phone that is 40% of the column as shown, above the on-screen keyboard, so the composer never covers the column.
 - **Search field:** a 44px `inset` pill with a `muted` search icon. Focused, its 1.5px border turns `ink`, and the 2px `ink` outline is drawn 2px off round the whole field, as its input draws none. The browser's clear button is hidden for the screen's own. While a newer search is out, what is shown for the one before is dimmed and busy, its words `muted` and what matched unmarked, never by an opacity that would take them under 4.5:1, and after 300ms with no answer the status says "Searching…" in `meta` `muted`.
 - **Date field:** a `surface` field with a `rule` border and `radius-sm`, in a Task's row. With no day in it, its placeholder ("dd/mm/yyyy", or the locale's) is `muted` until it is typed in.
-- **Switch:** a 46×28 pill, `muted` when off and accent when on, its knob `surface`. The knob slides in 150ms on `ease-out` only when motion is allowed.
+- **Settings field:** a field or a select in Settings, `radius-sm`, 40px high on a desktop and 44px on a phone, on `inset` in a row and `surface` elsewhere, edged by a 1px inset ring in `edge`.
+- **Switch:** a 46×28 pill (50×30 on a phone, its knob 24px), `muted` when off and accent when on, its knob `surface` 3px in from either end. The knob slides in 150ms on `ease-out` only when motion is allowed.
 
 ### Navigation
 - **Top bar:** on `ground`, 52px high (60px on a phone): the mark and wordmark, then the Context switcher, then (between 720px and 1199px) the Attention button with its count, and Settings as an icon button at the far end. On a phone it shows the mark alone, still named "Praxis", and the switcher takes the width, its name cut with an ellipsis; Settings never shrinks from its 44px circle. Search belongs to the Journal: a field in its header, or a button on a phone.
 - **Attention button:** a `surface` pill in `ink`. While Attention is open it sits on `inset` in `ink` at 700, as the current phone tab does, and says so with `aria-expanded` too.
 - **Context switcher:** a pill of the current Context's solid accent with its name at 600. It opens a `surface` list where each Context is its swatch beside its name, and the current one sits on `inset` at 600.
 - **Phone tabs:** a `surface` pill below the content, 16px in from each side, holding Attention (inbox), the Journal (book-open) and the Agent (message-circle). Each tab is 56px high with its icon over its `caption` name, and its count or unread dot at the icon's shoulder. The current tab sits on `inset` in `ink` at 700. The others are `muted`.
-- **Settings:** on a desktop, a `surface` sidebar of sections in two groups, the Context's under its accent dot and the Deployment's, with the section shown on its tint in accent. On a phone, the same groups as rows with an icon, a `muted` value and a chevron.
+- **Settings:** on a desktop, a `surface` sidebar of sections in two groups, the Context's under its accent dot and the Deployment's, with the section shown on `inset` in `ink` at 700, its icon too: a selected state never takes the accent. A section's notes keep to 65 characters a line. On a phone, the same groups as rows with an icon, a `muted` value and a chevron.
 
 ### Task row
 The most repeated object in Praxis. An `inset` row with `radius-sm`, 10px by 12px: a 20px circle control with a 2px `muted` border (filled with an `ink` dot once Finished), the title in `row-title`, then its marks in `meta`, then the calendar icon button at the row's end, never the word. Each state that holds is its own mark in words. Due today is bold in `muted`, Overdue bold in `warn`, and a closed Task's title turns `muted`. In Attention's one-line rows on a phone the control is a 44px target, its 20px circle drawn at the centre, and the row's open button begins where it ends.

@@ -82,6 +82,100 @@ test("Brief and Review shows each time with its switch, and the Notification swi
   await expect(settings.getByRole("checkbox")).toHaveCount(0);
 });
 
+/**
+ * Where a switch's knob lies across its pill, from the pill's left edge, as drawn once it has
+ * finished moving: its `::after`, placed by `left` and moved by its transform.
+ */
+async function knobAcross(toggle: Locator) {
+  return toggle.evaluate((pill) => {
+    const knob = getComputedStyle(pill, "::after");
+    const moved = knob.transform === "none" ? 0 : new DOMMatrix(knob.transform).m41;
+    const start = Number.parseFloat(knob.left) + moved;
+    return { start, end: start + Number.parseFloat(knob.width), pill: pill.clientWidth };
+  });
+}
+
+test("a switch's knob lies inside its pill, on and off", async ({ page }, testInfo) => {
+  await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  const settings = await openSettings(page, "Brief and Review");
+  const toggle = settings.getByRole("switch", { name: "Daily Brief" });
+
+  for (const on of [true, false]) {
+    if (on) await expect(toggle).toBeChecked();
+    else await expect(toggle).not.toBeChecked();
+    // Inside the pill with room to spare each side, the knob at the end its state puts it.
+    await expect
+      .poll(async () => {
+        const { start, end, pill } = await knobAcross(toggle);
+        if (start < 2 || end > pill - 2) return `outside its pill: ${start} to ${end} in ${pill}`;
+        return (on ? pill - end : start) <= 4 ? "inside, at its end" : "not at its end";
+      })
+      .toBe("inside, at its end");
+    const sent = page.waitForResponse(/\/tools\/set_brief_time$/);
+    await turn(page, toggle, "tap", testInfo);
+    await sent;
+  }
+});
+
+test("on a phone, a section's groups sit on the 16px side gutter and its fields are 44px high", async ({
+  page,
+}, testInfo) => {
+  test.skip(!onPhone(testInfo), "the side gutter and the 44px Rule are the phone's");
+  await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  const settings = await openSettings(page, "Brief and Review");
+  const width = page.viewportSize()?.width ?? 0;
+
+  for (const name of ["Brief, each day", "Review, each week", "Notifications"]) {
+    const group = await settings.getByRole("group", { name, exact: true }).boundingBox();
+    expect(group?.x, name).toBeCloseTo(16, 0);
+    expect((group?.x ?? 0) + (group?.width ?? 0), name).toBeCloseTo(width - 16, 0);
+  }
+  const fields = settings.locator("input:not(.switch), select");
+  expect(await fields.count()).toBeGreaterThan(0);
+  for (const field of await fields.all()) {
+    expect((await field.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test("on a desktop, the section shown is on inset in ink in the sidebar, under a Column title, its fields edged at 3:1", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    onPhone(testInfo),
+    "the sidebar and the top bar's title beside a section are a desktop's",
+  );
+  await contextOfOwn(page, testInfo, "Rows");
+  await page.goto("/");
+  const settings = await openSettings(page, "Brief and Review");
+
+  // A selected state never takes the accent (the One Accent Rule): inset, in ink, its icon too.
+  const shown = page
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("link", { name: "Brief and Review", exact: true });
+  await expect(shown).toHaveAttribute("aria-current", "page");
+  await expect(shown).toHaveCSS("background-color", "rgb(244, 245, 248)");
+  await expect(shown).toHaveCSS("color", "rgb(26, 29, 35)");
+  await expect(shown.locator("svg").first()).toHaveCSS("color", "rgb(26, 29, 35)");
+
+  // Under the top bar's "Settings", at Screen title, the section's own heading is a step down.
+  await expect(page.getByRole("banner").getByRole("heading", { name: "Settings" })).toHaveCSS(
+    "font-size",
+    "26px",
+  );
+  await expect(settings.getByRole("heading", { name: "Brief and Review" })).toHaveCSS(
+    "font-size",
+    "20px",
+  );
+
+  // An empty field's edge is a 1px ring in `edge`, 3:1 on surface where `rule` is not.
+  const time = settings
+    .getByRole("group", { name: "Brief, each day", exact: true })
+    .getByLabel("Time", { exact: true });
+  await expect(time).toHaveCSS("box-shadow", "rgb(134, 141, 154) 0px 0px 0px 1px inset");
+});
+
 test("each switch in Brief and Review turns with Space and with a tap", async ({
   page,
 }, testInfo) => {

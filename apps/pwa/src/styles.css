@@ -304,6 +304,11 @@ button.quiet {
   white-space: nowrap;
 }
 
+/* The chevron keeps its size while the name beside it is cut short. */
+.context > svg {
+  flex: none;
+}
+
 .context-list {
   position: absolute;
   z-index: 2;
@@ -492,14 +497,15 @@ button.on-a-call {
   color: var(--muted);
 }
 
+/* A selected state never takes the accent: on inset in ink at 700, as the current phone tab is. */
 .settings-section-link[aria-current="page"] {
-  background: var(--accent-tint);
-  color: var(--accent);
+  background: var(--inset);
+  color: var(--ink);
   font-weight: 700;
 }
 
 .settings-section-link[aria-current="page"] .settings-section-icon {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .settings-section-name {
@@ -536,11 +542,6 @@ button.on-a-call {
   gap: var(--space-4);
   padding: var(--space-3) var(--space-2) var(--space-5);
   background: none;
-}
-
-.settings-shown > .settings > .column-heading {
-  font: var(--type-screen-title);
-  letter-spacing: var(--tracking-screen-title);
 }
 
 .settings-rows {
@@ -618,7 +619,6 @@ button.on-a-call {
 }
 
 .settings-row-control :is(input:not(.switch), select) {
-  border-color: var(--inset);
   background: var(--inset);
 }
 
@@ -693,6 +693,17 @@ input[type="checkbox"].switch:disabled {
   font: inherit;
 }
 
+/*
+ * A field in Settings is edged by a 1px inset ring in `edge`, as a field on an Entry's page is by
+ * its ring, so an empty one still shows where it is: 3:1 on surface and inset, where `rule` is not.
+ * Its border stays, transparent, for the colours a Device forces.
+ */
+.settings :is(input:not(.switch), select) {
+  border-color: transparent;
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+
 .context-rows {
   display: flex;
   flex-direction: column;
@@ -748,6 +759,7 @@ input[type="checkbox"].switch:disabled {
 }
 
 .settings-note {
+  max-width: 65ch;
   margin: 0;
   color: var(--muted);
 }
@@ -4084,8 +4096,9 @@ a.entry-mark.held-mark {
     height: 24px;
   }
 
+  /* The knob's travel across the wider pill: its width, less the knob and 3px either side. */
   input[type="checkbox"].switch:checked::after {
-    left: 23px;
+    transform: translateX(20px);
   }
 
   .settings-shown {
@@ -4094,8 +4107,20 @@ a.entry-mark.held-mark {
     overflow-y: visible;
   }
 
+  /* On the 16px side gutter, as the list of sections is: the margin of `.settings` alone. */
   .settings-shown > .settings {
     width: auto;
+    padding-inline: 0;
+  }
+
+  .settings :is(input, select) {
+    min-height: 44px;
+  }
+
+  /* The top bar's title is hidden in a section on a phone, so the section's heading takes its size. */
+  .settings-shown > .settings > .column-heading {
+    font: var(--type-screen-title);
+    letter-spacing: var(--tracking-screen-title);
   }
 
   .first-context {
