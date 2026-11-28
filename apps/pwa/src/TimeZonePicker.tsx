@@ -193,8 +193,8 @@ export function TimeZonePicker(props: {
                   <For each={zone.name.split("/")}>
                     {(part, at) => (
                       <>
-                        {at() > 0 ? <wbr /> : null}
                         {at() > 0 ? "/" : ""}
+                        {at() > 0 ? <wbr /> : null}
                         {part}
                       </>
                     )}

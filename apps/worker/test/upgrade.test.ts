@@ -404,7 +404,9 @@ describe("clear_conversation, on a runtime that cannot open its tables", () => {
     await deployment.wakeAgain(id);
     expect((await messages()).agent).toBe("unavailable");
 
-    value(await context.call(hand, "clear_conversation", { up_to: "2026-11-15T09:00:00.000Z" }));
+    // The screen shows no Message of a Conversation that cannot be opened, so it read none: the
+    // Message sent before still comes after what it clears up to, and is dropped all the same.
+    value(await context.call(hand, "clear_conversation", { up_to: "1970-01-01T00:00:00.000Z" }));
 
     expect(await messages()).toEqual({
       items: [],

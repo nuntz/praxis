@@ -240,9 +240,12 @@ test("the Offline Copy is read with no network, as last fetched, in any Context,
   await expect(unsent.getByRole("list", { name: "Mentions and References" })).toHaveText(`@${ana}`);
 
   // The Standing Entries are the copy's; the Trash and the settings need the network.
-  await openSettings(page, "Standing Entries");
+  // Said as the section's note, in the section under its heading.
+  const standingShown = await openSettings(page, "Standing Entries");
   await expect(
-    page.getByText("This Context's settings and its Trash need the network.", { exact: true }),
+    standingShown.getByText("This Context's settings and its Trash need the network.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(page.getByRole("list", { name: "Standing Entries" })).toContainText(
     `Always ask first ${tag}`,

@@ -125,12 +125,7 @@ const SHOWN: Record<Section, SectionShown> = {
         fallback={
           // With no network the Standing Entries are the Offline Copy's.
           <Show when={from.props.offlineZone}>
-            {(zone) => (
-              <>
-                <p class="settings-note">{from.needsNetwork()}</p>
-                <Standing timeZone={zone()} />
-              </>
-            )}
+            {(zone) => <Standing timeZone={zone()} note={from.needsNetwork()} />}
           </Show>
         }
       >

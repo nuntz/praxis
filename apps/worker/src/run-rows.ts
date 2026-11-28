@@ -165,45 +165,32 @@ export function forgetConversation(sql: SqlStorage): void {
   sql.exec(`UPDATE runs SET submission = NULL, from_record = NULL, told_through = NULL`);
 }
 
-/** A Run record's handles on the Conversation, as a clear finds them. */
-export type RunHandles = Pick<RunRow, "id" | "from_record" | "told_through">;
-
-/** The handles of the Runs answering the Messages, Briefs and Reviews a clear keeps, by their ids. */
-export function handlesOf(sql: SqlStorage, starts: string[]): RunHandles[] {
-  if (starts.length === 0) return [];
-  return sql
-    .exec<RunHandles>(
-      `SELECT id, from_record, told_through FROM runs
-       WHERE message IN (${starts.map(() => "?").join(", ")})`,
-      ...starts,
+/**
+ * Whether the Conversation shows a Message that came after `upTo`, by the Runs of the one kept
+ * now (a Run of one since cleared has no handle on it): a Message from the person as it was sent,
+ * which the first Run answering it is dated by, a Run trying it again coming later; or a Brief or
+ * a Review as it was taken, once it left a Message no newer one of its kind replaced.
+ */
+export function shownAfter(sql: SqlStorage, upTo: number): boolean {
+  const sent = sql
+    .exec(
+      `SELECT 1 FROM runs
+       WHERE message IS NOT NULL AND submission IS NOT NULL AND started_by = 'message'
+       GROUP BY message HAVING min(at) > ? LIMIT 1`,
+      upTo,
     )
     .toArray();
-}
-
-/**
- * Give the Runs whose Message a clear kept their handles back, once what it kept is placed again
- * (`placed`, each record's new id by its old): where the Agent was last told the log stood, which
- * the kept Messages were told, and the first record that may be the Run's own, as it now is. The
- * submission stays forgotten: the Run has ended, and the runtime numbers them afresh.
- */
-export function keepHandles(
-  sql: SqlStorage,
-  kept: RunHandles[],
-  placed: ReadonlyMap<number, number>,
-): void {
-  const order = [...placed].sort(([a], [b]) => a - b);
-  for (const run of kept) {
-    const from =
-      run.from_record === null
-        ? null
-        : (order.find(([old]) => old >= (run.from_record as number))?.[1] ?? null);
-    sql.exec(
-      `UPDATE runs SET from_record = ?, told_through = ? WHERE id = ?`,
-      from,
-      run.told_through,
-      run.id,
-    );
-  }
+  if (sent.length > 0) return true;
+  return (
+    sql
+      .exec(
+        `SELECT 1 FROM runs
+         WHERE submission IS NOT NULL AND started_by != 'message' AND raised = 1 AND replaced = 0
+           AND at > ? LIMIT 1`,
+        upTo,
+      )
+      .toArray().length > 0
+  );
 }
 
 /** Every Run that has not ended, oldest first: after a restart, each is waited on again. */

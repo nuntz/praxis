@@ -74,8 +74,7 @@ import type { StandingEntry } from "./standing-rows.ts";
 export const RUNTIME_TABLES = "pi_";
 
 /**
- * Drop all of the runtime's record of the Conversation at once (section 5.8), what a clear keeps
- * read beforehand and placed again after (`keptAfter`, `placeKept`): every one of its
+ * Drop all of the runtime's record of the Conversation at once (section 5.8): every one of its
  * tables, which a runtime opened afresh makes again, empty. Praxis never edits them, and they hold
  * nothing true that is not elsewhere (section 9.2).
  */
@@ -116,32 +115,6 @@ type MessageData = { id: string; words: string; spoken: boolean; at: number };
  */
 const CLOCK_KIND = "praxis.clock";
 type ClockData = { id: string; kind: ClockKind; at: number };
-
-/** Whether a record of the runtime's starts a Run: a person's Message, or the clock's. */
-function startsRun(record: EntryRecord): boolean {
-  return record.kind === MESSAGE_KIND || record.kind === CLOCK_KIND;
-}
-
-/**
- * Whether a record a clear keeps is placed again: a Message, the clock's start, and what the
- * Agent said and its calls' results. Not what the runtime keeps for itself, the tools it told the
- * model of, a compaction's summary or where the model's context starts.
- */
-function placedAgain(record: EntryRecord): boolean {
-  if (startsRun(record)) return true;
-  if (record.head !== undefined || record.edits !== undefined) return false;
-  const model = record.model ?? [];
-  return (
-    model.length > 0 &&
-    model.every((message) => message.role === "assistant" || message.role === "toolResult")
-  );
-}
-
-/** A record of the runtime's a clear keeps, by the id it had, as it is placed again. */
-export type KeptRecord = Pick<EntryRecord, "kind" | "model" | "data"> & { id: number };
-
-/** What a clear keeps: the records, and the ids of the Messages, Briefs and Reviews among them. */
-export type KeptConversation = { records: KeptRecord[]; starts: string[] };
 
 /** What each Agent call left beside its result for the screen: the result's code and its Effects. */
 type CallDetails = { result: RunCall["result"]; effects: Effect[] };
@@ -763,65 +736,6 @@ export class ContextAgent {
   }
 
   /** Every Run going or waiting has ended, and its record says how. */
-  /**
-   * What clearing the Conversation up to `upTo` keeps (section 5.8): every record of the runtime's
-   * from the first Message, Brief or Review that came after it, with what answered it, oldest
-   * first, and the ids of those Messages, Briefs and Reviews. What the model is told of the tools
-   * is told afresh by the runtime opened anew, and a compaction's summary speaks for what came
-   * before it, so neither is kept.
-   */
-  async keptAfter(storage: DurableObjectStorage, upTo: number): Promise<KeptConversation> {
-    const { root } = await this.open(storage);
-    const after: EntryRecord[] = [];
-    let max: number | undefined;
-    scan: for (;;) {
-      const page = await root.entries(
-        { order: "descending", ...(max === undefined ? {} : { maxEntryId: max as never }) },
-        SCAN_RECORDS,
-        undefined,
-        context,
-      );
-      for (const record of page.items) {
-        max = (record.id as number) - 1;
-        if (startsRun(record) && (record.data as MessageData | ClockData).at <= upTo) break scan;
-        after.push(record);
-      }
-      if (page.items.length < SCAN_RECORDS || max === undefined || max < 1) break;
-    }
-    const ascending = after.toReversed();
-    // What the Agent said before the first of them answered something dropped.
-    const first = ascending.findIndex(startsRun);
-    const records = first === -1 ? [] : ascending.slice(first).filter(placedAgain);
-    return {
-      records: records.map(({ id, kind, model, data }) => ({
-        id: id as number,
-        kind,
-        ...(model === undefined ? {} : { model }),
-        ...(data === undefined ? {} : { data }),
-      })),
-      starts: records.filter(startsRun).map((record) => (record.data as MessageData).id),
-    };
-  }
-
-  /**
-   * Place the records a clear kept in the Conversation opened afresh, in their order, as records
-   * written rather than Messages sent, so nothing answers them again. Answers with the id each now
-   * has, by the id it had.
-   */
-  async placeKept(
-    storage: DurableObjectStorage,
-    records: KeptRecord[],
-  ): Promise<Map<number, number>> {
-    const { root } = await this.open(storage);
-    const placed = new Map<number, number>();
-    for (const { id, ...entry } of records) {
-      const submission = await root.submit({ type: "write", entry }, context);
-      const settled = await submission.wait(context);
-      if (settled.entry !== undefined) placed.set(id, settled.entry as number);
-    }
-    return placed;
-  }
-
   async runsEnded(storage: DurableObjectStorage): Promise<void> {
     await this.open(storage);
     while (this.#settling.size > 0) await Promise.all(this.#settling);

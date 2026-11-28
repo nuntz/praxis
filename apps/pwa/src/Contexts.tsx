@@ -58,6 +58,13 @@ function retires(connections: number | undefined): string {
 }
 
 /**
+ * Whether a Context was just made from Contexts. Made, it becomes the current one, which draws
+ * Settings afresh over it, so the Contexts drawn then give the focus back to New Context…, as
+ * Cancel does.
+ */
+let madeHere = false;
+
+/**
  * The Deployment's Contexts, in its settings (section 8.6): each with its accent, the current one
  * said so, renamed, given another accent, retired or brought back here, and a new one made from a
  * form opened on demand. Retiring hides a Context and deletes nothing; a retired one can then be
@@ -90,6 +97,11 @@ export function Contexts(props: {
   const connected = connectionsByContext();
   const [making, setMaking] = createSignal(false);
   let newButton: HTMLButtonElement | undefined;
+  onMount(() => {
+    if (!madeHere) return;
+    madeHere = false;
+    newButton?.focus();
+  });
   const byId = (id: string) => props.contexts.find((context) => context.id === id);
   // A Context marked to retire is counted as retired, so the last one left is never marked too.
   const staying = () =>
@@ -138,7 +150,13 @@ export function Contexts(props: {
           changes={changes}
           onMade={(made) => {
             setMaking(false);
+            madeHere = true;
             props.onMade(made);
+            // Still here, when Settings was not drawn afresh for it.
+            if (madeHere) {
+              madeHere = false;
+              newButton?.focus();
+            }
           }}
           onCancel={() => {
             setMaking(false);

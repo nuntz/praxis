@@ -13,8 +13,17 @@ export function SettingsGroup<T>(props: {
   children?: JSX.Element;
   /** A part of its section on its own: a region, by this id, rather than a group. */
   region?: string;
-  /** What it lists: each item, the row drawn for it, an `<li>`, and what it says with none. */
-  list?: { each: readonly T[]; row: (item: T) => JSX.Element; empty: JSX.Element };
+  /**
+   * What it lists: each item, the row drawn for it, an `<li>`, and what it says with none. Where a
+   * line said in a row's place stands among the items (`SaidRow`), `none` says whether it holds
+   * none all the same, as the Trash does once its last item is restored.
+   */
+  list?: {
+    each: readonly T[];
+    row: (item: T) => JSX.Element;
+    empty: JSX.Element;
+    none?: boolean;
+  };
   /** What went wrong with a change made in it, under the box. */
   problem?: string | null | undefined;
   /** Under the box, after the problem. */
@@ -38,13 +47,13 @@ export function SettingsGroup<T>(props: {
             <h3 id={headingId} class="settings-rows-heading">
               {props.heading}
             </h3>
-            <Show
-              when={list().each.length > 0}
-              fallback={<p class="settings-note settings-none">{list().empty}</p>}
-            >
+            <Show when={list().each.length > 0}>
               <ul class="settings-box" aria-labelledby={headingId}>
                 <For each={list().each}>{(item) => list().row(item)}</For>
               </ul>
+            </Show>
+            <Show when={list().none ?? list().each.length === 0}>
+              <p class="settings-note settings-none">{list().empty}</p>
             </Show>
             <Problem message={props.problem} />
             {props.below}
@@ -64,6 +73,20 @@ export function SettingsGroup<T>(props: {
         )}
       </Match>
     </Switch>
+  );
+}
+
+/**
+ * What an act said in its row's place in a list, as a Device removed or an item of the Trash
+ * restored: a status, which takes the focus (`id`) and stays until the person's next act.
+ */
+export function SaidRow(props: { id: string; said: string }) {
+  return (
+    <li class="settings-said-row">
+      <p id={props.id} role="status" tabindex="-1">
+        {props.said}
+      </p>
+    </li>
   );
 }
 

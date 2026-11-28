@@ -1,9 +1,11 @@
 import type { RecordKind, RecordNamed, TrashItem } from "@praxis/domain";
 import { createMemo, createSignal, createUniqueId, For, onCleanup, onMount, Show } from "solid-js";
+import { Problem, SaidRow, SettingsGroup } from "./design/SettingRows.tsx";
 import { latestRead } from "./latest-read.ts";
-import { MarkedLine, marksSentOnLeaving } from "./leaving.tsx";
+import { focusOnMarking, MarkedLine, marksSentOnLeaving } from "./leaving.tsx";
 import { useLive } from "./live-context.ts";
-import { type CallTool, needsNetwork, unreachableMessage, useCallTool } from "./tools.ts";
+import { SettingsSection, sectionChanges } from "./SettingsSection.tsx";
+import { type CallTool, needsNetwork, useCallTool } from "./tools.ts";
 
 /** What each kind of record is called, in the glossary's words, one and many. */
 const KIND: Record<RecordKind, string> = {
@@ -61,7 +63,9 @@ export function Trash(props: {
   const [items, setItems] = createSignal<TrashItem[] | null>(null);
   /** The cursor to the earlier items, or null once every one is shown. */
   const [earlierFrom, setEarlierFrom] = createSignal<string | null>(null);
+  // What the last read met: in place of the list unread, and under it once read.
   const [problem, setProblem] = createSignal<string | null>(null);
+  const changes = sectionChanges();
   /** The record id of the item whose restore is out, if one is. */
   const [restoring, setRestoring] = createSignal<string | null>(null);
   /** While the Trash is to be emptied on leaving: the `deleted_at` of the newest item it showed. */
@@ -116,6 +120,7 @@ export function Trash(props: {
         read.push(...result.value.items);
         cursor = result.value.next_cursor;
       } while (!earlier && cursor !== null && read.length < shown.length);
+      setProblem(null);
       setItems(keptAsShown(shown, read));
       setEarlierFrom(cursor);
     } catch (error) {
@@ -153,32 +158,31 @@ export function Trash(props: {
     setSaid(null);
     setRestoring(item.record.id);
     try {
-      const result = await callTool("restore", { id: item.record.id });
-      if (!result.ok) return setProblem(result.error.message);
-      setProblem(null);
+      const restored = await changes.change("trash", () =>
+        callTool("restore", { id: item.record.id }),
+      );
+      if (restored === null) return;
       const shown = items() ?? [];
       const at = shown.findIndex((each) => each.record.id === item.record.id);
       marks.mark(item.record.id, false);
       setItems(shown.filter((each) => each.record.id !== item.record.id));
       setSaid({
-        said: restoredWords(result.value.record),
+        said: restoredWords(restored.record),
         before: shown[at + 1]?.record.id ?? null,
       });
       document.getElementById(saidId)?.focus();
       // A read still out answers from before the restore, so it is sent again.
       listed.changed();
       void listed.read(false);
-    } catch (error) {
-      setProblem(unreachableMessage(error));
     } finally {
       setRestoring(null);
     }
   }
 
   const saidId = createUniqueId();
-  const emptyingId = createUniqueId();
   let emptyButton: HTMLButtonElement | undefined;
-  let keepThemButton: HTMLButtonElement | undefined;
+  // Emptied, the focus goes to Keep them, which gives it back to Empty the Trash.
+  const keepThemRef = focusOnMarking(() => emptyingUpTo() !== null);
 
   /** The rows: each item, and what a restore said where the item it brought back stood. */
   const rows = createMemo(() => {
@@ -192,109 +196,85 @@ export function Trash(props: {
   });
 
   return (
-    <section id="trash" class="settings" aria-labelledby="trash-heading">
-      <h2 id="trash-heading" class="column-heading">
-        Trash
-      </h2>
-      <p class="settings-note">
-        What is deleted stays here 30 days, then it is removed for good. Restoring it brings back
-        everything that went with it.
-      </p>
-      <Show when={items()}>
+    <SettingsSection note="What is deleted stays here 30 days, then it is removed for good. Restoring it brings back everything that went with it.">
+      <Show when={items()} fallback={<Problem message={problem()} />}>
         {(listedItems) => (
           <>
             <Show when={emptyingUpTo() !== null && listedItems().length > 0}>
-              <p class="trash-emptying">
-                <span id={emptyingId}>
-                  Everything in the Trash now is removed for good when you leave the Trash.
-                </span>{" "}
-                <button
-                  ref={keepThemButton}
-                  type="button"
-                  class="quiet"
-                  aria-describedby={emptyingId}
-                  onClick={() => {
-                    setSaid(null);
-                    setEmptyingUpTo(null);
-                    marks.clear();
-                    emptyButton?.focus();
-                  }}
-                >
-                  Keep them
-                </button>
-              </p>
+              <MarkedLine
+                says="Everything in the Trash now is removed for good when you leave the Trash."
+                keep="Keep them"
+                keepRef={keepThemRef}
+                onKeep={() => {
+                  setSaid(null);
+                  setEmptyingUpTo(null);
+                  marks.clear();
+                  emptyButton?.focus();
+                }}
+              />
             </Show>
-            <Show when={rows().length > 0}>
-              <ul class="settings-box trash-items" aria-label="In the Trash">
-                <For each={rows()}>
-                  {(row) =>
-                    "said" in row ? (
-                      <li class="trash-said">
-                        <p id={saidId} role="status" tabindex="-1">
-                          {row.said}
-                        </p>
-                      </li>
-                    ) : (
-                      <TrashRow
-                        item={row}
-                        dates={dates}
-                        mark={markOf(row)}
-                        restoring={restoring() === row.record.id}
-                        onRestore={() => void restore(row)}
-                        onMark={(on) => setMark(row.record.id, on)}
-                      />
-                    )
-                  }
-                </For>
-              </ul>
-            </Show>
-            <Show
-              when={listedItems().length > 0}
-              fallback={<p class="settings-note">The Trash is empty.</p>}
-            >
-              <Show when={earlierFrom() !== null}>
-                <button
-                  type="button"
-                  class="quiet"
-                  onClick={() => {
-                    setSaid(null);
-                    void listed.read(true);
-                  }}
-                >
-                  Show earlier
-                </button>
-              </Show>
-              <p class="settings-note">{DOWNLOADED}</p>
-              <p class="settings-note">{QUOTED}</p>
-              <Show when={emptyingUpTo() === null}>
-                <button
-                  ref={emptyButton}
-                  type="button"
-                  class="quiet"
-                  onClick={() => {
-                    // Up to the newest delete shown: one made after it, unseen, stays.
-                    const newest = listedItems()[0];
-                    if (!newest) return;
-                    setSaid(null);
-                    setEmptyingUpTo(newest.deleted_at);
-                    keepThemButton?.focus();
-                  }}
-                >
-                  Empty the Trash
-                </button>
-              </Show>
-            </Show>
+            <SettingsGroup
+              heading="In the Trash"
+              problem={changes.problemAt("trash") ?? problem()}
+              list={{
+                each: rows(),
+                // Said once nothing is left, beside what a restore said where the last item stood.
+                none: listedItems().length === 0,
+                empty: "The Trash is empty.",
+                row: (row) =>
+                  "said" in row ? (
+                    <SaidRow id={saidId} said={row.said} />
+                  ) : (
+                    <TrashRow
+                      item={row}
+                      dates={dates}
+                      mark={markOf(row)}
+                      restoring={restoring() === row.record.id}
+                      onRestore={() => void restore(row)}
+                      onMark={(on) => setMark(row.record.id, on)}
+                    />
+                  ),
+              }}
+              below={
+                <Show when={listedItems().length > 0}>
+                  <Show when={earlierFrom() !== null}>
+                    <button
+                      type="button"
+                      class="quiet"
+                      onClick={() => {
+                        setSaid(null);
+                        void listed.read(true);
+                      }}
+                    >
+                      Show earlier
+                    </button>
+                  </Show>
+                  <p class="settings-note">
+                    {DOWNLOADED} {QUOTED}
+                  </p>
+                  <Show when={emptyingUpTo() === null}>
+                    <button
+                      ref={emptyButton}
+                      type="button"
+                      class="quiet"
+                      onClick={() => {
+                        // Up to the newest delete shown: one made after it, unseen, stays.
+                        const newest = listedItems()[0];
+                        if (!newest) return;
+                        setSaid(null);
+                        setEmptyingUpTo(newest.deleted_at);
+                      }}
+                    >
+                      Empty the Trash
+                    </button>
+                  </Show>
+                </Show>
+              }
+            />
           </>
         )}
       </Show>
-      <Show when={problem()}>
-        {(message) => (
-          <p class="problem" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -314,7 +294,8 @@ function TrashRow(props: {
 }) {
   const recordId = createUniqueId();
   let removeButton: HTMLButtonElement | undefined;
-  let keepButton: HTMLButtonElement | undefined;
+  // Marked by itself, the focus goes to its Keep it, which gives it back to Remove for good.
+  const keepRef = focusOnMarking(() => props.mark === "one");
   return (
     <li class="trash-item" data-testid="trash-item">
       <div class="trash-words">
@@ -352,10 +333,7 @@ function TrashRow(props: {
               type="button"
               class="quiet"
               aria-describedby={recordId}
-              onClick={() => {
-                props.onMark(true);
-                keepButton?.focus();
-              }}
+              onClick={() => props.onMark(true)}
             >
               Remove for good
             </button>
@@ -364,9 +342,7 @@ function TrashRow(props: {
           <MarkedLine
             says="Removed for good when you leave the Trash"
             of={recordId}
-            keepRef={(button) => {
-              keepButton = button;
-            }}
+            keepRef={keepRef}
             // Marked by emptying, only Keep them takes it back.
             onKeep={
               props.mark === "one"

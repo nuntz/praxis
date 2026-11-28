@@ -1,10 +1,10 @@
 import type { Accent } from "@praxis/domain";
 import Ellipsis from "lucide-solid/icons/ellipsis";
 import Pencil from "lucide-solid/icons/pencil";
-import { createEffect, createSignal, createUniqueId, type JSX, on, onMount, Show } from "solid-js";
+import { createSignal, createUniqueId, type JSX, onMount, Show } from "solid-js";
 import { type Action, Menu } from "./design/Menu.tsx";
 import { followRecord } from "./follow-record.ts";
-import { MarkedLine } from "./leaving.tsx";
+import { focusOnMarking, MarkedLine } from "./leaving.tsx";
 
 /**
  * A Context, a Connection or a Device in its list in Settings, drawn as a setting's row is: its
@@ -42,17 +42,8 @@ export function RecordRow(props: {
   const [renaming, setRenaming] = createSignal(false);
   const nameId = createUniqueId();
   let more: HTMLButtonElement | undefined;
-  let keep: HTMLButtonElement | undefined;
   // Marked, the focus goes to its Keep it, which gives it back to More.
-  createEffect(
-    on(
-      () => props.marked !== undefined,
-      (marked) => {
-        if (marked) keep?.focus();
-      },
-      { defer: true },
-    ),
-  );
+  const keepRef = focusOnMarking(() => props.marked !== undefined);
 
   function doneRenaming() {
     setRenaming(false);
@@ -118,9 +109,7 @@ export function RecordRow(props: {
                 marked().onKeep();
                 more?.focus();
               }}
-              keepRef={(button) => {
-                keep = button;
-              }}
+              keepRef={keepRef}
             />
           )}
         </Show>

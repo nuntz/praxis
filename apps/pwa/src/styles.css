@@ -576,8 +576,8 @@ button.on-a-call {
   list-style: none;
 }
 
-.settings-row,
-.settings-box > li {
+/* Each row of a group's box: a setting, or an item of what it lists. */
+.settings-box > * {
   padding: 14px 18px;
 }
 
@@ -589,8 +589,7 @@ button.on-a-call {
   min-height: 60px;
 }
 
-.settings-row + .settings-row,
-.settings-box > li + li {
+.settings-box > * + * {
   border-top: 1px solid var(--rule);
 }
 
@@ -746,7 +745,7 @@ input[type="checkbox"].switch:disabled {
   display: block;
 }
 
-/* What an act said where its row stood, as a Device removed. */
+/* What an act said where its row stood, as a Device removed or an item of the Trash restored. */
 .settings-said-row > p {
   margin: 0;
   overflow-wrap: anywhere;
@@ -913,20 +912,15 @@ button.accent-swatch[aria-pressed="true"] {
   min-width: 0;
 }
 
-.marked,
-.trash-emptying,
-.trash-said > p {
+/* What a marked act will do when its section is left, beside its Keep it (ADR 0027, ADR 0028). */
+.marked {
   margin: 0;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-/* What a marked act will do when its section is left, beside its Keep it (ADR 0027, ADR 0028). */
-.marked {
-  font-weight: 600;
-}
-
 /* Said to be disabled while a restore is out, so it keeps the focus, and dimmed as one is. */
-.trash-items button[aria-disabled="true"] {
+.trash-item button[aria-disabled="true"] {
   opacity: 0.5;
   cursor: default;
 }

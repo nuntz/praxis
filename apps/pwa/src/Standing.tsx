@@ -1,6 +1,6 @@
 import { type Entry, STANDING_CEILING, standingSize, type ToolResult } from "@praxis/domain";
 import { imageLoadingIn } from "@praxis/domain/markdown";
-import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createSignal, type JSX, onCleanup, onMount, Show } from "solid-js";
 import { Problem, SettingsGroup } from "./design/SettingRows.tsx";
 import { latestRead } from "./latest-read.ts";
 import { useLive } from "./live-context.ts";
@@ -48,7 +48,11 @@ export async function standingListed(callTool: CallTool): Promise<string | null>
  * of the ceiling they take. An Entry is marked standing from the Journal and unmarked from either.
  * It is read again on every change, since an edit, a delete or a restore can change it.
  */
-export function Standing(props: { timeZone: string }) {
+export function Standing(props: {
+  timeZone: string;
+  /** The section's note in place of its own, as the Offline Copy's list says it needs the network. */
+  note?: JSX.Element;
+}) {
   const callTool = useCallTool();
   const contextId = useContextId();
   const live = useLive();
@@ -96,7 +100,12 @@ export function Standing(props: { timeZone: string }) {
   }
 
   return (
-    <SettingsSection note="The Agent is given these at the start of every Run here and keeps honouring them, the newer where two disagree. Mark an Entry standing from the Journal.">
+    <SettingsSection
+      note={
+        props.note ??
+        "The Agent is given these at the start of every Run here and keeps honouring them, the newer where two disagree. Mark an Entry standing from the Journal."
+      }
+    >
       <Show when={!problem()} fallback={<Problem message={problem()} />}>
         <Show when={entries()}>
           {(listed) => (

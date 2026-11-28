@@ -1,6 +1,6 @@
 import { type Device, failure, type PushSubscription } from "@praxis/domain";
 import { createMemo, createSignal, createUniqueId, onMount, Show } from "solid-js";
-import { Problem, SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
+import { Problem, SaidRow, SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import {
   canNotify,
   deviceTimeZone,
@@ -309,11 +309,7 @@ export function Devices() {
                     )}
                   </Show>
                 ) : (
-                  <li class="settings-said-row">
-                    <p id={saidId} role="status" tabindex="-1">
-                      {row.said}
-                    </p>
-                  </li>
+                  <SaidRow id={saidId} said={row.said} />
                 ),
             }}
             below={

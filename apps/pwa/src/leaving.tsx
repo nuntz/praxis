@@ -1,13 +1,13 @@
 import type { ToolResult } from "@praxis/domain";
-import { createSignal, createUniqueId, onCleanup, Show } from "solid-js";
+import { createEffect, createSignal, createUniqueId, on, onCleanup, Show } from "solid-js";
 import { SignInLapsed, Unreachable } from "./tools.ts";
 
 /** What the screen says when what was marked could not be sent as its section was left. */
 export type Unsent = {
   /** None of it reached Praxis. */
   nothing: string;
-  /** Some of it did not. */
-  notAll: string;
+  /** Some of it did not, where more than one act can be marked. */
+  notAll?: string;
 };
 
 /** One act marked, as it is sent: the tool's call. */
@@ -35,6 +35,8 @@ export function marksSentOnLeaving<K>(options: {
   return {
     /** Whether `key` is marked. */
     has: (key: K) => marked().has(key),
+    /** Whether anything is marked. */
+    any: () => marked().size > 0,
     /** Mark `key`, or take its mark off. */
     mark(key: K, on: boolean) {
       setMarked((was) => {
@@ -63,7 +65,9 @@ async function sendMarked(
   const unreached = sent.filter(
     (each) => each.status === "rejected" && each.reason instanceof Unreachable,
   ).length;
-  if (unreached > 0) onProblem(unreached === sent.length ? unsent.nothing : unsent.notAll);
+  if (unreached > 0) {
+    onProblem(unreached === sent.length ? unsent.nothing : (unsent.notAll ?? unsent.nothing));
+  }
   for (const each of sent) {
     if (each.status === "fulfilled") {
       if (!each.value.ok && each.value.error.code !== "not_found") {
@@ -77,17 +81,41 @@ async function sendMarked(
 }
 
 /**
+ * Marking puts the focus on Keep it (ADR 0028): the `keepRef` to give the `MarkedLine` drawn while
+ * `marked` holds, which takes the focus as `marked` comes to hold, once the line is drawn, and not
+ * when a line is drawn marked already, as a row read again is.
+ */
+export function focusOnMarking(marked: () => boolean): (button: HTMLButtonElement) => void {
+  let keep: HTMLButtonElement | undefined;
+  createEffect(
+    on(
+      marked,
+      (now) => {
+        if (now) keep?.focus();
+      },
+      { defer: true },
+    ),
+  );
+  return (button) => {
+    keep = button;
+  };
+}
+
+/**
  * What a marked act will do and when, as its row reads it, beside a Keep it that takes the mark
- * off. Marking puts the focus on Keep it (`keepRef`), and Keep it gives it back to what marked it.
- * One marked only with others, as by emptying the Trash, has no Keep it of its own.
+ * off, which `focusOnMarking` gives the focus as it is marked, and which gives it back to what
+ * marked it. One marked only with others, as by emptying the Trash, has no Keep it of its own; the
+ * line for all of them keeps them (`keep`).
  */
 export function MarkedLine(props: {
   says: string;
   /** The id of what names the thing marked, which Keep it is described by too. */
-  of: string;
+  of?: string;
   /** Take the mark off, the focus back where it was marked from. */
   onKeep?: (() => void) | undefined;
   keepRef?: (button: HTMLButtonElement) => void;
+  /** What Keep it says: "Keep them", for the line of all that is marked. */
+  keep?: string;
 }) {
   const saysId = createUniqueId();
   return (
@@ -101,10 +129,10 @@ export function MarkedLine(props: {
               ref={(button) => props.keepRef?.(button)}
               type="button"
               class="quiet"
-              aria-describedby={`${saysId} ${props.of}`}
+              aria-describedby={props.of === undefined ? saysId : `${saysId} ${props.of}`}
               onClick={() => keep()()}
             >
-              Keep it
+              {props.keep ?? "Keep it"}
             </button>
           </>
         )}

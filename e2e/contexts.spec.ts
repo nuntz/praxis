@@ -123,6 +123,8 @@ test("the Deployment's settings list the Contexts with their accents, and make, 
   await expect(row(side).getByText("Plum · Current", { exact: true })).toBeVisible();
   await expect(row(work.name).getByText("Rust", { exact: true })).toBeVisible();
   await expect(form).toHaveCount(0);
+  // Made, the focus goes back on what opened the form, as Cancel puts it.
+  await expect(contexts.getByRole("button", { name: "New Context…", exact: true })).toBeFocused();
 
   // Another accent, from round swatches opened in place, the one it has said in words and
   // pressed; shown at once in the switcher.

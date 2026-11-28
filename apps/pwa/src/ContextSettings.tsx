@@ -11,33 +11,30 @@ import { createSignal, createUniqueId, For, onCleanup, onMount, Show } from "sol
 import { SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import { deviceTimeZone } from "./device.ts";
 import { latestRead } from "./latest-read.ts";
-import { MarkedLine, marksSentOnLeaving } from "./leaving.tsx";
+import { focusOnMarking, MarkedLine, marksSentOnLeaving } from "./leaving.tsx";
 import { useLive } from "./live-context.ts";
 import { SettingsLink } from "./SettingsLink.tsx";
-import { SettingsSection, sectionChanges } from "./SettingsSection.tsx";
+import { type SectionChanges, SettingsSection, sectionChanges } from "./SettingsSection.tsx";
 import { SettlingField } from "./SettlingField.tsx";
 import { TimeZonePicker } from "./TimeZonePicker.tsx";
 import { useCallTool } from "./tools.ts";
 
 /**
- * A change to the current Context's settings as it is sent, through the section's queue
- * (`sectionChanges`), showing the settings as it answered. Every tool that changes them answers as
- * `set_time_zone` does. Says whether it went through.
+ * A change to the current Context's settings, sent through the section's queue, then shown as the
+ * settings it answered with: every tool that changes them answers as `set_time_zone` does. Says
+ * whether it went through.
  */
-function settingsChange(onChanged: (settings: Settings) => void) {
-  const callTool = useCallTool();
-  const changes = sectionChanges();
-  async function change(
+function changeSettings(changes: SectionChanges, onChanged: (settings: Settings) => void) {
+  return async (
     at: string,
     send: () => Promise<ToolResult<{ record: Settings }>>,
     options?: { holds: boolean },
-  ) {
+  ) => {
     const changed = await changes.change(at, send, options);
     if (changed === null) return false;
     onChanged(changed.record);
     return true;
-  }
-  return { callTool, sending: changes.sending, problemAt: changes.problemAt, change };
+  };
 }
 
 /**
@@ -49,7 +46,10 @@ export function GeneralSettings(props: {
   settings: Settings;
   onChanged: (settings: Settings) => void;
 }) {
-  const { callTool, sending, problemAt, change } = settingsChange(props.onChanged);
+  const callTool = useCallTool();
+  const changes = sectionChanges();
+  const { sending, problemAt } = changes;
+  const change = changeSettings(changes, props.onChanged);
   const device = deviceTimeZone();
   // Named as this browser names it, so one zone known by two names is not told apart.
   const differs = () => namedZone(props.settings.time_zone) !== device;
@@ -107,7 +107,10 @@ export function BriefAndReview(props: {
   settings: Settings;
   onChanged: (settings: Settings) => void;
 }) {
-  const { callTool, sending, problemAt, change } = settingsChange(props.onChanged);
+  const callTool = useCallTool();
+  const changes = sectionChanges();
+  const { sending, problemAt } = changes;
+  const change = changeSettings(changes, props.onChanged);
 
   // The time each comes at, kept while it is off so switching it on brings it back.
   const [briefTime, setBriefTime] = createSignal(
@@ -249,10 +252,17 @@ export function BriefAndReview(props: {
 const CLEARED_ON_LEAVING = "Cleared when you leave Conversation and search.";
 
 /**
+ * What a screen that has read no Message clears up to, so the Device's clock plays no part: before
+ * any Message, as one that cannot be opened, which shows none, is cleared (section 5.8).
+ */
+const NONE_READ = new Date(0).toISOString();
+
+/**
  * Conversation and search, in Settings: the rare, heavy actions on the current Context, clearing
  * its Conversation and rebuilding its search index (section 8.6). Clearing cannot be put back, so
- * Clear only marks it, and the Conversation is cleared as the section is left (ADR 0028), up to
- * the newest Message the screen had read when Clear was tapped: what came after stays.
+ * Clear only marks it, and the Conversation is cleared as the section is left (ADR 0028), unless a
+ * Message came after the newest the screen had read when Clear was tapped: then nothing is, and
+ * the screen's notice says so.
  */
 export function ConversationAndSearch(props: {
   contextName: string;
@@ -262,28 +272,17 @@ export function ConversationAndSearch(props: {
   const callTool = useCallTool();
   const { change, sending, problemAt } = sectionChanges();
   const newest = newestMessage();
-  // Marked by the time of the newest Message read as Clear was tapped.
+  // Marked by the time of the newest Message read as Clear was tapped: one at most.
   const clearing = marksSentOnLeaving<string>({
     sends: (marked) =>
       [...marked].map((upTo) => () => callTool("clear_conversation", { up_to: upTo })),
-    unsent: {
-      nothing: "Praxis could not be reached: the Conversation was not cleared.",
-      notAll: "Praxis could not be reached: the Conversation was not cleared.",
-    },
+    unsent: { nothing: "Praxis could not be reached: the Conversation was not cleared." },
     onProblem: (message) => props.onProblem(message),
   });
-  const [marked, setMarked] = createSignal<string | null>(null);
   const everyMessage = createUniqueId();
   let clearButton: HTMLButtonElement | undefined;
-  let keepButton: HTMLButtonElement | undefined;
-
-  function mark(upTo: string | null) {
-    const was = marked();
-    if (was !== null) clearing.mark(was, false);
-    if (upTo !== null) clearing.mark(upTo, true);
-    setMarked(upTo);
-    (upTo === null ? clearButton : keepButton)?.focus();
-  }
+  // Marked, the focus goes to its Keep it, which gives it back to Clear.
+  const keepRef = focusOnMarking(() => clearing.any());
 
   // What the last rebuild of the meaning index said, until the screen is left.
   const [rebuilding, setRebuilding] = createSignal<string | null>(null);
@@ -310,18 +309,19 @@ export function ConversationAndSearch(props: {
       <SettingsGroup heading="Conversation">
         <SettingRow
           title={<span id={everyMessage}>Every Message</span>}
-          description="Clearing drops every Message, and what the Agent quoted of records since removed for good with them. The Journal, its changes and the Run records stay as they are. It cannot be undone."
+          description="Clearing drops every Message, and what the Agent quoted of records since removed for good with them, unless one comes after you tap Clear: then nothing is cleared, so you see it first. The Journal, its changes and the Run records stay as they are. It cannot be undone."
           control={() => (
             <Show
-              when={marked() === null}
+              when={!clearing.any()}
               fallback={
                 <MarkedLine
                   says={CLEARED_ON_LEAVING}
                   of={everyMessage}
-                  onKeep={() => mark(null)}
-                  keepRef={(button) => {
-                    keepButton = button;
+                  onKeep={() => {
+                    clearing.clear();
+                    clearButton?.focus();
                   }}
+                  keepRef={keepRef}
                 />
               }
             >
@@ -331,7 +331,10 @@ export function ConversationAndSearch(props: {
                 class="quiet"
                 // Nothing to clear until a Message is read: none yet, or none read.
                 disabled={newest.at() === null}
-                onClick={() => mark(newest.at())}
+                onClick={() => {
+                  const upTo = newest.at();
+                  if (upTo !== null) clearing.mark(upTo, true);
+                }}
               >
                 Clear the Conversation
               </button>
@@ -368,7 +371,8 @@ export function ConversationAndSearch(props: {
  * The time of the newest Message the screen has read in the Conversation, as `clear_conversation`
  * takes it, so the Device's clock plays no part: a Message from the person when it was sent, a
  * Brief or a Review when it was taken. Read as the section opens and followed down the live
- * channel; null with none read.
+ * channel; null with none read. A Conversation that cannot be opened shows none, and is cleared
+ * all the same, which is how it is mended (section 11): up to before any Message (`NONE_READ`).
  */
 function newestMessage() {
   const callTool = useCallTool();
@@ -386,7 +390,8 @@ function newestMessage() {
     try {
       const page = await callTool("list_messages", {});
       if (!current() || !page.ok) return;
-      setAt(null);
+      // One that cannot be opened shows none, and is cleared whole (section 11).
+      setAt(page.value.agent === "unavailable" ? NONE_READ : null);
       take(page.value.items);
     } catch {
       // Unread, there is nothing to clear up to.

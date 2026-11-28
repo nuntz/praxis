@@ -621,7 +621,7 @@ export const tools = {
     destructive: true,
     changesNoRecord: "conversation",
     description:
-      "Clear this Context's Conversation up to up_to: every Message, Brief and Review that came at or before it, with what the Agent heard, said and called in answer, is dropped at once, and the next Message starts it afresh. up_to is the time of the newest Message the person was shown, as list_messages gives it: a Message, a Brief or a Review that came after it stays, so clearing never drops what the person did not see. The Journal, the change log and the Run records stay as they were; a Run Transcript can no longer be saved of a Run it dropped. It is refused while a Run is going. It cannot be undone.",
+      "Clear this Context's Conversation: every Message, what the Agent heard, said and called, is dropped at once, and the next Message starts it afresh. up_to is the time of the newest Message the person was shown, as list_messages gives it (a person's Message as sent, a Brief or a Review as taken): it is refused, and nothing is dropped, when a Message came after it, so clearing never drops what the person did not see. A Conversation that cannot be opened shows no Message, and is dropped whole whatever up_to says. The Journal, the change log and the Run records stay as they were; a Run Transcript can no longer be saved of a Run before it. It is refused while a Run is going. It cannot be undone.",
     input: writeInput({ up_to: z.iso.datetime() }),
     offered: toHandOnly,
   },

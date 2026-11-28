@@ -228,6 +228,17 @@ test("opening a section puts the focus on its heading, and on a phone going back
     await expect(page).toHaveURL("/settings/spend");
     await expect(heading("Spend")).toBeFocused();
   }
+
+  // The Trash and the Changes open as every other section does.
+  for (const name of ["Trash", "Changes"]) {
+    if (onPhone(testInfo)) await link(name).tap();
+    else await link(name).click();
+    await expect(heading(name)).toBeFocused();
+    if (onPhone(testInfo)) {
+      await toList.tap();
+      await expect(link(name)).toBeFocused();
+    }
+  }
 });
 
 test("a change that cannot be made is said once, under the box of the group it came from, and goes once one is", async ({

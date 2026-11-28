@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { WebSocketRoute } from "@playwright/test";
+import type { MessagesPage } from "@praxis/domain";
 import {
   callContextTool,
   closeSettings,
@@ -231,6 +232,76 @@ test("the person saves a Run's transcript, then clears the Conversation from the
   await expect(
     conversation.getByText(`Nothing said to the Agent in Cleared ${tag} yet.`, { exact: true }),
   ).toBeVisible();
+});
+
+test("a Clear sent as the section is left, once a Message came after the newest the screen had read, clears nothing and says so", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const context = await makeContext(page, {
+    name: `Kept ${tag}`,
+    time_zone: "UTC",
+    accent: "moss",
+  });
+  await callContextTool(page, context.id, "send_message", { words: `Say: Read ${tag}` });
+  await lastShown(page, context.id);
+  await page.goto("/");
+  const settings = await openSettings(page, "Conversation and search");
+  const clear = settings.getByRole("button", { name: "Clear the Conversation", exact: true });
+  await expect(clear).toBeEnabled();
+  await clear.click();
+
+  // A Message from another Device, after the tap, answered before the section is left.
+  await callContextTool(page, context.id, "send_message", { words: `Say: Since ${tag}` });
+  await expect
+    .poll(async () => {
+      const { items } = await callContextTool(page, context.id, "list_runs", {});
+      return items.filter((run: { ended: string | null }) => run.ended !== null).length;
+    })
+    .toBe(2);
+  const cleared = page.waitForResponse(/\/tools\/clear_conversation$/);
+  await closeSettings(page);
+
+  expect(await (await cleared).json()).toMatchObject({ ok: false, error: { code: "refused" } });
+  await expect(page.getByRole("alert")).toHaveText(
+    "A Message came after the newest one you had seen, so nothing was cleared: look at it, then clear again.",
+  );
+  const { items } = await callContextTool(page, context.id, "list_messages", {});
+  expect(items).toHaveLength(4);
+});
+
+test("a Conversation that cannot be opened can still be cleared, which mends it", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}-${crypto.randomUUID()}`;
+  const context = await makeContext(page, {
+    name: `Mended ${tag}`,
+    time_zone: "UTC",
+    accent: "plum",
+  });
+  await lastShown(page, context.id);
+  // The journeys' Worker opens every Conversation, so the screen is told this one cannot be:
+  // `upgrade.test.ts` clears one that cannot, for real.
+  await page.route(/\/tools\/list_messages$/, async (route) => {
+    const answer = await route.fetch();
+    const { value } = (await answer.json()) as { value: MessagesPage };
+    await route.fulfill({
+      response: answer,
+      json: { ok: true, value: { ...value, items: [], next_cursor: null, agent: "unavailable" } },
+    });
+  });
+  await page.goto("/");
+  const settings = await openSettings(page, "Conversation and search");
+  const clear = settings.getByRole("button", { name: "Clear the Conversation", exact: true });
+  await expect(clear).toBeEnabled();
+  await clear.click();
+  const clearing = page.waitForRequest(/\/tools\/clear_conversation$/);
+  const cleared = page.waitForResponse(/\/tools\/clear_conversation$/);
+  await closeSettings(page);
+
+  // It shows no Message, so the screen read none: up to before any, with no clock of its own.
+  expect((await clearing).postDataJSON()).toMatchObject({ up_to: "1970-01-01T00:00:00.000Z" });
+  expect((await (await cleared).json()).ok).toBe(true);
 });
 
 test("between a Message sent and its answer, the Agent is said to be at work where the answer will appear", async ({
