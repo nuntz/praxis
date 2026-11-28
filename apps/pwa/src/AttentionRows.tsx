@@ -1,4 +1,4 @@
-import { type Day, dayIn, type Project, type Task, utcMidnight } from "@praxis/domain";
+import { dayIn, type Project, type Task } from "@praxis/domain";
 import ChevronRight from "lucide-solid/icons/chevron-right";
 import Folder from "lucide-solid/icons/folder";
 import Hourglass from "lucide-solid/icons/hourglass";
@@ -6,6 +6,7 @@ import Repeat from "lucide-solid/icons/repeat";
 import UserRound from "lucide-solid/icons/user-round";
 import { createEffect, createUniqueId, type JSX, on, onCleanup, onMount, Show } from "solid-js";
 import { todayIn } from "./days.tsx";
+import { shortDay } from "./short-day.ts";
 import { createFinishing, DueMark, type OnFinished, TaskMarks } from "./TaskItem.tsx";
 
 /**
@@ -13,17 +14,6 @@ import { createFinishing, DueMark, type OnFinished, TaskMarks } from "./TaskItem
  * matters most at its end, and the rest as small signs. Every mark is in its description, for a
  * screen reader. The row opens the record's page, where everything it has can be changed.
  */
-
-/** A day short, as a row says it: the year only when it is not this one. */
-export function shortDay(day: Day, today: Day): string {
-  const sameYear = day.slice(0, 4) === today.slice(0, 4);
-  return new Intl.DateTimeFormat(undefined, {
-    day: "numeric",
-    month: "short",
-    year: sameYear ? undefined : "numeric",
-    timeZone: "UTC",
-  }).format(utcMidnight(day));
-}
 
 /** The mark a row leads with, and which state it says, so the signs leave that one out. */
 type Lead = {

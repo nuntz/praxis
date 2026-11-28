@@ -119,6 +119,51 @@ test("an Entry or a Task opened from search, older than the screen holds, is bro
   await expect(task).toBeInViewport();
 });
 
+test("an excerpt, a name in a chip and a picker take their own direction, so Arabic is laid out right to left", async ({
+  page,
+}, testInfo) => {
+  const tag = `${testInfo.project.name}${crypto.randomUUID().replaceAll("-", "")}`;
+  const context = await contextOfOwn(page, testInfo, "Direction");
+  const call = (tool: string, input: unknown) => callContextTool(page, context.id, tool, input);
+  const arabic = `اشتريت مصباحًا جديدًا للحديقة ${tag}.`;
+  const name = `حديقة المنزل ${tag}`;
+  await call("record_entry", { words: arabic });
+  await call("create_project", { name });
+
+  await page.goto("/");
+  const { journal } = await openJournal(page, testInfo);
+  const search = await enterSearch(page);
+  await search.fill(tag);
+  const direction = (of: import("@playwright/test").Locator) =>
+    of.evaluate((element) => getComputedStyle(element).direction);
+  const entries = journal.getByRole("region", { name: /^Entries / });
+  const excerpt = entries.getByTestId("search-excerpt").filter({ hasText: "مصباح" });
+  await expect(excerpt).toHaveText(arabic);
+  expect(await direction(excerpt)).toBe("rtl");
+  const project = journal
+    .getByRole("region", { name: /^Projects / })
+    .getByTestId("search-excerpt")
+    .filter({ hasText: "حديقة المنزل" });
+  expect(await direction(project)).toBe("rtl");
+  // Words of the screen's own keep its direction.
+  const status = journal.getByRole("region", { name: "Found" }).getByRole("status");
+  await expect(status).toHaveText("Found 2");
+  expect(await direction(status)).toBe("ltr");
+
+  // Set from its picker, the Project's chip says its name right to left, and the picker did too.
+  await search.fill("");
+  const chips = journal.getByRole("group", { name: "Narrow the search" });
+  await chips.getByRole("button", { name: "Project", exact: true }).click();
+  const picker = journal.getByRole("dialog", { name: "Project" });
+  await picker.getByRole("combobox", { name: "Find a Project" }).fill(tag);
+  const choice = picker.getByRole("option", { name });
+  await expect(choice).toBeVisible();
+  expect(await direction(choice.locator(".choice-name"))).toBe("rtl");
+  await page.keyboard.press("Enter");
+  const chip = chips.getByRole("button", { name: `Project: ${name}, remove` });
+  expect(await direction(chip.locator(".chip-words"))).toBe("rtl");
+});
+
 test("the person finds an Entry by what it means, though it shares no word with the search", async ({
   page,
 }, testInfo) => {
@@ -414,7 +459,8 @@ test("a Task found says where it stands as Attention does, is finished and reope
     [titles.finished, "Finished"],
     [titles.recurring, "Due Jan 5, 2099 · Recurring"],
     [titles.waiting, `Waiting on ${titles.open}`],
-    [titles.delegated, "Delegated to Alice Moreau since \\w+ \\d+, \\d{4}"],
+    // Delegated today, its day is said without this year's number, as Attention says it.
+    [titles.delegated, "Delegated to Alice Moreau since \\w+ \\d+"],
     [titles.deferred, "Deferred until Jan 10, 2099"],
     [titles.overdue, "Due Jan 10, 2025, Overdue"],
     [titles.dropped, "Dropped"],

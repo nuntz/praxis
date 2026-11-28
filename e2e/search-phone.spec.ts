@@ -242,6 +242,8 @@ test("on a desktop, search stays in the Journal column with the composer below w
   // A press anywhere on the field's pill puts the caret in it.
   await pressFieldEnd(page, field);
   await expect(field).toBeFocused();
+  // The field is 44px high, as on a phone.
+  expect(await heightOf(field.locator(".."))).toBe(44);
   await journal.getByRole("heading", { name: "Journal", exact: true }).click();
   await expect(field).not.toBeFocused();
   // Its field is a pill in the Journal's header, beside its title, and its chips wait until the

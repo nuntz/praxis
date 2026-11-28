@@ -2524,13 +2524,10 @@ button.call-control {
 
   .journal-search .search-row {
     position: absolute;
-    top: calc(var(--space-5) + 1px);
+    /* Its 44px centred on the title's 40px line. */
+    top: calc(var(--space-5) - 2px);
     right: var(--space-5);
     width: min(260px, calc(100% - 150px));
-  }
-
-  .journal-search .search-field {
-    height: 38px;
   }
 
   .journal-search .search-field input {
@@ -2625,6 +2622,11 @@ button.search-clear {
   font: var(--type-caption);
   letter-spacing: var(--tracking-caption);
   text-align: center;
+}
+
+/* The `/` that reaches the field, said only while the field does not have the focus. */
+.search-field:focus-within .search-key {
+  display: none;
 }
 
 /* What the empty field searches, and offline why it cannot be used, under the chips. */

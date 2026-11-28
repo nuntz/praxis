@@ -141,11 +141,15 @@ test("the focused empty field says what search covers, and on a desktop / puts t
 
   if (onPhone(testInfo)) return;
   // `/` from anywhere but a field puts the cursor in the search field, and types nothing there.
+  // Its keycap shows only while the field does not have the focus.
   await journal.getByRole("heading", { name: "Journal" }).click();
+  const keycap = field.locator("..").locator(".search-key");
+  await expect(keycap).toBeVisible();
   await page.keyboard.press("/");
   await expect(field).toBeFocused();
   await expect(field).toHaveValue("");
   await expect(line).toBeVisible();
+  await expect(keycap).toBeHidden();
 
   // In the composer, it stays a `/`.
   await composer.fill("either");

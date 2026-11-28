@@ -217,6 +217,7 @@ export function ChoicePicker(props: {
       <input
         type="text"
         class="choice-field"
+        dir="auto"
         role="combobox"
         aria-label={props.fieldLabel}
         placeholder={props.placeholder}
@@ -267,7 +268,9 @@ function ChoiceLabel(props: { choice: Choice }) {
   if (to.kind === "new_project") return <>New Project “{name}”</>;
   return (
     <>
-      <span class="choice-name">{name}</span>
+      <span class="choice-name" dir="auto">
+        {name}
+      </span>
       <Show when={detail}>{(said) => <span class="choice-detail"> · {said()}</span>}</Show>
     </>
   );

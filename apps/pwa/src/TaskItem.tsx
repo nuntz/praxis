@@ -1,8 +1,16 @@
-import { type Day, type Task, type TaskDates, utcMidnight, waitedOnName } from "@praxis/domain";
+import {
+  type Day,
+  dayIn,
+  type Task,
+  type TaskDates,
+  utcMidnight,
+  waitedOnName,
+} from "@praxis/domain";
 import Calendar from "lucide-solid/icons/calendar";
-import { createMemo, createSignal, type JSX, Show } from "solid-js";
+import { createSignal, type JSX, Show } from "solid-js";
 import { todayIn } from "./days.tsx";
 import { SettlingField } from "./SettlingField.tsx";
+import { shortDay } from "./short-day.ts";
 import { unreachableMessage, useCallTool, useContextId } from "./tools.ts";
 import { discardUnsent, finishTask, unsentFinishOf } from "./unsent.ts";
 
@@ -176,14 +184,16 @@ export function createFinishing(props: {
  */
 export function TaskMarks(props: {
   task: Pick<Task, "id" | "state" | "due_date" | "recurrence">;
-  /** The Context's time zone, in which the day it was Delegated is told. */
+  /**
+   * The Context's time zone, in which the day it was Delegated is told, with a year only for another
+   * year than today's there, as Attention's rows say it.
+   */
   timeZone: string;
   mark?: JSX.Element;
 }) {
   const open = () => (props.task.state.is === "open" ? props.task.state : null);
-  const sinceFormat = createMemo(
-    () => new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: props.timeZone }),
-  );
+  const since = (at: string) =>
+    shortDay(dayIn(Date.parse(at), props.timeZone), todayIn(props.timeZone));
   return (
     <>
       <Show when={unsentFinishOf(props.task.id)}>
@@ -214,8 +224,7 @@ export function TaskMarks(props: {
       <Show when={open()?.delegated}>
         {(delegated) => (
           <span class="task-mark">
-            Delegated to {delegated().to.name} since{" "}
-            {sinceFormat().format(new Date(delegated().since))}
+            Delegated to {delegated().to.name} since {since(delegated().since)}
           </span>
         )}
       </Show>

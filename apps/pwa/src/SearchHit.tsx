@@ -1,6 +1,6 @@
 import type { Excerpt, ProjectState, SearchHit, Task } from "@praxis/domain";
 import Check from "lucide-solid/icons/check";
-import { Index, Show } from "solid-js";
+import { For, Index, Show } from "solid-js";
 import { authorName } from "./authors.ts";
 import { recordAnchor } from "./Journal.tsx";
 import { createFinishing, DueMark, TaskMarks } from "./TaskItem.tsx";
@@ -240,15 +240,21 @@ function ExcerptShown(props: { excerpt: Excerpt }) {
     return cut;
   };
   return (
-    <span class="search-excerpt" data-testid="search-excerpt">
-      {/* Each part follows its place as the excerpt changes, from first words to marked words. */}
-      <Index each={parts()}>
-        {(part) => (
-          <Show when={part().matched} fallback={part().text}>
-            <mark>{part().text}</mark>
-          </Show>
-        )}
-      </Index>
-    </span>
+    // Typed by the person, it takes its own direction, as an Arabic sentence ends at its left: taken
+    // anew as its words change, since a browser keeps the direction it first found.
+    <For each={[props.excerpt.text]}>
+      {() => (
+        <span class="search-excerpt" data-testid="search-excerpt" dir="auto">
+          {/* Each part follows its place as the excerpt changes, from first words to marked words. */}
+          <Index each={parts()}>
+            {(part) => (
+              <Show when={part().matched} fallback={part().text}>
+                <mark>{part().text}</mark>
+              </Show>
+            )}
+          </Index>
+        </span>
+      )}
+    </For>
   );
 }

@@ -424,6 +424,7 @@ The one motion is a page going one level deeper, beside a press fading back as i
 - **Do** say every state in words, beside any colour it takes.
 - **Do** keep text fields at 16px or larger at any width wherever a finger can reach them, a touch screen beside a trackpad too, so the page does not zoom when one is tapped.
 - **Do** put every `:hover` look behind `(hover: hover) and (pointer: fine)`, so a tap on a touch screen leaves nothing hovered.
+- **Do** let text the person typed take its own direction (`dir="auto"`), so a sentence in Arabic reads right to left and ends at its left: in search, an excerpt, a hit's title or name, and a name in a chip or a picker. The screen's own words keep the screen's direction.
 
 ### Don't:
 - **Don't** use the accent on anything but where the person is about to write or decide (The One Accent Rule). A secondary button is quiet, in `ink`.

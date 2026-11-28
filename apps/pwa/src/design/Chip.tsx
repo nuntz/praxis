@@ -94,7 +94,14 @@ export function Chip(props: {
         <Show when={props.icon}>
           {(icon) => <Dynamic component={icon()} class="chip-icon" size={14} aria-hidden="true" />}
         </Show>
-        <span class="chip-words">{props.held?.shown ?? props.label}</span>
+        {/* Its own direction is taken anew for each thing it says: a browser keeps the first. */}
+        <Show when={props.held?.shown ?? props.label} keyed>
+          {(words) => (
+            <span class="chip-words" dir="auto">
+              {words}
+            </span>
+          )}
+        </Show>
         <Dynamic
           component={props.held === null ? ChevronDown : X}
           class="chip-end"

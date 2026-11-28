@@ -432,6 +432,7 @@ export function createSearch(props: {
                 ref={field}
                 id="journal-search-words"
                 type="search"
+                dir="auto"
                 // Within a Project, the field does not name it: the chip does, and a long name is cut.
                 placeholder={
                   narrowing().project ? "Search within this Project" : `Search ${context()}`
@@ -513,7 +514,7 @@ export function createSearch(props: {
                 <>
                   <p class="search-nothing-title">
                     {hasWords({ words: shownWords() })
-                      ? `Nothing found for “${shownWords().trim()}”`
+                      ? ["Nothing found for “", <bdi>{shownWords().trim()}</bdi>, "”"]
                       : "Nothing found"}
                   </p>
                   <For each={chipsKept()}>
