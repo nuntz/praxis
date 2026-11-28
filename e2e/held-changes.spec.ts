@@ -14,6 +14,9 @@ import {
 // A Held Change (section 4.7): the Agent asked to change the person's words, and only the person's
 // tap makes it. The journey makes a Context of its own, so the count it reads is its own.
 
+/** Ink, in each theme. */
+const INK = { light: "rgb(26, 29, 35)", dark: "rgb(238, 240, 244)" } as const;
+
 /** Where the count of what is open to act on is shown: a phone's tab, or the column's heading. */
 function count(page: Page, testInfo: TestInfo) {
   return onPhone(testInfo)
@@ -56,7 +59,22 @@ test("the Agent's change to the person's words waits for their tap, which makes 
   const { journal } = await openJournal(page, testInfo);
   const shown = journal.getByTestId("entry").filter({ hasText: before });
   await expect(shown.getByTestId("words")).toHaveText(before);
-  await shown.getByRole("link", { name: "Held Change for your tap", exact: true }).click();
+  const mark = shown.getByRole("link", { name: "Held Change for your tap", exact: true });
+  await expect(mark).toHaveCSS("text-decoration-line", "underline");
+  // The mark is in ink, as an Entry's other marks are, never the browser's link colour: at rest,
+  // hovered and focused, in light and in dark.
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expect(mark, `at rest in ${colorScheme}`).toHaveCSS("color", INK[colorScheme]);
+    await mark.hover();
+    await expect(mark, `hovered in ${colorScheme}`).toHaveCSS("color", INK[colorScheme]);
+    await page.mouse.move(0, 0);
+    await mark.focus();
+    await expect(mark, `focused in ${colorScheme}`).toHaveCSS("color", INK[colorScheme]);
+    await mark.blur();
+  }
+  await page.emulateMedia({ colorScheme: null });
+  await mark.click();
   const held = page
     .getByRole("region", { name: "Attention", exact: true })
     .getByRole("region", { name: "Held Changes", exact: true })

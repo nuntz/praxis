@@ -46,6 +46,12 @@ p {
   margin: 0;
 }
 
+/* A link is in ink, visited, hovered or focused, never the browser's blue or violet, which no token
+   names; nor does it take the accent (the One Accent Rule). */
+a {
+  color: var(--ink);
+}
+
 :focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
@@ -3835,9 +3841,13 @@ button.entry-page-add-button {
   margin-top: var(--space-2);
 }
 
+/* The way to an Entry's Held Change: in ink and underlined, as a quiet button is. */
 a.entry-mark.held-mark {
+  color: var(--ink);
   font: var(--type-meta);
   font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /*
