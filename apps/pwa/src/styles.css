@@ -935,6 +935,7 @@ input[type="checkbox"].switch:disabled {
   min-height: 0;
 }
 
+/* A column clips what overflows it rather than scrolling it, so no popover can scroll it sideways. */
 .peer {
   display: flex;
   flex-direction: column;
@@ -942,7 +943,7 @@ input[type="checkbox"].switch:disabled {
   min-height: 0;
   border-radius: var(--radius-lg);
   background: var(--surface);
-  overflow: hidden;
+  overflow: clip;
 }
 
 .peer.attention {
@@ -2639,8 +2640,9 @@ button.search-clear {
 
 /*
  * The chips under the field, in one row that wraps. A chip not set is a surface pill with a
- * hairline and a chevron; once set it is ink with surface words and an x (section 8.4). Its picker
- * opens under it, as a menu does.
+ * hairline and a chevron; once set it is ink with surface words and an x (section 8.4). Each is one
+ * line, what it holds cut with an ellipsis, and its icons never shrink. Its picker opens under it,
+ * as a menu does, from the chip's end where it would run past the column's.
  */
 .search-chips {
   display: flex;
@@ -2655,11 +2657,15 @@ button.search-clear {
 
 .chip-holder {
   position: relative;
+  flex: none;
+  max-width: 100%;
 }
 
 button.chip {
   gap: 6px;
-  min-height: 32px;
+  max-width: 100%;
+  height: 32px;
+  min-height: 0;
   padding: 0 10px;
   border: 1px solid var(--rule);
   background: var(--surface);
@@ -2671,6 +2677,22 @@ button.chip {
 
 button.chip .chip-end {
   color: var(--muted);
+}
+
+button.chip .chip-icon,
+button.chip .chip-end {
+  flex: none;
+}
+
+.chip-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.chip.set .chip-words {
+  max-width: 240px;
 }
 
 button.chip.set {
@@ -2696,6 +2718,16 @@ button.chip.set .chip-end {
   border: 1px solid var(--rule);
   border-radius: var(--radius-md);
   background: var(--surface);
+}
+
+.chip-picker.from-end {
+  right: 0;
+  left: auto;
+}
+
+/* A chip's picker highlights its choice on inset, as hovered; the composer's keep the tint. */
+.chip-picker .link-picker .highlighted {
+  background: var(--inset);
 }
 
 .chip-choices {
@@ -3980,11 +4012,18 @@ a.entry-mark.held-mark {
     overflow-x: auto;
   }
 
+  /* A set chip's words are cut past 60% of the row, so the chips after it still show. */
   .chip-holder {
     position: static;
+    max-width: 60%;
   }
 
-  .chip-picker {
+  button.chip.set .chip-words {
+    max-width: none;
+  }
+
+  .chip-picker,
+  .chip-picker.from-end {
     top: 100%;
     right: var(--space-4);
     left: var(--space-4);
@@ -3992,8 +4031,7 @@ a.entry-mark.held-mark {
 
   /* A chip, a hit and a Task found's link are each a touch target of 44px, as its tick is. */
   button.chip {
-    flex: none;
-    min-height: 44px;
+    height: 44px;
     padding: 0 var(--space-3);
   }
 

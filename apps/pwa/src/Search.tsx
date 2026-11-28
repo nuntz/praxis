@@ -371,7 +371,10 @@ export function createSearch(props: {
                 ref={field}
                 id="journal-search-words"
                 type="search"
-                placeholder={`Search ${narrowing().project ? `within ${narrowing().project?.name}` : context()}`}
+                // Within a Project, the field does not name it: the chip does, and a long name is cut.
+                placeholder={
+                  narrowing().project ? "Search within this Project" : `Search ${context()}`
+                }
                 autocomplete="off"
                 aria-keyshortcuts={onPhone() ? undefined : "/"}
                 aria-describedby={describedBy()}

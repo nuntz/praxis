@@ -376,8 +376,8 @@ The controls are **soft and certain**: round and gentle in form, with one solid 
 - **Focus:** a 2px `ink` outline, 2px off, on everything.
 
 ### Chips
-- **Style:** a 32px pill, `surface` with a `rule` border, `label` type at 600 in `ink`, with its end (a chevron or ×) in `muted`.
-- **State:** once set, it turns solid `ink` with `surface` text. It never takes the accent. Its picker is a `surface` box with `radius-md` and a `rule` border, whose choices sit on `inset` when hovered or focused.
+- **Style:** a 32px pill (44px on a phone), `surface` with a `rule` border, `label` type at 600 in `ink`, with its end (a chevron or ×) in `muted`. A chip is one line: what it holds is cut with an ellipsis past 240px, or on a phone past 60% of its row, and its icon and its end never shrink.
+- **State:** once set, it turns solid `ink` with `surface` text. It never takes the accent. Its picker is a `surface` box with `radius-md` and a `rule` border, whose choices sit on `inset` when hovered, focused or highlighted. It opens inside its column, from the chip's end where it would run past the column's, and is never wider than the column.
 
 ### Cards / Containers
 - **Panel:** `surface` on `ground`, `radius-lg`, with a 20px inset and a `column-title` head.

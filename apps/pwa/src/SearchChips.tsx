@@ -194,6 +194,7 @@ function RecordPicker(
     <ChoicePicker
       label={`${kind}s`}
       fieldLabel={`Find a ${kind}`}
+      placeholder={`Find a ${kind}`}
       none={`No ${kind} is named so.`}
       offer={(typed) =>
         props.kind === "project"

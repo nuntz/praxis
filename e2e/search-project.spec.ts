@@ -90,7 +90,7 @@ test("the Project chip picks a Project as `#` does, closed ones marked, and list
   await expect(found.getByRole("heading", { name: "Projects" })).toHaveCount(0);
   await expect(found.locator("mark")).toHaveCount(0);
   await expect(journal.getByRole("list", { name: "Entries" })).toBeHidden();
-  await expect(field).toHaveAttribute("placeholder", `Search within ${kitchen}`);
+  await expect(field).toHaveAttribute("placeholder", "Search within this Project");
 
   // With words, it narrows the words' list.
   await field.fill("tiles");
