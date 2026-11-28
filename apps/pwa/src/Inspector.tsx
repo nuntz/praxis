@@ -806,7 +806,7 @@ function ActionLine(props: {
 
 /**
  * A day on its own line, sent once it settles (`SettlingField`), for the record whose page draws
- * it: that may be sent as the page goes, when the panel shows another (#162).
+ * it: that may be sent as the page goes, when the panel shows another.
  */
 function DateLine(props: {
   icon: LucideIcon;
