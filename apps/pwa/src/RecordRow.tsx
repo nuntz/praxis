@@ -1,16 +1,19 @@
 import type { Accent } from "@praxis/domain";
 import Ellipsis from "lucide-solid/icons/ellipsis";
 import Pencil from "lucide-solid/icons/pencil";
-import { createSignal, type JSX, onMount, Show } from "solid-js";
+import { createEffect, createSignal, createUniqueId, type JSX, on, onMount, Show } from "solid-js";
 import { type Action, Menu } from "./design/Menu.tsx";
 import { followRecord } from "./follow-record.ts";
+import { MarkedLine } from "./leaving.tsx";
 
 /**
  * A Context, a Connection or a Device in its list in Settings, drawn as a setting's row is: its
  * name as the title, a Context's beside its swatch, its details as the note, then the one act it is
  * for, and the rest behind a More button, Rename first. Rename turns the title into the name's
  * field in place, the focus in it, and the field goes, the focus back on More, once the name is
- * kept or the person leaves it with Cancel or Escape.
+ * kept or the person leaves it with Cancel or Escape. Marked to end or retire as its section is
+ * left (ADR 0028), it says so in place of its acts, beside a Keep it that takes the focus as it is
+ * marked and gives it back to More.
  */
 export function RecordRow(props: {
   testId: "context-row" | "connection-row" | "device-row";
@@ -33,9 +36,23 @@ export function RecordRow(props: {
   onRename: (name: string) => Promise<boolean>;
   /** Its More button, for an act opened from it to give the focus back to. */
   moreRef?: (button: HTMLButtonElement) => void;
+  /** What an act marked on it will do when its section is left, and how the mark is taken off. */
+  marked?: { says: string; onKeep: () => void } | undefined;
 }) {
   const [renaming, setRenaming] = createSignal(false);
+  const nameId = createUniqueId();
   let more: HTMLButtonElement | undefined;
+  let keep: HTMLButtonElement | undefined;
+  // Marked, the focus goes to its Keep it, which gives it back to More.
+  createEffect(
+    on(
+      () => props.marked !== undefined,
+      (marked) => {
+        if (marked) keep?.focus();
+      },
+      { defer: true },
+    ),
+  );
 
   function doneRenaming() {
     setRenaming(false);
@@ -52,7 +69,9 @@ export function RecordRow(props: {
               <Show when={props.accent}>
                 {(accent) => <span class={`swatch accent-${accent()}`} aria-hidden="true" />}
               </Show>
-              <span class="record-name">{props.name}</span>
+              <span id={nameId} class="record-name">
+                {props.name}
+              </span>
             </span>
           }
         >
@@ -66,24 +85,45 @@ export function RecordRow(props: {
         <span class="settings-row-note">{props.note}</span>
       </div>
       <div class="settings-row-control">
-        {props.act}
-        <Menu
-          label={`More for ${props.name}`}
-          icon={Ellipsis}
-          buttonRef={(button) => {
-            more = button;
-            props.moreRef?.(button);
-          }}
-          items={[
-            {
-              label: "Rename",
-              icon: Pencil,
-              disabled: props.sending,
-              onSelect: () => setRenaming(true),
-            },
-            ...props.more,
-          ]}
-        />
+        <Show
+          when={props.marked}
+          fallback={
+            <>
+              {props.act}
+              <Menu
+                label={`More for ${props.name}`}
+                icon={Ellipsis}
+                buttonRef={(button) => {
+                  more = button;
+                  props.moreRef?.(button);
+                }}
+                items={[
+                  {
+                    label: "Rename",
+                    icon: Pencil,
+                    disabled: props.sending,
+                    onSelect: () => setRenaming(true),
+                  },
+                  ...props.more,
+                ]}
+              />
+            </>
+          }
+        >
+          {(marked) => (
+            <MarkedLine
+              says={marked().says}
+              of={nameId}
+              onKeep={() => {
+                marked().onKeep();
+                more?.focus();
+              }}
+              keepRef={(button) => {
+                keep = button;
+              }}
+            />
+          )}
+        </Show>
       </div>
       {props.detail}
       {props.under}

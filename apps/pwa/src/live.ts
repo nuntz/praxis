@@ -12,7 +12,7 @@ export type LiveListener = {
   message?(message: Message): void;
   /** A Message no longer in the Conversation, by its id: a Brief or Review a newer one replaced. */
   gone?(message: string): void;
-  /** The Conversation was cleared: it holds no Message now. */
+  /** The Conversation was cleared: it holds only what came after what it was cleared up to. */
   cleared?(): void;
   /**
    * The channel opened again after a drop. What the Conversation said meanwhile is not replayed:

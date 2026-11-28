@@ -14,6 +14,8 @@ import type { Action } from "./design/Menu.tsx";
 import { Problem, SettingsGroup } from "./design/SettingRows.tsx";
 import { deviceTimeZone } from "./device.ts";
 import { MakeExport } from "./Export.tsx";
+import { latestRead } from "./latest-read.ts";
+import { marksSentOnLeaving } from "./leaving.tsx";
 import { RecordRow } from "./RecordRow.tsx";
 import {
   listedCount,
@@ -33,34 +35,65 @@ function accentName(accent: Accent): string {
 /** A Deployment tool that changes one Context, and returns it as it now is. */
 type ContextChange = Extract<
   DeploymentToolName,
-  | "create_context"
-  | "rename_context"
-  | "set_context_accent"
-  | "retire_context"
-  | "bring_back_context"
+  "create_context" | "rename_context" | "set_context_accent" | "bring_back_context"
 >;
 
 /** The note of the only Context not retired, which `retire_context` refuses (section 4.11). */
 const ONLY_ONE = "The only Context: make another to retire it.";
 
 /**
+ * What a Context marked to retire says until Contexts is left (ADR 0028): what else ends with it,
+ * by how many Connections it has, or, unread, that any it has do.
+ */
+function retires(connections: number | undefined): string {
+  const after =
+    connections === undefined
+      ? "Any Connections it has end."
+      : connections === 0
+        ? "Nothing else ends."
+        : connections === 1
+          ? "Its Connection ends."
+          : `Its ${connections} Connections end.`;
+  return `Retires when you leave Contexts. ${after}`;
+}
+
+/**
  * The Deployment's Contexts, in its settings (section 8.6): each with its accent, the current one
  * said so, renamed, given another accent, retired or brought back here, and a new one made from a
  * form opened on demand. Retiring hides a Context and deletes nothing; a retired one can then be
- * deleted for good (section 10.4).
+ * deleted for good (section 10.4). Retiring also ends its Connections, which bringing it back does
+ * not, so Retire only marks it, and it retires as Contexts is left (ADR 0028).
  */
 export function Contexts(props: {
   contexts: ContextListing[];
   onChanged: (context: ContextListing) => void;
   onMade: (context: ContextListing) => void;
   onDeleted: (id: string) => void;
+  /** Says what the screen must say once Contexts is no longer shown to say it. */
+  onProblem: (message: string) => void;
 }) {
   const changes = sectionChanges();
   const current = useContextId();
+  const retiring = marksSentOnLeaving<string>({
+    sends: (marked) =>
+      [...marked].map((id) => async () => {
+        const retired = await callDeploymentTool("retire_context", { id });
+        if (retired.ok) props.onChanged(retired.value.record);
+        return retired;
+      }),
+    unsent: {
+      nothing: "Praxis could not be reached: nothing was retired.",
+      notAll: "Praxis could not be reached: some of what you marked was not retired.",
+    },
+    onProblem: (message) => props.onProblem(message),
+  });
+  const connected = connectionsByContext();
   const [making, setMaking] = createSignal(false);
   let newButton: HTMLButtonElement | undefined;
   const byId = (id: string) => props.contexts.find((context) => context.id === id);
-  const shown = () => props.contexts.filter((context) => !context.retired);
+  // A Context marked to retire is counted as retired, so the last one left is never marked too.
+  const staying = () =>
+    props.contexts.filter((context) => !context.retired && !retiring.has(context.id));
 
   return (
     <SettingsSection note="Each Context keeps a Journal, a Conversation and settings of its own. Retiring one hides it and ends its Connections, and deletes nothing.">
@@ -77,10 +110,15 @@ export function Contexts(props: {
                 <ContextRow
                   context={context()}
                   current={id === current}
-                  only={!context().retired && shown().length === 1}
+                  only={staying().length === 1 && staying()[0]?.id === id}
                   changes={changes}
                   onChanged={props.onChanged}
                   onDeleted={props.onDeleted}
+                  retiring={retiring.has(id) ? retires(connected.of(id)) : null}
+                  onRetire={(on) => {
+                    retiring.mark(id, on);
+                    if (on) void connected.read();
+                  }}
                 />
               )}
             </Show>
@@ -121,6 +159,10 @@ function ContextRow(props: {
   changes: SectionChanges;
   onChanged: (context: ContextListing) => void;
   onDeleted: (id: string) => void;
+  /** What it says while marked to retire as Contexts is left, or null. */
+  retiring: string | null;
+  /** Mark it to retire, or take the mark off. */
+  onRetire: (on: boolean) => void;
 }) {
   const sending = () => props.changes.sending();
   // What an act behind More opened under the row.
@@ -167,15 +209,7 @@ function ContextRow(props: {
       ];
     }
     if (props.only) return [];
-    // #215 has Retire wait until the section is left.
-    return [
-      {
-        label: "Retire",
-        icon: Archive,
-        disabled: sending(),
-        onSelect: () => void send("retire_context", { id }),
-      },
-    ];
+    return [{ label: "Retire", icon: Archive, onSelect: () => props.onRetire(true) }];
   };
 
   return (
@@ -198,6 +232,11 @@ function ContextRow(props: {
       moreRef={(button) => {
         more = button;
       }}
+      marked={
+        props.retiring === null
+          ? undefined
+          : { says: props.retiring, onKeep: () => props.onRetire(false) }
+      }
       more={[
         {
           label: "Accent",
@@ -430,6 +469,35 @@ export function NewContext(props: {
       <Problem message={problemAt("new-context")} />
     </form>
   );
+}
+
+/**
+ * How many Connections each Context has, read as Contexts opens and again as one is marked to
+ * retire, which ends them; unknown until read, or when the read fails.
+ */
+function connectionsByContext() {
+  const [counted, setCounted] = createSignal<ReadonlyMap<string, number> | null>(null);
+  const { read } = latestRead(async (current) => {
+    try {
+      const listed = await callDeploymentTool("list_connections", {});
+      if (!current() || !listed.ok) return;
+      const counts = new Map<string, number>();
+      for (const { context_id } of listed.value.items) {
+        counts.set(context_id, (counts.get(context_id) ?? 0) + 1);
+      }
+      setCounted(counts);
+    } catch {
+      // Unread, the mark says any Connections it has end.
+    }
+  });
+  onMount(() => void read());
+  return {
+    read,
+    of: (id: string) => {
+      const counts = counted();
+      return counts === null ? undefined : (counts.get(id) ?? 0);
+    },
+  };
 }
 
 /** How many Contexts are not retired, as the phone's list of sections shows it. */

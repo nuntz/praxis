@@ -42,6 +42,8 @@ import {
   DIGEST_CHANGES,
   dropRuntimeTables,
   HELD_NAMED,
+  holdsRuntimeTables,
+  type KeptConversation,
 } from "./agent.ts";
 import { arrivalTime, startTimer } from "./arrival.ts";
 import {
@@ -129,6 +131,8 @@ import { putBack, type Restoring } from "./restore-rows.ts";
 import { deploymentOf } from "./routing.ts";
 import {
   forgetConversation,
+  handlesOf,
+  keepHandles,
   lastToldChange,
   newestRun,
   nextTryFrom,
@@ -873,7 +877,9 @@ export function contextObject(
     /**
      * `clear_conversation`, by the person's hand from the Context's settings (section 5.8): all of
      * the runtime's record is dropped at once, and the next thing to need the Agent opens it
-     * afresh, which also mends a Conversation the runtime could not open under this release. The
+     * afresh, which also mends a Conversation the runtime could not open under this release. What
+     * came after `up_to`, the newest Message the screen had read, is read first and placed again
+     * in the one opened afresh, so a clear never drops what the person was not shown. The
      * Journal, the change log and the Run records stay as they were, but for the Runs' handles on
      * the Conversation. It is refused while a Run is going, since the runtime is working in the
      * record it would drop. It changes no record and leaves no Effect; a repeated key answers as
@@ -882,11 +888,9 @@ export function contextObject(
     private async clearConversation(request: ToolRequest): Promise<ToolResult<unknown>> {
       const admitted = admit(request);
       if (!admitted.ok) return admitted;
-      const { key } = admitted.value.input as ToolInput<"clear_conversation">;
+      const { key, up_to } = admitted.value.input as ToolInput<"clear_conversation">;
       // A Brief or a Review the clock is starting is going too, once it has started.
       await this.#clocking;
-      // From here to the drop nothing awaits: no Run can start in the record being dropped, and the
-      // key is read as the drop finds it.
       const sql = this.ctx.storage.sql;
       const keyed = {
         caller: request.caller,
@@ -894,14 +898,23 @@ export function contextObject(
         tool: "clear_conversation",
         at: request.arrivedAt,
       };
+      const going = () =>
+        runsNotEnded(sql).length > 0
+          ? refusal(
+              "A Run is going in this Conversation, so nothing was cleared: try again once it has ended.",
+              [],
+            )
+          : null;
       const repeated = repeatedKey(sql, keyed);
       if (repeated) return repeated;
-      if (runsNotEnded(sql).length > 0) {
-        return refusal(
-          "A Run is going in this Conversation, so nothing was cleared: try again once it has ended.",
-          [],
-        );
-      }
+      const before = going();
+      if (before) return before;
+      const kept = await this.keptThroughClear(Date.parse(up_to));
+      // From here to the drop nothing awaits: no Run can start in the record being dropped, and the
+      // key is read as the drop finds it.
+      const started = going();
+      if (started) return started;
+      const handles = handlesOf(sql, kept.starts);
       const result: ToolResult<ToolOutput["clear_conversation"]> = success({
         conversation: "cleared",
       });
@@ -913,9 +926,29 @@ export function contextObject(
       // The Agent held the runtime opened on the tables dropped: the next to need it opens anew.
       if (typeof this.#agent === "object") this.#agent = undefined;
       this.#agentWake = { active: false };
+      if (kept.records.length > 0) {
+        const agent = this.agent();
+        if (typeof agent === "object") {
+          const placed = await agent.placeKept(this.ctx.storage, kept.records);
+          this.ctx.storage.transactionSync(() => keepHandles(sql, handles, placed));
+        }
+      }
       this.send({ kind: "cleared" });
       await this.keepAlarm();
       return result;
+    }
+
+    /**
+     * What clearing the Conversation up to `upTo` keeps: what came after it. A Conversation never
+     * opened keeps nothing, and neither does one the runtime cannot open under this release, which
+     * is dropped whole, and so mended.
+     */
+    private async keptThroughClear(upTo: number): Promise<KeptConversation> {
+      const none: KeptConversation = { records: [], starts: [] };
+      if (!holdsRuntimeTables(this.ctx.storage.sql) || !this.hasAgent()) return none;
+      const agent = await this.conversation();
+      if (typeof agent !== "object") return none;
+      return agent.keptAfter(this.ctx.storage, upTo);
     }
 
     /**

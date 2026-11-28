@@ -17,6 +17,7 @@ import {
 } from "solid-js";
 import { Problem, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import { latestRead } from "./latest-read.ts";
+import { marksSentOnLeaving } from "./leaving.tsx";
 import { RecordRow } from "./RecordRow.tsx";
 import {
   listedCount,
@@ -29,8 +30,11 @@ import { callDeploymentTool, unreachableMessage } from "./tools.ts";
 /** A Deployment tool that changes one Connection, and returns it as it now is. */
 type ConnectionChange = Extract<
   DeploymentToolName,
-  "create_connection" | "rename_connection" | "set_connection_reading_only" | "end_connection"
+  "create_connection" | "rename_connection" | "set_connection_reading_only"
 >;
+
+/** What a Connection marked to end says until Connections is left (ADR 0028). */
+const ENDS = "Ends when you leave Connections. Its address stops working.";
 
 /** The whole address of a Connection, on this Deployment's own hostname, to paste into a client. */
 function fullAddress(connection: Connection): string {
@@ -40,14 +44,27 @@ function fullAddress(connection: Connection): string {
 /**
  * The Deployment's Connections, in its settings (section 8.6): each outside agent the person lets
  * work in one Context, with the address to paste into it. Made, renamed, limited to reading or
- * not, and ended here, by the person's hand only. Retiring a Context ends its Connections, so the
- * list is read again whenever the Contexts change.
+ * not, and ended here, by the person's hand only. Ending one cannot be put back, so End only marks
+ * it, and it ends as Connections is left (ADR 0028): until then it works. Retiring a Context ends
+ * its Connections, so the list is read again whenever the Contexts change.
  */
-export function Connections(props: { contexts: ContextListing[] }) {
+export function Connections(props: {
+  contexts: ContextListing[];
+  /** Says what the screen must say once Connections is no longer shown to say it. */
+  onProblem: (message: string) => void;
+}) {
   const [connections, setConnections] = createSignal<Connection[]>([]);
   // What the last read met, said in place of the list it could not read.
   const [problem, setProblem] = createSignal<string | null>(null);
   const changes = sectionChanges();
+  const ending = marksSentOnLeaving<string>({
+    sends: (marked) => [...marked].map((id) => () => callDeploymentTool("end_connection", { id })),
+    unsent: {
+      nothing: "Praxis could not be reached: nothing was ended.",
+      notAll: "Praxis could not be reached: some of what you marked was not ended.",
+    },
+    onProblem: (message) => props.onProblem(message),
+  });
   const [making, setMaking] = createSignal(false);
   let newButton: HTMLButtonElement | undefined;
   const byId = (id: string) => connections().find((connection) => connection.id === id);
@@ -86,9 +103,7 @@ export function Connections(props: { contexts: ContextListing[] }) {
   function show(changed: Connection) {
     listed.changed();
     setConnections((listed) =>
-      changed.ended
-        ? listed.filter((connection) => connection.id !== changed.id)
-        : listed.map((connection) => (connection.id === changed.id ? changed : connection)),
+      listed.map((connection) => (connection.id === changed.id ? changed : connection)),
     );
   }
 
@@ -110,6 +125,8 @@ export function Connections(props: { contexts: ContextListing[] }) {
                     contextName={contextName(connection().context_id)}
                     changes={changes}
                     onChanged={show}
+                    ending={ending.has(id)}
+                    onEnd={(on) => ending.mark(id, on)}
                   />
                 )}
               </Show>
@@ -150,6 +167,10 @@ function ConnectionRow(props: {
   contextName: string;
   changes: SectionChanges;
   onChanged: (connection: Connection) => void;
+  /** Whether it is marked to end as Connections is left. */
+  ending: boolean;
+  /** Mark it to end, or take the mark off. */
+  onEnd: (on: boolean) => void;
 }) {
   const sending = () => props.changes.sending();
   const readingOnly = createUniqueId();
@@ -192,15 +213,8 @@ function ConnectionRow(props: {
       onRename={async (name) =>
         (await send("rename_connection", { id: props.connection.id, name })) !== null
       }
-      more={[
-        // #215 has End wait until the section is left.
-        {
-          label: "End",
-          icon: Unplug,
-          disabled: sending(),
-          onSelect: () => void send("end_connection", { id: props.connection.id }),
-        },
-      ]}
+      more={[{ label: "End", icon: Unplug, onSelect: () => props.onEnd(true) }]}
+      marked={props.ending ? { says: ENDS, onKeep: () => props.onEnd(false) } : undefined}
     />
   );
 }

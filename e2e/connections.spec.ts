@@ -1,5 +1,15 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import { expect, lastShown, makeContext, openSettings, test } from "./fixtures.ts";
+import type { Locator, Page } from "@playwright/test";
+import {
+  callDeploymentTool,
+  closeSettings,
+  expect,
+  lastShown,
+  makeContext,
+  openSettings,
+  showSection,
+  test,
+} from "./fixtures.ts";
 
 // The person makes a Connection in the Deployment's settings, for an outside agent to work in one
 // Context, and pastes its address into the agent (sections 7.2 and 8.6, ADR 0009).
@@ -92,13 +102,71 @@ test("the person makes a Connection to one Context, and its address reaches that
     error: { code: "not_offered" },
   });
 
-  // Ended from behind More, it leaves the list, and the address is refused with what to do instead.
-  // #215 has End wait until the section is left.
+  // End, from behind More, only marks it, beside a Keep it that takes the focus: until
+  // Connections is left it works, and Keep it takes the mark back, the focus back on More.
+  const keep = row.getByRole("button", { name: "Keep it", exact: true });
+  await end(row, name);
+  await expect(
+    row.getByText("Ends when you leave Connections. Its address stops working.", { exact: true }),
+  ).toBeVisible();
+  await expect(keep).toBeFocused();
+  expect(await call(agent, "get_settings")).toMatchObject({ ok: true });
+  await keep.click();
+  await expect(row.getByRole("button", { name: `More for ${name}`, exact: true })).toBeFocused();
+  await showSection(page, "Devices");
+  expect(await call(agent, "get_settings")).toMatchObject({ ok: true });
+
+  // Ended, and Connections left, the address is refused with what to do instead.
+  await showSection(page, "Connections");
+  await end(row, name);
+  const ending = page.waitForResponse(/\/end_connection$/);
+  await showSection(page, "Devices");
+  expect((await (await ending).json()).ok).toBe(true);
+  await showSection(page, "Connections");
+  await expect(row).toHaveCount(0);
+  await expect(call(agent, "get_settings")).rejects.toThrow(/Make a new Connection in Praxis/);
+});
+
+/** End a Connection from behind its row's More, as the person does. */
+async function end(row: Locator, name: string) {
   await row.getByRole("button", { name: `More for ${name}`, exact: true }).click();
-  await page
+  await row
+    .page()
     .getByRole("menu", { name: `More for ${name}`, exact: true })
     .getByRole("menuitem", { name: "End", exact: true })
     .click();
-  await expect(row).toHaveCount(0);
-  await expect(call(agent, "get_settings")).rejects.toThrow(/Make a new Connection in Praxis/);
+}
+
+/** Whether a Connection, by its id, is still listed: one ended is not. */
+async function listed(page: Page, id: string): Promise<boolean> {
+  const { items } = await callDeploymentTool(page, "list_connections", {});
+  return items.some((connection: { id: string }) => connection.id === id);
+}
+
+test("a Connection marked to end with no network is not ended as Connections is left, and the screen says so", async ({
+  page,
+}) => {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const work = await makeContext(page, { name: `Kept ${tag}`, time_zone: "UTC", accent: "teal" });
+  const name = `Agent ${tag}`;
+  const { record } = await callDeploymentTool(page, "create_connection", {
+    name,
+    context_id: work.id,
+    reading_only: false,
+  });
+  await page.goto("/");
+  const connections = await openSettings(page, "Connections");
+  const row = connections.getByTestId("connection-row").filter({
+    has: page.getByText(name, { exact: true }),
+  });
+
+  await end(row, name);
+  await expect(row.getByRole("button", { name: "Keep it", exact: true })).toBeFocused();
+  await page.context().setOffline(true);
+  await closeSettings(page);
+  await expect(page.getByRole("alert")).toHaveText(
+    "Praxis could not be reached: nothing was ended.",
+  );
+  await page.context().setOffline(false);
+  expect(await listed(page, record.id)).toBe(true);
 });

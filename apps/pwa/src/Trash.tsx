@@ -1,15 +1,9 @@
 import type { RecordKind, RecordNamed, TrashItem } from "@praxis/domain";
 import { createMemo, createSignal, createUniqueId, For, onCleanup, onMount, Show } from "solid-js";
 import { latestRead } from "./latest-read.ts";
+import { MarkedLine, marksSentOnLeaving } from "./leaving.tsx";
 import { useLive } from "./live-context.ts";
-import {
-  type CallTool,
-  needsNetwork,
-  SignInLapsed,
-  Unreachable,
-  unreachableMessage,
-  useCallTool,
-} from "./tools.ts";
+import { type CallTool, needsNetwork, unreachableMessage, useCallTool } from "./tools.ts";
 
 /** What each kind of record is called, in the glossary's words, one and many. */
 const KIND: Record<RecordKind, string> = {
@@ -70,10 +64,26 @@ export function Trash(props: {
   const [problem, setProblem] = createSignal<string | null>(null);
   /** The record id of the item whose restore is out, if one is. */
   const [restoring, setRestoring] = createSignal<string | null>(null);
-  /** The items marked to be removed for good on leaving, by their record's id. */
-  const [marked, setMarked] = createSignal<ReadonlySet<string>>(new Set());
   /** While the Trash is to be emptied on leaving: the `deleted_at` of the newest item it showed. */
   const [emptyingUpTo, setEmptyingUpTo] = createSignal<string | null>(null);
+  /**
+   * The items marked to be removed for good on leaving, by their record's id: leaving the Trash
+   * sends them, and the emptying, but for those the emptying removes.
+   */
+  const marks = marksSentOnLeaving<string>({
+    sends: (marked) => {
+      const upTo = emptyingUpTo();
+      const markedOneByOne = (items() ?? [])
+        .filter((item) => marked.has(item.record.id) && (upTo === null || item.deleted_at > upTo))
+        .map((item) => item.record.id);
+      return [
+        ...(upTo === null ? [] : [() => callTool("empty_trash", { up_to: upTo })]),
+        ...markedOneByOne.map((id) => () => callTool("remove_for_good", { id })),
+      ];
+    },
+    unsent: { nothing: NOTHING_REMOVED, notAll: NOT_ALL_REMOVED },
+    onProblem: (message) => props.onProblem(message),
+  });
   const [said, setSaid] = createSignal<Said | null>(null);
   const dates = {
     deleted: new Intl.DateTimeFormat(undefined, {
@@ -121,32 +131,16 @@ export function Trash(props: {
   onCleanup(
     live.listen({ changed: () => listed.read(false), readAfresh: () => listed.read(false) }),
   );
-  // Leaving the Trash sends what it marked; the app hidden or killed sends nothing.
-  onCleanup(() => {
-    const upTo = emptyingUpTo();
-    const markedOneByOne = (items() ?? [])
-      .filter((item) => marked().has(item.record.id) && (upTo === null || item.deleted_at > upTo))
-      .map((item) => item.record.id);
-    if (upTo !== null || markedOneByOne.length > 0) {
-      void removeOnLeaving(callTool, upTo, markedOneByOne, props.onProblem);
-    }
-  });
-
   /** How an item is marked to be removed for good on leaving: by emptying, by itself, or not. */
   function markOf(item: TrashItem): Mark {
     const upTo = emptyingUpTo();
     if (upTo !== null && item.deleted_at <= upTo) return "emptying";
-    return marked().has(item.record.id) ? "one" : null;
+    return marks.has(item.record.id) ? "one" : null;
   }
 
   function setMark(id: string, on: boolean) {
     setSaid(null);
-    setMarked((was) => {
-      const now = new Set(was);
-      if (on) now.add(id);
-      else now.delete(id);
-      return now;
-    });
+    marks.mark(id, on);
   }
 
   /**
@@ -164,7 +158,7 @@ export function Trash(props: {
       setProblem(null);
       const shown = items() ?? [];
       const at = shown.findIndex((each) => each.record.id === item.record.id);
-      setMarked((was) => new Set([...was].filter((id) => id !== item.record.id)));
+      marks.mark(item.record.id, false);
       setItems(shown.filter((each) => each.record.id !== item.record.id));
       setSaid({
         said: restoredWords(result.value.record),
@@ -222,7 +216,7 @@ export function Trash(props: {
                   onClick={() => {
                     setSaid(null);
                     setEmptyingUpTo(null);
-                    setMarked(new Set<string>());
+                    marks.clear();
                     emptyButton?.focus();
                   }}
                 >
@@ -319,7 +313,6 @@ function TrashRow(props: {
   onMark: (on: boolean) => void;
 }) {
   const recordId = createUniqueId();
-  const markId = createUniqueId();
   let removeButton: HTMLButtonElement | undefined;
   let keepButton: HTMLButtonElement | undefined;
   return (
@@ -368,60 +361,26 @@ function TrashRow(props: {
             </button>
           }
         >
-          <p class="trash-marked">
-            <span id={markId}>Removed for good when you leave the Trash</span>
-            {/* Marked by emptying, only Keep them takes it back. */}
-            <Show when={props.mark === "one"}>
-              {" "}
-              <button
-                ref={keepButton}
-                type="button"
-                class="quiet"
-                aria-describedby={`${markId} ${recordId}`}
-                onClick={() => {
-                  props.onMark(false);
-                  removeButton?.focus();
-                }}
-              >
-                Keep it
-              </button>
-            </Show>
-          </p>
+          <MarkedLine
+            says="Removed for good when you leave the Trash"
+            of={recordId}
+            keepRef={(button) => {
+              keepButton = button;
+            }}
+            // Marked by emptying, only Keep them takes it back.
+            onKeep={
+              props.mark === "one"
+                ? () => {
+                    props.onMark(false);
+                    removeButton?.focus();
+                  }
+                : undefined
+            }
+          />
         </Show>
       </div>
     </li>
   );
-}
-
-/**
- * Send what the Trash marked, as it is left. A removal that cannot be sent removes nothing, and
- * the screen says so; one whose item has left the Trash meanwhile, restored or past its 30 days,
- * is not found and says nothing, since what is so already holds.
- */
-async function removeOnLeaving(
-  callTool: CallTool,
-  upTo: string | null,
-  markedOneByOne: string[],
-  onProblem: (message: string) => void,
-) {
-  const sent = await Promise.allSettled([
-    ...(upTo === null ? [] : [callTool("empty_trash", { up_to: upTo })]),
-    ...markedOneByOne.map((id) => callTool("remove_for_good", { id })),
-  ]);
-  const unreached = sent.filter(
-    (each) => each.status === "rejected" && each.reason instanceof Unreachable,
-  ).length;
-  if (unreached > 0) onProblem(unreached === sent.length ? NOTHING_REMOVED : NOT_ALL_REMOVED);
-  for (const each of sent) {
-    if (each.status === "fulfilled") {
-      if (!each.value.ok && each.value.error.code !== "not_found") {
-        onProblem(each.value.error.message);
-      }
-    } else if (!(each.reason instanceof Unreachable || each.reason instanceof SignInLapsed)) {
-      // A lapsed sign-in says so on the screen already; anything else is a fault.
-      throw each.reason;
-    }
-  }
 }
 
 /** What a restore brought back, as said where it stood: "“Paint the hall” and 2 Tasks are back…". */

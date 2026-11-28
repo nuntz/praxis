@@ -194,7 +194,7 @@ export const runsWith: Record<string, () => unknown> = {
   view_ahead: () => ({ days: 90 }),
   search: () => ({ words: marked("Offered") }),
   rebuild_search_index: () => ({}),
-  clear_conversation: () => ({}),
+  clear_conversation: () => ({ up_to: "2026-11-15T09:00:00.000Z" }),
   restore: () => ({ id: "no-such-record" }),
   remove_for_good: () => ({ id: "no-such-record" }),
   empty_trash: () => ({ up_to: "2026-11-15T09:00:00.000Z" }),

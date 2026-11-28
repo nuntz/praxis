@@ -404,7 +404,7 @@ describe("clear_conversation, on a runtime that cannot open its tables", () => {
     await deployment.wakeAgain(id);
     expect((await messages()).agent).toBe("unavailable");
 
-    value(await context.call(hand, "clear_conversation", {}));
+    value(await context.call(hand, "clear_conversation", { up_to: "2026-11-15T09:00:00.000Z" }));
 
     expect(await messages()).toEqual({
       items: [],

@@ -585,6 +585,6 @@ test("Contexts and Connections show their one solid button only while a form is 
 
   const search = await showSection(page, "Conversation and search");
   await expect(search.getByRole("button", { name: "Rebuild from the Journal" })).toBeVisible();
-  // #215 makes Clear the Conversation quiet too.
-  expect(await solid(search)).not.toContain("Rebuild from the Journal");
+  await expect(search.getByRole("button", { name: "Clear the Conversation" })).toBeVisible();
+  expect(await solid(search)).toEqual([]);
 });

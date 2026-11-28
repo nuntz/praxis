@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { WebSocketRoute } from "@playwright/test";
 import {
+  callContextTool,
   closeSettings,
   expect,
   holdAgentMessages,
@@ -201,16 +202,30 @@ test("the person saves a Run's transcript, then clears the Conversation from the
   expect(saved).toMatchObject({ kind: "run_transcript", context: { id: context.id } });
   expect(JSON.stringify(saved.messages)).toContain(words);
 
+  const { items } = await callContextTool(page, context.id, "list_messages", {});
+  const sent = items.find((message: { from: string }) => message.from === "person");
+  // Clear only marks it, beside a Keep it that takes the focus and gives it back to Clear; it is
+  // cleared as the section is left.
   const settings = await openSettings(page, "Conversation and search");
   await expect(settings).toContainText(`Cleared ${tag}`);
-  await settings.getByRole("button", { name: "Clear the Conversation", exact: true }).click();
-  const clearing = page.waitForResponse(/\/tools\/clear_conversation$/);
-  await settings.getByRole("button", { name: "Clear it for good", exact: true }).click();
-  expect((await (await clearing).json()).ok).toBe(true);
-  await expect(settings.getByText(/^The Conversation is cleared/)).toBeVisible();
+  const clear = settings.getByRole("button", { name: "Clear the Conversation", exact: true });
+  const keep = settings.getByRole("button", { name: "Keep it", exact: true });
+  await clear.click();
+  await expect(
+    settings.getByText("Cleared when you leave Conversation and search.", { exact: true }),
+  ).toBeVisible();
+  await expect(keep).toBeFocused();
+  await keep.click();
+  await expect(clear).toBeFocused();
+  await clear.click();
+  const clearing = page.waitForRequest(/\/tools\/clear_conversation$/);
+  const cleared = page.waitForResponse(/\/tools\/clear_conversation$/);
 
   // Every screen open on the Conversation hears it was cleared: it holds no Message.
   await closeSettings(page);
+  // Up to the newest Message the screen had read, the person's, as it was sent.
+  expect((await clearing).postDataJSON()).toMatchObject({ up_to: sent.at });
+  expect((await (await cleared).json()).ok).toBe(true);
   await toConversation();
   await expect(messages).toHaveCount(0);
   await expect(

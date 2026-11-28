@@ -8,6 +8,7 @@ import {
   onPhone,
   openJournal,
   openSettings,
+  showSection,
   switchTo,
   test,
 } from "./fixtures.ts";
@@ -139,11 +140,40 @@ test("the Deployment's settings list the Contexts with their accents, and make, 
   await expect(row(side).getByText("Moss · Current", { exact: true })).toBeVisible();
   await expect(row(side).getByRole("button", { name: `More for ${side}` })).toBeFocused();
 
-  // Retired, it leaves the switcher and the screen moves to a Context that is not; brought
-  // back, it returns as it was.
-  // #215 has Retire wait until the section is left.
+  // Retire only marks it, saying what else ends with it, beside a Keep it that takes the focus
+  // and gives it back to More.
+  for (const n of [1, 2]) {
+    await callDeploymentTool(page, "create_connection", {
+      name: `Agent ${n} ${tag}`,
+      context_id: work.id,
+      reading_only: false,
+    });
+  }
+  const keep = (name: string) => row(name).getByRole("button", { name: "Keep it", exact: true });
+  await behindMore(row(work.name), work.name, "Retire");
+  await expect(
+    row(work.name).getByText("Retires when you leave Contexts. Its 2 Connections end.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(keep(work.name)).toBeFocused();
+  await keep(work.name).click();
+  await expect(row(work.name).getByRole("button", { name: `More for ${work.name}` })).toBeFocused();
+
+  // Retired as Contexts is left, it leaves the switcher and the screen moves to a Context that is
+  // not; brought back, it returns as it was.
   await behindMore(row(side), side, "Retire");
+  await expect(
+    row(side).getByText("Retires when you leave Contexts. Nothing else ends.", { exact: true }),
+  ).toBeVisible();
+  await expect(keep(side)).toBeFocused();
+  await expect(switcher(page)).toHaveAccessibleName(`Context: ${side}`);
+  const retiring = page.waitForResponse(/\/retire_context$/);
+  await showSection(page, "Devices");
+  expect((await (await retiring).json()).ok).toBe(true);
+  await showSection(page, "Contexts");
   await expect(row(side).getByText("Moss · Retired", { exact: true })).toBeVisible();
+  await expect(row(work.name).getByText(/^Rust/)).toBeVisible();
   await expect(switcher(page)).not.toHaveAccessibleName(`Context: ${side}`);
   await switcher(page).click();
   const listed = page.getByRole("banner").getByRole("list", { name: "Contexts" });

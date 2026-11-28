@@ -411,8 +411,8 @@ export function Conversation(props: {
         call()?.answer(message);
       },
       gone: (id) => setMessages((shown) => shown.filter((message) => message.id !== id)),
-      // Cleared, from this Device or another: every Message is gone, and the Conversation starts
-      // afresh from the newest page, read again.
+      // Cleared, from this Device or another: every Message it was cleared up to is gone, and the
+      // Conversation starts afresh from the newest page, read again, which holds what came after.
       cleared: async () => {
         setMessages([]);
         setEarlierCursor(null);

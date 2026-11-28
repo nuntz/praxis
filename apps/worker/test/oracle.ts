@@ -159,7 +159,7 @@ export async function throughOracle(stub: Stub, request: Request): Promise<ToolR
     words: { before: before.words, after: after.words, log: after.summaries },
   });
   expect(problems, `The oracle, on ${request.tool} as ${request.caller.kind}`).toEqual([]);
-  if (request.tool === "clear_conversation" && result.ok) await holdsNoConversation(stub);
+  if (request.tool === "clear_conversation" && result.ok) await holdsNoConversation(stub, request);
   await keepsItsAlarm(stub, `on ${request.tool} as ${request.caller.kind}`);
   return result;
 }
@@ -192,20 +192,31 @@ async function keepsItsAlarm(stub: Stub, after: string): Promise<void> {
 }
 
 /**
- * Fail unless the runtime's tables hold none of the words said in the Conversation, once it has
- * been cleared (section 5.8): all of its record is dropped at once, not hidden.
+ * Fail unless the runtime's tables hold none of the words said in the Conversation up to what it
+ * was cleared up to, once it has been (section 5.8): all of that record is dropped at once, not
+ * hidden. What it kept, what came after, is read back as the Messages it shows.
  */
-async function holdsNoConversation(stub: Stub): Promise<void> {
+async function holdsNoConversation(stub: Stub, request: Request): Promise<void> {
   const left = await runInDurableObject(stub, (_, state) => {
     const sql = state.storage.sql;
     return textsIn(
       sql,
       tablesIn(sql).filter((name) => name.startsWith(RUNTIME_TABLES)),
-    ).flatMap(({ where, text }) => (markersIn(text).length > 0 ? [where] : []));
+    ).flatMap(({ where, text }) => markersIn(text).map((marker) => ({ where, marker })));
   });
-  expect(left, "A cleared Conversation leaves none of its words in the runtime's tables").toEqual(
-    [],
-  );
+  // Read only when there is something left, so a test's Context opens no Agent of its own here.
+  const shown =
+    left.length === 0
+      ? new Set<string>()
+      : new Set(
+          markersIn(
+            JSON.stringify(await stub.call({ ...request, tool: "list_messages", input: {} })),
+          ),
+        );
+  expect(
+    left.filter(({ marker }) => !shown.has(marker)).map(({ where }) => where),
+    "A cleared Conversation leaves none of the words it dropped in the runtime's tables",
+  ).toEqual([]);
 }
 
 /** What is wrong with one call as the oracle saw it. Nothing, when the call kept its word. */

@@ -854,8 +854,7 @@ button.accent-swatch[aria-pressed="true"] {
   gap: var(--space-1);
 }
 
-.delete-context-actions,
-.clear-conversation-actions {
+.delete-context-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -914,14 +913,15 @@ button.accent-swatch[aria-pressed="true"] {
   min-width: 0;
 }
 
-.trash-marked,
+.marked,
 .trash-emptying,
 .trash-said > p {
   margin: 0;
   overflow-wrap: anywhere;
 }
 
-.trash-marked {
+/* What a marked act will do when its section is left, beside its Keep it (ADR 0027, ADR 0028). */
+.marked {
   font-weight: 600;
 }
 

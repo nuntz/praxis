@@ -1,14 +1,18 @@
 import {
   FIRST_TIMES,
+  type Message,
   namedZone,
   type Settings,
   type ToolResult,
   type Weekday,
   weekdays,
 } from "@praxis/domain";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, createUniqueId, For, onCleanup, onMount, Show } from "solid-js";
 import { SettingRow, SettingsGroup, SwitchInput } from "./design/SettingRows.tsx";
 import { deviceTimeZone } from "./device.ts";
+import { latestRead } from "./latest-read.ts";
+import { MarkedLine, marksSentOnLeaving } from "./leaving.tsx";
+import { useLive } from "./live-context.ts";
 import { SettingsLink } from "./SettingsLink.tsx";
 import { SettingsSection, sectionChanges } from "./SettingsSection.tsx";
 import { SettlingField } from "./SettlingField.tsx";
@@ -241,13 +245,45 @@ export function BriefAndReview(props: {
   );
 }
 
+/** What the Conversation marked to be cleared says until the section is left (ADR 0028). */
+const CLEARED_ON_LEAVING = "Cleared when you leave Conversation and search.";
+
 /**
  * Conversation and search, in Settings: the rare, heavy actions on the current Context, clearing
- * its Conversation and rebuilding its search index (section 8.6).
+ * its Conversation and rebuilding its search index (section 8.6). Clearing cannot be put back, so
+ * Clear only marks it, and the Conversation is cleared as the section is left (ADR 0028), up to
+ * the newest Message the screen had read when Clear was tapped: what came after stays.
  */
-export function ConversationAndSearch(props: { contextName: string }) {
+export function ConversationAndSearch(props: {
+  contextName: string;
+  /** Says what the screen must say once the section is no longer shown to say it. */
+  onProblem: (message: string) => void;
+}) {
   const callTool = useCallTool();
   const { change, sending, problemAt } = sectionChanges();
+  const newest = newestMessage();
+  // Marked by the time of the newest Message read as Clear was tapped.
+  const clearing = marksSentOnLeaving<string>({
+    sends: (marked) =>
+      [...marked].map((upTo) => () => callTool("clear_conversation", { up_to: upTo })),
+    unsent: {
+      nothing: "Praxis could not be reached: the Conversation was not cleared.",
+      notAll: "Praxis could not be reached: the Conversation was not cleared.",
+    },
+    onProblem: (message) => props.onProblem(message),
+  });
+  const [marked, setMarked] = createSignal<string | null>(null);
+  const everyMessage = createUniqueId();
+  let clearButton: HTMLButtonElement | undefined;
+  let keepButton: HTMLButtonElement | undefined;
+
+  function mark(upTo: string | null) {
+    const was = marked();
+    if (was !== null) clearing.mark(was, false);
+    if (upTo !== null) clearing.mark(upTo, true);
+    setMarked(upTo);
+    (upTo === null ? clearButton : keepButton)?.focus();
+  }
 
   // What the last rebuild of the meaning index said, until the screen is left.
   const [rebuilding, setRebuilding] = createSignal<string | null>(null);
@@ -261,17 +297,6 @@ export function ConversationAndSearch(props: { contextName: string }) {
     );
   }
 
-  // Whether the person has asked to clear the Conversation and is being asked to be sure, and what
-  // the last clear said, until the screen is left.
-  const [confirming, setConfirming] = createSignal(false);
-  const [cleared, setCleared] = createSignal<string | null>(null);
-
-  async function clear() {
-    if ((await change("conversation", () => callTool("clear_conversation", {}))) === null) return;
-    setConfirming(false);
-    setCleared("The Conversation is cleared. The next Message starts it afresh.");
-  }
-
   return (
     <SettingsSection
       note={
@@ -282,42 +307,34 @@ export function ConversationAndSearch(props: { contextName: string }) {
       }
     >
       {/* The Conversation's text is kept until the person clears it, all at once (section 5.8). */}
-      <SettingsGroup
-        heading="Conversation"
-        problem={problemAt("conversation")}
-        below={
-          <p class="settings-said" role="status">
-            {cleared() ?? ""}
-          </p>
-        }
-      >
+      <SettingsGroup heading="Conversation">
         <SettingRow
-          title="Every Message"
+          title={<span id={everyMessage}>Every Message</span>}
           description="Clearing drops every Message, and what the Agent quoted of records since removed for good with them. The Journal, its changes and the Run records stay as they are. It cannot be undone."
           control={() => (
             <Show
-              when={confirming()}
+              when={marked() === null}
               fallback={
-                <button
-                  type="button"
-                  disabled={sending()}
-                  onClick={() => {
-                    setCleared(null);
-                    setConfirming(true);
+                <MarkedLine
+                  says={CLEARED_ON_LEAVING}
+                  of={everyMessage}
+                  onKeep={() => mark(null)}
+                  keepRef={(button) => {
+                    keepButton = button;
                   }}
-                >
-                  Clear the Conversation
-                </button>
+                />
               }
             >
-              <div class="clear-conversation-actions">
-                <button type="button" disabled={sending()} onClick={() => void clear()}>
-                  Clear it for good
-                </button>
-                <button type="button" class="quiet" onClick={() => setConfirming(false)}>
-                  Keep it
-                </button>
-              </div>
+              <button
+                ref={clearButton}
+                type="button"
+                class="quiet"
+                // Nothing to clear until a Message is read: none yet, or none read.
+                disabled={newest.at() === null}
+                onClick={() => mark(newest.at())}
+              >
+                Clear the Conversation
+              </button>
             </Show>
           )}
         />
@@ -345,6 +362,48 @@ export function ConversationAndSearch(props: { contextName: string }) {
       </SettingsGroup>
     </SettingsSection>
   );
+}
+
+/**
+ * The time of the newest Message the screen has read in the Conversation, as `clear_conversation`
+ * takes it, so the Device's clock plays no part: a Message from the person when it was sent, a
+ * Brief or a Review when it was taken. Read as the section opens and followed down the live
+ * channel; null with none read.
+ */
+function newestMessage() {
+  const callTool = useCallTool();
+  const live = useLive();
+  const [at, setAt] = createSignal<string | null>(null);
+  const take = (messages: Message[]) => {
+    const times = messages.flatMap((message) =>
+      message.from === "person" ? [message.at] : message.clock ? [message.clock.taken] : [],
+    );
+    const now = at();
+    const latest = [...times, ...(now === null ? [] : [now])].sort().at(-1);
+    setAt(latest ?? null);
+  };
+  const newestPage = latestRead(async (current) => {
+    try {
+      const page = await callTool("list_messages", {});
+      if (!current() || !page.ok) return;
+      setAt(null);
+      take(page.value.items);
+    } catch {
+      // Unread, there is nothing to clear up to.
+    }
+  });
+  onMount(async () => {
+    await live.ready;
+    await newestPage.read();
+  });
+  onCleanup(
+    live.listen({
+      message: (message) => take([message]),
+      cleared: () => newestPage.read(),
+      rejoined: () => newestPage.read(),
+    }),
+  );
+  return { at };
 }
 
 /** A day of the week as the Device's language names it, in full or shortened. */

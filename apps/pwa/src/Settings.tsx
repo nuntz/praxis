@@ -55,7 +55,10 @@ type SettingsProps = {
   onContextChanged: (changed: ContextListing) => void;
   onContextMade: (made: ContextListing) => void;
   onContextDeleted: (id: string) => void;
-  /** Says a problem on the screen, for a section that has left it, as the Trash's removals do. */
+  /**
+   * Says a problem on the screen, for a section that has left it, as what the Trash, Contexts,
+   * Connections and Conversation and search marked does when it cannot be sent (ADR 0028).
+   */
   onProblem: (message: string) => void;
 };
 
@@ -156,7 +159,12 @@ const SHOWN: Record<Section, SectionShown> = {
     icon: MessageCircle,
     ofContext: true,
     panel: (from) =>
-      withSettings(from, () => <ConversationAndSearch contextName={from.props.contextName} />),
+      withSettings(from, () => (
+        <ConversationAndSearch
+          contextName={from.props.contextName}
+          onProblem={from.props.onProblem}
+        />
+      )),
   },
   contexts: {
     name: "Contexts",
@@ -169,6 +177,7 @@ const SHOWN: Record<Section, SectionShown> = {
         onChanged={props.onContextChanged}
         onMade={props.onContextMade}
         onDeleted={props.onContextDeleted}
+        onProblem={props.onProblem}
       />
     ),
   },
@@ -177,7 +186,7 @@ const SHOWN: Record<Section, SectionShown> = {
     icon: Plug,
     ofContext: false,
     read: connectionsListed,
-    panel: ({ props }) => <Connections contexts={props.contexts} />,
+    panel: ({ props }) => <Connections contexts={props.contexts} onProblem={props.onProblem} />,
   },
   devices: {
     name: "Devices",

@@ -165,6 +165,47 @@ export function forgetConversation(sql: SqlStorage): void {
   sql.exec(`UPDATE runs SET submission = NULL, from_record = NULL, told_through = NULL`);
 }
 
+/** A Run record's handles on the Conversation, as a clear finds them. */
+export type RunHandles = Pick<RunRow, "id" | "from_record" | "told_through">;
+
+/** The handles of the Runs answering the Messages, Briefs and Reviews a clear keeps, by their ids. */
+export function handlesOf(sql: SqlStorage, starts: string[]): RunHandles[] {
+  if (starts.length === 0) return [];
+  return sql
+    .exec<RunHandles>(
+      `SELECT id, from_record, told_through FROM runs
+       WHERE message IN (${starts.map(() => "?").join(", ")})`,
+      ...starts,
+    )
+    .toArray();
+}
+
+/**
+ * Give the Runs whose Message a clear kept their handles back, once what it kept is placed again
+ * (`placed`, each record's new id by its old): where the Agent was last told the log stood, which
+ * the kept Messages were told, and the first record that may be the Run's own, as it now is. The
+ * submission stays forgotten: the Run has ended, and the runtime numbers them afresh.
+ */
+export function keepHandles(
+  sql: SqlStorage,
+  kept: RunHandles[],
+  placed: ReadonlyMap<number, number>,
+): void {
+  const order = [...placed].sort(([a], [b]) => a - b);
+  for (const run of kept) {
+    const from =
+      run.from_record === null
+        ? null
+        : (order.find(([old]) => old >= (run.from_record as number))?.[1] ?? null);
+    sql.exec(
+      `UPDATE runs SET from_record = ?, told_through = ? WHERE id = ?`,
+      from,
+      run.told_through,
+      run.id,
+    );
+  }
+}
+
 /** Every Run that has not ended, oldest first: after a restart, each is waited on again. */
 export function runsNotEnded(sql: SqlStorage): RunRow[] {
   return sql.exec<RunRow>(`SELECT * FROM runs WHERE ended IS NULL ORDER BY seq`).toArray();
