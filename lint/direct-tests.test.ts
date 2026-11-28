@@ -44,6 +44,7 @@ const directTests: Record<string, { namedAt: NamedAt[]; files: Record<string, st
       "search-groups.test.ts": "how what a search found is grouped by kind",
       "typing-pause.test.ts": "how search waits for a pause in typing",
       "short-day.test.ts": "how a day is said short",
+      "change-words.test.ts": "how Changes says what happened",
     },
   },
 };
